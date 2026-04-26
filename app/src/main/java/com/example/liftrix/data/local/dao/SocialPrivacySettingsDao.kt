@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.SocialPrivacySettingsEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -287,4 +288,62 @@ interface SocialPrivacySettingsDao {
 
     @Query("SELECT COUNT(*) FROM privacy_settings WHERE user_id = :userId AND social_enabled = 1")
     suspend fun getSocialEnabledCount(userId: String): Int
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert socialprivacysettings from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(socialPrivacySettings: SocialPrivacySettingsEntity) {
+        val entity = socialPrivacySettings.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert socialprivacysettings from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(socialPrivacySettings: SocialPrivacySettingsEntity) {
+        val local = getSocialPrivacySettingsForSync(socialPrivacySettings.userId)
+        if (local == null || socialPrivacySettings.lastModified > local.lastModified) {
+            val entity = socialPrivacySettings.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: SocialPrivacySettingsEntity)
+
+    /**
+     * Get dirty socialprivacysettings that need upload to Firestore.
+     */
+    @Query("SELECT * FROM privacy_settings WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtySocialPrivacySettings(userId: String): List<SocialPrivacySettingsEntity>
+
+    /**
+     * Mark socialprivacysettings as clean after successful Firestore upload.
+     */
+    @Query("UPDATE privacy_settings SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE user_id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local socialprivacysettings for remote deduplication.
+     */
+    @Query("SELECT * FROM privacy_settings WHERE user_id = :userId LIMIT 1")
+    suspend fun getSocialPrivacySettingsForSync(userId: String): SocialPrivacySettingsEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

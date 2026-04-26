@@ -199,7 +199,7 @@ private fun DashboardCustomizationActions(
                     showMoreMenu = false
                 },
                 leadingIcon = {
-                    Icon(Icons.Default.Build, contentDescription = null)
+                    Icon(Icons.Default.Build, contentDescription = "Fix migration issues")
                 }
             )
         }
@@ -373,7 +373,7 @@ private fun CustomizationErrorState(
     ) {
         Icon(
             imageVector = Icons.Default.Error,
-            contentDescription = null,
+            contentDescription = "Error",
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(64.dp)
         )
@@ -406,7 +406,7 @@ private fun CustomizationErrorState(
             Button(onClick = onRetry) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
-                    contentDescription = null,
+                    contentDescription = "Retry",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -430,7 +430,7 @@ private fun CustomizationEmptyState(
     ) {
         Icon(
             imageVector = Icons.Default.Dashboard,
-            contentDescription = null,
+            contentDescription = "No widgets selected",
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )

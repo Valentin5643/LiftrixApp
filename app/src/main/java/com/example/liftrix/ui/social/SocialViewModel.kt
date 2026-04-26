@@ -234,7 +234,7 @@ class SocialViewModel @Inject constructor(
                 }
                 
                 val result = followRepository.sendFollowRequest(
-                    followerId = currentUserId,
+                    followerId = currentUserId.value,
                     targetUserId = userId,
                     requestSource = "SOCIAL_SCREEN"
                 )
@@ -244,7 +244,7 @@ class SocialViewModel @Inject constructor(
                         Timber.d("DEBUG_FOLLOW_REQUEST: Follow request successful, status: $followStatus")
                         loadSocialFeed() // Refresh data to show updated state
                         analyticsService.logSocialFeedEvent(
-                            userId = currentUserId,
+                            userId = currentUserId.value,
                             eventType = "follow_request_sent",
                             additionalData = mapOf("target_user_id" to userId)
                         )
@@ -368,12 +368,12 @@ class SocialViewModel @Inject constructor(
                 
                 val result = if (accept) {
                     followRepository.acceptFollowRequest(
-                        targetUserId = currentUserId,
+                        targetUserId = currentUserId.value,
                         requesterId = userId
                     )
                 } else {
                     followRepository.declineFollowRequest(
-                        targetUserId = currentUserId,
+                        targetUserId = currentUserId.value,
                         requesterId = userId
                     )
                 }
@@ -383,7 +383,7 @@ class SocialViewModel @Inject constructor(
                         Timber.d("DEBUG_FOLLOW_RESPONSE: Follow request response successful")
                         loadSocialFeed() // Refresh data to show updated state
                         analyticsService.logSocialFeedEvent(
-                            userId = currentUserId,
+                            userId = currentUserId.value,
                             eventType = if (accept) "follow_request_accepted" else "follow_request_declined",
                             additionalData = mapOf("requester_user_id" to userId)
                         )
@@ -428,7 +428,7 @@ class SocialViewModel @Inject constructor(
                 }
                 
                 val result = followRepository.blockUser(
-                    blockerId = currentUserId,
+                    blockerId = currentUserId.value,
                     targetUserId = userId
                 )
                 
@@ -437,7 +437,7 @@ class SocialViewModel @Inject constructor(
                         Timber.d("DEBUG_BLOCK_USER: Block action successful")
                         loadSocialFeed() // Refresh data to show updated state
                         analyticsService.logSocialFeedEvent(
-                            userId = currentUserId,
+                            userId = currentUserId.value,
                             eventType = "user_blocked",
                             additionalData = mapOf("target_user_id" to userId)
                         )
@@ -484,18 +484,18 @@ class SocialViewModel @Inject constructor(
     fun handleFollowAction(targetUserId: String) {
         viewModelScope.launch {
             val currentUserId = authRepository.getCurrentUserId() ?: return@launch
-            
+
             socialRelationshipUseCase.followAction(
                 targetUserId = targetUserId,
                 action = FollowAction.FOLLOW,
                 context = "SOCIAL_FEED"
             ).fold(
-                onSuccess = { 
+                onSuccess = {
                     // Update UI optimistically
                     updateFollowStatus(targetUserId, true)
                     // Track analytics
                     analyticsService.logSocialFeedEvent(
-                        userId = currentUserId,
+                        userId = currentUserId.value,
                         eventType = "follow_action",
                         additionalData = mapOf(
                             "target_user_id" to targetUserId,
@@ -736,11 +736,14 @@ class SocialViewModel @Inject constructor(
                         loadFollowing()
                         // Trigger sync to Firebase
                         syncFollowRelationships(forceSync = true)
-                        analyticsService.logSocialFeedEvent(
-                            userId = authRepository.getCurrentUserId() ?: "",
-                            eventType = "user_followed",
-                            additionalData = mapOf("target_user_id" to userId)
-                        )
+                        val currentUserId = authRepository.getCurrentUserId()
+                        if (currentUserId != null) {
+                            analyticsService.logSocialFeedEvent(
+                                userId = currentUserId.value,
+                                eventType = "user_followed",
+                                additionalData = mapOf("target_user_id" to userId)
+                            )
+                        }
                     },
                     onFailure = { error ->
                         Timber.e("DEBUG_FOLLOW_ACTION: Follow failed with error: ${error.message}")
@@ -781,7 +784,7 @@ class SocialViewModel @Inject constructor(
                 
                 // Use FollowRepository to unfollow
                 val result = followRepository.unfollowUser(
-                    followerId = currentUserId,
+                    followerId = currentUserId.value,
                     targetUserId = userId
                 )
                 
@@ -793,7 +796,7 @@ class SocialViewModel @Inject constructor(
                         // Trigger sync to Firebase
                         syncFollowRelationships(forceSync = true)
                         analyticsService.logSocialFeedEvent(
-                            userId = currentUserId,
+                            userId = currentUserId.value,
                             eventType = "user_unfollowed",
                             additionalData = mapOf("target_user_id" to userId)
                         )
@@ -904,14 +907,14 @@ class SocialViewModel @Inject constructor(
     private fun syncFollowRelationships(forceSync: Boolean = false) {
         viewModelScope.launch {
             try {
-                val currentUser = authRepository.getCurrentUser()
-                if (currentUser != null) {
+                val currentUserId = authRepository.getCurrentUserId()
+                if (currentUserId != null) {
                     val workRequest = FollowRelationshipSyncWorker.createWorkRequest(
-                        userId = currentUser.uid,
+                        userId = currentUserId.value,
                         forceSync = forceSync
                     )
                     WorkManagerProvider.getInstance(context).enqueue(workRequest)
-                    Timber.d("Enqueued follow relationship sync for user ${currentUser.uid}")
+                    Timber.d("Enqueued follow relationship sync for user ${currentUserId.value}")
                 }
             } catch (exception: Exception) {
                 Timber.w(exception, "Failed to trigger follow relationship sync")
@@ -935,10 +938,10 @@ class SocialViewModel @Inject constructor(
     private fun trackSocialScreenViewed() {
         viewModelScope.launch {
             try {
-                val currentUser = authRepository.getCurrentUser()
-                if (currentUser != null) {
+                val currentUserId = authRepository.getCurrentUserId()
+                if (currentUserId != null) {
                     analyticsService.logSocialFeedEvent(
-                        userId = currentUser.uid,
+                        userId = currentUserId.value,
                         eventType = "social_screen_viewed",
                         additionalData = mapOf(
                             "timestamp" to System.currentTimeMillis()
@@ -957,10 +960,10 @@ class SocialViewModel @Inject constructor(
     private fun trackFriendRequestSent(userId: String) {
         viewModelScope.launch {
             try {
-                val currentUser = authRepository.getCurrentUser()
-                if (currentUser != null) {
+                val currentUserId = authRepository.getCurrentUserId()
+                if (currentUserId != null) {
                     analyticsService.logFriendRequestSent(
-                        userId = currentUser.uid,
+                        userId = currentUserId.value,
                         targetUserId = userId
                     )
                 }
@@ -976,10 +979,10 @@ class SocialViewModel @Inject constructor(
     private fun trackFriendRequestResponse(userId: String, accepted: Boolean) {
         viewModelScope.launch {
             try {
-                val currentUser = authRepository.getCurrentUser()
-                if (currentUser != null) {
+                val currentUserId = authRepository.getCurrentUserId()
+                if (currentUserId != null) {
                     analyticsService.logFriendRequestResponse(
-                        userId = currentUser.uid,
+                        userId = currentUserId.value,
                         targetUserId = userId,
                         accepted = accepted
                     )
@@ -996,10 +999,10 @@ class SocialViewModel @Inject constructor(
     private fun trackFriendRemoved(userId: String) {
         viewModelScope.launch {
             try {
-                val currentUser = authRepository.getCurrentUser()
-                if (currentUser != null) {
+                val currentUserId = authRepository.getCurrentUserId()
+                if (currentUserId != null) {
                     analyticsService.logSocialFeedEvent(
-                        userId = currentUser.uid,
+                        userId = currentUserId.value,
                         eventType = "friend_removed",
                         additionalData = mapOf(
                             "target_user_id" to userId,
@@ -1019,10 +1022,10 @@ class SocialViewModel @Inject constructor(
     private fun trackUserBlocked(userId: String) {
         viewModelScope.launch {
             try {
-                val currentUser = authRepository.getCurrentUser()
-                if (currentUser != null) {
+                val currentUserId = authRepository.getCurrentUserId()
+                if (currentUserId != null) {
                     analyticsService.logSocialFeedEvent(
-                        userId = currentUser.uid,
+                        userId = currentUserId.value,
                         eventType = "user_blocked",
                         additionalData = mapOf(
                             "target_user_id" to userId,
@@ -1042,10 +1045,10 @@ class SocialViewModel @Inject constructor(
     private fun trackRefreshPerformed() {
         viewModelScope.launch {
             try {
-                val currentUser = authRepository.getCurrentUser()
-                if (currentUser != null) {
+                val currentUserId = authRepository.getCurrentUserId()
+                if (currentUserId != null) {
                     analyticsService.logSocialFeedEvent(
-                        userId = currentUser.uid,
+                        userId = currentUserId.value,
                         eventType = "social_feed_refreshed",
                         additionalData = mapOf(
                             "timestamp" to System.currentTimeMillis()
@@ -1064,10 +1067,10 @@ class SocialViewModel @Inject constructor(
     private fun trackViewAllFriendsClicked() {
         viewModelScope.launch {
             try {
-                val currentUser = authRepository.getCurrentUser()
-                if (currentUser != null) {
+                val currentUserId = authRepository.getCurrentUserId()
+                if (currentUserId != null) {
                     analyticsService.logSocialFeedEvent(
-                        userId = currentUser.uid,
+                        userId = currentUserId.value,
                         eventType = "view_all_friends_clicked",
                         additionalData = mapOf(
                             "timestamp" to System.currentTimeMillis()
@@ -1086,10 +1089,10 @@ class SocialViewModel @Inject constructor(
     private fun trackWorkoutViewed(sharedWorkout: SharedWorkout) {
         viewModelScope.launch {
             try {
-                val currentUser = authRepository.getCurrentUser()
-                if (currentUser != null) {
+                val currentUserId = authRepository.getCurrentUserId()
+                if (currentUserId != null) {
                     analyticsService.logSocialWorkoutViewed(
-                        userId = currentUser.uid,
+                        userId = currentUserId.value,
                         workoutId = sharedWorkout.id,
                         friendUserId = sharedWorkout.friendUserId,
                         workoutName = sharedWorkout.workoutName
@@ -1107,10 +1110,10 @@ class SocialViewModel @Inject constructor(
     private fun trackWorkoutCongratulated(sharedWorkout: SharedWorkout) {
         viewModelScope.launch {
             try {
-                val currentUser = authRepository.getCurrentUser()
-                if (currentUser != null) {
+                val currentUserId = authRepository.getCurrentUserId()
+                if (currentUserId != null) {
                     analyticsService.logSocialFeedEvent(
-                        userId = currentUser.uid,
+                        userId = currentUserId.value,
                         eventType = "workout_congratulated",
                         additionalData = mapOf(
                             "workout_id" to sharedWorkout.id,

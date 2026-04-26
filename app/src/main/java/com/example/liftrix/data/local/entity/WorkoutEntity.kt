@@ -17,6 +17,7 @@ import java.time.LocalDate
 @Entity(
     tableName = "workouts",
     indices = [
+        Index(value = ["id", "user_id"], unique = true, name = "idx_workout_id_user"),
         Index(value = ["user_id", "date", "status"], name = "idx_workout_analytics"),
         Index(value = ["user_id", "created_at"], name = "idx_workout_user_created"),
         Index(value = ["user_id", "status"], name = "idx_workout_user_status"),
@@ -27,7 +28,15 @@ import java.time.LocalDate
         // Performance optimization indexes (added based on PERF-SPEC analysis)
         Index(value = ["user_id", "updated_at", "date", "created_at"], name = "idx_workout_history_optimized"),
         Index(value = ["user_id", "date"], name = "idx_workout_date_range_fast"),
-        Index(value = ["template_id", "user_id", "created_at"], name = "idx_workout_template_history")
+        Index(value = ["template_id", "user_id", "created_at"], name = "idx_workout_template_history"),
+        Index(
+            value = ["user_id", "status", "date"],
+            name = "idx_workouts_json_analytics"
+        ),
+        Index(
+            value = ["user_id", "last_modified"],
+            name = "idx_workouts_dirty_sync"
+        )
     ]
 )
 @TypeConverters(DateTimeConverters::class, WorkoutConverters::class)
@@ -71,7 +80,14 @@ data class WorkoutEntity(
     
     @ColumnInfo(name = "is_synced", defaultValue = "0")
     val isSynced: Boolean = false,
-    
+
     @ColumnInfo(name = "sync_version", defaultValue = "0")
-    val syncVersion: Long = 0L
+    val syncVersion: Long = 0L,
+
+    // Offline-first architecture fields (SPEC-20241228)
+    @ColumnInfo(name = "is_dirty", defaultValue = "0")
+    val isDirty: Boolean = false,
+
+    @ColumnInfo(name = "last_modified", defaultValue = "0")
+    val lastModified: Long = 0L
 ) 

@@ -94,8 +94,8 @@ class CacheWarmingService @Inject constructor(
 
                 // Get current user for personalized warming
                 val userId = authQueryUseCase(waitForAuth = false).getOrNull()
-                if (userId != null && userId.isNotEmpty()) {
-                    warmUserSpecificCache(userId)
+                if (userId?.value?.isNotEmpty() == true) {
+                    warmUserSpecificCache(userId.value)
                 } else {
                     Timber.d("$TAG: No authenticated user - skipping cache warming")
                 }

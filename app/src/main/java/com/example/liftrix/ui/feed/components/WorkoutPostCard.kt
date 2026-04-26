@@ -28,9 +28,7 @@ import com.example.liftrix.R
 import com.example.liftrix.domain.model.social.MediaItem
 import com.example.liftrix.domain.model.social.MediaType
 import com.example.liftrix.domain.model.social.WorkoutPost
-import com.example.liftrix.ui.components.DynamicProfileImage
-import com.example.liftrix.ui.components.isStoragePath
-import com.example.liftrix.ui.components.extractStoragePathFromUrl
+import com.example.liftrix.ui.profile.components.ProfileImageDisplay
 import com.example.liftrix.data.service.FirebaseStorageUrlResolver
 import com.google.firebase.storage.FirebaseStorage
 import com.example.liftrix.domain.model.WeightUnit
@@ -173,25 +171,19 @@ private fun PostHeader(
                 .clickable { onProfileClick() },
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Profile image - using DynamicProfileImage for token-resilient loading
+            // Profile image - using ProfileImageDisplay for consistent behavior
             val userIdentifier = "${post.authorDisplayName ?: post.authorUsername} (${post.userId})"
-            val profilePath = if (post.authorProfilePhotoUrl.isStoragePath()) {
-                post.authorProfilePhotoUrl
-            } else {
-                // Extract storage path from URL using utility function
-                post.authorProfilePhotoUrl.extractStoragePathFromUrl()
-            }
-            
-            Timber.d("PFP_DEBUG: Feed profile image for $userIdentifier | originalUrl='${post.authorProfilePhotoUrl}' | extractedPath='$profilePath'")
-            
-            // Use DynamicProfileImage for token-resilient loading
-            // Note: DynamicProfileImage now handles both paths and URLs automatically via CompositionLocal
-            DynamicProfileImage(
-                storagePath = profilePath ?: post.authorProfilePhotoUrl,
-                displayName = post.authorDisplayName ?: post.authorUsername ?: "User",
-                contentDescription = "Profile picture of ${post.authorDisplayName}",
-                modifier = Modifier.size(40.dp),
-                debugContext = "Feed-$userIdentifier"
+
+            Timber.d("PFP_DEBUG: Feed profile image for $userIdentifier | imageUrl='${post.authorProfilePhotoUrl}'")
+
+            // Use ProfileImageDisplay for consistent profile image handling with proper caching and fallback
+            ProfileImageDisplay(
+                imageUrl = post.authorProfilePhotoUrl,
+                displayName = post.authorDisplayName ?: post.authorUsername,
+                userId = post.userId,
+                size = 40.dp,
+                onClick = null, // Click handled by parent Row
+                contentDescription = "Profile picture of ${post.authorDisplayName}"
             )
             
             Spacer(modifier = Modifier.width(LiftrixSpacing.small))
@@ -249,7 +241,7 @@ private fun PostHeader(
                 DropdownMenuItem(
                     text = { Text("Edit Workout") },
                     leadingIcon = { 
-                        Icon(Icons.Default.Edit, contentDescription = null) 
+                        Icon(Icons.Default.Edit, contentDescription = "Edit workout") 
                     },
                     onClick = {
                         onEditWorkout()
@@ -261,7 +253,7 @@ private fun PostHeader(
                 DropdownMenuItem(
                     text = { Text("Block User") },
                     leadingIcon = { 
-                        Icon(Icons.Default.Block, contentDescription = null) 
+                        Icon(Icons.Default.Block, contentDescription = "Block user") 
                     },
                     onClick = {
                         onBlockUser()
@@ -271,7 +263,7 @@ private fun PostHeader(
                 DropdownMenuItem(
                     text = { Text("Report Post") },
                     leadingIcon = { 
-                        Icon(Icons.Default.Flag, contentDescription = null) 
+                        Icon(Icons.Default.Flag, contentDescription = "Report post") 
                     },
                     onClick = {
                         onReportPost()

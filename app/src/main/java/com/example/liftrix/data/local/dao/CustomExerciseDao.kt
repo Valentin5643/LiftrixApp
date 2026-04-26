@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.CustomExerciseEntity
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseCategory
@@ -141,4 +142,62 @@ interface CustomExerciseDao {
      */
     @Query("SELECT COUNT(*) FROM custom_exercises WHERE user_id = :userId AND exercise_type = :exerciseType")
     suspend fun getCustomExerciseCountByType(userId: String, exerciseType: ExerciseType): Int
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert customexercise from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(customExercise: CustomExerciseEntity) {
+        val entity = customExercise.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert customexercise from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(customExercise: CustomExerciseEntity) {
+        val local = getCustomExerciseForSync(customExercise.id, customExercise.userId)
+        if (local == null || customExercise.lastModified > local.lastModified) {
+            val entity = customExercise.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: CustomExerciseEntity)
+
+    /**
+     * Get dirty customexercise that need upload to Firestore.
+     */
+    @Query("SELECT * FROM custom_exercises WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyCustomExercises(userId: String): List<CustomExerciseEntity>
+
+    /**
+     * Mark customexercise as clean after successful Firestore upload.
+     */
+    @Query("UPDATE custom_exercises SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local customexercise for remote deduplication.
+     */
+    @Query("SELECT * FROM custom_exercises WHERE id = :id AND user_id = :userId LIMIT 1")
+    suspend fun getCustomExerciseForSync(id: String, userId: String): CustomExerciseEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 } 

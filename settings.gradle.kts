@@ -15,3 +15,5 @@ dependencyResolutionManagement {
 rootProject.name = "Liftrix"
 include(":app")
 include(":lint-rules")
+include(":user-scoping-annotations")
+include(":user-scoping-processor")

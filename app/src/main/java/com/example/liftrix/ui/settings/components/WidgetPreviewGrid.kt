@@ -158,7 +158,7 @@ private fun GridPreviewContent(widget: AnalyticsWidget) {
         // Widget icon
         Icon(
             imageVector = widget.getPreviewIcon(),
-            contentDescription = null,
+            contentDescription = widget.displayName,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(24.dp)
         )
@@ -194,7 +194,7 @@ private fun SectionPreviewContent(widget: AnalyticsWidget) {
         // Widget icon
         Icon(
             imageVector = widget.getPreviewIcon(),
-            contentDescription = null,
+            contentDescription = widget.displayName,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(28.dp)
         )
@@ -249,7 +249,7 @@ private fun ListPreviewContent(widget: AnalyticsWidget) {
         // Widget icon
         Icon(
             imageVector = widget.getPreviewIcon(),
-            contentDescription = null,
+            contentDescription = widget.displayName,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(24.dp)
         )
@@ -301,7 +301,7 @@ private fun CustomPreviewContent(widget: AnalyticsWidget) {
         ) {
             Icon(
                 imageVector = widget.getPreviewIcon(),
-                contentDescription = null,
+                contentDescription = widget.displayName,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp)
             )
@@ -366,7 +366,7 @@ private fun PreviewEmptyState(
     ) {
         Icon(
             imageVector = Icons.Default.ViewModule,
-            contentDescription = null,
+            contentDescription = "No active widgets",
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             modifier = Modifier.size(32.dp)
         )

@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.SharedRoutineEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -131,7 +132,7 @@ interface SharedRoutineDao {
         SET is_synced = 1, sync_version = :syncVersion
         WHERE id = :routineId
     """)
-    suspend fun markAsSynced(routineId: String, syncVersion: Int)
+    suspend fun markAsSynced(routineId: String, syncVersion: Long)
     
     @Query("""
         SELECT * FROM shared_routines 
@@ -139,4 +140,62 @@ interface SharedRoutineDao {
         ORDER BY version DESC, created_at DESC
     """)
     suspend fun getRoutineVersions(parentId: String): List<SharedRoutineEntity>
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert sharedroutine from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(sharedRoutine: SharedRoutineEntity) {
+        val entity = sharedRoutine.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert sharedroutine from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(sharedRoutine: SharedRoutineEntity) {
+        val local = getSharedRoutineForSync(sharedRoutine.id, sharedRoutine.userId)
+        if (local == null || sharedRoutine.lastModified > local.lastModified) {
+            val entity = sharedRoutine.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: SharedRoutineEntity)
+
+    /**
+     * Get dirty sharedroutine that need upload to Firestore.
+     */
+    @Query("SELECT * FROM shared_routines WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtySharedRoutines(userId: String): List<SharedRoutineEntity>
+
+    /**
+     * Mark sharedroutine as clean after successful Firestore upload.
+     */
+    @Query("UPDATE shared_routines SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local sharedroutine for remote deduplication.
+     */
+    @Query("SELECT * FROM shared_routines WHERE id = :id AND user_id = :userId LIMIT 1")
+    suspend fun getSharedRoutineForSync(id: String, userId: String): SharedRoutineEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

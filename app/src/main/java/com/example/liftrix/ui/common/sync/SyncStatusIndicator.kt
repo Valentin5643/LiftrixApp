@@ -166,7 +166,7 @@ private fun SyncStatusContent(
             icon?.let {
                 Icon(
                     imageVector = it,
-                    contentDescription = null,
+                    contentDescription = text,
                     tint = color,
                     modifier = Modifier.size(16.dp)
                 )
@@ -264,7 +264,12 @@ fun CompactSyncIndicator(
             icon?.let {
                 Icon(
                     imageVector = it,
-                    contentDescription = null,
+                    contentDescription = when (syncStatus) {
+                        SyncStatus.Syncing -> "Syncing"
+                        is SyncStatus.Success, is SyncStatus.AnalyticsSuccess -> "Synced"
+                        is SyncStatus.Error -> "Sync error"
+                        else -> "Sync status"
+                    },
                     tint = color,
                     modifier = Modifier.size(12.dp)
                 )

@@ -52,7 +52,7 @@ class SocialProfileQueryUseCase @Inject constructor(
             )
         }
     ) {
-        val viewerId = authQueryUseCase(waitForAuth = false).getOrNull() // Can be null for anonymous viewing
+        val viewerId = authQueryUseCase(waitForAuth = false).getOrNull()?.value // Extract String from UserId
         socialProfileRepository.getProfile(userId, viewerId).getOrThrow()
     }
 
@@ -107,10 +107,15 @@ class SocialProfileQueryUseCase @Inject constructor(
                     return liftrixFailure(
                         LiftrixError.NotFoundError(
                             errorMessage = "User profile not found",
+                            isRecoverable = true, // Profile can be created
                             analyticsContext = mapOf(
                                 "context" to "SocialProfileQueryUseCase",
-                                "profileUserId" to request.profileUserId
-                            )
+                                "profileUserId" to request.profileUserId,
+                                "suggestion" to "CREATE_PROFILE",
+                                "reason" to "Profile exists in auth but not in database - likely new user or incomplete onboarding"
+                            ),
+                            resourceType = "USER_PROFILE",
+                            resourceId = request.profileUserId
                         )
                     )
                 }
@@ -161,7 +166,7 @@ class SocialProfileQueryUseCase @Inject constructor(
             )
         }
     ) {
-        val viewerId = authQueryUseCase(waitForAuth = false).getOrNull()
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw IllegalStateException("User not authenticated")
 
         // Validate limit
@@ -169,7 +174,7 @@ class SocialProfileQueryUseCase @Inject constructor(
             throw IllegalArgumentException("Limit must be between 1 and 100")
         }
 
-        val profiles = socialProfileRepository.getDiscoverableProfiles(viewerId, limit).getOrThrow()
+        val profiles = socialProfileRepository.getDiscoverableProfiles(userId.value, limit).getOrThrow()
         profiles
     }
 
@@ -180,7 +185,7 @@ class SocialProfileQueryUseCase @Inject constructor(
      */
     private suspend fun getCurrentUserId(): String? {
         return try {
-            authRepository.getCurrentUserId()
+            authRepository.getCurrentUserId()?.value
         } catch (e: Exception) {
             Timber.e(e, "Failed to get current user ID")
             null

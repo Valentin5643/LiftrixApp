@@ -75,7 +75,7 @@ fun getCurrentUserId(authQueryUseCase: AuthQueryUseCase = hiltViewModel()): Flow
         flow {
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
+                    onSuccess = { it?.value },
                     onFailure = { null }
                 )
                 emit(userId)

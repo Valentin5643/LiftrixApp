@@ -114,7 +114,7 @@ fun ManualSyncControls(
             ) {
                 Icon(
                     imageVector = Icons.Default.Settings,
-                    contentDescription = null,
+                    contentDescription = "Open sync settings",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -267,7 +267,7 @@ private fun SyncStatusBadge(
             
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = text,
                 tint = color,
                 modifier = Modifier
                     .size(16.dp)
@@ -276,7 +276,7 @@ private fun SyncStatusBadge(
         } else {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = text,
                 tint = color,
                 modifier = Modifier.size(16.dp)
             )
@@ -418,7 +418,7 @@ fun CompactSyncControl(
         ) {
             Icon(
                 imageVector = Icons.Default.Refresh,
-                contentDescription = null,
+                contentDescription = "Sync data now",
                 tint = when {
                     combinedStatus.hasAnyError -> MaterialTheme.colorScheme.error
                     combinedStatus.isAllSuccess -> LiftrixColorsV2.DataViz.Positive
@@ -483,7 +483,11 @@ private fun SyncHistoryItemRow(
         
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = when (historyItem.status) {
+                SyncHistoryStatus.SUCCESS -> "Sync successful"
+                SyncHistoryStatus.ERROR -> "Sync failed"
+                SyncHistoryStatus.PARTIAL -> "Sync partially completed"
+            },
             tint = color,
             modifier = Modifier.size(16.dp)
         )

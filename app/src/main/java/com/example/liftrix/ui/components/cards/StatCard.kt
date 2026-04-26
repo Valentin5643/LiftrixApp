@@ -130,7 +130,7 @@ fun StatCard(
                 icon?.let {
                     Icon(
                         imageVector = it,
-                        contentDescription = null,
+                        contentDescription = title,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )
@@ -275,7 +275,7 @@ fun TrendIndicator(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = getTrendDescription(trend),
             tint = color,
             modifier = Modifier.size(if (compact) 14.dp else 16.dp)
         )

@@ -7,6 +7,7 @@ import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.domain.service.SettingsPersistenceManager
 import com.example.liftrix.domain.service.SettingsValidator
+import com.example.liftrix.service.ImageProcessingService
 import com.example.liftrix.domain.usecase.auth.AuthCommandUseCase
 import com.example.liftrix.domain.usecase.settings.SettingsQueryUseCase
 import com.example.liftrix.domain.usecase.settings.SettingsCommandUseCase
@@ -59,7 +60,9 @@ class SettingsViewModel @Inject constructor(
     private val profileQueryUseCase: ProfileQueryUseCase,
     private val socialProfileQueryUseCase: SocialProfileQueryUseCase,
     private val authCommandUseCase: AuthCommandUseCase,
+    private val accountCommandUseCase: com.example.liftrix.domain.usecase.account.AccountCommandUseCase,
     private val profileImageOperationsUseCase: ProfileImageOperationsUseCase,
+    private val imageProcessingService: ImageProcessingService,
     private val authRepository: AuthRepository,
     private val analyticsService: AnalyticsService,
     private val settingsPersistenceManager: SettingsPersistenceManager,
@@ -168,6 +171,14 @@ class SettingsViewModel @Inject constructor(
             is SettingsEvent.NavigateToProfile -> handleProfileNavigation()
             is SettingsEvent.NavigateToSubscription -> handleSubscriptionNavigation()
             is SettingsEvent.NavigateToPrivacy -> handlePrivacyNavigation()
+            is SettingsEvent.NavigateToTermsOfService -> handleTermsOfServiceNavigation()
+            is SettingsEvent.NavigateToAIDisclaimer -> handleAIDisclaimerNavigation()
+            is SettingsEvent.NavigateToCommunityGuidelines -> handleCommunityGuidelinesNavigation()
+            is SettingsEvent.NavigateToContentModerationPolicy -> handleContentModerationPolicyNavigation()
+            is SettingsEvent.NavigateToRefundPolicy -> handleRefundPolicyNavigation()
+            is SettingsEvent.NavigateToAIChatSettings -> handleAIChatSettingsNavigation()
+            is SettingsEvent.NavigateToHelpCenter -> handleHelpCenterNavigation()
+            is SettingsEvent.NavigateToContactSupport -> handleContactSupportNavigation()
             is SettingsEvent.NavigateToHelp -> handleHelpNavigation()
             is SettingsEvent.NavigateToAbout -> handleAboutNavigation()
             is SettingsEvent.NavigateToAnomalyDetection -> handleAnomalyDetectionNavigation()
@@ -193,6 +204,12 @@ class SettingsViewModel @Inject constructor(
             is SettingsEvent.ExportDataRequested -> handleDataExport()
             is SettingsEvent.NavigateToDataPortability -> handleDataPortabilityNavigation()
             is SettingsEvent.DeleteAccountRequested -> handleAccountDeletion()
+            is SettingsEvent.DeleteAccountDialogDismissed -> dismissDeleteAccountDialog()
+            is SettingsEvent.DeleteAccountConfirmed -> confirmAccountDeletion(
+                event.reauthProvider,
+                event.reauthPayload,
+                event.exportDataFirst
+            )
             is SettingsEvent.SystemThemeChanged -> handleSystemThemeChanged()
             is SettingsEvent.SubscriptionStatusChanged -> handleSubscriptionStatusChanged()
         }
@@ -725,6 +742,70 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
+     * Handles terms of service navigation event.
+     */
+    private fun handleTermsOfServiceNavigation() {
+        trackNavigationEvent("terms_of_service")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
+     * Handles AI disclaimer navigation event.
+     */
+    private fun handleAIDisclaimerNavigation() {
+        trackNavigationEvent("ai_disclaimer")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
+     * Handles community guidelines navigation event.
+     */
+    private fun handleCommunityGuidelinesNavigation() {
+        trackNavigationEvent("community_guidelines")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
+     * Handles content moderation policy navigation event.
+     */
+    private fun handleContentModerationPolicyNavigation() {
+        trackNavigationEvent("content_moderation_policy")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
+     * Handles refund policy navigation event.
+     */
+    private fun handleRefundPolicyNavigation() {
+        trackNavigationEvent("refund_subscription_policy")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
+     * Handles AI chat settings navigation event.
+     */
+    private fun handleAIChatSettingsNavigation() {
+        trackNavigationEvent("ai_chat_settings")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
+     * Handles help center navigation event.
+     */
+    private fun handleHelpCenterNavigation() {
+        trackNavigationEvent("help_center")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
+     * Handles contact support navigation event.
+     */
+    private fun handleContactSupportNavigation() {
+        trackNavigationEvent("contact_support")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
      * Handles help navigation event.
      */
     private fun handleHelpNavigation() {
@@ -914,61 +995,95 @@ class SettingsViewModel @Inject constructor(
                 
                 Timber.d("Starting profile image upload for user: ${currentUser.uid}")
 
-                // Show loading state (could be enhanced with specific image upload loading state)
-                _uiState.value = _uiState.value.copy(isUpdatingSettings = true)
+                // Show loading state
+                _uiState.value = _uiState.value.copy(isUpdatingSettings = true, error = null)
 
-                // TODO: Need to process imageUri to bytes using ImageProcessingService before calling upload()
-                // For now, using repository directly with the upload operation
-                // Upload image using the use case
-                // Note: ProfileImageOperationsUseCase.upload() requires imageBytes, not imageUri
-                // This needs ImageProcessingService integration to convert URI -> ByteArray
-                Timber.w("Profile image upload from Settings requires ImageProcessingService integration")
-                _uiState.value = _uiState.value.copy(
-                    isUpdatingSettings = false,
-                    error = "Profile image upload from settings not yet implemented with new API"
-                )
-                return@launch
+                // Step 1: Process image URI to bytes using ImageProcessingService
+                val processResult = imageProcessingService.processProfileImage(imageUri)
 
-                /*val result = profileImageOperationsUseCase.upload(
-                    userId = currentUser.uid,
-                    imageBytes = imageBytes // Need to convert imageUri to ByteArray first
-                )
+                when {
+                    processResult.isSuccess -> {
+                        val processedImage = processResult.getOrNull()!!
+                        Timber.d("Image processed successfully: ${processedImage.fileSizeBytes} bytes")
 
-                result.fold(
-                    onSuccess = { imageUrl ->
-                        Timber.i("Profile image upload successful: $imageUrl")
-
-                        // Clear loading state
-                        _uiState.value = _uiState.value.copy(isUpdatingSettings = false)
-
-                        // Track successful upload
-                        analyticsService.logEvent(
-                            "profile_image_uploaded",
-                            mapOf(
-                                "source" to "settings_screen",
-                                "success" to true
-                            )
+                        // Step 2: Upload processed image bytes
+                        val uploadResult = profileImageOperationsUseCase.upload(
+                            userId = currentUser.uid,
+                            imageBytes = processedImage.imageBytes
                         )
-                    },
-                    onFailure = { error ->
-                        val errorMessage = error.message ?: "Failed to upload profile image"
-                        Timber.e("Profile image upload failed: $error")
+
+                        uploadResult.fold(
+                            onSuccess = { storagePath ->
+                                Timber.i("Profile image upload successful: $storagePath")
+
+                                // Update UI state with success
+                                _uiState.value = _uiState.value.copy(
+                                    isUpdatingSettings = false,
+                                    error = null
+                                )
+
+                                // Reload settings to show updated profile image
+                                loadSettings()
+
+                                // Track successful upload
+                                analyticsService.logEvent(
+                                    "profile_image_uploaded",
+                                    mapOf(
+                                        "source" to "settings_screen",
+                                        "success" to true,
+                                        "file_size_bytes" to processedImage.fileSizeBytes.toString()
+                                    )
+                                )
+                            },
+                            onFailure = { error ->
+                                val errorMessage = when (error) {
+                                    is LiftrixError.ValidationError -> error.violations.firstOrNull() ?: "Image validation failed"
+                                    is LiftrixError.NetworkError -> "Network error: ${error.message}"
+                                    else -> "Failed to upload profile image"
+                                }
+                                Timber.e("Profile image upload failed: $error")
+
+                                _uiState.value = _uiState.value.copy(
+                                    isUpdatingSettings = false,
+                                    error = errorMessage
+                                )
+
+                                // Track failed upload
+                                analyticsService.logEvent(
+                                    "profile_image_upload_failed",
+                                    mapOf(
+                                        "source" to "settings_screen",
+                                        "error" to errorMessage
+                                    )
+                                )
+                            }
+                        )
+                    }
+                    else -> {
+                        // Image processing failed
+                        val error = processResult.exceptionOrNull()
+                        val errorMessage = when {
+                            error?.message?.contains("too large") == true -> "Image too large to process"
+                            error?.message?.contains("format") == true -> "Unsupported image format"
+                            else -> "Failed to process image"
+                        }
+                        Timber.e(error, "Image processing failed")
 
                         _uiState.value = _uiState.value.copy(
                             isUpdatingSettings = false,
                             error = errorMessage
                         )
 
-                        // Track failed upload
+                        // Track processing failure
                         analyticsService.logEvent(
-                            "profile_image_upload_failed",
+                            "profile_image_processing_failed",
                             mapOf(
                                 "source" to "settings_screen",
                                 "error" to errorMessage
                             )
                         )
                     }
-                )*/
+                }
 
             } catch (e: Exception) {
                 Timber.e(e, "Unexpected error during profile image upload")
@@ -1043,11 +1158,71 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Handles account deletion request.
+     * Handles account deletion request by showing the delete account confirmation dialog.
      */
     private fun handleAccountDeletion() {
         trackDataAction("delete_requested")
-        // Account deletion logic will be handled by the UI layer
+        updateState { copy(showDeleteAccountDialog = true) }
+    }
+
+    /**
+     * Dismisses the delete account confirmation dialog.
+     */
+    private fun dismissDeleteAccountDialog() {
+        updateState { copy(showDeleteAccountDialog = false) }
+    }
+
+    /**
+     * Confirms account deletion and initiates the deletion process.
+     *
+     * @param reauthProvider The authentication provider ("password", "google", "anonymous")
+     * @param reauthPayload The re-authentication credential
+     * @param exportDataFirst Whether to export data before deletion
+     */
+    private fun confirmAccountDeletion(
+        reauthProvider: String,
+        reauthPayload: String,
+        exportDataFirst: Boolean
+    ) {
+        val userId = currentUserId ?: return
+
+        updateState { copy(showDeleteAccountDialog = false, isLoading = true) }
+        trackDataAction("delete_confirmed")
+
+        viewModelScope.launch {
+            Timber.d("Initiating account deletion for user $userId with provider $reauthProvider, exportDataFirst=$exportDataFirst")
+
+            val result = accountCommandUseCase.deleteAccount(
+                reauthProvider = reauthProvider,
+                reauthPayload = reauthPayload,
+                exportDataFirst = exportDataFirst
+            )
+
+            result.fold(
+                onSuccess = { deletionJobId ->
+                    Timber.i("Account deletion initiated successfully. Job ID: $deletionJobId")
+                    trackDataAction("delete_success")
+
+                    // Sign out the user after successful deletion initiation
+                    confirmSignOut()
+                },
+                onFailure = { error ->
+                    Timber.e("Failed to delete account for user $userId: $error")
+                    trackDataAction("delete_failed")
+
+                    updateState {
+                        copy(
+                            isLoading = false,
+                            error = when (error) {
+                                is LiftrixError.AuthenticationError -> "Re-authentication failed. Please check your credentials."
+                                is LiftrixError.BusinessLogicError -> error.errorMessage
+                                else -> "Failed to delete account. Please try again."
+                            }
+                        )
+                    }
+                }
+            )
+        }
     }
 
     /**
@@ -1423,11 +1598,11 @@ class SettingsViewModel @Inject constructor(
     
     /**
      * Gets the current authenticated user ID for security validation.
-     * 
+     *
      * @return Current user ID if authenticated, null otherwise
      */
     suspend fun getCurrentUserId(): String? {
-        return authRepository.getCurrentUserId()
+        return authRepository.getCurrentUserId()?.value
     }
     
     override fun onCleared() {

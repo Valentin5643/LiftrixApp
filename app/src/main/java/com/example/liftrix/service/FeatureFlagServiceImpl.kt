@@ -1,5 +1,6 @@
 package com.example.liftrix.service
 
+import com.example.liftrix.BuildConfig
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
@@ -48,7 +49,7 @@ class FeatureFlagServiceImpl @Inject constructor(
             "show_social_features" to true,
             "enable_workout_recommendations" to false
         )
-        
+
         // A/B test default variants
         private val DEFAULT_AB_TEST_VARIANTS = mapOf(
             "progress_dashboard_layout" to "control",
@@ -56,12 +57,18 @@ class FeatureFlagServiceImpl @Inject constructor(
             "premium_pricing_display" to "control",
             "chart_visualization_style" to "control"
         )
-        
+
         // Remote config fetch timeout in seconds
         private const val FETCH_TIMEOUT_SECONDS = 10L
-        
-        // Cache expiration time in seconds (1 hour)
+
+        // Cache expiration time in seconds (1 hour for production)
         private const val CACHE_EXPIRATION_SECONDS = 3600L
+
+        // TODO: TEMPORARY DEBUG OVERRIDE
+        // WHY: Enables immediate Remote Config fetching in debug builds for testing/debugging
+        // WHEN TO REMOVE: After Remote Config is fully tested and Firebase Console shows fetch activity
+        // PRODUCTION IMPACT: None - only affects debug builds (BuildConfig.DEBUG)
+        private const val DEBUG_CACHE_EXPIRATION_SECONDS = 0L // Immediate fetching for debug
     }
     
     // In-memory cache for feature flags
@@ -77,20 +84,40 @@ class FeatureFlagServiceImpl @Inject constructor(
     
     /**
      * Initialize Firebase Remote Config with appropriate settings
+     *
+     * DEBUG BUILD BEHAVIOR:
+     * - Sets minimumFetchIntervalInSeconds = 0 for immediate fetching
+     * - Enables real-time testing of feature flags
+     *
+     * PRODUCTION BUILD BEHAVIOR:
+     * - Uses standard 1-hour fetch interval
+     * - Normal caching behavior
      */
     private fun initializeRemoteConfig() {
         try {
+            // Determine fetch interval based on build type
+            val fetchInterval = if (BuildConfig.DEBUG) {
+                DEBUG_CACHE_EXPIRATION_SECONDS
+            } else {
+                CACHE_EXPIRATION_SECONDS
+            }
+
             val configSettings = FirebaseRemoteConfigSettings.Builder()
-                .setMinimumFetchIntervalInSeconds(CACHE_EXPIRATION_SECONDS)
+                .setMinimumFetchIntervalInSeconds(fetchInterval)
                 .setFetchTimeoutInSeconds(FETCH_TIMEOUT_SECONDS)
                 .build()
-            
+
             firebaseRemoteConfig.setConfigSettingsAsync(configSettings)
             firebaseRemoteConfig.setDefaultsAsync(DEFAULT_FEATURE_FLAGS + DEFAULT_AB_TEST_VARIANTS)
-            
+
+            // Log configuration mode
+            if (BuildConfig.DEBUG) {
+                Timber.i("🔧 DEBUG MODE: FeatureFlagService initialized with IMMEDIATE fetching (interval = 0s)")
+            }
+
             // Perform initial fetch
             performInitialFetch()
-            
+
         } catch (e: Exception) {
             Timber.e(e, "Failed to initialize Remote Config")
         }

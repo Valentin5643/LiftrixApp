@@ -355,7 +355,7 @@ private fun MetricPreview(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = title,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(24.dp)
         )
@@ -421,7 +421,7 @@ private fun ChartPreview(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = title,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(16.dp)
             )

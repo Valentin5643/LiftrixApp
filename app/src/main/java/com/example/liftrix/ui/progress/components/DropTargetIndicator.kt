@@ -310,7 +310,7 @@ fun EnhancedDropTargetIndicator(
         if (isActive) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = contentDescription,
                 tint = if (isValidTarget) {
                     MaterialTheme.colorScheme.primary
                 } else {

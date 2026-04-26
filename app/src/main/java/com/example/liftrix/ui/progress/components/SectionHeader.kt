@@ -110,7 +110,7 @@ fun SectionHeader(
             // Expand/collapse icon with rotation animation
             Icon(
                 imageVector = Icons.Default.ExpandMore,
-                contentDescription = null,
+                contentDescription = if (isExpanded) "Collapse section" else "Expand section",
                 modifier = Modifier
                     .size(24.dp)
                     .rotate(rotationAngle),
@@ -155,7 +155,7 @@ fun SimpleSectionHeader(
         
         Icon(
             imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-            contentDescription = null,
+            contentDescription = if (isExpanded) "Collapse section" else "Expand section",
             modifier = Modifier.size(20.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )

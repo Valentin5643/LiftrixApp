@@ -59,7 +59,7 @@ class CustomExerciseListViewModelImpl @Inject constructor(
             
             setState(UiState.Loading)
             try {
-                customExerciseRepository.getAllCustomExercises(userId).collectLatest { exercises ->
+                customExerciseRepository.getAllCustomExercises(userId.value).collectLatest { exercises ->
                     allExercises = exercises
                     val currentState = getCurrentState()?.copy(exercises = exercises) ?: CustomExerciseListState(exercises = exercises)
                     applyFiltersAndSearch(currentState)
@@ -68,7 +68,7 @@ class CustomExerciseListViewModelImpl @Inject constructor(
             } catch (e: Exception) {
                 setState(UiState.Error(LiftrixError.DataRetrievalError(
                     operation = "LOAD_CUSTOM_EXERCISES",
-                    analyticsContext = mapOf("userId" to userId)
+                    analyticsContext = mapOf("userId" to userId.value)
                 )))
             }
         }
@@ -112,7 +112,7 @@ class CustomExerciseListViewModelImpl @Inject constructor(
                     return@launch
                 }
 
-                val result = customExerciseRepository.deleteCustomExercise(userId, CustomExerciseId.fromString(exerciseId))
+                val result = customExerciseRepository.deleteCustomExercise(userId.value, CustomExerciseId.fromString(exerciseId))
                 result.fold(
                     onSuccess = {
                         Timber.i("Successfully deleted custom exercise: $exerciseId")

@@ -118,6 +118,16 @@ interface DeadLetterQueueDao {
     suspend fun clearOldReviewedItems(userId: String, cutoffTime: Long)
 
     /**
+     * Clears all dead letter items older than the cutoff time (reviewed or not).
+     */
+    @Query("""
+        DELETE FROM dead_letter_queue
+        WHERE user_id = :userId
+        AND failed_at < :cutoffTime
+    """)
+    suspend fun clearOldItems(userId: String, cutoffTime: Long): Int
+
+    /**
      * Gets dead letter statistics for analytics.
      */
     @Query("""

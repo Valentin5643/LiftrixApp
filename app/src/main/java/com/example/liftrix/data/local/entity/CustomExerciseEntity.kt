@@ -89,6 +89,9 @@ data class CustomExerciseEntity(
     @ColumnInfo(name = "sync_version", defaultValue = "1")
     val syncVersion: Long = 1,
     
+    @ColumnInfo(name = "is_dirty", defaultValue = "0")
+    val isDirty: Boolean = false,
+    
     @ColumnInfo(name = "last_modified", defaultValue = "0")
     val lastModified: Long = System.currentTimeMillis()
 ) 

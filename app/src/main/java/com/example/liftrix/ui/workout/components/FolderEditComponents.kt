@@ -149,7 +149,7 @@ fun FolderEditActionButton(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = title,
                 modifier = Modifier.size(24.dp)
             )
             

@@ -51,7 +51,7 @@ fun ClearHistoryDialog(
                 ) {
                     Icon(
                         Icons.Default.Warning,
-                        contentDescription = null,
+                        contentDescription = "Warning",
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(32.dp)
                     )

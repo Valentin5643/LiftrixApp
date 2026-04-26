@@ -57,18 +57,20 @@ class PostCreationViewModel @Inject constructor(
         
         viewModelScope.launch {
             try {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
-                    onFailure = {
-                        updateState { currentState ->
-                            currentState.copy(
-                                isLoading = false,
-                                error = "User not authenticated"
-                            )
-                        }
-                        return@launch
-                    }
+                val userIdResult = authQueryUseCase(waitForAuth = false)
+                val userId = userIdResult.fold(
+                    onSuccess = { it.value },
+                    onFailure = { null }
                 )
+                if (userId == null) {
+                    updateState { currentState ->
+                        currentState.copy(
+                            isLoading = false,
+                            error = "User not authenticated"
+                        )
+                    }
+                    return@launch
+                }
 
                 val result = workoutQueryUseCase.getById(WorkoutId(workoutId), userId)
                 result.fold(
@@ -180,21 +182,23 @@ class PostCreationViewModel @Inject constructor(
                 error = null
             )
         }
-        
+
         viewModelScope.launch {
-            val userId = authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
-                onFailure = {
-                    updateState { currentState ->
-                        currentState.copy(
-                            isCreatingPost = false,
-                            error = "Authentication required"
-                        )
-                    }
-                    Timber.e("Failed to get current user ID for post creation")
-                    return@launch
-                }
+            val userIdResult = authQueryUseCase(waitForAuth = false)
+            val userId = userIdResult.fold(
+                onSuccess = { it.value },
+                onFailure = { null }
             )
+            if (userId == null) {
+                updateState { currentState ->
+                    currentState.copy(
+                        isCreatingPost = false,
+                        error = "Authentication required"
+                    )
+                }
+                Timber.e("Failed to get current user ID for post creation")
+                return@launch
+            }
             createPostForUser(userId, state)
         }
     }

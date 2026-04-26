@@ -391,7 +391,7 @@ private fun EditWorkoutErrorContent(
         // Error icon and message
         Icon(
             imageVector = Icons.Default.Error,
-            contentDescription = null,
+            contentDescription = "Error",
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.error
         )

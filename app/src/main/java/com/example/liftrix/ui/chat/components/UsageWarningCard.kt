@@ -101,7 +101,7 @@ private fun UsageWarningHeader(
         ) {
             Icon(
                 imageVector = getWarningIcon(warningLevel),
-                contentDescription = null,
+                contentDescription = getWarningTitle(warningLevel, currentLanguage),
                 modifier = Modifier.size(20.dp),
                 tint = getWarningIconColor(warningLevel)
             )
@@ -271,7 +271,7 @@ fun CompactUsageWarning(
         ) {
             Icon(
                 imageVector = getWarningIcon(warningLevel),
-                contentDescription = null,
+                contentDescription = getCompactWarningText(usageLimits, currentLanguage),
                 modifier = Modifier.size(16.dp),
                 tint = getWarningIconColor(warningLevel)
             )

@@ -69,7 +69,7 @@ fun RecentActivityCard(
                             )
                             Icon(
                                 imageVector = Icons.Default.ArrowForward,
-                                contentDescription = null,
+                                contentDescription = "See all activities",
                                 modifier = Modifier.size(16.dp)
                             )
                         }

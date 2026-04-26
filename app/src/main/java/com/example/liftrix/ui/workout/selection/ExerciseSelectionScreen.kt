@@ -240,7 +240,7 @@ private fun ExerciseSelectionContent(
                 ) {
                     Icon(
                         imageVector = Icons.Default.History,
-                        contentDescription = null,
+                        contentDescription = "Recent exercises",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
                     )
@@ -300,7 +300,7 @@ private fun ExerciseSelectionContent(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = null,
+                            contentDescription = "Create custom exercise",
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -315,7 +315,7 @@ private fun ExerciseSelectionContent(
                     ) {
                         Icon(
                             imageVector = Icons.Default.List,
-                            contentDescription = null,
+                            contentDescription = "Manage custom exercises",
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -376,7 +376,7 @@ private fun EmptyExerciseState(
     ) {
         Icon(
             imageVector = Icons.Default.Search,
-            contentDescription = null,
+            contentDescription = "Search exercises",
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             modifier = Modifier.size(48.dp)
         )

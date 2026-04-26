@@ -164,7 +164,7 @@ fun ButtonsWithIconsPreview() {
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = null
+                    contentDescription = "Add workout"
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Add Workout")
@@ -177,7 +177,7 @@ fun ButtonsWithIconsPreview() {
             ) {
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null
+                    contentDescription = "Start session"
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Start Session")
@@ -190,7 +190,7 @@ fun ButtonsWithIconsPreview() {
             ) {
                 Icon(
                     imageVector = Icons.Default.Favorite,
-                    contentDescription = null
+                    contentDescription = "Save favorite"
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Save Favorite")
@@ -203,7 +203,7 @@ fun ButtonsWithIconsPreview() {
             ) {
                 Icon(
                     imageVector = Icons.Default.Star,
-                    contentDescription = null
+                    contentDescription = "Rate workout"
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Rate Workout")

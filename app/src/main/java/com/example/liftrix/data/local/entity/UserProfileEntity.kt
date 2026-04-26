@@ -68,6 +68,13 @@ data class UserProfileEntity(
     @ColumnInfo(name = "sync_version", defaultValue = "1")
     val syncVersion: Long = 1L,
 
+    // Offline-first architecture fields (SPEC-20241228)
+    @ColumnInfo(name = "is_dirty", defaultValue = "0")
+    val isDirty: Boolean = false,
+
+    @ColumnInfo(name = "last_modified", defaultValue = "0")
+    val lastModified: Long = 0L,
+
     // Enhanced social and achievement fields added in migration 35->36
     @ColumnInfo(name = "bio")
     val bio: String? = null,

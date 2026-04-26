@@ -68,7 +68,7 @@ class FeedViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
+                    onSuccess = { it?.value },
                     onFailure = { null }
                 )
                 _uiState.value = _uiState.value.copy(currentUserId = userId)
@@ -99,7 +99,7 @@ class FeedViewModel @Inject constructor(
         .flatMapLatest { tab ->
             flow {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
+                    onSuccess = { it?.value },
                     onFailure = { null }
                 )
                 if (userId != null) {
@@ -187,7 +187,7 @@ class FeedViewModel @Inject constructor(
     private fun toggleLike(postId: String) {
         viewModelScope.launch(Dispatchers.IO + SupervisorJob()) {
             val userId = authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
+                onSuccess = { it?.value },
                 onFailure = { null }
             )
             if (userId != null) {
@@ -230,7 +230,7 @@ class FeedViewModel @Inject constructor(
     private fun toggleSave(postId: String) {
         viewModelScope.launch {
             val userId = authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
+                onSuccess = { it?.value },
                 onFailure = { null }
             )
             if (userId != null) {
@@ -275,7 +275,7 @@ class FeedViewModel @Inject constructor(
             try {
                 // Track share analytics with proper share event
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
+                    onSuccess = { it?.value ?: "" },
                     onFailure = { "" }
                 )
                 analyticsTracker.trackShare(
@@ -342,7 +342,7 @@ class FeedViewModel @Inject constructor(
     private fun copyWorkout(post: WorkoutPost) {
         viewModelScope.launch {
             val userId = authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
+                onSuccess = { it?.value },
                 onFailure = { null }
             )
             if (userId != null) {
@@ -386,7 +386,7 @@ class FeedViewModel @Inject constructor(
     private fun refreshFeed() {
         viewModelScope.launch {
             val userId = authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
+                onSuccess = { it?.value },
                 onFailure = { null }
             )
             if (userId != null) {

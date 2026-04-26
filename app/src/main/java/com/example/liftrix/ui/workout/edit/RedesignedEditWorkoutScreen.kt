@@ -481,7 +481,7 @@ private fun EditWorkoutContent(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
-                        contentDescription = null,
+                        contentDescription = "Add exercise",
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))

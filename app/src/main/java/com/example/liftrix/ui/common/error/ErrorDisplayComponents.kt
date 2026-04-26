@@ -119,7 +119,7 @@ fun ErrorDisplay(
                 if (showIcon) {
                     Icon(
                         imageVector = getErrorIcon(error),
-                        contentDescription = null,
+                        contentDescription = ErrorMapper.mapToErrorTitle(error),
                         modifier = Modifier.size(if (compact) 20.dp else 24.dp),
                         tint = getErrorContentColor(severity)
                     )
@@ -162,7 +162,7 @@ fun ErrorDisplay(
                     ) {
                         Icon(
                             imageVector = Icons.Default.CloudOff, // Using CloudOff as close icon substitute
-                            contentDescription = null,
+                            contentDescription = "Dismiss error",
                             tint = getErrorContentColor(severity).copy(alpha = 0.6f)
                         )
                     }
@@ -180,7 +180,7 @@ fun ErrorDisplay(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
-                        contentDescription = null,
+                        contentDescription = "Retry",
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(LiftrixTokens.Spacing.Small))
@@ -231,7 +231,7 @@ fun ErrorSnackbar(
         ) {
             Icon(
                 imageVector = getErrorIcon(error),
-                contentDescription = null,
+                contentDescription = ErrorMapper.mapToErrorTitle(error),
                 modifier = Modifier.size(20.dp),
                 tint = getErrorContentColor(severity)
             )
@@ -265,7 +265,7 @@ fun ErrorSnackbar(
             ) {
                 Icon(
                     imageVector = Icons.Default.CloudOff, // Using CloudOff as close substitute
-                    contentDescription = null,
+                    contentDescription = "Dismiss error notification",
                     modifier = Modifier.size(18.dp),
                     tint = getErrorContentColor(severity).copy(alpha = 0.6f)
                 )
@@ -302,7 +302,7 @@ fun ErrorDialog(
         icon = {
             Icon(
                 imageVector = getErrorIcon(error),
-                contentDescription = null,
+                contentDescription = ErrorMapper.mapToErrorTitle(error),
                 modifier = Modifier.size(32.dp),
                 tint = getErrorContentColor(severity)
             )
@@ -387,7 +387,7 @@ fun InlineErrorMessage(
             ) {
                 Icon(
                     imageVector = Icons.Default.ErrorOutline,
-                    contentDescription = null,
+                    contentDescription = "Error",
                     modifier = Modifier.size(16.dp),
                     tint = LiftrixTokens.SemanticColors.Error
                 )
@@ -440,7 +440,7 @@ fun ErrorEmptyState(
             // Large error icon
             Icon(
                 imageVector = getErrorIcon(error),
-                contentDescription = null,
+                contentDescription = ErrorMapper.mapToErrorTitle(error),
                 modifier = Modifier.size(64.dp),
                 tint = getErrorContentColor(severity).copy(alpha = 0.6f)
             )
@@ -474,7 +474,7 @@ fun ErrorEmptyState(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
-                        contentDescription = null,
+                        contentDescription = "Retry",
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(LiftrixTokens.Spacing.Small))

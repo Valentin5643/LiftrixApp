@@ -430,7 +430,7 @@ private fun WidgetSection(
                     ) {
                         Icon(
                             imageVector = Icons.Default.ExpandMore,
-                            contentDescription = null,
+                            contentDescription = if (isExpanded) "Collapse $title section" else "Expand $title section",
                             modifier = Modifier
                                 .size(24.dp)
                                 .rotate(rotationAngle),

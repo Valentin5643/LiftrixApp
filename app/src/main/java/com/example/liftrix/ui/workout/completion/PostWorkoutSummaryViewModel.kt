@@ -54,7 +54,7 @@ class PostWorkoutSummaryViewModel @Inject constructor(
 
             // Get current user ID
             val userId = authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
+                onSuccess = { it.value },
                 onFailure = {
                     _uiState.value = PostWorkoutUiState.Error(
                         message = "User not authenticated"
@@ -62,7 +62,7 @@ class PostWorkoutSummaryViewModel @Inject constructor(
                     return@launch
                 }
             )
-            
+
             // Get workout details
             workoutQueryUseCase.getById(WorkoutId(workoutId), userId).fold(
                 onSuccess = { workout ->
@@ -164,7 +164,7 @@ class PostWorkoutSummaryViewModel @Inject constructor(
     fun discardWorkout(workoutId: String, onSuccess: () -> Unit) {
         viewModelScope.launch {
             val userId = currentUserId ?: authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
+                onSuccess = { it.value },
                 onFailure = {
                     Timber.e("Cannot discard workout - user not authenticated")
                     return@launch

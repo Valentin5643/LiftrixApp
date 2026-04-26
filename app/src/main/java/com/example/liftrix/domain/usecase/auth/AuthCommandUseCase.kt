@@ -2,6 +2,7 @@ package com.example.liftrix.domain.usecase.auth
 
 import android.content.Context
 import androidx.work.WorkManager
+import com.example.liftrix.core.identity.UserId
 import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.UserAccount
@@ -118,10 +119,10 @@ class AuthCommandUseCase @Inject constructor(
         handleUserAccountCreation(user, email)
 
         // Sync onboarding profile after successful login
-        syncOnboardingProfileAfterLogin(user.uid)
+        syncOnboardingProfileAfterLogin(UserId(user.uid))
 
         // Restore follow relationships
-        restoreFollowRelationshipsAfterLogin(user.uid)
+        restoreFollowRelationshipsAfterLogin(UserId(user.uid))
 
         user
     }
@@ -177,10 +178,10 @@ class AuthCommandUseCase @Inject constructor(
             }
 
             // Transfer pending onboarding data
-            transferOnboardingDataAfterLogin(user.uid)
+            transferOnboardingDataAfterLogin(UserId(user.uid))
 
             // Restore follow relationships
-            restoreFollowRelationshipsAfterLogin(user.uid)
+            restoreFollowRelationshipsAfterLogin(UserId(user.uid))
 
         } catch (e: Exception) {
             Timber.e(e, "Error handling UserAccount for Google sign-in")
@@ -387,8 +388,8 @@ class AuthCommandUseCase @Inject constructor(
         // 3. Clear WorkManager jobs for this user (AUTH-007 FIX)
         if (userId != null) {
             try {
-                workManager.cancelAllWorkByTag("sync_$userId")
-                workManager.cancelAllWorkByTag("user_$userId")
+                workManager.cancelAllWorkByTag("sync_${userId.value}")
+                workManager.cancelAllWorkByTag("user_${userId.value}")
             } catch (e: Exception) {
                 Timber.w(e, "Failed to cancel WorkManager jobs during sign out")
             }
@@ -434,7 +435,7 @@ class AuthCommandUseCase @Inject constructor(
         Timber.d("Starting enhanced sign out process")
 
         // Step 1: Get current user ID for analytics
-        val currentUserId = authRepository.getCurrentUserId()
+        val currentUserId = authRepository.getCurrentUserId()?.value
         Timber.d("Current user ID: $currentUserId")
 
         // Step 2: Sign out from Firebase
@@ -769,31 +770,31 @@ class AuthCommandUseCase @Inject constructor(
     /**
      * Sync onboarding profile data after login.
      */
-    private suspend fun syncOnboardingProfileAfterLogin(userId: String) {
+    private suspend fun syncOnboardingProfileAfterLogin(userId: UserId) {
         withContext(Dispatchers.IO) {
             try {
-                Timber.d("Checking for unsynced onboarding profile for user $userId")
+                Timber.d("Checking for unsynced onboarding profile for user ${userId.value}")
 
-                val hasProfile = profileRepository.hasProfile(userId)
+                val hasProfile = profileRepository.hasProfile(userId.value)
                 if (!hasProfile) {
-                    Timber.d("No profile found for user $userId - skipping profile sync")
+                    Timber.d("No profile found for user ${userId.value} - skipping profile sync")
                     return@withContext
                 }
 
-                val unsyncedCount = profileRepository.getUnsyncedCount(userId)
+                val unsyncedCount = profileRepository.getUnsyncedCount(userId.value)
                 if (unsyncedCount > 0) {
-                    Timber.d("Found $unsyncedCount unsynced profile entries for user $userId")
+                    Timber.d("Found $unsyncedCount unsynced profile entries for user ${userId.value}")
 
-                    profileRepository.queueSync(userId)
-                    val syncResult = profileRepository.syncNow(userId)
+                    profileRepository.queueSync(userId.value)
+                    val syncResult = profileRepository.syncNow(userId.value)
 
                     if (syncResult.isSuccess) {
-                        Timber.d("Successfully synced onboarding profile for user $userId")
+                        Timber.d("Successfully synced onboarding profile for user ${userId.value}")
                     } else {
                         Timber.w("Failed to sync profile immediately, will retry in background")
                     }
                 } else {
-                    Timber.d("Profile already synced for user $userId")
+                    Timber.d("Profile already synced for user ${userId.value}")
                 }
             } catch (e: Exception) {
                 Timber.e(e, "Error syncing onboarding profile")
@@ -804,15 +805,15 @@ class AuthCommandUseCase @Inject constructor(
     /**
      * Restore follow relationships from Firebase after login.
      */
-    private suspend fun restoreFollowRelationshipsAfterLogin(userId: String) {
+    private suspend fun restoreFollowRelationshipsAfterLogin(userId: UserId) {
         withContext(Dispatchers.IO) {
             try {
-                Timber.d("🔥 FOLLOW-SYNC-FIX: Starting follow relationship restoration for user $userId")
+                Timber.d("🔥 FOLLOW-SYNC-FIX: Starting follow relationship restoration for user ${userId.value}")
 
-                val restoreWorkRequest = FollowRelationshipSyncWorker.createRestoreWorkRequest(userId)
+                val restoreWorkRequest = FollowRelationshipSyncWorker.createRestoreWorkRequest(userId.value)
                 workManager.enqueue(restoreWorkRequest)
 
-                Timber.d("🔥 FOLLOW-SYNC-FIX: Queued follow relationship restoration work for user $userId")
+                Timber.d("🔥 FOLLOW-SYNC-FIX: Queued follow relationship restoration work for user ${userId.value}")
             } catch (e: Exception) {
                 Timber.e(e, "🔥 FOLLOW-SYNC-FIX: Error queuing follow restoration work")
             }
@@ -822,17 +823,17 @@ class AuthCommandUseCase @Inject constructor(
     /**
      * Transfer pending onboarding data to authenticated user after Google login.
      */
-    private suspend fun transferOnboardingDataAfterLogin(userId: String) {
+    private suspend fun transferOnboardingDataAfterLogin(userId: UserId) {
         withContext(Dispatchers.IO) {
             try {
-                Timber.d("🔧 ONBOARDING-FIX: Checking for pending onboarding data for user $userId")
+                Timber.d("🔧 ONBOARDING-FIX: Checking for pending onboarding data for user ${userId.value}")
 
                 val hasPendingData = onboardingDataStore.hasPendingOnboardingData()
 
                 if (hasPendingData) {
                     Timber.d("🔧 ONBOARDING-FIX: Found pending onboarding data, initiating transfer")
 
-                    val transferResult = onboardingDataStore.retrievePendingOnboardingData(userId)
+                    val transferResult = onboardingDataStore.retrievePendingOnboardingData(userId.value)
 
                     transferResult.fold(
                         onSuccess = { pendingData ->
@@ -843,8 +844,8 @@ class AuthCommandUseCase @Inject constructor(
                                     onSuccess = {
                                         Timber.d("🔧 ONBOARDING-FIX: Successfully saved transferred profile")
                                         onboardingDataStore.clearPendingOnboardingData()
-                                        profileRepository.queueSync(userId)
-                                        profileRepository.syncNow(userId)
+                                        profileRepository.queueSync(userId.value)
+                                        profileRepository.syncNow(userId.value)
                                     },
                                     onFailure = { error ->
                                         Timber.e("🔧 ONBOARDING-FIX: Failed to save transferred profile: ${error.message}")
@@ -870,14 +871,14 @@ class AuthCommandUseCase @Inject constructor(
     /**
      * Sync existing profile if needed (fallback).
      */
-    private suspend fun syncExistingProfileIfNeeded(userId: String) {
+    private suspend fun syncExistingProfileIfNeeded(userId: UserId) {
         try {
-            val hasProfile = profileRepository.hasProfile(userId)
+            val hasProfile = profileRepository.hasProfile(userId.value)
             if (hasProfile) {
-                val unsyncedCount = profileRepository.getUnsyncedCount(userId)
+                val unsyncedCount = profileRepository.getUnsyncedCount(userId.value)
                 if (unsyncedCount > 0) {
-                    profileRepository.queueSync(userId)
-                    profileRepository.syncNow(userId)
+                    profileRepository.queueSync(userId.value)
+                    profileRepository.syncNow(userId.value)
                 }
             }
         } catch (e: Exception) {

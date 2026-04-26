@@ -387,7 +387,7 @@ fun ImagePickerDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CameraAlt,
-                                contentDescription = null,
+                                contentDescription = "Camera",
                                 modifier = Modifier.size(24.dp)
                             )
                             Text(
@@ -417,7 +417,7 @@ fun ImagePickerDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.PhotoLibrary,
-                                contentDescription = null,
+                                contentDescription = "Photo library",
                                 modifier = Modifier.size(24.dp)
                             )
                             Text(

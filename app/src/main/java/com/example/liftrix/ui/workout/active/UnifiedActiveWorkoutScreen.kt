@@ -211,7 +211,7 @@ fun UnifiedActiveWorkoutScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
-                            contentDescription = null,
+                            contentDescription = "Navigate back",
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -242,7 +242,7 @@ fun UnifiedActiveWorkoutScreen(
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.Stop,
-                                    contentDescription = null
+                                    contentDescription = "Stop workout"
                                 )
                             }
                         )
@@ -647,7 +647,7 @@ private fun ExerciseCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = null,
+                    contentDescription = "Add set",
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -676,7 +676,7 @@ private fun EmptyExerciseList(
         ) {
             Icon(
                 imageVector = Icons.Default.FitnessCenter,
-                contentDescription = null,
+                contentDescription = "No exercises",
                 modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.outline
             )

@@ -235,7 +235,7 @@ fun ProfileTopBar(
                             DropdownMenuItem(
                                 text = { Text("Block User") },
                                 leadingIcon = {
-                                    Icon(Icons.Default.Block, contentDescription = null)
+                                    Icon(Icons.Default.Block, contentDescription = "Block user")
                                 },
                                 onClick = {
                                     onBlockUser()
@@ -245,7 +245,7 @@ fun ProfileTopBar(
                             DropdownMenuItem(
                                 text = { Text("Report Profile") },
                                 leadingIcon = {
-                                    Icon(Icons.Default.Flag, contentDescription = null)
+                                    Icon(Icons.Default.Flag, contentDescription = "Report profile")
                                 },
                                 onClick = {
                                     onReportProfile()
@@ -542,7 +542,7 @@ fun ModernProfileContent(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.FitnessCenter,
-                                    contentDescription = null,
+                                    contentDescription = "No workouts",
                                     modifier = Modifier.size(48.dp),
                                     tint = textSecondary.copy(alpha = 0.5f)
                                 )
@@ -742,7 +742,7 @@ fun ProfileAvatar(
                         .data(imageUrl)
                         .crossfade(true)
                         .build(),
-                    contentDescription = null,
+                    contentDescription = "$displayName profile picture",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -794,7 +794,7 @@ fun ConnectionActions(
                     ) {
                         Icon(
                             imageVector = Icons.Default.PersonAdd,
-                            contentDescription = null,
+                            contentDescription = "Connect",
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -811,7 +811,7 @@ fun ConnectionActions(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Schedule,
-                            contentDescription = null,
+                            contentDescription = "Pending",
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -828,7 +828,7 @@ fun ConnectionActions(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Check,
-                            contentDescription = null,
+                            contentDescription = "Accept",
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -841,7 +841,7 @@ fun ConnectionActions(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = null,
+                            contentDescription = "Decline",
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -858,7 +858,7 @@ fun ConnectionActions(
                     ) {
                         Icon(
                             imageVector = Icons.Default.FitnessCenter,
-                            contentDescription = null,
+                            contentDescription = "Workouts",
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -874,7 +874,7 @@ fun ConnectionActions(
                     ) {
                         Icon(
                             imageVector = Icons.Default.FitnessCenter,
-                            contentDescription = null,
+                            contentDescription = "Gym buddy",
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -891,7 +891,7 @@ fun ConnectionActions(
                     ) {
                         Icon(
                             imageVector = Icons.Default.FitnessCenter,
-                            contentDescription = null,
+                            contentDescription = "Workouts",
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -908,7 +908,7 @@ fun ConnectionActions(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Group,
-                            contentDescription = null,
+                            contentDescription = "Gym buddy",
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -1049,7 +1049,7 @@ fun EquipmentSection(
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.FitnessCenter,
-                                    contentDescription = null,
+                                    contentDescription = "Equipment: ${item.name}",
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -1098,7 +1098,7 @@ fun GoalsSection(
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.TrendingUp,
-                                    contentDescription = null,
+                                    contentDescription = "Goal: $goal",
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -1142,7 +1142,7 @@ fun AchievementsSection(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.EmojiEvents,
-                                contentDescription = null,
+                                contentDescription = "Achievement",
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -1275,7 +1275,7 @@ fun StatsItem(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = label,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp)
             )
@@ -1313,7 +1313,7 @@ fun StatItem(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = label,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp)
             )
@@ -1346,7 +1346,7 @@ fun InfoItem(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = label,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 modifier = Modifier.size(18.dp)
             )
@@ -1408,7 +1408,7 @@ fun ErrorProfileState(
         ) {
             Icon(
                 imageVector = Icons.Default.Error,
-                contentDescription = null,
+                contentDescription = "Error",
                 tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(48.dp)
             )

@@ -22,7 +22,35 @@ interface LegalDocumentService {
      * @return LiftrixResult containing the terms of service document
      */
     suspend fun getTermsOfService(forceRefresh: Boolean = false): LiftrixResult<LegalDocument>
-    
+
+    /**
+     * Retrieves the AI disclaimer document
+     * @param forceRefresh Whether to force refresh from remote source
+     * @return LiftrixResult containing the AI disclaimer document
+     */
+    suspend fun getAIDisclaimer(forceRefresh: Boolean = false): LiftrixResult<LegalDocument>
+
+    /**
+     * Retrieves the community guidelines document
+     * @param forceRefresh Whether to force refresh from remote source
+     * @return LiftrixResult containing the community guidelines document
+     */
+    suspend fun getCommunityGuidelines(forceRefresh: Boolean = false): LiftrixResult<LegalDocument>
+
+    /**
+     * Retrieves the content moderation policy document
+     * @param forceRefresh Whether to force refresh from remote source
+     * @return LiftrixResult containing the content moderation policy document
+     */
+    suspend fun getContentModerationPolicy(forceRefresh: Boolean = false): LiftrixResult<LegalDocument>
+
+    /**
+     * Retrieves the refund and subscription policy document
+     * @param forceRefresh Whether to force refresh from remote source
+     * @return LiftrixResult containing the refund and subscription policy document
+     */
+    suspend fun getRefundSubscriptionPolicy(forceRefresh: Boolean = false): LiftrixResult<LegalDocument>
+
     /**
      * Retrieves the EULA (End User License Agreement) if applicable
      * @param forceRefresh Whether to force refresh from remote source
@@ -150,24 +178,32 @@ data class LegalDocument(
 enum class LegalDocumentType(val displayName: String, val fileName: String) {
     PRIVACY_POLICY("Privacy Policy", "privacy_policy"),
     TERMS_OF_SERVICE("Terms of Service", "terms_of_service"),
+    AI_DISCLAIMER("AI Disclaimer", "ai_disclaimer"),
+    COMMUNITY_GUIDELINES("Community Guidelines", "community_guidelines"),
+    CONTENT_MODERATION_POLICY("Content Moderation Policy", "content_moderation_policy"),
+    REFUND_SUBSCRIPTION_POLICY("Refund & Subscription Policy", "refund_subscription_policy"),
     EULA("End User License Agreement", "eula"),
     DATA_PROCESSING_AGREEMENT("Data Processing Agreement", "data_processing_agreement"),
     COOKIE_POLICY("Cookie Policy", "cookie_policy"),
     ACCESSIBILITY_STATEMENT("Accessibility Statement", "accessibility_statement");
-    
+
     companion object {
         /**
          * Gets documents that require user acceptance
          */
         fun getRequiredDocuments(): List<LegalDocumentType> = listOf(
             PRIVACY_POLICY,
-            TERMS_OF_SERVICE
+            TERMS_OF_SERVICE,
+            AI_DISCLAIMER
         )
-        
+
         /**
          * Gets optional documents for information purposes
          */
         fun getOptionalDocuments(): List<LegalDocumentType> = listOf(
+            COMMUNITY_GUIDELINES,
+            CONTENT_MODERATION_POLICY,
+            REFUND_SUBSCRIPTION_POLICY,
             EULA,
             DATA_PROCESSING_AGREEMENT,
             COOKIE_POLICY,

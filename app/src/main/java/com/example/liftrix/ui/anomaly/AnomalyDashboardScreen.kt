@@ -218,7 +218,7 @@ private fun DetectionStatisticsCard(
             ) {
                 Icon(
                     imageVector = if (statistics.detectionEnabled) Icons.Default.CheckCircle else Icons.Default.Warning,
-                    contentDescription = null,
+                    contentDescription = if (statistics.detectionEnabled) "Detection active" else "Detection disabled",
                     tint = if (statistics.detectionEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(16.dp)
                 )
@@ -311,7 +311,7 @@ private fun AnomalyCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
-                        contentDescription = null,
+                        contentDescription = "Resolved",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(16.dp)
                     )
@@ -397,7 +397,7 @@ private fun NoAnomaliesCard() {
         ) {
             Icon(
                 imageVector = Icons.Default.CheckCircle,
-                contentDescription = null,
+                contentDescription = "No anomalies detected",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(48.dp)
             )
@@ -463,7 +463,7 @@ private fun ErrorState(
         ) {
             Icon(
                 imageVector = Icons.Default.Error,
-                contentDescription = null,
+                contentDescription = "Error",
                 tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(64.dp)
             )
@@ -486,7 +486,7 @@ private fun ErrorState(
             Button(onClick = onRetry) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
-                    contentDescription = null,
+                    contentDescription = "Retry",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -514,7 +514,7 @@ private fun EmptyState(
         ) {
             Icon(
                 imageVector = Icons.Default.TrendingUp,
-                contentDescription = null,
+                contentDescription = "Anomaly detection",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(64.dp)
             )
@@ -537,7 +537,7 @@ private fun EmptyState(
             Button(onClick = onNavigateToSettings) {
                 Icon(
                     imageVector = Icons.Default.Settings,
-                    contentDescription = null,
+                    contentDescription = "Configure settings",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))

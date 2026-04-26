@@ -39,6 +39,142 @@ Firebase (8 services + Firestore sync)
 
 ### Critical Architectural Rules
 
+#### 0. Room-First Offline Architecture (SPEC-20241228 - MANDATORY)
+**Room is the single source of truth. Firestore offline persistence is DISABLED.**
+
+**Core Principles:**
+1. **Single Authority**: Room is the authoritative database; Firestore is stateless sync target
+2. **Origin-Aware Writes**: All writes use `upsertLocal()` or `upsertFromRemote()` to distinguish source
+3. **Dirty Flag Gating**: Only entities with `isDirty=true` are synced to Firestore
+4. **Idempotent Listeners**: Real-time Firestore updates use `upsertFromRemote()` (no feedback loops)
+5. **Timestamp Deduplication**: Remote updates only applied if `remote.lastModified > local.lastModified`
+6. **Repository Bypass Eliminated**: ALL repository writes go to Room first, then queue for sync
+
+**DAO Method Pattern:**
+```kotlin
+// ✅ LOCAL ORIGIN - Sets isDirty=true, triggers sync
+suspend fun upsertLocal(workout: WorkoutEntity) {
+    val entity = workout.copy(
+        isDirty = true,
+        lastModified = System.currentTimeMillis()
+    )
+    _insert(entity)
+}
+
+// ✅ REMOTE ORIGIN - Sets isDirty=false, NO sync trigger
+@Transaction
+suspend fun upsertFromRemote(workout: WorkoutEntity) {
+    val local = getWorkoutById(workout.id, workout.userId)
+    if (local == null || workout.lastModified > local.lastModified) {
+        _insert(workout.copy(isDirty = false, isSynced = true))
+    }
+}
+
+// ✅ SYNC WORKERS - Query only dirty entities
+@Query("SELECT * FROM workouts WHERE user_id = :userId AND is_dirty = 1")
+suspend fun getDirtyWorkouts(userId: String): List<WorkoutEntity>
+
+// ✅ POST-UPLOAD - Mark entities as clean
+@Query("UPDATE workouts SET is_dirty = 0, is_synced = 1, sync_version = :version WHERE id IN (:ids)")
+suspend fun markAsClean(ids: List<String>, userId: String, version: Long = System.currentTimeMillis())
+
+// ❌ NEVER USE - Generic inserts don't distinguish origin
+@Insert suspend fun insert(workout: WorkoutEntity) // FORBIDDEN
+```
+
+**Sync Worker Pattern:**
+```kotlin
+override suspend fun performSync(userId: String): Result {
+    // 1. Get dirty entities (isDirty=true only)
+    val dirtyWorkouts = workoutDao.getDirtyWorkouts(userId)
+    if (dirtyWorkouts.isEmpty()) return Result.success()
+
+    // 2. Upload to Firestore with conflict check
+    dirtyWorkouts.forEach { workout ->
+        val remote = firebaseDataSource.getWorkout(userId, workout.id)
+        if (remote != null && remote.lastModified > workout.lastModified) {
+            // Remote is newer, skip upload
+            continue
+        }
+        batch.set(userId, "workouts", workout.id, workout.toDto())
+    }
+    batch.commit()
+
+    // 3. Mark as clean AFTER successful upload
+    workoutDao.markAsClean(dirtyWorkouts.map { it.id }, userId)
+
+    // 4. Download remote updates (separate from upload)
+    val remoteWorkouts = firebaseDataSource.getWorkouts(userId)
+    remoteWorkouts.forEach { workoutDao.upsertFromRemote(it) }
+
+    return Result.success()
+}
+```
+
+**Real-Time Listener Pattern:**
+```kotlin
+// ✅ CORRECT - Idempotent, no feedback loop
+private suspend fun onRemoteEngagement(doc: DocumentSnapshot) {
+    val likeCount = doc.getLong("likeCount")?.toInt() ?: 0
+    val lastModified = doc.getLong("lastModified") ?: System.currentTimeMillis()
+
+    workoutPostDao.upsertEngagementFromRemote(
+        postId = doc.id,
+        likeCount = likeCount,
+        lastModified = lastModified
+    ) // Sets isDirty=false, NO sync trigger
+}
+
+// ❌ WRONG - Creates feedback loop
+private suspend fun onRemoteEngagement(doc: DocumentSnapshot) {
+    postDao.updateLikeCount(doc.id, likeCount) // Generic update, isDirty unclear
+    syncCoordinator.triggerSync() // FEEDBACK LOOP!
+}
+```
+
+**Repository Pattern:**
+```kotlin
+// ✅ CORRECT - Room-first with feature flag
+override suspend fun createUserProfile(...): LiftrixResult<Unit> {
+    if (OfflineArchitectureFlags.FIX_AUTH_REPOSITORY) {
+        // Room-first: write to Room, queue for Firestore sync
+        userProfileDao.upsertLocal(profileEntity)
+        offlineQueueManager.queueOperation(...)
+        syncCoordinator.triggerImmediateSync(userId)
+    } else {
+        // Legacy: direct Firestore write (rollback path)
+        firestore.batch().set(...).commit()
+    }
+}
+
+// ❌ WRONG - Bypasses Room
+override suspend fun createUserProfile(...): LiftrixResult<Unit> {
+    firestore.collection("users").document(uid).set(...).await()
+}
+```
+
+**Feature Flags (Rollback Switches):**
+- `ROOM_FIRST_ENABLED`: Master switch (default: true)
+- `DISABLE_FIRESTORE_PERSISTENCE`: Disables Firestore offline cache (default: true)
+- `USE_DIRTY_FLAG_GATING`: Sync workers use getDirty* queries (default: true)
+- `USE_IDEMPOTENT_LISTENERS`: Listeners use upsertFromRemote (default: true)
+- `FIX_*_REPOSITORY`: Per-repository Room-first switches (default: true)
+
+**Validation Commands:**
+```bash
+# Verify no direct Firestore writes
+rg "firestore\.(set|update|delete|batch)" --type kotlin
+
+# Verify all DAOs have origin-aware methods
+rg "suspend fun upsert(Local|FromRemote)" app/src/main/java/com/example/liftrix/data/local/dao/
+
+# Verify sync workers use dirty flag gating
+rg "getDirty\w+" app/src/main/java/com/example/liftrix/sync/
+
+# Check feature flag configuration
+cat app/src/main/java/com/example/liftrix/config/OfflineArchitectureFlags.kt
+```
+
 #### 1. User Scoping (MANDATORY)
 **ALL database operations MUST filter by userId to prevent data leakage:**
 ```kotlin
@@ -673,23 +809,10 @@ ResponsiveDashboardLayout (Adaptive container)
             ↓ Analytics/Chart/Metric Widgets
 ```
 
-### Widget System (15 Total Widgets)
-**Active Widgets** (12 displayed):
-- `strength_progress` - 1RM tracking with PR markers
-- `volume_chart` - ModernVolumeChart with bezier curves
-- `frequency_chart` - Workout frequency heatmap
-- `muscle_group_chart` - Muscle distribution analysis
-- `exercise_ranking` - Top performing exercises
-- `workout_duration` - Session duration trends
-- `one_rm_progression` - Strength progression over time
-- `recent_achievements` - Latest personal records
-- `recovery_metrics` - Rest and recovery analysis
-- `consistency_score` - Workout consistency tracking
-- `overtraining_risk` - Overtraining detection
-- `progressive_overload` - Progressive overload analysis
+### Widget System (15 Total)
+**Active (12)**: `strength_progress`, `volume_chart`, `frequency_chart`, `muscle_group_chart`, `exercise_ranking`, `workout_duration`, `one_rm_progression`, `recent_achievements`, `recovery_metrics`, `consistency_score`, `overtraining_risk`, `progressive_overload`
 
-**Deprecated Widgets** (3 hidden, kept for compatibility):
-- `workout_frequency`, `total_volume`, `volume_calendar`
+**Deprecated (3)**: `workout_frequency`, `total_volume`, `volume_calendar`
 
 ### ViewModels & Coordination Pattern
 ```kotlin
@@ -707,21 +830,9 @@ ProgressSummaryViewModel
 ```
 
 ### Detail Screen Navigation
+**Routes**: `VolumeAnalysisDetail`, `OneRmDetail`, `MuscleGroupDetail`, `WorkoutFrequencyDetail`, `ExerciseRankingDetail`
 ```kotlin
-// Type-safe navigation to detail screens
-navController.navigate(
-    OneRmProgressionDetail(
-        exerciseIds = listOf("1", "2"),
-        timeRange = TimeRange.SIX_MONTHS
-    )
-)
-
-// Available detail routes
-VolumeAnalysisDetail
-OneRmDetail
-MuscleGroupDetail  
-WorkoutFrequencyDetail
-ExerciseRankingDetail
+navController.navigate(OneRmProgressionDetail(exerciseIds = listOf("1", "2"), timeRange = TimeRange.SIX_MONTHS))
 ```
 
 ### Performance Optimizations
@@ -730,20 +841,6 @@ ExerciseRankingDetail
 - **ResponsiveDashboardLayout**: 2-col mobile, 3-col tablet, 4-col desktop
 - **GlobalTimeRangeSelector**: Single source of truth for time filtering
 - **Widget virtualization**: Limits to 10 widgets under memory pressure
-
-### Chart Implementation Standards
-```kotlin
-// All charts follow this pattern
-@Composable
-fun ModernChart(
-    data: List<DataPoint>,
-    timeRange: TimeRangeType,
-    modifier: Modifier = Modifier,
-    onDataPointSelected: ((DataPoint) -> Unit)? = null,
-    showPersonalRecords: Boolean = true,
-    animationDuration: Int = 300
-)
-```
 
 ## Quick Reference
 
@@ -755,11 +852,7 @@ fun ModernChart(
 - Entities: `*Entity.kt` in `data/local/entity/`
 - AI Components: `ui/chat/ChatbotViewModel.kt`, `domain/service/AIChatService.kt`, `data/service/AbusePreventionService.kt`
 
-### Consolidated Use Cases
-
-The codebase uses consolidated use cases to reduce duplication:
-
-**By Domain:**
+### Consolidated Use Cases (by Domain)
 - **Auth**: AuthQueryUseCase, AuthCommandUseCase
 - **Profile**: ProfileQueryUseCase, ProfileCommandUseCase, ProfileImageOperationsUseCase, CalculateAchievementsUseCase
 - **Analytics**: AnalyticsQueryUseCase, AnalyticsExportUseCase, DashboardCommandUseCase, WidgetPreferencesUseCase, WidgetMigrationUseCase
@@ -860,96 +953,6 @@ RedesignedExerciseCard(
 LegacyExerciseCard(...)
 ```
 
-## 🚨 Critical Gotchas
-
-### Session State Management
-```kotlin
-// ✅ Use UnifiedWorkoutSessionManager for session operations
-// ❌ Never create multiple session state sources
-```
-
-### Firebase Sync Priority
-```kotlin
-// ✅ Read from Room, sync to Firebase in background
-// ❌ Never read directly from Firebase in UI layer
-```
-
-### Social Privacy Controls
-```kotlin
-// ✅ Always include viewer context for profile access
-userSearchRepository.getPublicProfile(profileUserId, viewerId)
-
-// ❌ Never expose profile data without privacy filtering
-userSearchRepository.getPublicProfile(profileUserId, null)
-```
-
-### Gym Buddy QR Code Gotchas
-```kotlin
-// ✅ Enforce 5 buddy limit and validate QR expiration
-if (buddies.size >= 5) throw BuddyLimitException("Maximum 5 buddies")
-if (System.currentTimeMillis() > expiresAt) throw QRExpiredException()
-
-// ❌ Never allow unlimited buddies or expired QR codes
-gymBuddyRepository.createConnection(userId1, userId2)  // No validation
-```
-
-### PR Notification Gotchas
-```kotlin
-// ✅ Enforce daily cooldown per buddy
-val cooldownKey = "$userId:$buddyId:${LocalDate.now()}"
-if (!prRepository.hasSentToday(cooldownKey)) {
-    // Send notification
-}
-
-// ❌ Never spam PR notifications
-buddies.forEach { sendPRNotification(it) }  // No cooldown
-```
-
-### Social Feed Engagement Gotchas
-```kotlin
-// ✅ Use optimistic updates with proper error handling
-_likedPosts.value = _likedPosts.value + postId
-val result = engagementRepository.toggleLike(postId, userId)
-if (result is LiftrixResult.Error) {
-    _likedPosts.value = _likedPosts.value - postId  // Must revert
-}
-
-// ❌ Never update engagement without optimistic UI feedback
-val result = engagementRepository.toggleLike(postId, userId)
-if (result is LiftrixResult.Success) {
-    _likedPosts.value = _likedPosts.value + postId  // Too slow
-}
-```
-
-### Feed Caching Performance
-```kotlin
-// ✅ Use relevance-based caching with proper invalidation
-feedCacheService.invalidateCache(userId, InvalidationReason.NEW_FOLLOW)
-
-// ❌ Don't cache feeds without proper invalidation strategy
-feedCache.put(userId, posts)  // Cache will become stale
-```
-
-### Progress Dashboard Navigation
-```kotlin
-// ✅ Use type-safe navigation with @Serializable data classes
-navController.navigate(OneRmProgressionDetail(exerciseIds = listOf("1", "2"), timeRange = TimeRange.SIX_MONTHS))
-
-// ❌ Don't use string-based navigation for detail views
-navController.navigate("oneRmDetail/1,2/SIX_MONTHS")
-```
-
-### Chart Performance Optimization
-```kotlin
-// ✅ Use remember() for expensive chart calculations
-val chartData = remember(rawData, timeRange) {
-    processChartData(rawData, timeRange)
-}
-
-// ❌ Don't recalculate chart data on every recomposition
-val chartData = processChartData(rawData, timeRange)
-```
-
 ## Key Classes & Components
 
 ### Core System Classes
@@ -958,48 +961,6 @@ val chartData = processChartData(rawData, timeRange)
 - `BaseViewModel<S, E>` - ViewModel base class for MVI pattern
 - `UiState<T>` - UI state management (Loading/Success/Error/Empty)
 - `LiftrixRoute` - Type-safe navigation with @Serializable
-
-### Sync Infrastructure Classes
-- `SyncRepository` - Core sync operations contract
-- `SyncCoordinator` - Orchestrates all sync operations
-- `MasterSyncWorker` - Periodic sync coordinator (every 15 min)
-- `OfflineQueueManager` - Manages offline operations queue
-- `ConflictResolver` - Last-write-wins conflict resolution
-- `RealtimeSyncService` - Firestore real-time listeners
-- `FirebaseDataSource` - Firebase CRUD operations
-
-### UI Components
-- `UnifiedWorkoutCard` - Foundation card component (12dp radius, haptic feedback)
-- `ModernActionButton` - Three-tier button system (Primary/Secondary/Tertiary)
-- `LiftrixSpacing` - Semantic spacing tokens (16dp/12dp/8dp)
-- `ResponsiveDashboardLayout` - Adaptive grid (2-col mobile, 3-col tablet, 4-col desktop)
-- `AdaptiveWidgetGrid` - LazyVerticalGrid with dynamic columns and card spanning
-- `ModernVolumeChart` - Bezier curves, gradient fills, PR markers
-- `GlobalTimeRangeSelector` - Synchronized time selector for all charts
-
-### Social & Profile System
-- `ProfileViewModel` - Enhanced profile management with achievements
-- `UserSearchRepository` - Social discovery with privacy filtering
-- `QRCodeService` - ZXing-based QR code generation
-- `CalculateAchievementsUseCase` - Automatic achievement detection
-- `ProfileImageManager` - Image upload, crop, and cache management
-- `UnitConversionService` - Dynamic kg/lbs and km/miles conversion based on user settings
-
-### Social Feed & Engagement System
-- `FeedRepositoryImpl` - Paging3 integration with RemoteMediator for offline support
-- `EngagementRepositoryImpl` - Optimistic updates for likes, comments, saves with error recovery
-- `FeedGeneratorUseCase` - Intelligent relevance scoring (Recency + Engagement + PRs + Media)
-- `FeedCacheService` - Performance layer with relevance-based caching and smart invalidation
-- `CommentSyncService` - Real-time Firestore listeners for live comment updates
-- `MediaUploadServiceImpl` - Firebase Storage integration with compression and CDN
-- `PrivacyEnforcementService` - Content filtering based on privacy levels and user relationships
-
-### Gym Buddy & PR System
-- `GymBuddyViewModel` - QR code generation and buddy management
-- `GymBuddyRepository` - Mutual connections with 5 buddy limit
-- `PRDetectionServiceImpl` - Comprehensive PR detection algorithms
-- `NotificationActionService` - Handle notification actions without opening app
-- `NotificationRouter` - Intelligent routing with batching and quiet hours
 
 ## Performance Targets
 - **60fps UI rendering** with optimized animations

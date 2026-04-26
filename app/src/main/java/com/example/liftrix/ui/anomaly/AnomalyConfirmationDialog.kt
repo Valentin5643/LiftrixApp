@@ -55,7 +55,7 @@ fun AnomalyConfirmationDialog(
             ) {
                 Icon(
                     imageVector = Icons.Default.Warning,
-                    contentDescription = null,
+                    contentDescription = "Warning",
                     tint = MaterialTheme.colorScheme.error
                 )
                 Spacer(modifier = Modifier.width(8.dp))

@@ -18,7 +18,11 @@ import androidx.room.PrimaryKey
     indices = [
         Index(value = ["post_id"], name = "idx_post_likes_post"),
         Index(value = ["user_id"], name = "idx_post_likes_user"),
-        Index(value = ["post_id", "user_id"], unique = true, name = "idx_post_likes_unique")
+        Index(value = ["post_id", "user_id"], unique = true, name = "idx_post_likes_unique"),
+        // P0-PERF-001: User activity timeline - critical for "My Liked Posts" feed
+        Index(value = ["user_id", "created_at"], name = "idx_post_likes_user_timeline"),
+        // P0-PERF-001: Post engagement chronology - supports "Recent Likes" on post detail
+        Index(value = ["post_id", "created_at"], name = "idx_post_likes_post_timeline")
     ],
     foreignKeys = [
         ForeignKey(
@@ -51,5 +55,11 @@ data class PostLikeEntity(
 
     // Sync metadata
     @ColumnInfo(name = "is_synced", defaultValue = "0")
-    val isSynced: Boolean = false
+    val isSynced: Boolean = false,
+    
+    @ColumnInfo(name = "is_dirty", defaultValue = "0")
+    val isDirty: Boolean = false,
+    
+    @ColumnInfo(name = "last_modified", defaultValue = "0")
+    val lastModified: Long = 0L
 )

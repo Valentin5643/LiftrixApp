@@ -541,7 +541,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                 
                 val blankSession = UnifiedWorkoutSession(
                     id = WorkoutSessionId.generate(),
-                    userId = userId,
+                    userId = userId.value,
                     name = "Quick Workout",
                     templateId = null,
                     exercises = emptyList(),
@@ -579,8 +579,8 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                 
                 // Load the template from repository
                 val templateResult = workoutTemplateRepository.getTemplateById(
-                    WorkoutTemplateId.fromString(templateId), 
-                    userId
+                    WorkoutTemplateId.fromString(templateId),
+                    userId.value
                 )
                 
                 val template = templateResult.fold(
@@ -639,7 +639,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                 // Create session with template exercises
                 val templateSession = UnifiedWorkoutSession(
                     id = WorkoutSessionId.generate(),
-                    userId = userId,
+                    userId = userId.value,
                     name = template.name,
                     templateId = templateId,
                     exercises = sessionExercises,
@@ -658,10 +658,10 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                     sessionExercise.sets.forEach { set ->
                     }
                 }
-                
+
                 // Record template usage
-                workoutTemplateRepository.recordTemplateUsage(WorkoutTemplateId.fromString(templateId), userId)
-                
+                workoutTemplateRepository.recordTemplateUsage(WorkoutTemplateId.fromString(templateId), userId.value)
+
                 sessionManager.forceStartSession(templateSession)
                 
             } catch (e: Exception) {
@@ -744,10 +744,10 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                     return@launch
                 }
                 
-                
+
                 val templateResult = workoutTemplateRepository.getTemplateById(
                     WorkoutTemplateId.fromString(templateId),
-                    userId
+                    userId.value
                 )
                 
                 templateResult.fold(
@@ -1026,7 +1026,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                     // Launch concurrent requests for each exercise
                     launch {
                         workoutQueryUseCase.getPreviousSetData(
-                            userId = userId,
+                            userId = userId.value,
                             exerciseId = canonicalLibraryId, // 🔥 FIX: Use canonical library ID instead of display name
                             setNumber = 1, // Load for all sets initially
                             excludeWorkoutId = currentSession.id.value // Exclude current active session
@@ -1100,9 +1100,9 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                 // 🔥 FIX: The exerciseId parameter should already be the canonical library ID
                 // since it comes from the exercise selection. Add logging to verify.
                 Timber.d("[PREV_SET_REFRESH_FIX] Refreshing previous data for canonical ID: '$exerciseId'")
-                
+
                 workoutQueryUseCase.getPreviousSetData(
-                    userId = userId,
+                    userId = userId.value,
                     exerciseId = exerciseId, // Should already be canonical library ID
                     setNumber = 1,
                     excludeWorkoutId = currentSession.id.value

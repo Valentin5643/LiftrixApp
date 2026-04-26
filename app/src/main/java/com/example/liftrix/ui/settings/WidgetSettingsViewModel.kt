@@ -63,7 +63,7 @@ class WidgetSettingsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
+                    onSuccess = { it.value },
                     onFailure = { error ->
                         Timber.e(error, "🔐 AUTH: Failed to load authenticated user ID")
                         updateState { UiState.Error(LiftrixError.AuthenticationError("Failed to authenticate user")) }

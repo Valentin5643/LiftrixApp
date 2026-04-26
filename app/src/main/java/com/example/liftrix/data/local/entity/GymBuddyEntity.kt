@@ -2,6 +2,7 @@ package com.example.liftrix.data.local.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
@@ -18,9 +19,23 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "gym_buddies",
     indices = [
-        Index(value = ["user_id"]),
-        Index(value = ["buddy_id"]),
+        Index(value = ["user_id"], unique = true),
+        Index(value = ["buddy_id"], unique = true),
         Index(value = ["user_id", "buddy_id"], unique = true)
+    ],
+    foreignKeys = [
+        ForeignKey(
+            entity = SocialProfileEntity::class,
+            parentColumns = ["user_id"],
+            childColumns = ["user_id"],
+            onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = SocialProfileEntity::class,
+            parentColumns = ["user_id"],
+            childColumns = ["buddy_id"],
+            onDelete = ForeignKey.CASCADE
+        )
     ]
 )
 data class GymBuddyEntity(
@@ -59,5 +74,11 @@ data class GymBuddyEntity(
     val isSynced: Boolean = false,
 
     @ColumnInfo(name = "sync_version", defaultValue = "0")
-    val syncVersion: Int = 0
+    val syncVersion: Long = 0L,
+    
+    @ColumnInfo(name = "is_dirty", defaultValue = "0")
+    val isDirty: Boolean = false,
+    
+    @ColumnInfo(name = "last_modified", defaultValue = "0")
+    val lastModified: Long = 0L
 )

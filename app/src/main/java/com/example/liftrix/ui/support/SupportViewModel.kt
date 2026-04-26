@@ -83,7 +83,7 @@ class SupportViewModel @Inject constructor(
                 val userTickets = emptyList<com.example.liftrix.domain.model.support.SupportTicket>()
                 
                 val data = SupportUiState.Data(
-                    ticketForm = TicketForm(userId = userId),
+                    ticketForm = TicketForm(userId = userId.value),
                     deviceInfo = deviceInfo,
                     userTickets = userTickets
                 )

@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.FollowRequestEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -273,9 +274,90 @@ interface FollowRequestDao {
     suspend fun updateSyncStatus(
         requestId: String,
         isSynced: Boolean,
-        version: Int,
+        version: Long,
         updatedAt: Long
     ): Int
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert followrequest from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(followRequest: FollowRequestEntity) {
+        val entity = followRequest.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert followrequest from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(followRequest: FollowRequestEntity) {
+        val local = getFollowRequestForSync(
+            followRequest.id,
+            followRequest.requesterId,
+            followRequest.targetId
+        )
+        if (local == null || followRequest.lastModified > local.lastModified) {
+            val entity = followRequest.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: FollowRequestEntity)
+
+    /**
+     * Get dirty followrequest that need upload to Firestore.
+     */
+    @Query("""
+        SELECT * FROM follow_requests 
+        WHERE (requester_id = :userId OR target_id = :userId)
+        AND is_dirty = 1
+        ORDER BY last_modified ASC
+    """)
+    suspend fun getDirtyFollowRequests(userId: String): List<FollowRequestEntity>
+
+    /**
+     * Mark followrequest as clean after successful Firestore upload.
+     */
+    @Query("""
+        UPDATE follow_requests 
+        SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion 
+        WHERE id IN (:ids) 
+        AND (requester_id = :userId OR target_id = :userId)
+    """)
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local followrequest for remote deduplication.
+     */
+    @Query("""
+        SELECT * FROM follow_requests 
+        WHERE id = :id 
+        AND (requester_id = :requesterId OR target_id = :targetId)
+        LIMIT 1
+    """)
+    suspend fun getFollowRequestForSync(
+        id: String,
+        requesterId: String,
+        targetId: String
+    ): FollowRequestEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }
 
 /**

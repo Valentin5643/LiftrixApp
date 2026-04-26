@@ -18,6 +18,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.FieldValue
+import com.example.liftrix.config.OfflineArchitectureFlags
 import com.google.gson.Gson
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -51,22 +52,6 @@ class UserPublicSyncWorker @AssistedInject constructor(
     private val auth: FirebaseAuth,
     private val gson: Gson
 ) : CoroutineWorker(context, params) {
-
-    // 🔥 FIX: Fallback constructor for WorkManager reflection when Hilt factory fails
-    // Uses EntryPoint pattern for proper dependency resolution
-    constructor(context: Context, params: WorkerParameters) : this(
-        context = context,
-        params = params,
-        userAccountDao = WorkerServiceLocator.getUserPublicSyncDependencies(context).userAccountDao,
-        userProfileDao = WorkerServiceLocator.getUserPublicSyncDependencies(context).userProfileDao,
-        workoutDao = WorkerServiceLocator.getUserPublicSyncDependencies(context).workoutDao,
-        firestore = WorkerServiceLocator.getUserPublicSyncDependencies(context).firestore,
-        auth = WorkerServiceLocator.getUserPublicSyncDependencies(context).auth,
-        gson = WorkerServiceLocator.getUserPublicSyncDependencies(context).gson
-    ) {
-        Timber.w("⚠️ UserPublicSyncWorker using FALLBACK constructor - Hilt factory failed!")
-        Timber.w("⚠️ Worker will function but this indicates assisted factory generation issue")
-    }
 
     companion object {
         const val WORK_NAME = "user_public_sync_work"
@@ -106,6 +91,8 @@ class UserPublicSyncWorker @AssistedInject constructor(
             )
             
             val forceSync = inputData.getBoolean("forceSync", false)
+            val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+                OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
 
             // AUTHENTICATION FIX: Verify auth state and user context
             Timber.d("[USER-PUBLIC-SYNC] 🔐 Verifying authentication for user: $userId")
@@ -170,7 +157,8 @@ class UserPublicSyncWorker @AssistedInject constructor(
                     "publicAchievements" to emptyList<Map<String, Any>>(),
                     "searchTokens" to emptyList<String>(),
                     "searchKeywords" to emptyList<String>(),
-                    "syncVersion" to 1,
+                    "syncVersion" to 1L,
+                    "lastModified" to System.currentTimeMillis(),
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
                 
@@ -202,6 +190,25 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 Timber.w("[USER-PUBLIC-SYNC] ⚠️ UserAccount has null username for user: $userId")
                 Timber.w("[USER-PUBLIC-SYNC]   - User may not be fully discoverable without username")
             }
+
+            val dirtyAccounts = if (useDirtyFlagGating) {
+                userAccountDao.getDirtyUserAccounts(userId)
+            } else {
+                emptyList()
+            }
+            val dirtyProfiles = if (useDirtyFlagGating) {
+                userProfileDao.getDirtyUserProfiles(userId)
+            } else {
+                emptyList()
+            }
+            if (useDirtyFlagGating && dirtyAccounts.isEmpty() && dirtyProfiles.isEmpty() && !forceSync) {
+                Timber.d("[USER-PUBLIC-SYNC] ✅ No dirty account/profile data for user $userId, skipping")
+                return@withContext Result.success(
+                    Data.Builder()
+                        .putInt(KEY_SYNC_COUNT, 0)
+                        .build()
+                )
+            }
             
             // Calculate workout statistics
             Timber.d("[USER-PUBLIC-SYNC] 📊 Calculating workout statistics for: $userId")
@@ -225,6 +232,11 @@ class UserPublicSyncWorker @AssistedInject constructor(
             Timber.d("[USER-PUBLIC-SYNC]   - Display name: ${userAccount.displayName ?: userProfile?.displayName}")
             Timber.d("[USER-PUBLIC-SYNC]   - Username: ${userAccount.username}")
             
+            val localLastModified = maxOf(
+                userAccount.lastModified,
+                userProfile?.lastModified ?: 0L
+            )
+
             val publicUserData = mutableMapOf<String, Any?>(
                 "userId" to userId,
                 "username" to userAccount.username,
@@ -263,7 +275,8 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 "searchKeywords" to searchKeywords,
                 
                 // Metadata
-                "syncVersion" to 1, // Use simple integer version for Firestore rules compatibility
+                "syncVersion" to 1L, // Use simple integer version for Firestore rules compatibility
+                "lastModified" to localLastModified,
                 "updatedAt" to FieldValue.serverTimestamp()
             )
             
@@ -271,6 +284,23 @@ class UserPublicSyncWorker @AssistedInject constructor(
             val publicDocRef = firestore
                 .collection(USERS_PUBLIC_COLLECTION)
                 .document(userId)
+
+            val remotePublicDoc = publicDocRef.get().await()
+            if (remotePublicDoc.exists()) {
+                val remoteLastModified = when (val remoteValue = remotePublicDoc.get("lastModified")) {
+                    is com.google.firebase.Timestamp -> remoteValue.toDate().time
+                    is Number -> remoteValue.toLong()
+                    else -> 0L
+                }
+                if (remoteLastModified > localLastModified) {
+                    Timber.d("[USER-PUBLIC-SYNC] ✅ Remote public profile newer; upload skipped")
+                    return@withContext Result.success(
+                        Data.Builder()
+                            .putInt(KEY_SYNC_COUNT, 0)
+                            .build()
+                    )
+                }
+            }
             
             Timber.d("[USER-PUBLIC-SYNC] 📦 Uploading to $USERS_PUBLIC_COLLECTION/$userId")
             publicDocRef.set(publicUserData, SetOptions.merge()).await()
@@ -291,6 +321,7 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 "isSearchable" to true, // 🔥 CRITICAL FIX: Missing field that search queries require
                 "searchTokens" to searchTokens,
                 "keywords" to searchKeywords,
+                "lastModified" to localLastModified,
                 "updatedAt" to FieldValue.serverTimestamp()
             )
             

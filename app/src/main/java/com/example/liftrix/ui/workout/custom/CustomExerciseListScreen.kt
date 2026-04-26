@@ -180,7 +180,7 @@ fun CustomExerciseListScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Error,
-                            contentDescription = null,
+                            contentDescription = "Error",
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(48.dp)
                         )
@@ -211,7 +211,7 @@ fun CustomExerciseListScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.FitnessCenter,
-                            contentDescription = null,
+                            contentDescription = "No exercises",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(64.dp)
                         )
@@ -409,7 +409,7 @@ private fun CustomExerciseCard(
                 } else {
                     Icon(
                         imageVector = getIconForExerciseType(exercise.exerciseType),
-                        contentDescription = null,
+                        contentDescription = exercise.exerciseType.name.replace("_", " ").lowercase(),
                         tint = LiftrixColorsV2.Teal,
                         modifier = Modifier.size(28.dp)
                     )
@@ -520,7 +520,7 @@ private fun CustomExerciseCard(
             } else {
                 Icon(
                     imageVector = Icons.Default.ChevronRight,
-                    contentDescription = null,
+                    contentDescription = "View exercise",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(24.dp)
                 )
@@ -549,7 +549,7 @@ private fun EmptyExerciseState(
         ) {
             Icon(
                 imageVector = if (hasSearchQuery) Icons.Default.SearchOff else Icons.Default.FitnessCenter,
-                contentDescription = null,
+                contentDescription = if (hasSearchQuery) "No results" else "No custom exercises",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(64.dp)
             )

@@ -1,22 +1,4 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * const {onCall} = require("firebase-functions/v2/https");
- * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
 
-// const {onRequest} = require("firebase-functions/v2/https");
-// const logger = require("firebase-functions/logger");
-
-// Create and deploy your first functions
-// https://firebase.google.com/docs/functions/get-started
-
-// exports.helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
 
 const {initializeApp} = require("firebase-admin/app");
 const {getAuth} = require("firebase-admin/auth");
@@ -25,6 +7,7 @@ const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {onCall} = require("firebase-functions/v2/https");
 const {logger} = require("firebase-functions");
+const functions = require("firebase-functions");
 
 // Initialize Firebase Admin SDK
 initializeApp();
@@ -32,10 +15,6 @@ initializeApp();
 const auth = getAuth();
 const db = getFirestore();
 
-/**
- * Cloud Function triggered when a subscription document is created or updated
- * Assigns custom claims based on subscription tier and status
- */
 exports.updateUserCustomClaims = onDocumentWritten(
     "subscriptions/{subscriptionId}",
     async (event) => {
@@ -2348,20 +2327,9 @@ exports.onSupportTicketCreated = onDocumentWritten(
       }
     });
 
-// ================================
-// ORPHANED PROFILE CLEANUP FUNCTIONS
-// ================================
+// Auth trigger removed - using document-based trigger pattern below instead
+// (firebase-functions v6 has compatibility issues with auth triggers)
 
-/**
- * 🔥 AUTOMATIC CLEANUP FUNCTION
- * =============================
- * 
- * This function runs when a cleanup request document is created.
- * It cleans up all associated Firestore data for orphaned profiles.
- * 
- * To trigger cleanup, create a document in 'user_cleanup_requests/{uid}' with:
- * { reason: 'user_deleted', timestamp: Date.now(), user_id: uid }
- */
 exports.cleanupDeletedUser = onDocumentWritten(
   "user_cleanup_requests/{uid}",
   async (event) => {
@@ -2515,12 +2483,88 @@ exports.cleanupDeletedUser = onDocumentWritten(
     
     const notificationHistoryQuery = await db.collection("notification_history")
       .where("user_id", "==", uid).limit(100).get();
-    
+
     notificationHistoryQuery.docs.forEach((doc) => {
       batch.delete(doc.ref);
       operationCount++;
     });
-    
+
+    // 12. Delete user settings
+    logger.info(`🧹 CLEANUP: Deleting user settings for ${uid}`);
+    const settingsDocRef = db.collection("user_settings").doc(uid);
+    batch.delete(settingsDocRef);
+    operationCount++;
+
+    // 13. Delete subscriptions
+    logger.info(`🧹 CLEANUP: Deleting subscriptions for ${uid}`);
+    const subscriptionsQuery = await db.collection("subscriptions")
+      .where("user_id", "==", uid).limit(100).get();
+
+    subscriptionsQuery.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      operationCount++;
+    });
+
+    if (subscriptionsQuery.docs.length > 0) {
+      logger.info(`🧹 CLEANUP: Found ${subscriptionsQuery.docs.length} subscriptions to delete for ${uid}`);
+    }
+
+    // 14. Delete custom exercises
+    logger.info(`🧹 CLEANUP: Deleting custom exercises for ${uid}`);
+    const customExercisesQuery = await db.collection("custom_exercises")
+      .where("user_id", "==", uid).limit(500).get();
+
+    customExercisesQuery.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      operationCount++;
+    });
+
+    if (customExercisesQuery.docs.length > 0) {
+      logger.info(`🧹 CLEANUP: Found ${customExercisesQuery.docs.length} custom exercises to delete for ${uid}`);
+    }
+
+    // 15. Delete analytics cache
+    logger.info(`🧹 CLEANUP: Deleting analytics cache for ${uid}`);
+    const analyticsCacheQuery = await db.collection("analytics_cache")
+      .where("user_id", "==", uid).limit(500).get();
+
+    analyticsCacheQuery.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      operationCount++;
+    });
+
+    if (analyticsCacheQuery.docs.length > 0) {
+      logger.info(`🧹 CLEANUP: Found ${analyticsCacheQuery.docs.length} analytics cache items to delete for ${uid}`);
+    }
+
+    // 16. Delete notifications
+    logger.info(`🧹 CLEANUP: Deleting notifications for ${uid}`);
+    const notificationsQuery = await db.collection("notifications")
+      .where("user_id", "==", uid).limit(500).get();
+
+    notificationsQuery.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      operationCount++;
+    });
+
+    if (notificationsQuery.docs.length > 0) {
+      logger.info(`🧹 CLEANUP: Found ${notificationsQuery.docs.length} notifications to delete for ${uid}`);
+    }
+
+    // 17. Delete gym buddy relationships
+    logger.info(`🧹 CLEANUP: Deleting gym buddy relationships for ${uid}`);
+    const gymBuddiesQuery = await db.collection("gym_buddies")
+      .where("user_id", "==", uid).limit(100).get();
+
+    gymBuddiesQuery.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      operationCount++;
+    });
+
+    if (gymBuddiesQuery.docs.length > 0) {
+      logger.info(`🧹 CLEANUP: Found ${gymBuddiesQuery.docs.length} gym buddy relationships to delete for ${uid}`);
+    }
+
     // Execute all deletions in a single batch
     logger.info(`🧹 CLEANUP: Executing batch delete of ${operationCount} operations for ${uid}`);
     await batch.commit();
@@ -2546,18 +2590,10 @@ exports.cleanupDeletedUser = onDocumentWritten(
   }
 });
 
-/**
- * 🔧 BULK CLEANUP FUNCTION
- * =========================
- * 
- * This function allows you to clean up existing orphaned data.
- * Call this function manually when you need to clean up orphaned profiles.
- */
+
 exports.bulkCleanupOrphanedData = onCall(async (request) => {
   logger.info("🧹 BULK_CLEANUP: Starting bulk cleanup of orphaned data");
   
-  // Allow testing from Firebase Console (request.auth may be undefined)
-  // In production, you should add proper admin authentication
   if (request.auth) {
     logger.info(`🧹 BULK_CLEANUP: Authenticated user ${request.auth.uid} running cleanup`);
   } else {
@@ -2678,28 +2714,159 @@ exports.bulkCleanupOrphanedData = onCall(async (request) => {
 });
 
 /**
- * 📊 MONITORING FUNCTION
- * =======================
- * 
- * Daily scheduled function to check for orphaned data and alert if needed.
+ * Scheduled Cloud Function to detect AND delete orphaned Firestore data
+ * Runs daily at 2 AM UTC to clean up data from deleted Firebase Auth users
+ *
+ * This function:
+ * 1. Scans Firestore for user profiles
+ * 2. Checks if corresponding Firebase Auth account exists
+ * 3. Automatically deletes orphaned profiles and related data
  */
-exports.detectOrphanedData = onSchedule(
+exports.scheduledOrphanCleanup = onSchedule(
     {
       schedule: "0 2 * * *", // Daily at 2 AM UTC
       timeZone: "UTC",
     },
     async (event) => {
-      logger.info("📊 MONITORING: Starting daily orphaned data detection");
-      
+      logger.info("🧹 SCHEDULED_CLEANUP: Starting daily orphaned data cleanup");
+
       try {
         let orphanedCount = 0;
-        
-        // Get sample of user documents (limit to prevent timeout)
-        const usersSnapshot = await db.collection("users").limit(100).get();
-        
+        let deletedCount = 0;
+        const deletedProfiles = [];
+
+        // Get all user documents (process in batches to avoid timeout)
+        const usersSnapshot = await db.collection("users").limit(500).get();
+        logger.info(`🧹 SCHEDULED_CLEANUP: Checking ${usersSnapshot.docs.length} user profiles`);
+
         for (const doc of usersSnapshot.docs) {
           const uid = doc.id;
-          
+
+          try {
+            // Check if Firebase Auth user still exists
+            await auth.getUser(uid);
+            // User exists - not orphaned, skip
+
+          } catch (authError) {
+            if (authError.code === "auth/user-not-found") {
+              orphanedCount++;
+              logger.info(`🧹 SCHEDULED_CLEANUP: Found orphaned profile: ${uid}`);
+
+              try {
+                // Delete the orphaned user's data using batch operations
+                const batch = db.batch();
+                let operationCount = 0;
+
+                // 1. Delete main user profile
+                batch.delete(db.collection("users").doc(uid));
+                operationCount++;
+
+                // 2. Delete social profile
+                batch.delete(db.collection("social_profiles").doc(uid));
+                operationCount++;
+
+                // 3. Delete user subcollections (workouts, templates, achievements)
+                const subcollections = ["workouts", "templates", "achievements"];
+                for (const collectionName of subcollections) {
+                  const subcollectionSnapshot = await db.collection("users").doc(uid)
+                    .collection(collectionName).limit(100).get();
+
+                  subcollectionSnapshot.docs.forEach(subDoc => {
+                    batch.delete(subDoc.ref);
+                    operationCount++;
+                  });
+                }
+
+                // 4. Delete follow relationships
+                const followingSnapshot = await db.collection("follow_relationships")
+                  .where("follower_user_id", "==", uid).limit(100).get();
+                followingSnapshot.docs.forEach(followDoc => {
+                  batch.delete(followDoc.ref);
+                  operationCount++;
+                });
+
+                const followersSnapshot = await db.collection("follow_relationships")
+                  .where("following_user_id", "==", uid).limit(100).get();
+                followersSnapshot.docs.forEach(followDoc => {
+                  batch.delete(followDoc.ref);
+                  operationCount++;
+                });
+
+                // 5. Delete workout posts
+                const postsSnapshot = await db.collection("workout_posts")
+                  .where("user_id", "==", uid).limit(100).get();
+                postsSnapshot.docs.forEach(postDoc => {
+                  batch.delete(postDoc.ref);
+                  operationCount++;
+                });
+
+                // 6. Delete FCM tokens
+                const tokensSnapshot = await db.collection("fcm_tokens")
+                  .where("user_id", "==", uid).limit(100).get();
+                tokensSnapshot.docs.forEach(tokenDoc => {
+                  batch.delete(tokenDoc.ref);
+                  operationCount++;
+                });
+
+                // 7. Delete notification data
+                const notifPrefsSnapshot = await db.collection("notification_preferences")
+                  .where("user_id", "==", uid).limit(100).get();
+                notifPrefsSnapshot.docs.forEach(prefDoc => {
+                  batch.delete(prefDoc.ref);
+                  operationCount++;
+                });
+
+                // Execute batch delete
+                await batch.commit();
+
+                deletedCount++;
+                deletedProfiles.push(uid);
+                logger.info(`✅ SCHEDULED_CLEANUP: Deleted ${operationCount} documents for orphaned user ${uid}`);
+
+              } catch (deleteError) {
+                logger.error(`❌ SCHEDULED_CLEANUP: Failed to delete orphaned user ${uid}:`, deleteError);
+              }
+            }
+          }
+        }
+
+        logger.info(`✅ SCHEDULED_CLEANUP COMPLETE: Checked ${usersSnapshot.docs.length} profiles, found ${orphanedCount} orphaned, deleted ${deletedCount}`);
+        logger.info(`🧹 CLEANUP_METRICS | checked=${usersSnapshot.docs.length} | orphaned=${orphanedCount} | deleted=${deletedCount} | timestamp=${Date.now()}`);
+
+        // Alert if high number of orphaned profiles remaining
+        if (orphanedCount > deletedCount + 10) {
+          logger.error(`🚨 ALERT: More orphaned profiles exist - may need additional cleanup runs`);
+        }
+
+        return null;
+
+      } catch (error) {
+        logger.error("❌ SCHEDULED_CLEANUP ERROR:", error);
+        throw error;
+      }
+    });
+
+/**
+ * DEPRECATED - Use scheduledOrphanCleanup instead
+ * This function only detects orphaned data without deleting it
+ */
+exports.detectOrphanedData = onSchedule(
+    {
+      schedule: "0 3 * * *", // Daily at 3 AM UTC (1 hour after cleanup)
+      timeZone: "UTC",
+    },
+    async (event) => {
+      logger.info("📊 MONITORING: Starting daily orphaned data detection (deprecated - use scheduledOrphanCleanup)");
+
+      try {
+        let orphanedCount = 0;
+
+        // Get sample of user documents (limit to prevent timeout)
+        const usersSnapshot = await db.collection("users").limit(100).get();
+
+        for (const doc of usersSnapshot.docs) {
+          const uid = doc.id;
+
           try {
             await auth.getUser(uid);
             // User exists, not orphaned
@@ -2709,17 +2876,606 @@ exports.detectOrphanedData = onSchedule(
             }
           }
         }
-        
+
         logger.info(`📊 MONITORING: Found ${orphanedCount} orphaned profiles out of ${usersSnapshot.docs.length} checked`);
-        
+
         // Alert if high number of orphaned profiles
         if (orphanedCount > 5) {
-          logger.error(`🚨 ALERT: HIGH ORPHANED DATA COUNT: ${orphanedCount} profiles detected - consider running bulk cleanup`);
+          logger.error(`🚨 ALERT: HIGH ORPHANED DATA COUNT: ${orphanedCount} profiles detected - scheduledOrphanCleanup should have cleaned these`);
         }
-        
+
         logger.info(`📊 MONITORING_METRICS | orphaned_count=${orphanedCount} | total_checked=${usersSnapshot.docs.length} | timestamp=${Date.now()}`);
-        
+
       } catch (error) {
         logger.error("📊 MONITORING ERROR:", error);
       }
     });
+
+/**
+ * Account Deletion Service (GDPR Compliance - SPEC-20251230)
+ *
+ * Monitors /deletion_requests collection and processes account deletions.
+ * Handles:
+ * - Firebase Auth account deletion
+ * - Firestore user document + subcollections deletion
+ * - Cloud Storage file deletion
+ * - Social post anonymization (remove PII, keep anonymized data)
+ * - Optional data export before deletion
+ *
+ * Flow:
+ * 1. Android app queues deletion: /deletion_requests/{jobId}
+ * 2. This function triggers on status change to PENDING
+ * 3. Export data if requested
+ * 4. Delete all user data (Auth, Firestore, Storage)
+ * 5. Update job status to COMPLETED or FAILED
+ */
+exports.processAccountDeletion = onDocumentWritten(
+    "deletion_requests/{jobId}",
+    async (event) => {
+      const jobId = event.params.jobId;
+
+      try {
+        const deletionData = event.data?.after?.data();
+
+        if (!deletionData) {
+          logger.warn(`No deletion data found for job: ${jobId}`);
+          return null;
+        }
+
+        // Only process if status is PENDING
+        if (deletionData.status !== "PENDING") {
+          logger.info(`Job ${jobId} already processed (status: ${deletionData.status})`);
+          return null;
+        }
+
+        const userId = deletionData.userId;
+        const exportFirst = deletionData.exportFirst || false;
+
+        logger.info(`🗑️ ACCOUNT_DELETION: Starting deletion for user ${userId} (job: ${jobId}, export: ${exportFirst})`);
+
+        // Update status to PROCESSING
+        await db.collection("deletion_requests").doc(jobId).update({
+          status: "PROCESSING",
+          startedAt: new Date(),
+        });
+
+        // Step 1: Export user data if requested
+        if (exportFirst) {
+          logger.info(`📤 ACCOUNT_DELETION: Exporting data for user ${userId}`);
+          await exportUserData(userId);
+        }
+
+        // Step 2: Delete Firebase Auth account
+        logger.info(`🔐 ACCOUNT_DELETION: Deleting Auth account for user ${userId}`);
+        try {
+          await auth.deleteUser(userId);
+          logger.info(`✅ ACCOUNT_DELETION: Auth account deleted for user ${userId}`);
+        } catch (authError) {
+          if (authError.code === "auth/user-not-found") {
+            logger.warn(`Auth account not found for user ${userId} (already deleted)`);
+          } else {
+            throw authError;
+          }
+        }
+
+        // Step 3: Delete Firestore user document and subcollections
+        logger.info(`🗄️ ACCOUNT_DELETION: Deleting Firestore data for user ${userId}`);
+        await deleteUserFirestoreData(userId);
+
+        // Step 4: Delete Cloud Storage files
+        logger.info(`📦 ACCOUNT_DELETION: Deleting Storage files for user ${userId}`);
+        await deleteUserStorageFiles(userId);
+
+        // Step 5: Anonymize social posts (GDPR requirement - keep anonymized data)
+        logger.info(`👤 ACCOUNT_DELETION: Anonymizing social posts for user ${userId}`);
+        await anonymizeSocialPosts(userId);
+
+        // Step 6: Update job status to COMPLETED
+        await db.collection("deletion_requests").doc(jobId).update({
+          status: "COMPLETED",
+          completedAt: new Date(),
+        });
+
+        logger.info(`✅ ACCOUNT_DELETION: Deletion completed for user ${userId} (job: ${jobId})`);
+
+        return null;
+      } catch (error) {
+        logger.error(`❌ ACCOUNT_DELETION ERROR for job ${jobId}:`, error);
+
+        // Update job status to FAILED with error details
+        try {
+          await db.collection("deletion_requests").doc(jobId).update({
+            status: "FAILED",
+            failedAt: new Date(),
+            error: error.message,
+          });
+        } catch (updateError) {
+          logger.error("Failed to update deletion job status:", updateError);
+        }
+
+        throw error;
+      }
+    });
+
+/**
+ * Export user data to Cloud Storage (GDPR requirement).
+ * Creates JSON export of all user data for download.
+ *
+ * @param {string} userId - User ID
+ */
+async function exportUserData(userId) {
+  const {Storage} = require("@google-cloud/storage");
+  const storage = new Storage();
+  const bucket = storage.bucket(process.env.FIREBASE_STORAGE_BUCKET || `${process.env.GCLOUD_PROJECT}.appspot.com`);
+
+  const exportData = {
+    userId: userId,
+    exportedAt: new Date().toISOString(),
+    data: {},
+  };
+
+  try {
+    // Export user profile
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (userDoc.exists) {
+      exportData.data.profile = userDoc.data();
+    }
+
+    // Export workouts
+    const workoutsSnapshot = await db.collection("users").doc(userId).collection("workouts").get();
+    exportData.data.workouts = workoutsSnapshot.docs.map((doc) => doc.data());
+
+    // Export templates
+    const templatesSnapshot = await db.collection("users").doc(userId).collection("templates").get();
+    exportData.data.templates = templatesSnapshot.docs.map((doc) => doc.data());
+
+    // Export social profile
+    const socialProfileDoc = await db.collection("social_profiles").doc(userId).get();
+    if (socialProfileDoc.exists) {
+      exportData.data.socialProfile = socialProfileDoc.data();
+    }
+
+    // Export settings
+    const settingsDoc = await db.collection("users").doc(userId).collection("settings").doc("preferences").get();
+    if (settingsDoc.exists) {
+      exportData.data.settings = settingsDoc.data();
+    }
+
+    // Upload export to Cloud Storage
+    const fileName = `user-data-exports/${userId}/export-${Date.now()}.json`;
+    const file = bucket.file(fileName);
+
+    await file.save(JSON.stringify(exportData, null, 2), {
+      contentType: "application/json",
+      metadata: {
+        userId: userId,
+        exportedAt: new Date().toISOString(),
+      },
+    });
+
+    // Generate signed URL (valid for 7 days)
+    const [url] = await file.getSignedUrl({
+      action: "read",
+      expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
+    logger.info(`📤 Data export created: ${fileName} (URL valid for 7 days)`);
+
+    // TODO: Send email to user with download link
+    // await sendDataExportEmail(userId, url);
+
+    return url;
+  } catch (error) {
+    logger.error(`Failed to export data for user ${userId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Delete all Firestore data for a user.
+ * Deletes user document and all subcollections.
+ *
+ * @param {string} userId - User ID
+ */
+async function deleteUserFirestoreData(userId) {
+  const batch = db.batch();
+  let deletedCount = 0;
+
+  try {
+    // Delete user document
+    batch.delete(db.collection("users").doc(userId));
+    deletedCount++;
+
+    // Delete subcollections (batch limit: 500 operations)
+    const subcollections = ["workouts", "templates", "achievements", "settings", "gym_buddies", "chat_history"];
+
+    for (const subcollection of subcollections) {
+      const snapshot = await db.collection("users").doc(userId).collection(subcollection).limit(500).get();
+
+      snapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+        deletedCount++;
+      });
+    }
+
+    // Delete social profile
+    const socialProfileRef = db.collection("social_profiles").doc(userId);
+    batch.delete(socialProfileRef);
+    deletedCount++;
+
+    // Delete follow relationships
+    const followingSnapshot = await db.collection("follow_relationships")
+        .where("follower_user_id", "==", userId)
+        .limit(500)
+        .get();
+
+    followingSnapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      deletedCount++;
+    });
+
+    const followersSnapshot = await db.collection("follow_relationships")
+        .where("followed_user_id", "==", userId)
+        .limit(500)
+        .get();
+
+    followersSnapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      deletedCount++;
+    });
+
+    await batch.commit();
+
+    logger.info(`✅ Deleted ${deletedCount} Firestore documents for user ${userId}`);
+  } catch (error) {
+    logger.error(`Failed to delete Firestore data for user ${userId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Delete all Cloud Storage files for a user.
+ * Deletes profile images, progress photos, workout media.
+ *
+ * @param {string} userId - User ID
+ */
+async function deleteUserStorageFiles(userId) {
+  const {Storage} = require("@google-cloud/storage");
+  const storage = new Storage();
+  const bucket = storage.bucket(process.env.FIREBASE_STORAGE_BUCKET || `${process.env.GCLOUD_PROJECT}.appspot.com`);
+
+  try {
+    const folders = [
+      `users/${userId}/`,
+      `profile-images/${userId}/`,
+      `progress-photos/${userId}/`,
+      `workout-media/${userId}/`,
+    ];
+
+    let deletedCount = 0;
+
+    for (const folder of folders) {
+      const [files] = await bucket.getFiles({prefix: folder});
+
+      for (const file of files) {
+        await file.delete();
+        deletedCount++;
+      }
+    }
+
+    logger.info(`✅ Deleted ${deletedCount} Storage files for user ${userId}`);
+  } catch (error) {
+    logger.error(`Failed to delete Storage files for user ${userId}:`, error);
+    // Don't throw - storage deletion is non-critical
+  }
+}
+
+/**
+ * Anonymize social posts (GDPR requirement).
+ * Remove PII but keep anonymized data for feed integrity.
+ *
+ * Anonymization:
+ * - Set user_id to "deleted-user-{hash}"
+ * - Remove caption, media_urls
+ * - Keep workout stats (total_volume, exercises_count, prs_count)
+ *
+ * @param {string} userId - User ID
+ */
+async function anonymizeSocialPosts(userId) {
+  try {
+    const postsSnapshot = await db.collection("workout_posts")
+        .where("user_id", "==", userId)
+        .limit(500)
+        .get();
+
+    const batch = db.batch();
+    const anonymousId = `deleted-user-${userId.substring(0, 8)}`;
+
+    postsSnapshot.docs.forEach((doc) => {
+      const postData = doc.data();
+
+      batch.update(doc.ref, {
+        user_id: anonymousId,
+        caption: "[Deleted]",
+        media_urls: null,
+        media_thumbnails: null,
+        // Keep workout stats for feed integrity
+        total_volume: postData.total_volume || null,
+        exercises_count: postData.exercises_count || null,
+        prs_count: postData.prs_count || 0,
+        visibility: "PRIVATE", // Hide from public feed
+      });
+    });
+
+    await batch.commit();
+
+    logger.info(`✅ Anonymized ${postsSnapshot.size} posts for user ${userId}`);
+  } catch (error) {
+    logger.error(`Failed to anonymize posts for user ${userId}:`, error);
+    // Don't throw - post anonymization is non-critical
+  }
+}
+
+/**
+ * Cloud Function: aiReport
+ * Handles user reports of AI-generated content that may be harmful or violate safety guidelines.
+ *
+ * @param {Object} data - Request data
+ * @param {string} data.messageId - ID of the AI message being reported
+ * @param {string} data.messageContent - Content of the AI message
+ * @param {string} data.reason - Report reason (HARMFUL_MEDICAL, MISINFORMATION, INAPPROPRIATE, OTHER)
+ * @param {string} data.reasonDescription - Human-readable description of the reason
+ * @param {string} data.notes - Optional additional notes from the reporter
+ * @param {string} data.userId - ID of the user submitting the report
+ * @param {number} data.timestamp - Report submission timestamp
+ * @param {Object} context - Firebase Functions context
+ * @returns {Promise<{success: boolean, reportId: string}>}
+ */
+exports.aiReport = onCall(async (request) => {
+  const {data, auth} = request;
+
+  // Verify authentication
+  if (!auth) {
+    throw new functions.https.HttpsError(
+        "unauthenticated",
+        "User must be authenticated to report AI content",
+    );
+  }
+
+  const {
+    messageId,
+    messageContent,
+    reason,
+    reasonDescription,
+    notes,
+    userId,
+    timestamp,
+  } = data;
+
+  // Validate required fields
+  if (!messageId || !messageContent || !reason || !userId) {
+    throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Missing required fields: messageId, messageContent, reason, userId",
+    );
+  }
+
+  // Verify the authenticated user matches the userId in the request
+  if (auth.uid !== userId) {
+    throw new functions.https.HttpsError(
+        "permission-denied",
+        "User can only submit reports on their own behalf",
+    );
+  }
+
+  try {
+    // Create AI report document
+    const reportRef = await db.collection("ai_reports").add({
+      message_id: messageId,
+      message_content: messageContent,
+      reason: reason,
+      reason_description: reasonDescription || "",
+      notes: notes || "",
+      reporter_user_id: userId,
+      reported_at: timestamp || Date.now(),
+      status: "PENDING", // PENDING, REVIEWED, RESOLVED, DISMISSED
+      reviewed_at: null,
+      reviewed_by_user_id: null,
+      resolution_notes: null,
+      created_at: new Date(),
+    });
+
+    logger.info(
+        `AI content reported: ${reportRef.id} by user ${userId} for message ${messageId}`,
+    );
+
+    // Send notification to admin channel (optional - requires admin notification setup)
+    // await sendAdminNotification('ai-safety', `New AI report: ${reason}`);
+
+    return {
+      success: true,
+      reportId: reportRef.id,
+    };
+  } catch (error) {
+    logger.error("Error processing AI report:", error);
+    throw new functions.https.HttpsError(
+        "internal",
+        "Failed to process AI report",
+    );
+  }
+});
+
+/**
+ * Cloud Function: moderationAction
+ * Handles admin moderation actions on user-generated content.
+ * Requires admin custom claim verification.
+ *
+ * @param {Object} data - Request data
+ * @param {string} data.actionType - Type of moderation action (HIDE_POST, DELETE_POST, HIDE_COMMENT, DELETE_COMMENT, WARN_USER, SUSPEND_USER, DISMISS_REPORT)
+ * @param {string} data.targetId - ID of the target entity (post ID, comment ID, user ID)
+ * @param {string} data.targetType - Type of target (POST, COMMENT, USER, REPORT)
+ * @param {string} data.reason - Reason for the moderation action
+ * @param {number} [data.durationDays] - Suspension duration in days (for SUSPEND_USER)
+ * @param {string} [data.reportId] - Associated content report ID (optional)
+ * @param {Object} context - Firebase Functions context
+ * @returns {Promise<{success: boolean, actionId: string}>}
+ */
+exports.moderationAction = onCall(async (request) => {
+  const {data, auth} = request;
+
+  // Verify admin authentication
+  if (!auth || !auth.token.admin) {
+    throw new functions.https.HttpsError(
+        "permission-denied",
+        "This action requires admin privileges",
+    );
+  }
+
+  const {
+    actionType,
+    targetId,
+    targetType,
+    reason,
+    durationDays,
+    reportId,
+  } = data;
+
+  // Validate required fields
+  if (!actionType || !targetId || !targetType || !reason) {
+    throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Missing required fields: actionType, targetId, targetType, reason",
+    );
+  }
+
+  const adminUserId = auth.uid;
+
+  try {
+    // Execute the moderation action
+    switch (actionType) {
+      case "HIDE_POST":
+        await db.collection("workout_posts").doc(targetId).update({
+          is_hidden: true,
+          hidden_reason: reason,
+          hidden_at: new Date(),
+          hidden_by_user_id: adminUserId,
+        });
+        logger.info(`Admin ${adminUserId} hid post ${targetId}: ${reason}`);
+        break;
+
+      case "DELETE_POST":
+        await db.collection("workout_posts").doc(targetId).delete();
+        logger.info(`Admin ${adminUserId} deleted post ${targetId}: ${reason}`);
+        break;
+
+      case "HIDE_COMMENT":
+        await db.collection("post_comments").doc(targetId).update({
+          is_hidden: true,
+          hidden_reason: reason,
+          hidden_at: new Date(),
+          hidden_by_user_id: adminUserId,
+        });
+        logger.info(`Admin ${adminUserId} hid comment ${targetId}: ${reason}`);
+        break;
+
+      case "DELETE_COMMENT":
+        await db.collection("post_comments").doc(targetId).delete();
+        logger.info(`Admin ${adminUserId} deleted comment ${targetId}: ${reason}`);
+        break;
+
+      case "WARN_USER":
+        await db.collection("account_restrictions").add({
+          user_id: targetId,
+          restriction_type: "WARNED",
+          reason: reason,
+          start_time: Date.now(),
+          end_time: null,
+          is_active: true,
+          created_by_user_id: adminUserId,
+          created_at: new Date(),
+        });
+        logger.info(`Admin ${adminUserId} warned user ${targetId}: ${reason}`);
+        // Send notification to user (implement via FCM)
+        break;
+
+      case "SUSPEND_USER":
+        if (!durationDays) {
+          throw new functions.https.HttpsError(
+              "invalid-argument",
+              "durationDays is required for SUSPEND_USER",
+          );
+        }
+        const endTime = Date.now() + (durationDays * 24 * 60 * 60 * 1000);
+        await db.collection("account_restrictions").add({
+          user_id: targetId,
+          restriction_type: "SUSPENDED",
+          reason: reason,
+          start_time: Date.now(),
+          end_time: endTime,
+          is_active: true,
+          created_by_user_id: adminUserId,
+          created_at: new Date(),
+        });
+        logger.info(`Admin ${adminUserId} suspended user ${targetId} for ${durationDays} days: ${reason}`);
+        // Send notification to user (implement via FCM)
+        break;
+
+      case "DISMISS_REPORT":
+        if (!reportId) {
+          throw new functions.https.HttpsError(
+              "invalid-argument",
+              "reportId is required for DISMISS_REPORT",
+          );
+        }
+        await db.collection("content_reports").doc(reportId).update({
+          status: "DISMISSED",
+          reviewed_at: Date.now(),
+          reviewed_by_user_id: adminUserId,
+          resolution_notes: reason,
+        });
+        logger.info(`Admin ${adminUserId} dismissed report ${reportId}: ${reason}`);
+        break;
+
+      default:
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            `Unknown action type: ${actionType}`,
+        );
+    }
+
+    // Log the moderation action for audit trail
+    const actionRef = await db.collection("moderation_actions").add({
+      admin_user_id: adminUserId,
+      action_type: actionType,
+      target_type: targetType,
+      target_id: targetId,
+      reason: reason,
+      duration_days: durationDays || null,
+      report_id: reportId || null,
+      created_at: new Date(),
+    });
+
+    // Update associated report status if provided
+    if (reportId) {
+      await db.collection("content_reports").doc(reportId).update({
+        status: "RESOLVED",
+        reviewed_at: Date.now(),
+        reviewed_by_user_id: adminUserId,
+        resolution_notes: `Action taken: ${actionType} - ${reason}`,
+      });
+    }
+
+    logger.info(`Moderation action ${actionRef.id} completed successfully`);
+
+    return {
+      success: true,
+      actionId: actionRef.id,
+    };
+  } catch (error) {
+    logger.error("Error executing moderation action:", error);
+    throw new functions.https.HttpsError(
+        "internal",
+        "Failed to execute moderation action",
+    );
+  }
+});

@@ -98,7 +98,7 @@ fun SessionTimerDisplay(
             ) {
                 Icon(
                     imageVector = statusIcon,
-                    contentDescription = null,
+                    contentDescription = statusText,
                     modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )

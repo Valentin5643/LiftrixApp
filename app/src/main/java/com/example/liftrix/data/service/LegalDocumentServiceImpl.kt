@@ -40,6 +40,10 @@ class LegalDocumentServiceImpl @Inject constructor(
     companion object {
         private const val PRIVACY_POLICY_CONFIG_KEY = "privacy_policy"
         private const val TERMS_CONFIG_KEY = "terms_of_service"
+        private const val AI_DISCLAIMER_CONFIG_KEY = "ai_disclaimer"
+        private const val COMMUNITY_GUIDELINES_CONFIG_KEY = "community_guidelines"
+        private const val CONTENT_MODERATION_POLICY_CONFIG_KEY = "content_moderation_policy"
+        private const val REFUND_SUBSCRIPTION_POLICY_CONFIG_KEY = "refund_subscription_policy"
         private const val EULA_CONFIG_KEY = "eula"
         private const val DPA_CONFIG_KEY = "data_processing_agreement"
         private const val DOCUMENT_VERSIONS_KEY = "legal_document_versions"
@@ -100,6 +104,25 @@ You have the right to:
 For privacy concerns or data requests:
 • In-app: Settings > Help & Support
 • Email: valijianu98@gmail.com"""
+
+        private const val DEFAULT_AI_DISCLAIMER = """AI Disclaimer for Liftrix
+
+Last Updated: January 2025
+
+1. General Information Only
+The AI assistant provides general fitness information and is not medical advice.
+
+2. Not a Substitute for Professionals
+Always consult qualified health or fitness professionals before starting a program.
+
+3. No Guarantees
+We do not guarantee results, accuracy, or suitability for your specific needs.
+
+4. User Responsibility
+You are responsible for your decisions, actions, and safety when using AI guidance.
+
+5. Contact
+For questions about AI guidance: support@liftrix.app"""
         
         private const val DEFAULT_TERMS_OF_SERVICE = """Terms of Service for Liftrix
 
@@ -175,6 +198,60 @@ These terms are governed by the laws of [Your Jurisdiction].
 • In-app: Settings > Help & Support
 • Email: legal@liftrix.com
 • Response within 48 hours"""
+
+        private const val DEFAULT_COMMUNITY_GUIDELINES = """Community Guidelines for Liftrix
+
+Last Updated: January 2025
+
+1. Be Respectful
+Treat others with respect in all social interactions.
+
+2. Safe Content
+Do not post harmful, abusive, or explicit content.
+
+3. Accurate Information
+Avoid sharing misleading health or fitness claims.
+
+4. Reporting
+Report content that violates guidelines.
+
+5. Contact
+Questions: support@liftrix.app"""
+
+        private const val DEFAULT_CONTENT_MODERATION_POLICY = """Content Moderation Policy for Liftrix
+
+Last Updated: January 2025
+
+1. Enforcement
+We moderate content to keep the community safe.
+
+2. Prohibited Content
+Harassment, hate, explicit content, and illegal activity are not allowed.
+
+3. Reporting
+Users can report content for review.
+
+4. Actions
+We may remove content or restrict accounts for violations.
+
+5. Contact
+Moderation questions: support@liftrix.app"""
+
+        private const val DEFAULT_REFUND_SUBSCRIPTION_POLICY = """Refund & Subscription Policy for Liftrix
+
+Last Updated: January 2025
+
+1. Subscriptions
+Subscriptions are managed through the app store.
+
+2. Cancellations
+Cancel anytime through your app store settings.
+
+3. Refunds
+Refunds are subject to the app store policy.
+
+4. Contact
+Billing questions: support@liftrix.app"""
         
         private fun getDocumentCacheKey(type: LegalDocumentType): String = 
             "legal_document_${type.fileName}_cache"
@@ -193,6 +270,18 @@ These terms are governed by the laws of [Your Jurisdiction].
     
     override suspend fun getTermsOfService(forceRefresh: Boolean): LiftrixResult<LegalDocument> = 
         getDocument(LegalDocumentType.TERMS_OF_SERVICE, TERMS_CONFIG_KEY, forceRefresh)
+
+    override suspend fun getAIDisclaimer(forceRefresh: Boolean): LiftrixResult<LegalDocument> =
+        getDocument(LegalDocumentType.AI_DISCLAIMER, AI_DISCLAIMER_CONFIG_KEY, forceRefresh)
+
+    override suspend fun getCommunityGuidelines(forceRefresh: Boolean): LiftrixResult<LegalDocument> =
+        getDocument(LegalDocumentType.COMMUNITY_GUIDELINES, COMMUNITY_GUIDELINES_CONFIG_KEY, forceRefresh)
+
+    override suspend fun getContentModerationPolicy(forceRefresh: Boolean): LiftrixResult<LegalDocument> =
+        getDocument(LegalDocumentType.CONTENT_MODERATION_POLICY, CONTENT_MODERATION_POLICY_CONFIG_KEY, forceRefresh)
+
+    override suspend fun getRefundSubscriptionPolicy(forceRefresh: Boolean): LiftrixResult<LegalDocument> =
+        getDocument(LegalDocumentType.REFUND_SUBSCRIPTION_POLICY, REFUND_SUBSCRIPTION_POLICY_CONFIG_KEY, forceRefresh)
     
     override suspend fun getEULA(forceRefresh: Boolean): LiftrixResult<LegalDocument?> = liftrixCatching(
         errorMapper = { throwable ->
@@ -264,8 +353,32 @@ These terms are governed by the laws of [Your Jurisdiction].
             } catch (e: Exception) {
                 Timber.w(e, "Failed to fetch terms of service")
             }
+
+            try {
+                documents.add(getAIDisclaimer(forceRefresh).getOrThrow())
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to fetch AI disclaimer")
+            }
             
             // Optional documents
+            try {
+                documents.add(getCommunityGuidelines(forceRefresh).getOrThrow())
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to fetch community guidelines")
+            }
+
+            try {
+                documents.add(getContentModerationPolicy(forceRefresh).getOrThrow())
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to fetch content moderation policy")
+            }
+
+            try {
+                documents.add(getRefundSubscriptionPolicy(forceRefresh).getOrThrow())
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to fetch refund & subscription policy")
+            }
+
             getEULA(forceRefresh).getOrNull()?.let { documents.add(it) }
             getDataProcessingAgreement(forceRefresh).getOrNull()?.let { documents.add(it) }
             
@@ -403,6 +516,10 @@ These terms are governed by the laws of [Your Jurisdiction].
             val currentDocument = when (documentType) {
                 LegalDocumentType.PRIVACY_POLICY -> getPrivacyPolicy().getOrNull()
                 LegalDocumentType.TERMS_OF_SERVICE -> getTermsOfService().getOrNull()
+                LegalDocumentType.AI_DISCLAIMER -> getAIDisclaimer().getOrNull()
+                LegalDocumentType.COMMUNITY_GUIDELINES -> getCommunityGuidelines().getOrNull()
+                LegalDocumentType.CONTENT_MODERATION_POLICY -> getContentModerationPolicy().getOrNull()
+                LegalDocumentType.REFUND_SUBSCRIPTION_POLICY -> getRefundSubscriptionPolicy().getOrNull()
                 LegalDocumentType.EULA -> getEULA().getOrNull()
                 LegalDocumentType.DATA_PROCESSING_AGREEMENT -> getDataProcessingAgreement().getOrNull()
                 else -> null
@@ -433,8 +550,12 @@ These terms are governed by the laws of [Your Jurisdiction].
                 // Force refresh all documents
                 getPrivacyPolicy(forceRefresh = true).getOrThrow()
                 getTermsOfService(forceRefresh = true).getOrThrow()
+                getAIDisclaimer(forceRefresh = true).getOrThrow()
                 
                 // Optional documents (don't fail if they're not available)
+                try { getCommunityGuidelines(forceRefresh = true) } catch (e: Exception) { /* ignored */ }
+                try { getContentModerationPolicy(forceRefresh = true) } catch (e: Exception) { /* ignored */ }
+                try { getRefundSubscriptionPolicy(forceRefresh = true) } catch (e: Exception) { /* ignored */ }
                 try { getEULA(forceRefresh = true) } catch (e: Exception) { /* ignored */ }
                 try { getDataProcessingAgreement(forceRefresh = true) } catch (e: Exception) { /* ignored */ }
                 
@@ -500,6 +621,42 @@ These terms are governed by the laws of [Your Jurisdiction].
                             urlFetcher = { remoteConfigManager.getTermsOfServiceUrl() },
                             versionFetcher = { remoteConfigManager.getTermsVersion() },
                             fallbackContent = DEFAULT_TERMS_OF_SERVICE
+                        )
+                    }
+                    LegalDocumentType.AI_DISCLAIMER -> {
+                        fetchDocumentFromRemoteUrl(
+                            type = type,
+                            title = "AI Disclaimer",
+                            urlFetcher = { remoteConfigManager.getAIDisclaimerUrl() },
+                            versionFetcher = { remoteConfigManager.getAIDisclaimerVersion() },
+                            fallbackContent = DEFAULT_AI_DISCLAIMER
+                        )
+                    }
+                    LegalDocumentType.COMMUNITY_GUIDELINES -> {
+                        fetchDocumentFromRemoteUrl(
+                            type = type,
+                            title = "Community Guidelines",
+                            urlFetcher = { remoteConfigManager.getCommunityGuidelinesUrl() },
+                            versionFetcher = { remoteConfigManager.getCommunityGuidelinesVersion() },
+                            fallbackContent = DEFAULT_COMMUNITY_GUIDELINES
+                        )
+                    }
+                    LegalDocumentType.CONTENT_MODERATION_POLICY -> {
+                        fetchDocumentFromRemoteUrl(
+                            type = type,
+                            title = "Content Moderation Policy",
+                            urlFetcher = { remoteConfigManager.getContentModerationPolicyUrl() },
+                            versionFetcher = { remoteConfigManager.getContentModerationPolicyVersion() },
+                            fallbackContent = DEFAULT_CONTENT_MODERATION_POLICY
+                        )
+                    }
+                    LegalDocumentType.REFUND_SUBSCRIPTION_POLICY -> {
+                        fetchDocumentFromRemoteUrl(
+                            type = type,
+                            title = "Refund & Subscription Policy",
+                            urlFetcher = { remoteConfigManager.getRefundSubscriptionPolicyUrl() },
+                            versionFetcher = { remoteConfigManager.getRefundPolicyVersion() },
+                            fallbackContent = DEFAULT_REFUND_SUBSCRIPTION_POLICY
                         )
                     }
                     else -> {

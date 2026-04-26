@@ -137,13 +137,13 @@ class CreateCustomExerciseUseCase @Inject constructor(
             // Get authenticated user
             val userId = authRepository.getCurrentUserId()
                 ?: return Result.failure(CreateCustomExerciseException.UserNotAuthenticated)
-            
+
             // Validate input
-            when (val validationResult = validateInput(input, userId)) {
+            when (val validationResult = validateInput(input, userId.value)) {
                 is ValidationResult.Success -> {
                     // Create the exercise with all enhanced fields
                     customExerciseRepository.createCustomExercise(
-                        userId = userId,
+                        userId = userId.value,
                         name = input.name.trim(),
                         description = input.description?.trim()?.takeIf { it.isNotBlank() },
                         exerciseType = input.exerciseType,

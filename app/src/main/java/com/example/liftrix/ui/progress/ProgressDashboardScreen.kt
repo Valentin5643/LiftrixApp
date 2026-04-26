@@ -748,7 +748,7 @@ private fun ErrorStateContent(
             ) {
                 Icon(
                     imageVector = Icons.Default.Error,
-                    contentDescription = null,
+                    contentDescription = "Error loading progress",
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(48.dp)
                 )
@@ -1019,7 +1019,7 @@ private fun ResponsiveWidgetsSection(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Dashboard,
-                        contentDescription = null,
+                        contentDescription = "No active widgets",
                         modifier = Modifier.size(48.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1277,7 +1277,7 @@ private fun InsightMetric(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = label,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(20.dp)
         )
@@ -1336,7 +1336,7 @@ private fun CalorieAnalyticsEmptyState(
     ) {
         Icon(
             imageVector = Icons.Default.LocalFireDepartment,
-            contentDescription = null,
+            contentDescription = "Calorie analytics",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(48.dp)
         )

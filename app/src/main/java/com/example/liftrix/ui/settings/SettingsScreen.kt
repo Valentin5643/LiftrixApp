@@ -60,6 +60,7 @@ import java.time.LocalDateTime
  * @param onNavigateToAbout Callback to navigate to about screen
  * @param onNavigateToPrivacyPolicy Callback to navigate to privacy policy screen
  * @param onNavigateToTermsOfService Callback to navigate to terms of service screen
+ * @param onNavigateToCommunityGuidelines Callback to navigate to community guidelines screen
  * @param modifier Modifier for styling the screen
  * @param viewModel SettingsViewModel for state management (injectable for testing)
  */
@@ -82,6 +83,10 @@ fun SettingsScreen(
     onNavigateToAbout: (() -> Unit)? = null,
     onNavigateToPrivacyPolicy: (() -> Unit)? = null,
     onNavigateToTermsOfService: (() -> Unit)? = null,
+    onNavigateToAIDisclaimer: (() -> Unit)? = null,
+    onNavigateToCommunityGuidelines: (() -> Unit)? = null,
+    onNavigateToContentModerationPolicy: (() -> Unit)? = null,
+    onNavigateToRefundSubscriptionPolicy: (() -> Unit)? = null,
     onNavigateToDataPortability: (() -> Unit)? = null,
     onNavigateToAIChatSettings: (() -> Unit)? = null,
     onNavigateToAdminBanManagement: (() -> Unit)? = null,
@@ -114,6 +119,10 @@ fun SettingsScreen(
         val stableOnNavigateToAbout = remember(onNavigateToAbout) { onNavigateToAbout }
         val stableOnNavigateToPrivacyPolicy = remember(onNavigateToPrivacyPolicy) { onNavigateToPrivacyPolicy }
         val stableOnNavigateToTermsOfService = remember(onNavigateToTermsOfService) { onNavigateToTermsOfService }
+        val stableOnNavigateToAIDisclaimer = remember(onNavigateToAIDisclaimer) { onNavigateToAIDisclaimer }
+        val stableOnNavigateToCommunityGuidelines = remember(onNavigateToCommunityGuidelines) { onNavigateToCommunityGuidelines }
+        val stableOnNavigateToContentModerationPolicy = remember(onNavigateToContentModerationPolicy) { onNavigateToContentModerationPolicy }
+        val stableOnNavigateToRefundSubscriptionPolicy = remember(onNavigateToRefundSubscriptionPolicy) { onNavigateToRefundSubscriptionPolicy }
         val stableOnNavigateToDataPortability = remember(onNavigateToDataPortability) { onNavigateToDataPortability }
         val stableOnNavigateToAIChatSettings = remember(onNavigateToAIChatSettings) { onNavigateToAIChatSettings }
         
@@ -173,11 +182,17 @@ fun SettingsScreen(
                             onNavigateToUsernameChange = stableOnNavigateToUsernameChange,
                             onNavigateToAccountDeletion = stableOnNavigateToAccountDeletion,
                             onNavigateToPrivacyPolicy = stableOnNavigateToPrivacyPolicy,
+                            onNavigateToTermsOfService = stableOnNavigateToTermsOfService,
+                            onNavigateToAIDisclaimer = stableOnNavigateToAIDisclaimer,
                             onNavigateToDataPortability = stableOnNavigateToDataPortability,
                             onNavigateToHelpCenter = stableOnNavigateToHelpCenter,
+                            onNavigateToContactSupport = stableOnNavigateToContactSupport,
                             onNavigateToAbout = stableOnNavigateToAbout,
                             onNavigateToAdminBanManagement = onNavigateToAdminBanManagement,
                             onNavigateToUpgradeToPremium = onNavigateToUpgradeToPremium,
+                            onNavigateToCommunityGuidelines = stableOnNavigateToCommunityGuidelines,
+                            onNavigateToContentModerationPolicy = stableOnNavigateToContentModerationPolicy,
+                            onNavigateToRefundSubscriptionPolicy = stableOnNavigateToRefundSubscriptionPolicy,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -204,6 +219,21 @@ fun SettingsScreen(
             onError = { error ->
                 Timber.e("Image picker error in settings: $error")
                 // Could enhance this with proper error display in the future
+            }
+        )
+
+        // Delete Account Confirmation Dialog with stable callbacks
+        DeleteAccountConfirmationDialog(
+            isVisible = uiState.showDeleteAccountDialog,
+            onDismiss = { stableOnEvent(SettingsEvent.DeleteAccountDialogDismissed) },
+            onConfirm = { reauthProvider, reauthPayload, exportDataFirst ->
+                stableOnEvent(
+                    SettingsEvent.DeleteAccountConfirmed(
+                        reauthProvider = reauthProvider,
+                        reauthPayload = reauthPayload,
+                        exportDataFirst = exportDataFirst
+                    )
+                )
             }
         )
     }
@@ -236,8 +266,14 @@ private fun SettingsContent(
     onNavigateToUsernameChange: (() -> Unit)? = null,
     onNavigateToAccountDeletion: (() -> Unit)? = null,
     onNavigateToPrivacyPolicy: (() -> Unit)? = null,
+    onNavigateToTermsOfService: (() -> Unit)? = null,
+    onNavigateToAIDisclaimer: (() -> Unit)? = null,
+    onNavigateToCommunityGuidelines: (() -> Unit)? = null,
+    onNavigateToContentModerationPolicy: (() -> Unit)? = null,
+    onNavigateToRefundSubscriptionPolicy: (() -> Unit)? = null,
     onNavigateToDataPortability: (() -> Unit)? = null,
     onNavigateToHelpCenter: (() -> Unit)? = null,
+    onNavigateToContactSupport: (() -> Unit)? = null,
     onNavigateToAbout: (() -> Unit)? = null,
     onNavigateToAdminBanManagement: (() -> Unit)? = null,
     onNavigateToUpgradeToPremium: (() -> Unit)? = null,
@@ -248,8 +284,14 @@ private fun SettingsContent(
     val stableOnNavigateToProfile = remember(onNavigateToProfile) { onNavigateToProfile }
     val stableOnNavigateToNotifications = remember(onNavigateToNotifications) { onNavigateToNotifications }
     val stableOnNavigateToPrivacyPolicy = remember(onNavigateToPrivacyPolicy) { onNavigateToPrivacyPolicy }
+    val stableOnNavigateToTermsOfService = remember(onNavigateToTermsOfService) { onNavigateToTermsOfService }
+    val stableOnNavigateToAIDisclaimer = remember(onNavigateToAIDisclaimer) { onNavigateToAIDisclaimer }
+    val stableOnNavigateToCommunityGuidelines = remember(onNavigateToCommunityGuidelines) { onNavigateToCommunityGuidelines }
+    val stableOnNavigateToContentModerationPolicy = remember(onNavigateToContentModerationPolicy) { onNavigateToContentModerationPolicy }
+    val stableOnNavigateToRefundSubscriptionPolicy = remember(onNavigateToRefundSubscriptionPolicy) { onNavigateToRefundSubscriptionPolicy }
     val stableOnNavigateToDataPortability = remember(onNavigateToDataPortability) { onNavigateToDataPortability }
     val stableOnNavigateToHelpCenter = remember(onNavigateToHelpCenter) { onNavigateToHelpCenter }
+    val stableOnNavigateToContactSupport = remember(onNavigateToContactSupport) { onNavigateToContactSupport }
     val stableOnNavigateToAbout = remember(onNavigateToAbout) { onNavigateToAbout }
     val stableSettingsCategories = remember { settingsCategories }
     
@@ -293,9 +335,15 @@ private fun SettingsContent(
                     onNavigateToUsernameChange = onNavigateToUsernameChange,
                     onNavigateToAccountDeletion = onNavigateToAccountDeletion,
                     onNavigateToPrivacyPolicy = stableOnNavigateToPrivacyPolicy,
+                    onNavigateToTermsOfService = stableOnNavigateToTermsOfService,
+                    onNavigateToAIDisclaimer = stableOnNavigateToAIDisclaimer,
+                    onNavigateToCommunityGuidelines = stableOnNavigateToCommunityGuidelines,
+                    onNavigateToContentModerationPolicy = stableOnNavigateToContentModerationPolicy,
+                    onNavigateToRefundSubscriptionPolicy = stableOnNavigateToRefundSubscriptionPolicy,
                     onNavigateToDataPortability = stableOnNavigateToDataPortability,
                     onNavigateToAdminBanManagement = onNavigateToAdminBanManagement,
                     onNavigateToHelpCenter = stableOnNavigateToHelpCenter,
+                    onNavigateToContactSupport = stableOnNavigateToContactSupport,
                     onNavigateToAbout = stableOnNavigateToAbout,
                     onNavigateToUpgradeToPremium = onNavigateToUpgradeToPremium
                 )
@@ -352,9 +400,15 @@ private fun SettingsCategoryContent(
     onNavigateToUsernameChange: (() -> Unit)? = null,
     onNavigateToAccountDeletion: (() -> Unit)? = null,
     onNavigateToPrivacyPolicy: (() -> Unit)? = null,
+    onNavigateToTermsOfService: (() -> Unit)? = null,
+    onNavigateToAIDisclaimer: (() -> Unit)? = null,
+    onNavigateToCommunityGuidelines: (() -> Unit)? = null,
+    onNavigateToContentModerationPolicy: (() -> Unit)? = null,
+    onNavigateToRefundSubscriptionPolicy: (() -> Unit)? = null,
     onNavigateToDataPortability: (() -> Unit)? = null,
     onNavigateToAdminBanManagement: (() -> Unit)? = null,
     onNavigateToHelpCenter: (() -> Unit)? = null,
+    onNavigateToContactSupport: (() -> Unit)? = null,
     onNavigateToAbout: (() -> Unit)? = null,
     onNavigateToUpgradeToPremium: (() -> Unit)? = null
 ) {
@@ -378,7 +432,8 @@ private fun SettingsCategoryContent(
                 SubscriptionSettings(
                     uiState = uiState,
                     onEvent = onEvent,
-                    onNavigateToUpgradeToPremium = onNavigateToUpgradeToPremium
+                    onNavigateToUpgradeToPremium = onNavigateToUpgradeToPremium,
+                    onNavigateToRefundSubscriptionPolicy = onNavigateToRefundSubscriptionPolicy
                 )
             }
             
@@ -391,6 +446,10 @@ private fun SettingsCategoryContent(
                     onNavigateToUsernameChange = onNavigateToUsernameChange,
                     onNavigateToAccountDeletion = onNavigateToAccountDeletion,
                     onNavigateToPrivacyPolicy = onNavigateToPrivacyPolicy,
+                    onNavigateToTermsOfService = onNavigateToTermsOfService,
+                    onNavigateToAIDisclaimer = onNavigateToAIDisclaimer,
+                    onNavigateToCommunityGuidelines = onNavigateToCommunityGuidelines,
+                    onNavigateToContentModerationPolicy = onNavigateToContentModerationPolicy,
                     onNavigateToDataPortability = onNavigateToDataPortability,
                     onNavigateToAdminBanManagement = onNavigateToAdminBanManagement
                 )
@@ -401,6 +460,7 @@ private fun SettingsCategoryContent(
                     uiState = uiState,
                     onEvent = onEvent,
                     onNavigateToHelpCenter = onNavigateToHelpCenter,
+                    onNavigateToContactSupport = onNavigateToContactSupport,
                     onNavigateToAbout = onNavigateToAbout
                 )
             }
@@ -472,7 +532,7 @@ private fun GeneralSettings(
             subtitle = "Configure AI assistant language, behavior, and data management",
             icon = LiftrixIcons.Workflow.Settings,
             onClick = { 
-                // Navigate to AI chat settings
+                stableOnEvent(SettingsEvent.NavigateToAIChatSettings)
                 stableOnNavigateToAIChatSettings?.invoke()
             }
         )
@@ -532,11 +592,12 @@ private fun GeneralSettings(
 private fun SubscriptionSettings(
     uiState: SettingsState,
     onEvent: (SettingsEvent) -> Unit,
-    onNavigateToUpgradeToPremium: (() -> Unit)? = null
+    onNavigateToUpgradeToPremium: (() -> Unit)? = null,
+    onNavigateToRefundSubscriptionPolicy: (() -> Unit)? = null
 ) {
     // Stable callback to prevent unnecessary recompositions
     val stableOnEvent = remember(onEvent) { onEvent }
-    
+
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -558,7 +619,7 @@ private fun SubscriptionSettings(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            
+
             if (uiState.hasPremiumAccess) {
                 SecondaryActionButton(
                     text = "Manage",
@@ -568,7 +629,7 @@ private fun SubscriptionSettings(
             } else {
                 PrimaryActionButton(
                     text = "Upgrade",
-                    onClick = { 
+                    onClick = {
                         stableOnEvent(SettingsEvent.UpgradeSubscription)
                         onNavigateToUpgradeToPremium?.invoke()
                     },
@@ -576,15 +637,28 @@ private fun SubscriptionSettings(
                 )
             }
         }
-        
+
         if (!uiState.hasPremiumAccess) {
             SettingsNavigationItem(
                 title = "Upgrade to Premium",
                 subtitle = "Unlock advanced features and analytics",
                 icon = Icons.Default.Star,
-                onClick = { 
+                onClick = {
                     stableOnEvent(SettingsEvent.UpgradeSubscription)
                     onNavigateToUpgradeToPremium?.invoke()
+                }
+            )
+        }
+
+        // Refund & Subscription Policy (visible if subscriptions exist)
+        if (uiState.hasPremiumAccess || uiState.subscriptionDisplayName != "Free") {
+            SettingsNavigationItem(
+                title = "Refund & Subscription Policy",
+                subtitle = "View refund and cancellation terms",
+                icon = LiftrixIcons.State.Info,
+                onClick = {
+                    stableOnEvent(SettingsEvent.NavigateToRefundPolicy)
+                    onNavigateToRefundSubscriptionPolicy?.invoke()
                 }
             )
         }
@@ -604,6 +678,10 @@ private fun PrivacySettings(
     onNavigateToUsernameChange: (() -> Unit)? = null,
     onNavigateToAccountDeletion: (() -> Unit)? = null,
     onNavigateToPrivacyPolicy: (() -> Unit)? = null,
+    onNavigateToTermsOfService: (() -> Unit)? = null,
+    onNavigateToAIDisclaimer: (() -> Unit)? = null,
+    onNavigateToCommunityGuidelines: (() -> Unit)? = null,
+    onNavigateToContentModerationPolicy: (() -> Unit)? = null,
     onNavigateToDataPortability: (() -> Unit)? = null,
     onNavigateToAdminBanManagement: (() -> Unit)? = null
 ) {
@@ -614,116 +692,150 @@ private fun PrivacySettings(
     val stableOnNavigateToUsernameChange = remember(onNavigateToUsernameChange) { onNavigateToUsernameChange }
     val stableOnNavigateToAccountDeletion = remember(onNavigateToAccountDeletion) { onNavigateToAccountDeletion }
     val stableOnNavigateToPrivacyPolicy = remember(onNavigateToPrivacyPolicy) { onNavigateToPrivacyPolicy }
+    val stableOnNavigateToTermsOfService = remember(onNavigateToTermsOfService) { onNavigateToTermsOfService }
+    val stableOnNavigateToAIDisclaimer = remember(onNavigateToAIDisclaimer) { onNavigateToAIDisclaimer }
+    val stableOnNavigateToCommunityGuidelines = remember(onNavigateToCommunityGuidelines) { onNavigateToCommunityGuidelines }
+    val stableOnNavigateToContentModerationPolicy = remember(onNavigateToContentModerationPolicy) { onNavigateToContentModerationPolicy }
     val stableOnNavigateToDataPortability = remember(onNavigateToDataPortability) { onNavigateToDataPortability }
     val stableOnNavigateToAdminBanManagement = remember(onNavigateToAdminBanManagement) { onNavigateToAdminBanManagement }
-    
+
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Account Management Section
+        // Account & Security Section
         Text(
-            text = "Account Management",
+            text = "Account & Security",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(vertical = 4.dp)
         )
-        
+
         SettingsNavigationItem(
             title = "Change Email",
             subtitle = "Update your email address",
             icon = LiftrixIcons.Workflow.Profile,
-            onClick = { 
+            onClick = {
                 stableOnEvent(SettingsEvent.NavigateToEmailChange)
                 stableOnNavigateToEmailChange?.invoke()
             }
         )
-        
+
         SettingsNavigationItem(
             title = "Change Password",
             subtitle = "Update your account password",
             icon = LiftrixIcons.Workflow.Settings,
-            onClick = { 
+            onClick = {
                 stableOnEvent(SettingsEvent.NavigateToPasswordChange)
                 stableOnNavigateToPasswordChange?.invoke()
             }
         )
-        
+
         SettingsNavigationItem(
-            title = "Change Username",
-            subtitle = "Update your username",
+            title = "Change Name",
+            subtitle = "Update your display name",
             icon = LiftrixIcons.Workflow.Profile,
-            onClick = { 
+            onClick = {
                 stableOnEvent(SettingsEvent.NavigateToUsernameChange)
                 stableOnNavigateToUsernameChange?.invoke()
             }
         )
-        
-        // Privacy & Data Section
+
+        // Privacy & Legal Section
         Text(
-            text = "Privacy & Data",
+            text = "Privacy & Legal",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
         )
-        
+
         SettingsNavigationItem(
             title = "Privacy Policy",
             subtitle = "View our privacy policy",
             icon = LiftrixIcons.State.Info,
-            onClick = { 
+            onClick = {
                 stableOnEvent(SettingsEvent.NavigateToPrivacy)
                 stableOnNavigateToPrivacyPolicy?.invoke()
             }
         )
-        
+
+        SettingsNavigationItem(
+            title = "Terms of Service",
+            subtitle = "View terms and conditions",
+            icon = LiftrixIcons.State.Info,
+            onClick = {
+                stableOnEvent(SettingsEvent.NavigateToTermsOfService)
+                stableOnNavigateToTermsOfService?.invoke()
+            }
+        )
+
+        SettingsNavigationItem(
+            title = "AI Disclaimer",
+            subtitle = "View AI assistant disclaimers and limitations",
+            icon = LiftrixIcons.State.Info,
+            onClick = {
+                stableOnEvent(SettingsEvent.NavigateToAIDisclaimer)
+                stableOnNavigateToAIDisclaimer?.invoke()
+            }
+        )
+
+        SettingsNavigationItem(
+            title = "Community Guidelines",
+            subtitle = "View content and conduct policies",
+            icon = LiftrixIcons.State.Info,
+            onClick = {
+                stableOnEvent(SettingsEvent.NavigateToCommunityGuidelines)
+                stableOnNavigateToCommunityGuidelines?.invoke()
+            }
+        )
+
+        SettingsNavigationItem(
+            title = "Content Moderation Policy",
+            subtitle = "View content moderation guidelines",
+            icon = LiftrixIcons.State.Info,
+            onClick = {
+                stableOnEvent(SettingsEvent.NavigateToContentModerationPolicy)
+                stableOnNavigateToContentModerationPolicy?.invoke()
+            }
+        )
+
+        // Data Control Section
+        Text(
+            text = "Data Control",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+        )
+
         SettingsNavigationItem(
             title = "Export Data",
             subtitle = "Download your workout data",
             icon = LiftrixIcons.Actions.Share,
-            onClick = { 
+            onClick = {
                 stableOnEvent(SettingsEvent.NavigateToDataPortability)
                 stableOnNavigateToDataPortability?.invoke()
             }
         )
-        
-        // Admin Section (Only visible to admin users)
+
         if (uiState.isAdmin && onNavigateToAdminBanManagement != null) {
-            Text(
-                text = "Administration",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
-            )
-            
             SettingsNavigationItem(
                 title = "User Management",
                 subtitle = "Ban and manage users",
                 icon = LiftrixIcons.Workflow.Settings,
-                onClick = { 
+                onClick = {
                     stableOnNavigateToAdminBanManagement?.invoke()
                 }
             )
         }
-        
-        // Danger Zone Section
-        Text(
-            text = "Danger Zone",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
-        )
-        
+
         SettingsNavigationItem(
             title = "Delete Account",
             subtitle = "Permanently delete your account",
             icon = Icons.Default.Delete,
-            onClick = { 
-                stableOnEvent(SettingsEvent.NavigateToAccountDeletion)
-                stableOnNavigateToAccountDeletion?.invoke()
+            onClick = {
+                stableOnEvent(SettingsEvent.DeleteAccountRequested)
             }
         )
     }
@@ -737,11 +849,13 @@ private fun SupportSettings(
     uiState: SettingsState,
     onEvent: (SettingsEvent) -> Unit,
     onNavigateToHelpCenter: (() -> Unit)? = null,
+    onNavigateToContactSupport: (() -> Unit)? = null,
     onNavigateToAbout: (() -> Unit)? = null
 ) {
     // Stable callbacks to prevent unnecessary recompositions
     val stableOnEvent = remember(onEvent) { onEvent }
     val stableOnNavigateToHelpCenter = remember(onNavigateToHelpCenter) { onNavigateToHelpCenter }
+    val stableOnNavigateToContactSupport = remember(onNavigateToContactSupport) { onNavigateToContactSupport }
     val stableOnNavigateToAbout = remember(onNavigateToAbout) { onNavigateToAbout }
     
     Column(
@@ -749,13 +863,25 @@ private fun SupportSettings(
     ) {
         SettingsNavigationItem(
             title = "Help & Support",
-            subtitle = "Get help with using the app",
+            subtitle = "Submit a support ticket",
             icon = Icons.Default.Help,
             onClick = { 
-                stableOnEvent(SettingsEvent.NavigateToHelp)
-                stableOnNavigateToHelpCenter?.invoke()
+                stableOnEvent(SettingsEvent.NavigateToContactSupport)
+                stableOnNavigateToContactSupport?.invoke()
             }
         )
+
+        if (onNavigateToHelpCenter != null) {
+            SettingsNavigationItem(
+                title = "FAQ / Help",
+                subtitle = "Browse guides and common questions",
+                icon = Icons.Default.Help,
+                onClick = {
+                    stableOnEvent(SettingsEvent.NavigateToHelpCenter)
+                    stableOnNavigateToHelpCenter?.invoke()
+                }
+            )
+        }
         
         SettingsNavigationItem(
             title = "About",
@@ -786,7 +912,7 @@ private fun ErrorState(
     ) {
         Icon(
             imageVector = LiftrixIcons.State.Error,
-            contentDescription = null,
+            contentDescription = "Error",
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(64.dp)
         )

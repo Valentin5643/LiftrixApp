@@ -70,7 +70,7 @@ private fun SuccessValidationFeedback(
     ) {
         Icon(
             imageVector = Icons.Default.CheckCircle,
-            contentDescription = null,
+            contentDescription = "Valid input",
             tint = LiftrixColors.Primary,
             modifier = Modifier.size(16.dp)
         )
@@ -103,7 +103,7 @@ private fun ErrorValidationFeedback(
     ) {
         Icon(
             imageVector = Icons.Default.Error,
-            contentDescription = null,
+            contentDescription = "Invalid input",
             tint = LiftrixColors.TiffanyBlue, // Coral accent for errors
             modifier = Modifier.size(16.dp)
         )
@@ -174,7 +174,7 @@ private fun ValidationErrorItem(
     ) {
         Icon(
             imageVector = Icons.Default.Error,
-            contentDescription = null,
+            contentDescription = "Error",
             tint = LiftrixColors.TiffanyBlue, // Coral accent for errors
             modifier = Modifier
                 .size(16.dp)
@@ -245,7 +245,7 @@ fun FormValidationStatus(
                 ) {
                     Icon(
                         imageVector = if (errors.isEmpty()) Icons.Default.CheckCircle else Icons.Default.Warning,
-                        contentDescription = null,
+                        contentDescription = if (errors.isEmpty()) "Form is valid" else "Form has errors",
                         tint = if (errors.isEmpty()) LiftrixColors.Primary else LiftrixColors.TiffanyBlue,
                         modifier = Modifier.size(20.dp)
                     )
@@ -340,7 +340,7 @@ fun ValidationTooltip(
             ) {
                 Icon(
                     imageVector = Icons.Default.Error,
-                    contentDescription = null,
+                    contentDescription = "Validation error",
                     tint = LiftrixColors.TiffanyBlue,
                     modifier = Modifier.size(16.dp)
                 )

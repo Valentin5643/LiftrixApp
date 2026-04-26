@@ -169,7 +169,7 @@ fun EmailChangeScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Warning,
-                                    contentDescription = null,
+                                    contentDescription = "Email not verified",
                                     tint = MaterialTheme.colorScheme.error,
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -200,7 +200,7 @@ fun EmailChangeScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Info,
-                                contentDescription = null,
+                                contentDescription = "Email change info",
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -251,7 +251,7 @@ fun EmailChangeScreen(
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.Email,
-                                    contentDescription = null
+                                    contentDescription = "New email",
                                 )
                             },
                             enabled = !uiState.isUpdatingEmail,
@@ -278,7 +278,7 @@ fun EmailChangeScreen(
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.Lock,
-                                    contentDescription = null
+                                    contentDescription = "Current password",
                                 )
                             },
                             trailingIcon = {
@@ -388,7 +388,7 @@ fun EmailChangeScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Error,
-                            contentDescription = null,
+                            contentDescription = "Error",
                             tint = MaterialTheme.colorScheme.onErrorContainer
                         )
                         Text(
@@ -430,7 +430,7 @@ fun EmailChangeScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
+                            contentDescription = "Success",
                             tint = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Text(
@@ -568,7 +568,7 @@ private fun EmailChangeScreenContent(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Warning,
-                                contentDescription = null,
+                                contentDescription = "Email not verified",
                                 tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -609,7 +609,7 @@ private fun EmailChangeScreenContent(
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Email,
-                                contentDescription = null
+                                contentDescription = "New email",
                             )
                         },
                         keyboardOptions = KeyboardOptions(
@@ -631,7 +631,7 @@ private fun EmailChangeScreenContent(
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Lock,
-                                contentDescription = null
+                                contentDescription = "Current password",
                             )
                         },
                         trailingIcon = {

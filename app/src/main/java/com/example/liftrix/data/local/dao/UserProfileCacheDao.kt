@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Upsert
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.UserProfileCacheEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -113,4 +114,62 @@ interface UserProfileCacheDao {
      */
     @Query("UPDATE user_profile_cache SET cache_timestamp = :timestamp WHERE user_id = :userId")
     suspend fun updateCacheTimestamp(userId: String, timestamp: Long)
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert userprofilecache from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(userProfileCache: UserProfileCacheEntity) {
+        val entity = userProfileCache.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert userprofilecache from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(userProfileCache: UserProfileCacheEntity) {
+        val local = getUserProfileCacheForSync(userProfileCache.userId)
+        if (local == null || userProfileCache.lastModified > local.lastModified) {
+            val entity = userProfileCache.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: UserProfileCacheEntity)
+
+    /**
+     * Get dirty userprofilecache that need upload to Firestore.
+     */
+    @Query("SELECT * FROM user_profile_cache WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyUserProfileCaches(userId: String): List<UserProfileCacheEntity>
+
+    /**
+     * Mark userprofilecache as clean after successful Firestore upload.
+     */
+    @Query("UPDATE user_profile_cache SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE user_id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local userprofilecache for remote deduplication.
+     */
+    @Query("SELECT * FROM user_profile_cache WHERE user_id = :userId LIMIT 1")
+    suspend fun getUserProfileCacheForSync(userId: String): UserProfileCacheEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

@@ -121,7 +121,7 @@ fun WorkoutVolumeHeatmap(
                 
                 Icon(
                     imageVector = Icons.Default.FitnessCenter,
-                    contentDescription = null,
+                    contentDescription = "Volume calendar",
                     tint = LiftrixColorsV2.Teal,
                     modifier = Modifier.size(GridSystem.iconMedium)
                 )

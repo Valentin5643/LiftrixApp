@@ -7,6 +7,7 @@ import com.example.liftrix.service.sync.ConflictResolver
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.config.OfflineArchitectureFlags
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -274,7 +275,13 @@ class SyncOperationManager @Inject constructor(
             
             Timber.d("SyncOperationManager: Syncing workouts for user $userId")
             
-            val unsyncedWorkouts = workoutDao.getUnsyncedWorkoutsForUser(userId)
+            val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+                OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
+            val unsyncedWorkouts = if (useDirtyFlagGating) {
+                workoutDao.getDirtyWorkouts(userId)
+            } else {
+                workoutDao.getUnsyncedWorkoutsForUser(userId)
+            }
             val results = mutableListOf<SyncOperationResult>()
             
             if (unsyncedWorkouts.isEmpty()) {
@@ -332,28 +339,27 @@ class SyncOperationManager @Inject constructor(
                     }
                 }
                 
-                try {
-                    firestoreBatch.commit().await()
+                    try {
+                        firestoreBatch.commit().await()
                     
-                    // Mark batch as synced
-                    for (workout in batch) {
-                        workoutDao.updateSyncStatusForUser(
-                            id = workout.id,
+                        // Mark batch as synced
+                        workoutDao.markAsClean(
+                            ids = batch.map { it.id },
                             userId = userId,
-                            isSynced = true,
-                            version = System.currentTimeMillis()
+                            syncVersion = System.currentTimeMillis()
                         )
-                        
-                        val operation = SyncOperation(
-                            entityType = ENTITY_WORKOUT,
-                            entityId = workout.id,
-                            operation = "UPDATE",
-                            priority = PRIORITY_HIGH,
-                            userId = userId
-                        )
-                        
-                        results.add(SyncOperationResult(operation, success = true))
-                    }
+
+                        for (workout in batch) {
+                            val operation = SyncOperation(
+                                entityType = ENTITY_WORKOUT,
+                                entityId = workout.id,
+                                operation = "UPDATE",
+                                priority = PRIORITY_HIGH,
+                                userId = userId
+                            )
+                            
+                            results.add(SyncOperationResult(operation, success = true))
+                        }
                     
                     Timber.d("SyncOperationManager: Successfully synced workout batch ${batchIndex + 1}")
                     
@@ -407,7 +413,13 @@ class SyncOperationManager @Inject constructor(
 
             try {
                 // Get unsynced templates
-                val unsyncedTemplates = workoutTemplateDao.getUnsyncedTemplates(userId)
+                val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+                    OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
+                val unsyncedTemplates = if (useDirtyFlagGating) {
+                    workoutTemplateDao.getDirtyWorkoutTemplates(userId)
+                } else {
+                    workoutTemplateDao.getUnsyncedTemplates(userId)
+                }
 
                 if (unsyncedTemplates.isEmpty()) {
                     Timber.d("SyncOperationManager: No unsynced templates for user $userId")
@@ -459,7 +471,11 @@ class SyncOperationManager @Inject constructor(
                         firestoreBatch.commit().await()
 
                         // Mark batch as synced
-                        workoutTemplateDao.markTemplatesAsSynced(batch.map { it.id })
+                        workoutTemplateDao.markAsClean(
+                            ids = batch.map { it.id },
+                            userId = userId,
+                            syncVersion = System.currentTimeMillis()
+                        )
 
                         for (template in batch) {
                             results.add(SyncOperationResult(operation, success = true))
@@ -513,7 +529,13 @@ class SyncOperationManager @Inject constructor(
 
             try {
                 // Get unsynced social profiles
-                val unsyncedSocialProfiles = socialProfileDao.getUnsyncedProfiles(userId)
+                val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+                    OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
+                val unsyncedSocialProfiles = if (useDirtyFlagGating) {
+                    socialProfileDao.getDirtySocialProfiles(userId)
+                } else {
+                    socialProfileDao.getUnsyncedProfiles(userId)
+                }
 
                 if (unsyncedSocialProfiles.isEmpty()) {
                     Timber.d("SyncOperationManager: No unsynced social profiles for user $userId")
@@ -563,13 +585,13 @@ class SyncOperationManager @Inject constructor(
                         firestoreBatch.commit().await()
 
                         // Mark batch as synced
-                        for (profile in batch) {
-                            socialProfileDao.updateSyncStatus(
-                                userId = profile.userId,
-                                isSynced = true,
-                                version = System.currentTimeMillis().toInt()
-                            )
+                        socialProfileDao.markAsClean(
+                            ids = batch.map { it.userId },
+                            userId = userId,
+                            syncVersion = System.currentTimeMillis()
+                        )
 
+                        for (profile in batch) {
                             results.add(SyncOperationResult(operation, success = true))
                         }
 
@@ -621,7 +643,13 @@ class SyncOperationManager @Inject constructor(
 
             try {
                 // Get unsynced achievements
-                val unsyncedAchievements = achievementDao.getUnsyncedAchievements(userId)
+                val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+                    OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
+                val unsyncedAchievements = if (useDirtyFlagGating) {
+                    achievementDao.getDirtyUserAchievements(userId)
+                } else {
+                    achievementDao.getUnsyncedAchievements(userId)
+                }
 
                 if (unsyncedAchievements.isEmpty()) {
                     Timber.d("SyncOperationManager: No unsynced achievements for user $userId")
@@ -673,12 +701,13 @@ class SyncOperationManager @Inject constructor(
                         firestoreBatch.commit().await()
 
                         // Mark batch as synced
-                        for (achievement in batch) {
-                            achievementDao.markAsSynced(
-                                achievementId = achievement.id,
-                                syncVersion = System.currentTimeMillis()
-                            )
+                        achievementDao.markAsClean(
+                            ids = batch.map { it.id },
+                            userId = userId,
+                            syncVersion = System.currentTimeMillis()
+                        )
 
+                        for (achievement in batch) {
                             results.add(SyncOperationResult(operation, success = true))
                         }
 

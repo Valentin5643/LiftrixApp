@@ -23,14 +23,17 @@ import javax.inject.Inject
 @HiltViewModel
 class PostCommentsViewModel @Inject constructor(
     private val engagementRepository: EngagementRepository,
-    private val authQueryUseCase: AuthQueryUseCase
+    private val authQueryUseCase: AuthQueryUseCase,
+    private val contentReportsDao: com.example.liftrix.data.local.dao.ContentReportsDao
 ) : ModernBaseViewModel<PostCommentsUiState>(initialState = PostCommentsUiState.Loading) {
 
     private val _postId = MutableStateFlow<String?>(null)
-    private val _currentUserId = MutableStateFlow<String?>(null)
+    private val _currentUserId = MutableStateFlow<com.example.liftrix.core.identity.UserId?>(null)
     private val _commentText = MutableStateFlow("")
     private val _isPosting = MutableStateFlow(false)
     private val _replyingTo = MutableStateFlow<PostComment?>(null)
+    private val _reportingComment = MutableStateFlow<PostComment?>(null)
+    private val _isSubmittingReport = MutableStateFlow(false)
 
     init {
         // Get current user ID
@@ -61,6 +64,9 @@ class PostCommentsViewModel @Inject constructor(
             is PostCommentsEvent.ReplyToComment -> setReplyingTo(event.comment)
             PostCommentsEvent.CancelReply -> cancelReply()
             PostCommentsEvent.RefreshComments -> refreshComments()
+            is PostCommentsEvent.ReportComment -> showReportDialog(event.comment)
+            is PostCommentsEvent.SubmitReport -> submitReport(event.commentId, event.reason, event.notes)
+            PostCommentsEvent.DismissReportDialog -> dismissReportDialog()
         }
     }
 
@@ -95,7 +101,7 @@ class PostCommentsViewModel @Inject constructor(
                     parentCommentId = replyingTo?.id
                 )
 
-                val result = engagementRepository.createComment(currentUserId, request)
+                val result = engagementRepository.createComment(currentUserId.value, request)
                 
                 result.fold(
                     onSuccess = { comment ->
@@ -116,7 +122,7 @@ class PostCommentsViewModel @Inject constructor(
                                 errorMessage = "Failed to post comment: ${throwable.message}",
                                 analyticsContext = mapOf(
                                     "post_id" to postId,
-                                    "user_id" to currentUserId
+                                    "user_id" to currentUserId.value
                                 )
                             )
                         }
@@ -130,7 +136,7 @@ class PostCommentsViewModel @Inject constructor(
                     errorMessage = "Failed to post comment: ${e.message}",
                     analyticsContext = mapOf(
                         "post_id" to postId,
-                        "user_id" to currentUserId
+                        "user_id" to currentUserId.value
                     )
                 )
                 Timber.e(e, "Exception posting comment")
@@ -175,7 +181,7 @@ class PostCommentsViewModel @Inject constructor(
                     analyticsContext = mapOf(
                         "comment_id" to commentId,
                         "post_id" to postId,
-                        "user_id" to currentUserId
+                        "user_id" to currentUserId.value
                     )
                 )
                 Timber.e(e, "Exception toggling comment like: $commentId")
@@ -204,11 +210,87 @@ class PostCommentsViewModel @Inject constructor(
         updateState { PostCommentsUiState.Success }
     }
 
+    private fun showReportDialog(comment: PostComment) {
+        _reportingComment.value = comment
+        Timber.d("Showing report dialog for comment: ${comment.id}")
+    }
+
+    private fun dismissReportDialog() {
+        _reportingComment.value = null
+        _isSubmittingReport.value = false
+    }
+
+    private fun submitReport(
+        commentId: String,
+        reason: com.example.liftrix.ui.social.ReportReason,
+        notes: String
+    ) {
+        val currentUserId = _currentUserId.value ?: return
+
+        viewModelScope.launch {
+            _isSubmittingReport.value = true
+
+            try {
+                // Check if user has already reported this comment
+                val hasReported = contentReportsDao.hasUserReported(
+                    currentUserId.value,
+                    commentId
+                )
+
+                if (hasReported) {
+                    Timber.w("User has already reported comment: $commentId")
+                    dismissReportDialog()
+                    return@launch
+                }
+
+                // Create report entity
+                val reportEntity = com.example.liftrix.data.local.entity.ContentReportEntity(
+                    id = java.util.UUID.randomUUID().toString(),
+                    reporterUserId = currentUserId.value,
+                    contentType = com.example.liftrix.data.local.entity.ContentReportEntity.CONTENT_TYPE_COMMENT,
+                    contentId = commentId,
+                    reason = reason.value,
+                    description = notes.takeIf { it.isNotBlank() },
+                    reportedAt = System.currentTimeMillis(),
+                    status = com.example.liftrix.data.local.entity.ContentReportEntity.STATUS_PENDING
+                )
+
+                // Insert using Room-first pattern
+                contentReportsDao.upsertLocal(reportEntity)
+
+                Timber.d("Report submitted successfully for comment: $commentId")
+
+                // Dismiss dialog
+                dismissReportDialog()
+
+                // Show success state
+                updateState { PostCommentsUiState.Success }
+
+            } catch (e: Exception) {
+                val error = LiftrixError.BusinessLogicError(
+                    code = "REPORT_SUBMIT_FAILED",
+                    errorMessage = "Failed to submit report: ${e.message}",
+                    analyticsContext = mapOf(
+                        "comment_id" to commentId,
+                        "user_id" to currentUserId.value,
+                        "reason" to reason.value
+                    )
+                )
+                Timber.e(e, "Exception submitting report")
+                updateState { PostCommentsUiState.Error(error) }
+            } finally {
+                _isSubmittingReport.value = false
+            }
+        }
+    }
+
     // Exposed state for UI
     val commentText: StateFlow<String> = _commentText.asStateFlow()
     val isPosting: StateFlow<Boolean> = _isPosting.asStateFlow()
     val replyingTo: StateFlow<PostComment?> = _replyingTo.asStateFlow()
-    val currentUserId: StateFlow<String?> = _currentUserId.asStateFlow()
+    val currentUserId: StateFlow<com.example.liftrix.core.identity.UserId?> = _currentUserId.asStateFlow()
+    val reportingComment: StateFlow<PostComment?> = _reportingComment.asStateFlow()
+    val isSubmittingReport: StateFlow<Boolean> = _isSubmittingReport.asStateFlow()
 
     /**
      * FIX INPUT-006: Sanitize HTML input to prevent XSS attacks (CVSS 7.4)
@@ -251,4 +333,11 @@ sealed class PostCommentsEvent {
     data class ReplyToComment(val comment: com.example.liftrix.domain.model.social.PostComment) : PostCommentsEvent()
     object CancelReply : PostCommentsEvent()
     object RefreshComments : PostCommentsEvent()
+    data class ReportComment(val comment: com.example.liftrix.domain.model.social.PostComment) : PostCommentsEvent()
+    data class SubmitReport(
+        val commentId: String,
+        val reason: com.example.liftrix.ui.social.ReportReason,
+        val notes: String
+    ) : PostCommentsEvent()
+    object DismissReportDialog : PostCommentsEvent()
 }

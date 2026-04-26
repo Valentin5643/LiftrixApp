@@ -17,7 +17,11 @@ import androidx.room.PrimaryKey
     tableName = "notification_history",
     indices = [
         Index(value = ["user_id", "received_at"]),
-        Index(value = ["is_read"])
+        Index(value = ["is_read"]),
+        // P0-PERF-001: Unread notifications priority - critical for notification center loading
+        Index(value = ["user_id", "is_read", "received_at"], name = "idx_notification_history_unread"),
+        // P0-PERF-001: Notification type filtering - supports category-based queries
+        Index(value = ["user_id", "type", "received_at"], name = "idx_notification_history_type")
     ],
     foreignKeys = [
         ForeignKey(

@@ -4,6 +4,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixSuccess
 import com.example.liftrix.domain.model.common.liftrixFailure
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.core.identity.UserId
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.google.firebase.auth.FirebaseAuth
 import javax.inject.Inject
@@ -32,12 +33,12 @@ class UserIdValidator @Inject constructor(
      * 
      * @return LiftrixResult with the current user's ID, or error if not authenticated
      */
-    suspend fun validateCurrentUser(): LiftrixResult<String> {
+    suspend fun validateCurrentUser(): LiftrixResult<UserId> {
         return authQueryUseCase(waitForAuth = false).fold(
             onSuccess = { currentUserId ->
                 // Verify Firebase auth state consistency
                 val firebaseUser = firebaseAuth.currentUser
-                if (firebaseUser?.uid != currentUserId) {
+                if (firebaseUser?.uid != currentUserId.value) {
                     liftrixFailure(
                         LiftrixError.AuthenticationError(
                             errorMessage = "Firebase auth state inconsistent with user session"
@@ -72,12 +73,12 @@ class UserIdValidator @Inject constructor(
     ): LiftrixResult<Unit> {
         return validateCurrentUser().fold(
             onSuccess = { currentUserId ->
-                if (currentUserId == requestedUserId) {
+                if (currentUserId.value == requestedUserId) {
                     liftrixSuccess(Unit)
                 } else {
                     liftrixFailure(
                         LiftrixError.AuthenticationError(
-                            errorMessage = "User $currentUserId cannot access data for $requestedUserId in operation: $operation"
+                            errorMessage = "User ${currentUserId.value} cannot access data for $requestedUserId in operation: $operation"
                         )
                     )
                 }
@@ -129,10 +130,10 @@ class UserIdValidator @Inject constructor(
     
     /**
      * Convenience method to get the current authenticated user ID with validation.
-     * 
+     *
      * @return The current user's ID if authenticated and valid, null otherwise
      */
-    suspend fun getCurrentValidatedUserId(): String? {
+    suspend fun getCurrentValidatedUserId(): UserId? {
         return validateCurrentUser().getOrNull()
     }
     

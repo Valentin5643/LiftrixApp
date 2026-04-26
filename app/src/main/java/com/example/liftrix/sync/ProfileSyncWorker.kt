@@ -20,11 +20,13 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.FieldValue
+import com.example.liftrix.config.OfflineArchitectureFlags
 import com.google.gson.Gson
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.flow.first
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
 
@@ -43,43 +45,8 @@ class ProfileSyncWorker @AssistedInject constructor(
     private val profileCleanupService: ProfileCleanupService
 ) : BaseSyncWorker(context, params) {
 
-    // 🔧 HOTFIX: Fallback constructor for when Hilt factory generation fails
-    // This allows WorkManager to instantiate the worker via reflection
-    // TEMPORARY: Remove once Hilt assisted factories are confirmed working
-    constructor(context: Context, params: WorkerParameters) : this(
-        context,
-        params,
-        WorkerServiceLocator.getProfileSyncDependencies(context).run {
-            Timber.w("⚠️ ProfileSyncWorker using FALLBACK constructor - Hilt factory failed!")
-            return@run this
-        }
-    )
-    
-    // Helper constructor to unpack the dependency structure
-    private constructor(
-        context: Context,
-        params: WorkerParameters,
-        deps: WorkerServiceLocator.ProfileSyncDependencies
-    ) : this(
-        context, params,
-        deps.userProfileDao, deps.workoutDao, deps.achievementDao,
-        deps.userProfileMapper, deps.firestore, deps.auth,
-        deps.gson, deps.followRepository, deps.profileCleanupService
-    )
-
     init {
-        val processName = getProcessName()
-        Timber.d("✅ ProfileSyncWorker constructed with Hilt dependency injection in process: $processName")
-    }
-    
-    private fun getProcessName(): String {
-        return try {
-            val pid = android.os.Process.myPid()
-            val manager = applicationContext.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-            manager.runningAppProcesses?.firstOrNull { it.pid == pid }?.processName ?: "unknown"
-        } catch (e: Exception) {
-            "error: ${e.message}"
-        }
+        Timber.d("✅ ProfileSyncWorker constructed with Hilt dependency injection")
     }
 
     override val workerName: String = "ProfileSyncWorker"
@@ -118,6 +85,9 @@ class ProfileSyncWorker @AssistedInject constructor(
         try {
             // Check cancellation before starting
             checkCancellation()
+            val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+                OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
+            val forceSync = inputData.getBoolean("forceSync", false)
             
             // 🔍 FORENSIC LOGGING - Pre-sync data integrity verification
             val preWorkoutCount = try {
@@ -129,7 +99,11 @@ class ProfileSyncWorker @AssistedInject constructor(
             
             // 🚨 CRITICAL DIAGNOSTIC - Check workout sync status before profile sync
             val preUnsyncedWorkouts = try {
-                workoutDao.getUnsyncedCountForUser(userId)
+                if (useDirtyFlagGating) {
+                    workoutDao.getDirtyWorkouts(userId).size
+                } else {
+                    workoutDao.getUnsyncedCountForUser(userId)
+                }
             } catch (e: Exception) {
                 Timber.w("Could not retrieve unsynced workout count for user $userId: ${e.message}")
                 -1
@@ -155,8 +129,6 @@ class ProfileSyncWorker @AssistedInject constructor(
             Timber.d("[DATA-INTEGRITY] - Synced Workouts: $preSyncedWorkouts")
             Timber.d("[DATA-INTEGRITY] - Achievements: $preAchievementCount")
             
-            val forceSync = inputData.getBoolean("forceSync", false)
-
             val profile = userProfileDao.getProfileForUserSuspend(userId)
             
             // 🧹 ORPHAN CLEANUP: If profile not found, check if user is orphaned and trigger cleanup
@@ -207,7 +179,19 @@ class ProfileSyncWorker @AssistedInject constructor(
                 }
             }
             
-            if (profile.isSynced && !forceSync) {
+            if (useDirtyFlagGating && !profile.isDirty) {
+                Timber.d("Profile not dirty for user $userId (dirty gating enabled)")
+                if (forceSync) {
+                    Timber.d("Force sync requested but ignored due to dirty gating")
+                }
+                return Result.success(
+                    Data.Builder()
+                        .putInt(KEY_SYNC_COUNT, 0)
+                        .build()
+                )
+            }
+
+            if (!useDirtyFlagGating && profile.isSynced && !forceSync) {
                 Timber.d("Profile already synced for user $userId")
                 return Result.success(
                     Data.Builder()
@@ -224,6 +208,89 @@ class ProfileSyncWorker @AssistedInject constructor(
             val docRef = firestore
                 .collection("users")
                 .document(userId)
+
+            val remoteDoc = docRef.get().await()
+            if (remoteDoc.exists()) {
+                val remoteLastModified = when (val remoteValue = remoteDoc.get("lastModified")) {
+                    is com.google.firebase.Timestamp -> remoteValue.toDate().time
+                    is Number -> remoteValue.toLong()
+                    else -> 0L
+                }
+                if (remoteLastModified > profile.lastModified) {
+                    val goalsJson = when (val remoteGoals = remoteDoc.get("fitnessGoals")) {
+                        is List<*> -> gson.toJson(remoteGoals)
+                        is String -> remoteGoals
+                        else -> profile.goals
+                    }
+                    val equipmentJson = when (val remoteEquipment = remoteDoc.get("availableEquipment")) {
+                        is List<*> -> gson.toJson(remoteEquipment)
+                        is String -> remoteEquipment
+                        else -> profile.availableEquipment
+                    }
+                    val updatedAt = remoteDoc.getTimestamp("updatedAt")?.toDate()?.toInstant()
+                        ?.atZone(java.time.ZoneOffset.UTC)
+                        ?.toLocalDateTime() ?: profile.updatedAt
+                    val createdAt = remoteDoc.getTimestamp("createdAt")?.toDate()?.toInstant()
+                        ?.atZone(java.time.ZoneOffset.UTC)
+                        ?.toLocalDateTime() ?: profile.createdAt
+                    val lastActiveAt = remoteDoc.getTimestamp("lastActiveAt")?.toDate()?.toInstant()
+                        ?.atZone(java.time.ZoneOffset.UTC)
+                        ?.toLocalDateTime() ?: profile.lastActiveAt
+                    val memberSince = remoteDoc.getTimestamp("memberSince")?.toDate()?.toInstant()
+                        ?.atZone(java.time.ZoneOffset.UTC)
+                        ?.toLocalDateTime() ?: profile.memberSince
+                    val profileImageUpdatedAt = remoteDoc.getTimestamp("profileImageUpdatedAt")?.toDate()?.toInstant()
+                        ?.atZone(java.time.ZoneOffset.UTC)
+                        ?.toLocalDateTime() ?: profile.profileImageUpdatedAt
+                    val completedAt = remoteDoc.getTimestamp("completedAt")?.toDate()?.toInstant()
+                        ?.atZone(java.time.ZoneOffset.UTC)
+                        ?.toLocalDateTime() ?: profile.completedAt
+
+                    val remoteEntity = profile.copy(
+                        displayName = remoteDoc.getString("displayName") ?: profile.displayName,
+                        bio = remoteDoc.getString("bio") ?: profile.bio,
+                        age = remoteDoc.getLong("age")?.toInt() ?: profile.age,
+                        weightKg = remoteDoc.getDouble("weightKg") ?: profile.weightKg,
+                        heightCm = remoteDoc.getDouble("heightCm") ?: profile.heightCm,
+                        fitnessLevel = remoteDoc.getString("fitnessLevel") ?: profile.fitnessLevel,
+                        goals = goalsJson,
+                        availableEquipment = equipmentJson,
+                        workoutFrequency = remoteDoc.getLong("workoutFrequency")?.toInt()
+                            ?: profile.workoutFrequency,
+                        preferredWorkoutDuration = remoteDoc.getLong("preferredWorkoutDuration")?.toInt()
+                            ?: profile.preferredWorkoutDuration,
+                        completedAt = completedAt,
+                        createdAt = createdAt,
+                        updatedAt = updatedAt,
+                        isDirty = false,
+                        isSynced = true,
+                        syncVersion = remoteDoc.getLong("syncVersion") ?: profile.syncVersion,
+                        lastModified = remoteLastModified,
+                        isPublic = remoteDoc.getBoolean("isPublic") ?: profile.isPublic,
+                        lastActiveAt = lastActiveAt,
+                        totalWorkouts = remoteDoc.getLong("totalWorkouts")?.toInt()
+                            ?: profile.totalWorkouts,
+                        currentStreak = remoteDoc.getLong("currentStreak")?.toInt()
+                            ?: profile.currentStreak,
+                        longestStreak = remoteDoc.getLong("longestStreak")?.toInt()
+                            ?: profile.longestStreak,
+                        memberSince = memberSince,
+                        profileCompletionPercentage = remoteDoc.getLong("profileCompletionPercentage")?.toInt()
+                            ?: profile.profileCompletionPercentage,
+                        profileImageUrl = remoteDoc.getString("profileImageUrl")
+                            ?: profile.profileImageUrl,
+                        profileImageUpdatedAt = profileImageUpdatedAt,
+                        hasCustomProfileImage = remoteDoc.getBoolean("hasCustomProfileImage")
+                            ?: profile.hasCustomProfileImage
+                    )
+                    userProfileDao.upsertFromRemote(remoteEntity)
+                    return Result.success(
+                        Data.Builder()
+                            .putInt(KEY_SYNC_COUNT, 0)
+                            .build()
+                    )
+                }
+            }
             
             // Parse JSON fields safely
             val fitnessGoals = profile.goals?.let { 
@@ -270,7 +337,7 @@ class ProfileSyncWorker @AssistedInject constructor(
                 "profileCompletionPercentage" to profile.profileCompletionPercentage,
                 // Required sync metadata fields (isValidSyncMetadata in firestore.rules)
                 "syncVersion" to System.currentTimeMillis(),
-                "lastModified" to FieldValue.serverTimestamp(), // Required by security rules
+                "lastModified" to profile.lastModified,
                 "isSynced" to true, // Required by security rules
                 "updatedAt" to FieldValue.serverTimestamp()
             )
@@ -313,10 +380,10 @@ class ProfileSyncWorker @AssistedInject constructor(
             Timber.d("[DATA-INTEGRITY] Profile sync completed with field isolation - ${profileOnlyData.size} fields updated")
             
             // 🔒 SYNC ISOLATION - Update only profile sync status, not workout sync status
-            userProfileDao.updateSyncStatus(
+            userProfileDao.markAsClean(
+                ids = listOf(profile.id),
                 userId = userId,
-                isSynced = true,
-                version = System.currentTimeMillis()
+                syncVersion = System.currentTimeMillis()
             )
             
             Timber.d("[DATA-INTEGRITY] Profile sync status updated - workout sync status preserved")
@@ -339,7 +406,11 @@ class ProfileSyncWorker @AssistedInject constructor(
             
             // 🚨 CRITICAL DIAGNOSTIC - Check workout sync status AFTER profile sync
             val postUnsyncedWorkouts = try {
-                workoutDao.getUnsyncedCountForUser(userId)
+                if (useDirtyFlagGating) {
+                    workoutDao.getDirtyWorkouts(userId).size
+                } else {
+                    workoutDao.getUnsyncedCountForUser(userId)
+                }
             } catch (e: Exception) {
                 Timber.w("Could not retrieve post-sync unsynced workout count for user $userId: ${e.message}")
                 -1
@@ -413,7 +484,15 @@ class ProfileSyncWorker @AssistedInject constructor(
                 
                 // Mark workouts as unsynced again to fix the corruption
                 try {
-                    val corruptedCount = workoutDao.markAllWorkoutsAsUnsyncedForUser(userId)
+                    val corruptedCount = if (useDirtyFlagGating) {
+                        val workouts = workoutDao.getAllWorkoutsForUser(userId).first()
+                        workouts.forEach { workout ->
+                            workoutDao.upsertLocal(workout)
+                        }
+                        workouts.size
+                    } else {
+                        workoutDao.markAllWorkoutsAsUnsyncedForUser(userId)
+                    }
                     Timber.i("[DATA-INTEGRITY] 🔧 SYNC CORRUPTION FIXED: Marked $corruptedCount workouts as unsynced")
                     
                     return Result.success(

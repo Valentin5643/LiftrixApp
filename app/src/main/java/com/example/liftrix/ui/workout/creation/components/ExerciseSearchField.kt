@@ -39,7 +39,7 @@ fun ExerciseSearchField(
         leadingIcon = {
             Icon(
                 imageVector = Icons.Default.Search,
-                contentDescription = null
+                contentDescription = "Search"
             )
         },
         trailingIcon = {

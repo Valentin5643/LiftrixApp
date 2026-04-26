@@ -297,7 +297,7 @@ private fun ModernProfileContent(
             ) {
                 Icon(
                     imageVector = Icons.Default.PersonAdd,
-                    contentDescription = null,
+                    contentDescription = "Connect",
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -324,7 +324,7 @@ private fun ModernProfileContent(
             ) {
                 Icon(
                     imageVector = Icons.Default.Message,
-                    contentDescription = null,
+                    contentDescription = "Message",
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -460,7 +460,7 @@ private fun ModernStatCard(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = label,
                 modifier = Modifier.size(24.dp),
                 tint = iconColor
             )
@@ -500,7 +500,7 @@ private fun ModernStatItem(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = label,
                 modifier = Modifier.size(16.dp),
                 tint = LiftrixColorsV2.Teal
             )

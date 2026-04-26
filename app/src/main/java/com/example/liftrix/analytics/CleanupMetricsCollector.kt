@@ -30,6 +30,10 @@ class CleanupMetricsCollector @Inject constructor() {
     
     /**
      * Metrics data class for structured logging
+     *
+     * IMPORTANT: Distinguishes between:
+     * - trueOrphansFound: Server-verified deleted Auth accounts (authoritative)
+     * - unverifiedFound: Client cannot verify due to security rules (not orphans)
      */
     data class CleanupMetrics(
         val operation: String,
@@ -37,7 +41,8 @@ class CleanupMetricsCollector @Inject constructor() {
         val startTimeMs: Long,
         val endTimeMs: Long,
         val durationMs: Long,
-        val orphanedFound: Int,
+        val trueOrphansFound: Int,       // Server-verified orphans
+        val unverifiedFound: Int,         // Client-limited (cannot verify)
         val orphanedRemoved: Int,
         val firestoreRemoved: Int,
         val roomRemoved: Int,
@@ -76,7 +81,8 @@ class CleanupMetricsCollector @Inject constructor() {
             startTimeMs = startTimeMs,
             endTimeMs = endTime,
             durationMs = duration,
-            orphanedFound = result.orphanedProfilesFound,
+            trueOrphansFound = result.trueOrphansFound,
+            unverifiedFound = result.unverifiedProfilesFound,
             orphanedRemoved = result.orphanedProfilesRemoved,
             firestoreRemoved = result.firestoreDocumentsRemoved,
             roomRemoved = result.roomRecordsRemoved,
@@ -85,15 +91,16 @@ class CleanupMetricsCollector @Inject constructor() {
             trigger = trigger,
             success = success
         )
-        
-        // Log completion summary
+
+        // Log completion summary with proper categorization
         Timber.tag(CLEANUP_METRICS_TAG).i(
             "🧹 CLEANUP_COMPLETE | " +
             "operation=$operation | " +
             "user_id=${userId ?: "all"} | " +
             "trigger=$trigger | " +
             "duration_ms=$duration | " +
-            "found=${result.orphanedProfilesFound} | " +
+            "true_orphans=${result.trueOrphansFound} | " +
+            "unverified=${result.unverifiedProfilesFound} | " +
             "removed=${result.orphanedProfilesRemoved} | " +
             "success=$success | " +
             "timestamp=$endTime"
@@ -120,21 +127,23 @@ class CleanupMetricsCollector @Inject constructor() {
      * Records performance-specific metrics
      */
     private fun recordPerformanceMetrics(metrics: CleanupMetrics) {
+        val totalProfilesChecked = metrics.trueOrphansFound + metrics.unverifiedFound
         val throughput = if (metrics.durationMs > 0) {
-            (metrics.orphanedFound * 1000) / metrics.durationMs // profiles per second
+            (totalProfilesChecked * 1000) / metrics.durationMs // profiles per second
         } else 0
-        
+
         Timber.tag(CLEANUP_PERFORMANCE_TAG).d(
             "🧹 CLEANUP_PERFORMANCE | " +
             "operation=${metrics.operation} | " +
             "duration_ms=${metrics.durationMs} | " +
-            "profiles_found=${metrics.orphanedFound} | " +
+            "true_orphans=${metrics.trueOrphansFound} | " +
+            "unverified=${metrics.unverifiedFound} | " +
             "throughput_profiles_per_sec=$throughput | " +
             "firestore_ops=${metrics.firestoreRemoved} | " +
             "room_ops=${metrics.roomRemoved} | " +
             "timestamp=${metrics.endTimeMs}"
         )
-        
+
         // Performance warning thresholds
         when {
             metrics.durationMs > 30000 -> { // > 30 seconds
@@ -142,9 +151,14 @@ class CleanupMetricsCollector @Inject constructor() {
                     "🧹 SLOW_CLEANUP | operation=${metrics.operation} took ${metrics.durationMs}ms - consider optimization"
                 )
             }
-            metrics.orphanedFound > 100 -> {
+            metrics.trueOrphansFound > 100 -> {
                 Timber.tag(CLEANUP_PERFORMANCE_TAG).w(
-                    "🧹 HIGH_ORPHAN_COUNT | Found ${metrics.orphanedFound} orphaned profiles - investigate root cause"
+                    "🧹 HIGH_ORPHAN_COUNT | Found ${metrics.trueOrphansFound} TRUE orphaned profiles - investigate root cause"
+                )
+            }
+            metrics.unverifiedFound > 100 -> {
+                Timber.tag(CLEANUP_PERFORMANCE_TAG).i(
+                    "🧹 HIGH_UNVERIFIED_COUNT | Found ${metrics.unverifiedFound} unverified profiles - client security-limited, server validation recommended"
                 )
             }
         }
@@ -162,8 +176,9 @@ class CleanupMetricsCollector @Inject constructor() {
             else -> "CRITICAL"
         }
         
-        val cleanupEfficiency = if (metrics.orphanedFound > 0) {
-            (metrics.orphanedRemoved * 100) / metrics.orphanedFound
+        val totalFound = metrics.trueOrphansFound + metrics.unverifiedFound
+        val cleanupEfficiency = if (totalFound > 0) {
+            (metrics.orphanedRemoved * 100) / totalFound
         } else 100
         
         Timber.tag(CLEANUP_IMPACT_TAG).i(

@@ -92,6 +92,7 @@ import com.example.liftrix.ui.support.SupportTicketScreen
 import com.example.liftrix.ui.settings.about.AboutScreen
 import com.example.liftrix.ui.settings.legal.PrivacyPolicyScreen
 import com.example.liftrix.ui.settings.legal.TermsOfServiceScreen
+import com.example.liftrix.ui.settings.legal.CommunityGuidelinesScreen
 import com.example.liftrix.ui.chat.ChatbotScreen
 import com.example.liftrix.ui.chat.settings.AIChatSettingsScreen
 import com.example.liftrix.ui.social.SocialViewModel
@@ -545,6 +546,18 @@ fun UnifiedNavigationContainer(
                         onNavigateToTermsOfService = {
                             navController.navigate(LiftrixRoute.TermsOfService)
                         },
+                        onNavigateToAIDisclaimer = {
+                            navController.navigate(LiftrixRoute.AIDisclaimer)
+                        },
+                        onNavigateToCommunityGuidelines = {
+                            navController.navigate(LiftrixRoute.CommunityGuidelines)
+                        },
+                        onNavigateToContentModerationPolicy = {
+                            navController.navigate(LiftrixRoute.ContentModerationPolicy)
+                        },
+                        onNavigateToRefundSubscriptionPolicy = {
+                            navController.navigate(LiftrixRoute.RefundSubscriptionPolicy)
+                        },
                         onNavigateToDataPortability = {
                             navController.navigate(LiftrixRoute.DataPortability)
                         },
@@ -566,8 +579,9 @@ fun UnifiedNavigationContainer(
                     var isLoading by remember { mutableStateOf(true) }
 
                     LaunchedEffect(Unit) {
-                        currentUserId = authQueryUseCase(waitForAuth = false).fold(
-                            onSuccess = { it },
+                        val result = authQueryUseCase(waitForAuth = false)
+                        currentUserId = result.fold(
+                            onSuccess = { it.value },
                             onFailure = { null }
                         )
                         isLoading = false
@@ -738,7 +752,39 @@ fun UnifiedNavigationContainer(
                         }
                     )
                 }
-                
+
+                composable<LiftrixRoute.AIDisclaimer> {
+                    com.example.liftrix.ui.settings.legal.AIDisclaimerScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+
+                composable<LiftrixRoute.CommunityGuidelines> {
+                    CommunityGuidelinesScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+
+                composable<LiftrixRoute.ContentModerationPolicy> {
+                    com.example.liftrix.ui.settings.legal.ContentModerationPolicyScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+
+                composable<LiftrixRoute.RefundSubscriptionPolicy> {
+                    com.example.liftrix.ui.settings.legal.RefundSubscriptionPolicyScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+
                 composable<LiftrixRoute.DataPortability> {
                     com.example.liftrix.ui.settings.data.DataPortabilityScreen(
                         onNavigateBack = {
@@ -1157,7 +1203,7 @@ fun UnifiedNavigationContainer(
                         "PENDING_REQUESTS" -> com.example.liftrix.ui.profile.FollowerListType.PENDING_REQUESTS
                         else -> com.example.liftrix.ui.profile.FollowerListType.FOLLOWERS
                     }
-                    
+
                     com.example.liftrix.ui.profile.FollowerListScreen(
                         userId = route.userId,
                         listType = listType,
@@ -1169,7 +1215,7 @@ fun UnifiedNavigationContainer(
                         }
                     )
                 }
-                
+
                 composable<LiftrixRoute.FollowingList> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.FollowingList>()
                     val listType = when (route.listType) {
@@ -1178,7 +1224,7 @@ fun UnifiedNavigationContainer(
                         "PENDING_REQUESTS" -> com.example.liftrix.ui.profile.FollowerListType.PENDING_REQUESTS
                         else -> com.example.liftrix.ui.profile.FollowerListType.FOLLOWING
                     }
-                    
+
                     com.example.liftrix.ui.profile.FollowerListScreen(
                         userId = route.userId,
                         listType = listType,
@@ -1499,8 +1545,9 @@ class UnifiedNavigationViewModel @Inject constructor(
      */
     suspend fun getCurrentUserId(): String? {
         return try {
-            authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
+            val result = authQueryUseCase(waitForAuth = false)
+            result.fold(
+                onSuccess = { it?.value },
                 onFailure = { null }
             )
         } catch (e: Exception) {

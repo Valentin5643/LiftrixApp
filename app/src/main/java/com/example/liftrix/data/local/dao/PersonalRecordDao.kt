@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.PersonalRecordEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -259,6 +260,64 @@ interface PersonalRecordDao {
         ORDER BY achieved_at DESC
     """)
     suspend fun getPRsForWorkout(userId: String, workoutId: String): List<PersonalRecordEntity>
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert personalrecord from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(personalRecord: PersonalRecordEntity) {
+        val entity = personalRecord.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert personalrecord from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(personalRecord: PersonalRecordEntity) {
+        val local = getPersonalRecordForSync(personalRecord.id, personalRecord.userId)
+        if (local == null || personalRecord.lastModified > local.lastModified) {
+            val entity = personalRecord.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: PersonalRecordEntity)
+
+    /**
+     * Get dirty personalrecord that need upload to Firestore.
+     */
+    @Query("SELECT * FROM personal_records WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyPersonalRecords(userId: String): List<PersonalRecordEntity>
+
+    /**
+     * Mark personalrecord as clean after successful Firestore upload.
+     */
+    @Query("UPDATE personal_records SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local personalrecord for remote deduplication.
+     */
+    @Query("SELECT * FROM personal_records WHERE id = :id AND user_id = :userId LIMIT 1")
+    suspend fun getPersonalRecordForSync(id: String, userId: String): PersonalRecordEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }
 
 /**

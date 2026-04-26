@@ -127,7 +127,7 @@ fun TemplateGridItem(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.StarBorder,
-                                contentDescription = null,
+                                contentDescription = "Toggle favorite",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -144,7 +144,7 @@ fun TemplateGridItem(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
-                                contentDescription = null,
+                                contentDescription = "More template actions",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -353,7 +353,7 @@ private fun TemplateStatChip(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = text,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(14.dp)
         )

@@ -9,6 +9,7 @@ import com.example.liftrix.core.workmanager.WorkManagerProvider
 import androidx.work.ExistingWorkPolicy
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.repository.ProgressStatsRepository
+import com.example.liftrix.config.OfflineArchitectureFlags
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
@@ -55,7 +56,13 @@ class SyncManager @Inject constructor(
      * Get count of unsynced workouts
      */
     suspend fun getUnsyncedCount(userId: String): Int {
-        return workoutRepository.getUnsyncedCount(userId).getOrElse { 0 }
+        return if (OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+            OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
+        ) {
+            0
+        } else {
+            workoutRepository.getUnsyncedCount(userId).getOrElse { 0 }
+        }
     }
 
     /**

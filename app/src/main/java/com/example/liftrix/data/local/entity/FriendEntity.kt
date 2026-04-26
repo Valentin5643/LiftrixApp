@@ -40,7 +40,13 @@ data class FriendEntity(
     val updatedAt: Instant,
     
     @ColumnInfo(name = "is_synced", defaultValue = "0")
-    val isSynced: Boolean = false
+    val isSynced: Boolean = false,
+    
+    @ColumnInfo(name = "is_dirty", defaultValue = "0")
+    val isDirty: Boolean = false,
+    
+    @ColumnInfo(name = "last_modified", defaultValue = "0")
+    val lastModified: Long = 0L
 ) {
     companion object {
         /**

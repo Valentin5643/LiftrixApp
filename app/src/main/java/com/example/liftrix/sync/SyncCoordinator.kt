@@ -99,6 +99,9 @@ class SyncCoordinator @Inject constructor(
         } else {
             scheduleLegacyPeriodicSync(userId)
         }
+
+        scheduleDeadLetterCleanup(userId)
+        scheduleDatabaseIntegrityCheck(userId)
     }
     
     /**
@@ -169,6 +172,30 @@ class SyncCoordinator @Inject constructor(
         )
         
         Timber.d("SyncCoordinator: Legacy periodic sync scheduled for user $userId")
+    }
+
+    private fun scheduleDeadLetterCleanup(userId: String) {
+        val cleanupRequest = DeadLetterCleanupWorker.createPeriodicWorkRequest(userId)
+
+        workManager.enqueueUniquePeriodicWork(
+            DeadLetterCleanupWorker.getWorkName(userId),
+            ExistingPeriodicWorkPolicy.KEEP,
+            cleanupRequest
+        )
+
+        Timber.d("SyncCoordinator: Dead letter cleanup scheduled for user $userId")
+    }
+
+    private fun scheduleDatabaseIntegrityCheck(userId: String) {
+        val integrityRequest = DatabaseIntegrityWorker.createPeriodicWorkRequest(userId)
+
+        workManager.enqueueUniquePeriodicWork(
+            DatabaseIntegrityWorker.getWorkName(userId),
+            ExistingPeriodicWorkPolicy.KEEP,
+            integrityRequest
+        )
+
+        Timber.d("SyncCoordinator: Database integrity check scheduled for user $userId")
     }
     
     /**

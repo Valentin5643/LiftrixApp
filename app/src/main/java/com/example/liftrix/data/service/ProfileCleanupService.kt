@@ -16,18 +16,27 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Service responsible for detecting and cleaning up orphaned profile data.
- * 
+ * Service responsible for detecting potentially orphaned profile data (client-side limited).
+ *
+ * IMPORTANT: This client-side service has LIMITED visibility:
+ * - Cannot verify Firebase Auth status for other users (security rules prevent this)
+ * - PERMISSION_DENIED errors mean "cannot verify" NOT "orphaned"
+ * - Server-side Cloud Functions provide authoritative orphan detection
+ *
  * Orphaned data occurs when:
  * - Firebase Auth UID is deleted but Firestore/Room data remains
  * - Sync workers fail because profiles don't exist in expected locations
  * - Stale references prevent proper sync operations
- * 
+ *
  * This service provides:
- * - Detection of orphaned profiles across Firebase Auth, Firestore, and Room
- * - Safe cleanup of stale data that doesn't affect active users
- * - Comprehensive logging and metrics for cleanup operations
- * - Prevention of sync worker failures due to missing profiles
+ * - Detection of unverified profiles (limited by security rules)
+ * - Safe cleanup of local Room data only (not Firestore)
+ * - Logging and metrics for monitoring
+ * - Recommendations to run server-side cleanup for authoritative validation
+ *
+ * For TRUE orphan cleanup, use:
+ * - Cloud Function: scheduledOrphanCleanup (automatic daily)
+ * - Cloud Function: bulkCleanupOrphanedData (manual on-demand)
  */
 @Singleton
 class ProfileCleanupService @Inject constructor(
@@ -49,12 +58,17 @@ class ProfileCleanupService @Inject constructor(
     
     /**
      * Data class representing cleanup results for reporting
+     *
+     * IMPORTANT: Distinguishes between:
+     * - TRUE_ORPHANS: Server-verified deleted Auth accounts (authoritative)
+     * - UNVERIFIED: Client cannot verify due to security rules (not orphans)
      */
     data class CleanupResult(
-        val orphanedProfilesFound: Int,
-        val orphanedProfilesRemoved: Int,
-        val firestoreDocumentsRemoved: Int,
-        val roomRecordsRemoved: Int,
+        val trueOrphansFound: Int,           // Server-verified orphans (Auth deleted)
+        val unverifiedProfilesFound: Int,     // Client-limited (cannot verify Auth)
+        val orphanedProfilesRemoved: Int,     // Actually removed (Room only)
+        val firestoreDocumentsRemoved: Int,   // Always 0 (client cannot delete)
+        val roomRecordsRemoved: Int,          // Local Room cleanup
         val errors: List<String>,
         val cleanupTimeMs: Long
     )
@@ -124,7 +138,15 @@ class ProfileCleanupService @Inject constructor(
             Timber.e(e, "🧹 CLEANUP: Startup cleanup failed for user $currentUserId")
             
             // Record failed cleanup
-            val errorResult = CleanupResult(0, 0, 0, 0, listOf(e.message ?: "Unknown error"), System.currentTimeMillis() - startTime)
+            val errorResult = CleanupResult(
+                trueOrphansFound = 0,
+                unverifiedProfilesFound = 0,
+                orphanedProfilesRemoved = 0,
+                firestoreDocumentsRemoved = 0,
+                roomRecordsRemoved = 0,
+                errors = listOf(e.message ?: "Unknown error"),
+                cleanupTimeMs = System.currentTimeMillis() - startTime
+            )
             metricsCollector.recordCleanupCompletion("startup_cleanup", currentUserId, "startup", errorResult, startTime)
             
             liftrixFailure(
@@ -147,61 +169,72 @@ class ProfileCleanupService @Inject constructor(
     suspend fun performOrphanedProfileCleanup(excludeUserId: String? = null): CleanupResult {
         val startTime = System.currentTimeMillis()
         val errors = mutableListOf<String>()
-        var orphanedFound = 0
+        var trueOrphansFound = 0       // Server-verified orphans only
+        var unverifiedFound = 0          // Client cannot verify (not orphans)
         var orphanedRemoved = 0
         var firestoreRemoved = 0
         var roomRemoved = 0
-        
+
         try {
-            Timber.i("🧹 CLEANUP: Starting comprehensive orphaned profile cleanup (excluding: $excludeUserId)")
-            
-            // Step 1: Find all Room profiles that don't have valid Firebase Auth UIDs
-            val roomOrphans = findOrphanedRoomProfiles(excludeUserId)
-            orphanedFound += roomOrphans.size
-            
-            if (roomOrphans.isNotEmpty()) {
-                Timber.w("🧹 CLEANUP: Found ${roomOrphans.size} orphaned profiles in Room database")
-                val removedFromRoom = cleanupOrphanedRoomData(roomOrphans)
+            Timber.i("🧹 CLEANUP: Starting comprehensive profile verification (excluding: $excludeUserId)")
+
+            // Step 1: Check Room profiles (returns unverified count)
+            val roomCheckResult = findOrphanedRoomProfiles(excludeUserId)
+            unverifiedFound += roomCheckResult.size
+
+            if (roomCheckResult.isNotEmpty()) {
+                Timber.w("🧹 CLEANUP: Found ${roomCheckResult.size} unverified profiles in Room database (client-limited)")
+                val removedFromRoom = cleanupOrphanedRoomData(roomCheckResult)
                 roomRemoved += removedFromRoom
                 orphanedRemoved += removedFromRoom
             }
-            
-            // Step 2: Find Firestore profiles that don't have valid Firebase Auth UIDs
-            val firestoreOrphans = findOrphanedFirestoreProfiles(excludeUserId)
-            orphanedFound += firestoreOrphans.size
-            
-            if (firestoreOrphans.isNotEmpty()) {
-                Timber.w("🧹 CLEANUP: Found ${firestoreOrphans.size} orphaned profiles in Firestore")
-                val removedFromFirestore = cleanupOrphanedFirestoreData(firestoreOrphans)
-                firestoreRemoved += removedFromFirestore
-                orphanedRemoved += removedFromFirestore
+
+            // Step 2: Check Firestore profiles (returns unverified count)
+            val firestoreCheckResult = findOrphanedFirestoreProfiles(excludeUserId)
+            unverifiedFound += firestoreCheckResult.size
+
+            if (firestoreCheckResult.isNotEmpty()) {
+                Timber.w("🧹 CLEANUP: Found ${firestoreCheckResult.size} unverified Firestore profiles (client-limited)")
+                val detectedFromFirestore = cleanupOrphanedFirestoreData(firestoreCheckResult)
+                firestoreRemoved += detectedFromFirestore
             }
-            
-            // Step 3: Log cleanup summary
+
+            // Step 3: Log cleanup summary with proper categorization
             val totalTime = System.currentTimeMillis() - startTime
-            Timber.i("🧹 CLEANUP: Completed - Found: $orphanedFound, Removed: $orphanedRemoved, Time: ${totalTime}ms")
-            
-            if (orphanedRemoved > 0) {
-                Timber.i("🧹 CLEANUP: Cleaned up $orphanedRemoved orphaned profiles (Room: $roomRemoved, Firestore: $firestoreRemoved)")
-            } else {
-                Timber.d("🧹 CLEANUP: No orphaned profiles found - system is clean")
+            Timber.i("🧹 CLEANUP: Completed in ${totalTime}ms")
+
+            if (trueOrphansFound > 0) {
+                Timber.w("🚨 CLEANUP: TRUE ORPHANS (server-verified): $trueOrphansFound")
             }
-            
+
+            if (unverifiedFound > 0) {
+                Timber.i("⚠️  CLEANUP: UNVERIFIED (client-limited): $unverifiedFound")
+                Timber.i("🔧 CLEANUP: Server-side validation required - run Cloud Function 'bulkCleanupOrphanedData'")
+            }
+
+            if (orphanedRemoved > 0) {
+                Timber.i("🧹 CLEANUP: Removed $orphanedRemoved local records (Room: $roomRemoved, Firestore: $firestoreRemoved)")
+            } else if (trueOrphansFound == 0 && unverifiedFound == 0) {
+                Timber.d("✅ CLEANUP: No issues detected - local state clean")
+            }
+
             return CleanupResult(
-                orphanedProfilesFound = orphanedFound,
+                trueOrphansFound = trueOrphansFound,
+                unverifiedProfilesFound = unverifiedFound,
                 orphanedProfilesRemoved = orphanedRemoved,
                 firestoreDocumentsRemoved = firestoreRemoved,
                 roomRecordsRemoved = roomRemoved,
                 errors = errors.toList(),
                 cleanupTimeMs = totalTime
             )
-            
+
         } catch (e: Exception) {
             Timber.e(e, "🧹 CLEANUP: Comprehensive cleanup failed")
             errors.add("Cleanup failed: ${e.message}")
-            
+
             return CleanupResult(
-                orphanedProfilesFound = orphanedFound,
+                trueOrphansFound = trueOrphansFound,
+                unverifiedProfilesFound = unverifiedFound,
                 orphanedProfilesRemoved = orphanedRemoved,
                 firestoreDocumentsRemoved = firestoreRemoved,
                 roomRecordsRemoved = roomRemoved,
@@ -228,71 +261,91 @@ class ProfileCleanupService @Inject constructor(
     }
     
     /**
-     * Finds Room profiles that don't correspond to valid Firebase Auth users.
+     * Finds Room profiles that cannot be verified by the client (security-limited).
+     *
+     * IMPORTANT: Returns "unverified" profiles, NOT confirmed orphans.
+     * Client cannot check Firebase Auth for other users due to security rules.
+     * Use server-side Cloud Functions for authoritative orphan detection.
      */
     private suspend fun findOrphanedRoomProfiles(excludeUserId: String?): List<String> {
         return try {
             val allProfiles = userProfileDao.getAllProfiles()
-            val orphanedIds = mutableListOf<String>()
-            
+            val unverifiedIds = mutableListOf<String>()
+
             for (profile in allProfiles) {
                 val userId = profile.userId
                 // Skip current user
                 if (userId == excludeUserId) continue
-                
-                // Check if this user exists in Firebase Auth
-                // Note: We can't directly check Firebase Auth for arbitrary UIDs
-                // So we'll use Firestore as a proxy - if it doesn't exist there either, likely orphaned
-                val existsInFirestore = try {
+
+                // Check if this user exists in Firestore
+                // Note: Client cannot verify Firebase Auth directly (security limitation)
+                // PERMISSION_DENIED means we can't access it, NOT that it's orphaned
+                val firestoreCheckResult = try {
                     val doc = firestore.collection("users").document(userId).get().await()
-                    doc.exists()
+                    if (doc.exists()) "EXISTS" else "MISSING"
                 } catch (e: Exception) {
-                    Timber.w("🧹 CLEANUP: Could not check Firestore for user $userId: ${e.message}")
-                    false
+                    when {
+                        e.message?.contains("PERMISSION_DENIED") == true -> "PERMISSION_DENIED"
+                        else -> "ERROR:${e.message}"
+                    }
                 }
-                
-                if (!existsInFirestore) {
-                    Timber.d("🧹 CLEANUP: Found potentially orphaned Room profile: $userId")
-                    orphanedIds.add(userId)
+
+                // Only flag as unverified if document is confirmed MISSING (not permission denied)
+                if (firestoreCheckResult == "MISSING") {
+                    Timber.d("🧹 CLEANUP: Found unverified Room profile: $userId (Firestore: confirmed missing)")
+                    unverifiedIds.add(userId)
+                } else if (firestoreCheckResult == "PERMISSION_DENIED") {
+                    Timber.d("🧹 CLEANUP: Cannot verify Room profile $userId (Firestore: permission denied - likely active user)")
+                } else if (firestoreCheckResult.startsWith("ERROR")) {
+                    Timber.w("🧹 CLEANUP: Could not check Firestore for user $userId: ${firestoreCheckResult.removePrefix("ERROR:")}")
                 }
             }
-            
-            orphanedIds
-            
+
+            unverifiedIds
+
         } catch (e: Exception) {
-            Timber.e(e, "🧹 CLEANUP: Failed to find orphaned Room profiles")
+            Timber.e(e, "🧹 CLEANUP: Failed to verify Room profiles")
             emptyList()
         }
     }
     
     /**
-     * Finds Firestore profiles that don't correspond to valid Firebase Auth users.
+     * Finds Firestore profiles that cannot be verified by the client.
+     *
+     * IMPORTANT: Returns "unverified" profiles, NOT confirmed orphans.
+     * Client uses Room cache as proxy check (not authoritative).
      */
     private suspend fun findOrphanedFirestoreProfiles(excludeUserId: String?): List<String> {
         return try {
             val usersQuery = firestore.collection("users").limit(100).get().await()
-            val orphanedIds = mutableListOf<String>()
-            
+            val unverifiedIds = mutableListOf<String>()
+
             for (document in usersQuery.documents) {
                 val userId = document.id
-                
+
                 // Skip current user
                 if (userId == excludeUserId) continue
-                
-                // For now, we'll identify orphans by checking if they also exist in Room
-                // This is a conservative approach - only cleanup profiles that exist in neither system
-                val existsInRoom = userProfileDao.getProfileForUserSuspend(userId) != null
-                
-                if (!existsInRoom) {
-                    Timber.d("🧹 CLEANUP: Found potentially orphaned Firestore profile: $userId")
-                    orphanedIds.add(userId)
+
+                // Check if this profile exists in Room (conservative approach)
+                // Only flag as unverified if it exists in neither Room nor client can verify it
+                val roomCheckResult = try {
+                    userProfileDao.getProfileForUserSuspend(userId) != null
+                } catch (e: Exception) {
+                    Timber.w("🧹 CLEANUP: Could not check Room for user $userId: ${e.message}")
+                    false
+                }
+
+                if (!roomCheckResult) {
+                    Timber.d("🧹 CLEANUP: Found unverified Firestore profile: $userId (not in local Room cache)")
+                    Timber.d("🧹 CLEANUP: Note: Client-side detection limited - server-side validation required")
+                    unverifiedIds.add(userId)
                 }
             }
-            
-            orphanedIds
-            
+
+            unverifiedIds
+
         } catch (e: Exception) {
-            Timber.e(e, "🧹 CLEANUP: Failed to find orphaned Firestore profiles")
+            Timber.e(e, "🧹 CLEANUP: Failed to scan Firestore profiles")
             emptyList()
         }
     }
@@ -379,29 +432,37 @@ class ProfileCleanupService @Inject constructor(
         
         for (userId in orphanedUserIds) {
             try {
-                Timber.w("🧹 CLEANUP: Detected orphaned Firestore data for user $userId")
-                
+                Timber.d("🧹 CLEANUP: Checking unverified Firestore profile: $userId")
+
                 // Check if documents exist (read-only operation)
-                val userDocExists = try {
+                val userDocCheckResult = try {
                     val doc = firestore.collection("users").document(userId).get().await()
-                    doc.exists()
+                    if (doc.exists()) "EXISTS" else "MISSING"
                 } catch (e: Exception) {
-                    Timber.w("🧹 CLEANUP: Could not check user document for $userId: ${e.message}")
-                    false
+                    when {
+                        e.message?.contains("PERMISSION_DENIED") == true -> "PERMISSION_DENIED"
+                        else -> "ERROR:${e.message}"
+                    }
                 }
-                
-                val socialDocExists = try {
+
+                val socialDocCheckResult = try {
                     val doc = firestore.collection("social_profiles").document(userId).get().await()
-                    doc.exists()
+                    if (doc.exists()) "EXISTS" else "MISSING"
                 } catch (e: Exception) {
-                    Timber.w("🧹 CLEANUP: Could not check social profile document for $userId: ${e.message}")
-                    false
+                    when {
+                        e.message?.contains("PERMISSION_DENIED") == true -> "PERMISSION_DENIED"
+                        else -> "ERROR:${e.message}"
+                    }
                 }
-                
-                if (userDocExists || socialDocExists) {
+
+                // Only count as detected orphan if we can CONFIRM it exists (not just permission denied)
+                if (userDocCheckResult == "EXISTS" || socialDocCheckResult == "EXISTS") {
                     detectedCount++
-                    Timber.w("🧹 CLEANUP: Orphaned Firestore data detected for user $userId (user_doc: $userDocExists, social_doc: $socialDocExists)")
-                    Timber.w("🧹 CLEANUP: ⚠️  SERVER-SIDE CLEANUP REQUIRED for user $userId - client cannot delete due to security rules")
+                    Timber.w("🧹 CLEANUP: Unverified Firestore profile detected: $userId (client-side check limited)")
+                    Timber.w("🧹 CLEANUP: user_doc: $userDocCheckResult, social_doc: $socialDocCheckResult")
+                    Timber.w("🧹 CLEANUP: ⚠️  SERVER-SIDE VALIDATION REQUIRED - client cannot verify Auth status")
+                } else if (userDocCheckResult == "PERMISSION_DENIED" || socialDocCheckResult == "PERMISSION_DENIED") {
+                    Timber.d("🧹 CLEANUP: Cannot verify Firestore profile $userId due to security rules (likely active user)")
                 }
                 
             } catch (e: Exception) {
@@ -410,9 +471,10 @@ class ProfileCleanupService @Inject constructor(
         }
         
         if (detectedCount > 0) {
-            Timber.w("🧹 CLEANUP: 🚨 DETECTED $detectedCount ORPHANED FIRESTORE PROFILES")
-            Timber.w("🧹 CLEANUP: 🔧 RECOMMENDATION: Implement server-side cleanup using Cloud Functions or Admin SDK")
-            Timber.w("🧹 CLEANUP: 🔧 EXAMPLE: exports.cleanupUser = functions.auth.user().onDelete((user) => { /* delete Firestore docs */ })")
+            Timber.w("🧹 CLEANUP: 🚨 DETECTED $detectedCount UNVERIFIED FIRESTORE PROFILES (client-side check)")
+            Timber.w("🧹 CLEANUP: ⚠️  Note: Client cannot verify Firebase Auth status due to security rules")
+            Timber.w("🧹 CLEANUP: ✅ Server-side Cloud Function 'scheduledOrphanCleanup' will validate and clean if needed")
+            Timber.w("🧹 CLEANUP: 📊 For immediate cleanup, run Cloud Function 'bulkCleanupOrphanedData' from Firebase Console")
         }
         
         // Return 0 since we're not actually deleting anything from client

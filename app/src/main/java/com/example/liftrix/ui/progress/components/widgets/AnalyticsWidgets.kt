@@ -406,7 +406,7 @@ private fun VolumeAnalyticsDisplay(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.TrendingUp,
-                        contentDescription = null,
+                        contentDescription = "Volume analytics",
                         tint = primaryColor,
                         modifier = Modifier.size(20.dp)
                     )
@@ -527,7 +527,7 @@ private fun LoadProgressionDisplay(
         ) {
             Icon(
                 imageVector = Icons.Default.Timeline,
-                contentDescription = null,
+                contentDescription = "Load progression",
                 tint = primaryColor,
                 modifier = Modifier.size(16.dp)
             )
@@ -575,7 +575,7 @@ private fun AnalyticsDisplay(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = icon,
-                        contentDescription = null,
+                        contentDescription = "Analytics",
                         tint = primaryColor,
                         modifier = Modifier.size(20.dp)
                     )
@@ -932,7 +932,7 @@ private fun VarietyDisplay(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.Diversity1,
-                        contentDescription = null,
+                        contentDescription = "Workout variety",
                         tint = primaryColor,
                         modifier = Modifier.size(20.dp)
                     )
@@ -975,7 +975,7 @@ private fun TimeAnalysisDisplay(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.Schedule,
-                        contentDescription = null,
+                        contentDescription = "Optimal time",
                         tint = primaryColor,
                         modifier = Modifier.size(24.dp)
                     )
@@ -1113,7 +1113,7 @@ private fun RecommendationItem(
             ) {
                 Icon(
                     imageVector = Icons.Default.Lightbulb,
-                    contentDescription = null,
+                    contentDescription = "Recommendation",
                     tint = primaryColor,
                     modifier = Modifier.size(16.dp)
                 )

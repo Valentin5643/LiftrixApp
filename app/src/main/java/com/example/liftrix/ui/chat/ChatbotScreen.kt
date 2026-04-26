@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,7 +37,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.theme.LiftrixSpacing
+import com.example.liftrix.ui.chat.components.AIChatDisclaimerBanner
 import com.example.liftrix.ui.chat.components.TypingIndicator
+import com.example.liftrix.ui.chat.components.AIMessageReportDialog
+import com.example.liftrix.ui.chat.components.AIReportReason
 import com.example.liftrix.domain.model.chat.ChatMessage
 import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.chat.UsageLimits
@@ -67,7 +72,8 @@ fun ChatbotScreen(
     viewModel: ChatbotViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    
+    var showDisclaimer by remember { mutableStateOf(true) }
+
     Scaffold(
         topBar = {
             ChatbotTopBar(
@@ -95,9 +101,25 @@ fun ChatbotScreen(
             MessageList(
                 messages = uiState.messages,
                 isTyping = uiState.isTyping,
+                onReportMessage = { messageId, messageContent, reason, notes ->
+                    viewModel.handleEvent(ChatbotEvent.ReportAIMessage(messageId, messageContent, reason, notes))
+                },
                 modifier = Modifier.fillMaxSize()
             )
-            
+
+            // AI Disclaimer Banner (session-scoped)
+            AnimatedVisibility(
+                visible = showDisclaimer,
+                enter = slideInVertically(initialOffsetY = { -it }),
+                exit = slideOutVertically(targetOffsetY = { -it }),
+                modifier = Modifier.align(Alignment.TopCenter)
+            ) {
+                AIChatDisclaimerBanner(
+                    onDismiss = { showDisclaimer = false },
+                    modifier = Modifier.padding(LiftrixSpacing.medium)
+                )
+            }
+
             // Usage warning overlay
             AnimatedVisibility(
                 visible = uiState.showUsageWarning,
@@ -195,17 +217,18 @@ private fun ChatbotTopBar(
 private fun MessageList(
     messages: List<ChatMessage>,
     isTyping: Boolean,
+    onReportMessage: (messageId: String, messageContent: String, reason: AIReportReason, notes: String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
-    
+
     // Auto-scroll to bottom when new message arrives
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
         }
     }
-    
+
     LazyColumn(
         state = listState,
         modifier = modifier,
@@ -218,10 +241,13 @@ private fun MessageList(
         ) { message ->
             MessageBubble(
                 message = message,
+                onReport = { reason, notes ->
+                    onReportMessage(message.id, message.content, reason, notes)
+                },
                 modifier = Modifier.animateItem()
             )
         }
-        
+
         // Typing indicator
         if (isTyping) {
             item {
@@ -238,18 +264,20 @@ private fun MessageList(
 @Composable
 private fun MessageBubble(
     message: ChatMessage,
+    onReport: (reason: AIReportReason, notes: String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isUserMessage = message.type == MessageType.USER
-    
+    var showReportDialog by remember { mutableStateOf(false) }
+
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = if (isUserMessage) Arrangement.End else Arrangement.Start
     ) {
         Surface(
-            color = if (isUserMessage) 
-                LiftrixColorsV2.primary 
-            else 
+            color = if (isUserMessage)
+                LiftrixColorsV2.primary
+            else
                 LiftrixColorsV2.surfaceVariant,
             shape = RoundedCornerShape(
                 topStart = 16.dp,
@@ -264,16 +292,17 @@ private fun MessageBubble(
             ) {
                 Text(
                     text = message.content,
-                    color = if (isUserMessage) 
-                        LiftrixColorsV2.onPrimary 
-                    else 
+                    color = if (isUserMessage)
+                        LiftrixColorsV2.onPrimary
+                    else
                         LiftrixColorsV2.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium
                 )
-                
+
                 Row(
                     modifier = Modifier.padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = formatTimestamp(message.createdAt),
@@ -283,7 +312,7 @@ private fun MessageBubble(
                         else
                             LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.7f)
                     )
-                    
+
                     message.tokenCount?.let { tokens ->
                         Text(
                             text = "$tokens tokens",
@@ -294,9 +323,35 @@ private fun MessageBubble(
                                 LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.7f)
                         )
                     }
+
+                    // Report button for AI messages only
+                    if (!isUserMessage) {
+                        Spacer(Modifier.weight(1f))
+                        Icon(
+                            Icons.Outlined.Flag,
+                            contentDescription = "Report AI response",
+                            modifier = Modifier
+                                .size(16.dp)
+                                .clickable { showReportDialog = true },
+                            tint = LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
                 }
             }
         }
+    }
+
+    // Report dialog
+    if (showReportDialog) {
+        AIMessageReportDialog(
+            messageId = message.id,
+            messageContent = message.content,
+            onDismiss = { showReportDialog = false },
+            onReport = { reason, notes ->
+                onReport(reason, notes)
+                showReportDialog = false
+            }
+        )
     }
 }
 
@@ -399,7 +454,7 @@ private fun UsageWarningCard(
             ) {
                 Icon(
                     Icons.Default.Info,
-                    contentDescription = null,
+                    contentDescription = "Usage alert",
                     modifier = Modifier.size(20.dp)
                 )
                 Column {

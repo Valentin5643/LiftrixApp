@@ -350,7 +350,7 @@ private fun EmptyCommentsState(
         ) {
             Icon(
                 Icons.Default.Comment,
-                contentDescription = null,
+                contentDescription = "Comments",
                 modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
             )
@@ -516,7 +516,7 @@ private fun CommentOptionsMenu(
                         onEdit()
                     },
                     leadingIcon = {
-                        Icon(Icons.Default.Edit, contentDescription = null)
+                        Icon(Icons.Default.Edit, contentDescription = "Edit comment")
                     }
                 )
             }
@@ -528,7 +528,7 @@ private fun CommentOptionsMenu(
                         onDelete()
                     },
                     leadingIcon = {
-                        Icon(Icons.Default.Delete, contentDescription = null)
+                        Icon(Icons.Default.Delete, contentDescription = "Delete comment")
                     }
                 )
             }
@@ -571,7 +571,7 @@ private fun CommentInput(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             Icons.Default.Reply,
-                            contentDescription = null,
+                            contentDescription = "Replying",
                             modifier = Modifier.size(16.dp),
                             tint = LiftrixColorsV2.primary
                         )

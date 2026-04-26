@@ -73,7 +73,7 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
                 )
                 Timber.d("User authenticated, loading templates for user: $userId")
                 
-                workoutTemplateRepository.getAllTemplatesForUser(userId).collect { result ->
+                workoutTemplateRepository.getAllTemplatesForUser(userId.value).collect { result ->
                     if (result.isSuccess) {
                         val templates = result.getOrElse { emptyList() }
                         _uiState.value = WorkoutTemplatesDashboardUiState.Success(
@@ -116,7 +116,7 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
                 )
 
                 // Use repository directly for folder-specific templates
-                workoutTemplateRepository.getTemplatesByFolder(userId, folderId).collect { result ->
+                workoutTemplateRepository.getTemplatesByFolder(userId.value, folderId).collect { result ->
                     if (result.isSuccess) {
                         val templates = result.getOrThrow()
 
@@ -200,7 +200,7 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
                     onSuccess = { it },
                     onFailure = { return@launch }
                 )
-                workoutTemplateRepository.recordTemplateUsage(template.id, userId)
+                workoutTemplateRepository.recordTemplateUsage(template.id, userId.value)
                 Timber.i("Template usage recorded: ${template.name}")
             } catch (exception: Exception) {
                 Timber.e(exception, "Error recording template usage")

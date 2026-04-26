@@ -1,9 +1,22 @@
 package com.example.liftrix.data.repository
 
+import com.example.liftrix.config.OfflineArchitectureFlags
 import com.example.liftrix.core.error.FirebaseErrorMapper
+import com.example.liftrix.core.identity.UserId
+import com.example.liftrix.data.local.entity.SubscriptionEntity
+import com.example.liftrix.data.local.entity.UserAccountEntity
+import com.example.liftrix.data.local.entity.SubscriptionTier as DataSubscriptionTier
+import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.data.mapper.UserMapper
+import com.example.liftrix.data.mapper.UserProfileMapper
+import com.example.liftrix.data.mapper.SubscriptionMapper
+import com.example.liftrix.data.model.SyncPayloadFactory
+import com.example.liftrix.data.remote.legacy.LegacyAuthFirestoreDataSource
 import com.example.liftrix.data.remote.dto.UserDto
 import com.example.liftrix.domain.model.User
+import com.example.liftrix.domain.model.UserProfile
+import com.example.liftrix.domain.model.SubscriptionStatus
+import com.example.liftrix.domain.model.SubscriptionTier
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -12,7 +25,7 @@ import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
-import com.google.firebase.firestore.FirebaseFirestore
+import androidx.room.withTransaction
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -23,12 +36,23 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.pow
+import java.time.Instant
+import java.time.LocalDateTime
 
 @Singleton
 class AuthRepositoryImpl @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
-    private val firestore: FirebaseFirestore,
-    private val syncCoordinator: com.example.liftrix.sync.SyncCoordinator
+    private val syncCoordinator: com.example.liftrix.sync.SyncCoordinator,
+    private val database: LiftrixDatabase,
+    private val userAccountDao: com.example.liftrix.data.local.dao.UserAccountDao,
+    private val userProfileDao: com.example.liftrix.data.local.dao.UserProfileDao,
+    private val userProfileMapper: UserProfileMapper,
+    private val subscriptionMapper: SubscriptionMapper,
+    private val settingsDao: com.example.liftrix.data.local.dao.SettingsDao,
+    private val subscriptionDao: com.example.liftrix.data.local.dao.SubscriptionDao,
+    private val offlineQueueManager: com.example.liftrix.data.sync.OfflineQueueManager,
+    private val legacyAuthDataSource: LegacyAuthFirestoreDataSource,
+    private val consentManagementService: com.example.liftrix.domain.service.ConsentManagementService
 ) : AuthRepository {
 
     override val currentUser: Flow<User?> = callbackFlow {
@@ -316,8 +340,17 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getCurrentUserId(): String? {
-        return firebaseAuth.currentUser?.uid
+    override suspend fun getCurrentUserId(): UserId? {
+        return firebaseAuth.currentUser?.uid?.let { UserId(it) }
+    }
+
+    override fun observeAuthState(): Flow<UserId?> = callbackFlow {
+        val listener = FirebaseAuth.AuthStateListener { auth ->
+            val userId = auth.currentUser?.uid?.let { UserId(it) }
+            trySend(userId)
+        }
+        firebaseAuth.addAuthStateListener(listener)
+        awaitClose { firebaseAuth.removeAuthStateListener(listener) }
     }
     
     /**
@@ -348,137 +381,28 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun createUserProfile(user: User): LiftrixResult<Unit> {
-        return liftrixCatching(
-            errorMapper = { throwable -> 
-                // ONBOARDING DEBUG: Enhanced error logging for profile creation failures
-                Timber.e(throwable, "Profile creation failed for user ${user.uid}")
-                when {
-                    throwable.message?.contains("PERMISSION_DENIED") == true -> {
-                        Timber.e("PERMISSION_DENIED: Firestore security rules rejected profile creation")
-                        Timber.e("User ID: ${user.uid}")
-                        Timber.e("Auth UID: ${firebaseAuth.currentUser?.uid}")
-                        Timber.e("Are they equal? ${user.uid == firebaseAuth.currentUser?.uid}")
-                    }
-                }
-                FirebaseErrorMapper.handleFirebaseError(throwable) 
-            }
-        ) {
-            Timber.d("Creating user profile for: ${user.uid}")
-            
-            // ONBOARDING FIX: Ensure Firestore client auth state is properly synchronized
-            val authValidationResult = validateFirestoreAuthState(user.uid)
-            if (!authValidationResult) {
-                throw IllegalStateException("Firestore auth state validation failed for user ${user.uid}")
-            }
-            
-            val userDto = UserMapper.toUserDto(user)
-            
-            // Convert userDto to a map and ensure it has userId field for security rules
-            val userMap = hashMapOf(
-                "userId" to user.uid,  // Add userId field that security rules expect
-                "uid" to user.uid,     // Keep uid for backward compatibility
-                "email" to userDto.email,
-                "display_name" to userDto.displayName,
-                "photo_url" to userDto.photoUrl,
-                "is_anonymous" to userDto.isAnonymous,
-                "subscription_tier" to userDto.subscriptionTier,
-                "subscription_status" to userDto.subscriptionStatus,
-                "subscription_expires_at" to userDto.subscriptionExpiresAt,
-                "premium_features_enabled" to userDto.premiumFeaturesEnabled,
-                "onboarding_completed" to userDto.onboardingCompleted,
-                "profile_version" to userDto.profileVersion,
-                "created_at" to userDto.createdAt,
-                "last_sign_in_at" to userDto.lastSignInAt,
-                "updated_at" to userDto.updatedAt
-            )
-            Timber.d("User map created with ${userMap.size} fields for user: ${user.uid}")
-            
-            // Use a batch write to ensure atomicity
-            val batch = firestore.batch()
-            
-            val userRef = firestore.collection("users").document(user.uid)
-            batch.set(userRef, userMap)
-            Timber.d("Added user document to batch - path: users/${user.uid}")
-            
-            // Create initial user settings
-            val settingsRef = firestore.collection("user_settings").document(user.uid)
-            val initialSettings = mapOf(
-                "userId" to user.uid,
-                "notification_enabled" to true,
-                "workout_reminders" to true,
-                "pr_notifications" to true,
-                "theme" to "system",
-                "units" to "metric", // metric or imperial
-                "rest_timer_enabled" to true,
-                "rest_timer_default_seconds" to 90,
-                "auto_start_rest_timer" to true,
-                "created_at" to com.google.firebase.Timestamp.now(),
-                "updated_at" to com.google.firebase.Timestamp.now()
-            )
-            batch.set(settingsRef, initialSettings)
-            Timber.d("Added user_settings document to batch for: ${user.uid}")
-            
-            // Create initial subscription document (free tier)
-            val subscriptionRef = firestore.collection("subscriptions").document()
-            val initialSubscription = mapOf(
-                "user_id" to user.uid,
-                "tier" to "free",
-                "status" to "active",
-                "provider" to "manual",
-                "started_at" to com.google.firebase.Timestamp.now(),
-                "auto_renew" to false,
-                "features" to emptyList<String>(),
-                "metadata" to mapOf("source" to "registration"),
-                "claims_updated" to false,
-                "created_at" to com.google.firebase.Timestamp.now(),
-                "version" to 1L
-            )
-            batch.set(subscriptionRef, initialSubscription)
-            Timber.d("Added subscriptions document to batch for: ${user.uid}")
-            
-            // Commit the batch
-            Timber.d("[PROFILE-CREATE] 📦 Committing batch write for profile creation: ${user.uid}")
-            batch.commit().await()
-            Timber.i("[PROFILE-CREATE] ✅ Batch write successful for profile creation: ${user.uid}")
-            Timber.i("[PROFILE-CREATE]   - User profile is now available for search and discovery")
-            Timber.i("[PROFILE-CREATE]   - Profile should sync to social_profiles collection via workers")
-            
+        return if (OfflineArchitectureFlags.FIX_AUTH_REPOSITORY) {
+            createUserProfileRoomFirst(user)
+        } else {
+            createUserProfileLegacy(user)
         }
     }
 
-    override suspend fun getUserProfile(uid: String): LiftrixResult<User?> {
-        return liftrixCatching(
-            errorMapper = { throwable -> FirebaseErrorMapper.handleFirebaseError(throwable) }
-        ) {
-            val document = firestore.collection("users")
-                .document(uid)
-                .get()
-                .await()
-            
-            if (document.exists()) {
-                val userDto = document.toObject(UserDto::class.java)
-                userDto?.let { UserMapper.fromUserDto(it) }
-            } else {
-                null
-            }
+    override suspend fun getUserProfile(uid: UserId): LiftrixResult<User?> {
+        return if (OfflineArchitectureFlags.FIX_AUTH_REPOSITORY) {
+            getUserProfileRoomFirst(uid)
+        } else {
+            getUserProfileLegacy(uid)
         }
     }
 
     private suspend fun updateLastSignInTime(uid: String) {
         try {
-            // CRITICAL FIX: Include userId field required by Firestore security rules
-            val updateMap = mapOf(
-                "userId" to uid,  // Required by security rules for user document writes
-                "last_sign_in_at" to com.google.firebase.Timestamp.now(),
-                "updated_at" to com.google.firebase.Timestamp.now()
-            )
-            
-            
-            firestore.collection("users")
-                .document(uid)
-                .set(updateMap, com.google.firebase.firestore.SetOptions.merge())
-                .await()
-                
+            if (OfflineArchitectureFlags.FIX_AUTH_REPOSITORY) {
+                updateLastSignInTimeRoomFirst(uid)
+            } else {
+                updateLastSignInTimeLegacy(uid)
+            }
         } catch (exception: Exception) {
             Timber.e(exception, "CRITICAL: Failed to update last sign-in time for user $uid")
             
@@ -499,16 +423,348 @@ class AuthRepositoryImpl @Inject constructor(
     }
     
     private suspend fun checkUserProfileExists(uid: String): Boolean {
+        return if (OfflineArchitectureFlags.FIX_AUTH_REPOSITORY) {
+            checkUserProfileExistsRoomFirst(uid)
+        } else {
+            checkUserProfileExistsLegacy(uid)
+        }
+    }
+
+    private suspend fun createUserProfileRoomFirst(user: User): LiftrixResult<Unit> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                Timber.e(throwable, "Room-first profile creation failed for user ${user.uid}")
+                FirebaseErrorMapper.handleFirebaseError(throwable)
+            }
+        ) {
+            Timber.d("Creating local user profile for: ${user.uid}")
+
+            // CRITICAL FIX: Use database transaction to ensure FK constraint order
+            database.withTransaction {
+                val now = LocalDateTime.now()
+
+                // 1. Insert UserAccountEntity first
+                val accountEntity = buildUserAccountEntity(user, now = now)
+                userAccountDao.upsertLocal(accountEntity)
+
+                // 2. Insert UserProfileEntity (parent for SubscriptionEntity FK)
+                val baseProfile = UserProfile.createMinimal(user.uid).copy(
+                    displayName = user.displayName ?: "User",
+                    profileImageUrl = user.photoUrl,
+                    profileImageUpdatedAt = now,
+                    updatedAt = now
+                )
+                val existingProfile = userProfileDao.getProfileForUserSuspend(user.uid)
+                val profileEntity = if (existingProfile != null) {
+                    userProfileMapper.toEntityWithId(baseProfile, existingProfile.id, isSynced = false)
+                } else {
+                    userProfileMapper.toEntity(baseProfile, isSynced = false)
+                }
+                userProfileDao.upsertLocal(profileEntity)
+
+                // 3. Insert SettingsEntity
+                val existingSettings = settingsDao.getUserSettingsSync(user.uid)
+                val settingsEntity = existingSettings ?: com.example.liftrix.data.local.entity.SettingsEntity.createDefault(user.uid)
+                settingsDao.upsertLocal(settingsEntity)
+
+                // 4. Insert SubscriptionEntity LAST (has FK dependency on UserProfileEntity)
+                val existingSubscription = subscriptionDao.getSubscription(user.uid)
+                val subscriptionEntity = existingSubscription ?: SubscriptionEntity(
+                    userId = user.uid,
+                    tier = DataSubscriptionTier.FREE,
+                    status = "active",
+                    provider = "manual",
+                    startedAt = Instant.now(),
+                    expiresAt = null,
+                    cancelledAt = null,
+                    trialEndsAt = null,
+                    autoRenew = false,
+                    priceCents = null,
+                    currency = "USD",
+                    createdAt = Instant.now(),
+                    updatedAt = Instant.now(),
+                    isSynced = false,
+                    syncVersion = 1L
+                )
+                subscriptionDao.upsertLocal(subscriptionEntity)
+            }
+
+            // Queue sync after successful transaction
+            queueProfileSync(user.uid)
+            syncCoordinator.triggerImmediateSync(user.uid)
+        }
+    }
+
+    private suspend fun createUserProfileLegacy(user: User): LiftrixResult<Unit> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                Timber.e(throwable, "Profile creation failed for user ${user.uid}")
+                when {
+                    throwable.message?.contains("PERMISSION_DENIED") == true -> {
+                        Timber.e("PERMISSION_DENIED: Firestore security rules rejected profile creation")
+                        Timber.e("User ID: ${user.uid}")
+                        Timber.e("Auth UID: ${firebaseAuth.currentUser?.uid}")
+                        Timber.e("Are they equal? ${user.uid == firebaseAuth.currentUser?.uid}")
+                    }
+                }
+                FirebaseErrorMapper.handleFirebaseError(throwable)
+            }
+        ) {
+            Timber.d("Creating user profile for: ${user.uid}")
+
+            val authValidationResult = validateFirestoreAuthState(user.uid)
+            if (!authValidationResult) {
+                throw IllegalStateException("Firestore auth state validation failed for user ${user.uid}")
+            }
+
+            val userDto = UserMapper.toUserDto(user)
+            val userMap = hashMapOf(
+                "userId" to user.uid,
+                "uid" to user.uid,
+                "email" to userDto.email,
+                "display_name" to userDto.displayName,
+                "photo_url" to userDto.photoUrl,
+                "is_anonymous" to userDto.isAnonymous,
+                "subscription_tier" to userDto.subscriptionTier,
+                "subscription_status" to userDto.subscriptionStatus,
+                "subscription_expires_at" to userDto.subscriptionExpiresAt,
+                "premium_features_enabled" to userDto.premiumFeaturesEnabled,
+                "onboarding_completed" to userDto.onboardingCompleted,
+                "profile_version" to userDto.profileVersion,
+                "created_at" to userDto.createdAt,
+                "last_sign_in_at" to userDto.lastSignInAt,
+                "updated_at" to userDto.updatedAt
+            )
+
+            val initialSettings = mapOf(
+                "userId" to user.uid,
+                "notification_enabled" to true,
+                "workout_reminders" to true,
+                "pr_notifications" to true,
+                "theme" to "system",
+                "units" to "metric",
+                "rest_timer_enabled" to true,
+                "rest_timer_default_seconds" to 90,
+                "auto_start_rest_timer" to true,
+                "created_at" to com.google.firebase.Timestamp.now(),
+                "updated_at" to com.google.firebase.Timestamp.now()
+            )
+
+            val initialSubscription = mapOf(
+                "user_id" to user.uid,
+                "tier" to "free",
+                "status" to "active",
+                "provider" to "manual",
+                "started_at" to com.google.firebase.Timestamp.now(),
+                "auto_renew" to false,
+                "features" to emptyList<String>(),
+                "metadata" to mapOf("source" to "registration"),
+                "claims_updated" to false,
+                "created_at" to com.google.firebase.Timestamp.now(),
+                "version" to 1L
+            )
+
+            Timber.d("[PROFILE-CREATE] 📦 Committing batch write for profile creation: ${user.uid}")
+            legacyAuthDataSource.createUserProfile(user.uid, userMap, initialSettings, initialSubscription)
+            Timber.i("[PROFILE-CREATE] ✅ Batch write successful for profile creation: ${user.uid}")
+            Timber.i("[PROFILE-CREATE]   - User profile is now available for search and discovery")
+            Timber.i("[PROFILE-CREATE]   - Profile should sync to social_profiles collection via workers")
+        }
+    }
+
+    private suspend fun getUserProfileRoomFirst(uid: UserId): LiftrixResult<User?> {
+        return liftrixCatching(
+            errorMapper = { throwable -> LiftrixError.DatabaseError("Failed to get user profile: ${throwable.message}") }
+        ) {
+            val account = userAccountDao.getAccountForUserSuspend(uid.value) ?: return@liftrixCatching null
+            val profile = userProfileDao.getProfileForUserSuspend(uid.value)
+            val subscription = subscriptionDao.getSubscription(uid.value)?.let { subscriptionMapper.toDomain(it) }
+
+            val displayName = account.displayName ?: profile?.displayName
+            val photoUrl = profile?.profileImageUrl
+            val createdAt = account.accountCreatedAt
+            val lastSignIn = profile?.lastActiveAt ?: account.accountCreatedAt
+            val updatedAt = profile?.updatedAt ?: account.accountCreatedAt
+            val subscriptionExpiresAt = subscription?.expiresAt?.atZone(java.time.ZoneId.systemDefault())?.toLocalDateTime()
+
+            User(
+                uid = account.userId,
+                email = account.email,
+                displayName = displayName,
+                photoUrl = photoUrl,
+                isAnonymous = account.email.isBlank(),
+                subscriptionTier = subscription?.tier ?: SubscriptionTier.FREE,
+                subscriptionStatus = subscription?.status ?: SubscriptionStatus.ACTIVE,
+                subscriptionExpiresAt = subscriptionExpiresAt,
+                premiumFeaturesEnabled = subscription?.isActive ?: false,
+                onboardingCompleted = profile?.completedAt != null,
+                profileVersion = profile?.syncVersion ?: 1L,
+                createdAt = createdAt,
+                lastSignInAt = lastSignIn,
+                updatedAt = updatedAt
+            )
+        }
+    }
+
+    private suspend fun getUserProfileLegacy(uid: UserId): LiftrixResult<User?> {
+        return liftrixCatching(
+            errorMapper = { throwable -> FirebaseErrorMapper.handleFirebaseError(throwable) }
+        ) {
+            val userDto = legacyAuthDataSource.getUserProfile(uid.value)
+            userDto?.let { UserMapper.fromUserDto(it) }
+        }
+    }
+
+    private suspend fun updateLastSignInTimeRoomFirst(uid: String) {
+        val now = LocalDateTime.now()
+        val profile = userProfileDao.getProfileForUserSuspend(uid) ?: return
+        val updated = profile.copy(
+            lastActiveAt = now,
+            updatedAt = now,
+            isSynced = false
+        )
+        userProfileDao.upsertLocal(updated)
+        queueProfileSync(uid)
+        syncCoordinator.triggerEntitySync(uid, "profile")
+    }
+
+    private suspend fun updateLastSignInTimeLegacy(uid: String) {
+        val updateMap = mapOf(
+            "userId" to uid,
+            "last_sign_in_at" to com.google.firebase.Timestamp.now(),
+            "updated_at" to com.google.firebase.Timestamp.now()
+        )
+        legacyAuthDataSource.updateUserFields(uid, updateMap)
+    }
+
+    private suspend fun checkUserProfileExistsRoomFirst(uid: String): Boolean {
         return try {
-            val document = firestore.collection("users")
-                .document(uid)
-                .get()
-                .await()
-            document.exists()
+            userProfileDao.hasProfile(uid)
         } catch (exception: Exception) {
-            Timber.e(exception, "Failed to check if user profile exists")
+            Timber.e(exception, "Failed to check if user profile exists locally")
             false
         }
+    }
+
+    private suspend fun checkUserProfileExistsLegacy(uid: String): Boolean {
+        return try {
+            legacyAuthDataSource.checkUserProfileExists(uid)
+        } catch (exception: Exception) {
+            Timber.e(exception, "Failed to check if user profile exists in legacy storage")
+            false
+        }
+    }
+
+    private suspend fun updateEmailRoomFirst(userId: String, newEmail: String) {
+        val now = LocalDateTime.now()
+        val existing = userAccountDao.getAccountForUserSuspend(userId)
+        val updated = if (existing != null) {
+            existing.copy(
+                email = newEmail,
+                lastEmailUpdate = now,
+                displayName = existing.displayName
+            )
+        } else {
+            UserAccountEntity(
+                userId = userId,
+                email = newEmail,
+                username = null,
+                emailVerified = false,
+                displayName = null,
+                lastPasswordChange = null,
+                accountCreatedAt = now,
+                lastEmailUpdate = now
+            )
+        }
+        userAccountDao.upsertLocal(updated)
+        syncCoordinator.triggerImmediateSync(userId)
+    }
+
+    private suspend fun updatePasswordRoomFirst(userId: String) {
+        val now = LocalDateTime.now()
+        val existing = userAccountDao.getAccountForUserSuspend(userId) ?: return
+        val updated = existing.copy(
+            lastPasswordChange = now
+        )
+        userAccountDao.upsertLocal(updated)
+        syncCoordinator.triggerImmediateSync(userId)
+    }
+
+    private suspend fun markAccountForDeletionRoomFirst(userId: String) {
+        val now = LocalDateTime.now()
+        userAccountDao.markForDeletion(userId, now)
+
+        val profile = userProfileDao.getProfileForUserSuspend(userId)
+        if (profile != null) {
+            val updatedProfile = profile.copy(
+                updatedAt = now,
+                isSynced = false
+            )
+            userProfileDao.upsertLocal(updatedProfile)
+            queueProfileDelete(userId, updatedProfile)
+        }
+
+        syncCoordinator.triggerImmediateSync(userId)
+    }
+
+    private suspend fun queueProfileSync(userId: String) {
+        val profile = userProfileDao.getProfileForUserSuspend(userId) ?: return
+        val payload = SyncPayloadFactory.createProfilePayload(
+            userId = profile.userId,
+            displayName = profile.displayName,
+            email = userAccountDao.getEmailForUser(userId) ?: "",
+            profileImageUrl = profile.profileImageUrl,
+            goals = profile.goals?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
+            preferences = emptyMap(),
+            syncVersion = profile.syncVersion,
+            lastModified = System.currentTimeMillis()
+        )
+
+        offlineQueueManager.queueOperation(
+            userId = userId,
+            entityType = "PROFILE",
+            entityId = userId,
+            operation = "UPSERT",
+            data = payload
+        )
+    }
+
+    private suspend fun queueProfileDelete(userId: String, profile: com.example.liftrix.data.local.entity.UserProfileEntity) {
+        val payload = SyncPayloadFactory.createProfilePayload(
+            userId = profile.userId,
+            displayName = profile.displayName,
+            email = userAccountDao.getEmailForUser(userId) ?: "",
+            profileImageUrl = profile.profileImageUrl,
+            goals = profile.goals?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
+            preferences = emptyMap(),
+            syncVersion = profile.syncVersion,
+            lastModified = System.currentTimeMillis()
+        )
+
+        offlineQueueManager.queueOperation(
+            userId = userId,
+            entityType = "PROFILE",
+            entityId = userId,
+            operation = "DELETE",
+            data = payload
+        )
+    }
+
+    private fun buildUserAccountEntity(
+        user: User,
+        now: LocalDateTime,
+        emailOverride: String? = null
+    ): UserAccountEntity {
+        return UserAccountEntity(
+            userId = user.uid,
+            email = emailOverride ?: user.email,
+            username = null,
+            emailVerified = user.isEmailVerified,
+            displayName = user.displayName,
+            lastPasswordChange = null,
+            accountCreatedAt = user.createdAt,
+            lastEmailUpdate = now
+        )
     }
 
     // Account Management Methods Implementation
@@ -608,22 +864,23 @@ class AuthRepositoryImpl @Inject constructor(
             
             // Send verification email to new address
             user.sendEmailVerification().await()
-            
-            // Update email in Firestore user profile
+
+            // Update local account data (Room-first) or fallback to legacy Firestore path
             try {
-                firestore.collection("users")
-                    .document(user.uid)
-                    .set(
+                if (OfflineArchitectureFlags.FIX_AUTH_REPOSITORY) {
+                    updateEmailRoomFirst(user.uid, newEmail)
+                } else {
+                    legacyAuthDataSource.updateUserFields(
+                        user.uid,
                         mapOf(
                             "email" to newEmail,
                             "updated_at" to com.google.firebase.Timestamp.now()
-                        ),
-                        com.google.firebase.firestore.SetOptions.merge()
+                        )
                     )
-                    .await()
-            } catch (firestoreError: Exception) {
-                Timber.w(firestoreError, "Failed to update email in Firestore, but Firebase Auth was updated")
-                // Don't fail the entire operation if Firestore update fails
+                }
+            } catch (legacyError: Exception) {
+                Timber.w(legacyError, "Failed to update email locally/legacy, but Firebase Auth was updated")
+                // Don't fail the entire operation if sync update fails
             }
             
         }
@@ -687,22 +944,23 @@ class AuthRepositoryImpl @Inject constructor(
             
             // Update to new password
             user.updatePassword(newPassword).await()
-            
-            // Update password change timestamp in Firestore
+
+            // Update password change timestamp locally or via legacy Firestore path
             try {
-                firestore.collection("users")
-                    .document(user.uid)
-                    .set(
+                if (OfflineArchitectureFlags.FIX_AUTH_REPOSITORY) {
+                    updatePasswordRoomFirst(user.uid)
+                } else {
+                    legacyAuthDataSource.updateUserFields(
+                        user.uid,
                         mapOf(
                             "last_password_change" to com.google.firebase.Timestamp.now(),
                             "updated_at" to com.google.firebase.Timestamp.now()
-                        ),
-                        com.google.firebase.firestore.SetOptions.merge()
+                        )
                     )
-                    .await()
-            } catch (firestoreError: Exception) {
-                Timber.w(firestoreError, "Failed to update password timestamp in Firestore")
-                // Don't fail the entire operation if Firestore update fails
+                }
+            } catch (legacyError: Exception) {
+                Timber.w(legacyError, "Failed to update password timestamp locally/legacy")
+                // Don't fail the entire operation if sync update fails
             }
             
         }
@@ -731,62 +989,30 @@ class AuthRepositoryImpl @Inject constructor(
             
             val userId = user.uid
             
-            // Create a batch to delete all user data atomically
-            val batch = firestore.batch()
-            
-            // List of collections to delete user data from
-            val collectionsToClean = listOf(
-                "users",
-                "user_settings", 
-                "subscriptions",
-                "workouts",
-                "workout_templates",
-                "custom_exercises",
-                "user_profiles",
-                "analytics_cache",
-                "social_profiles",
-                "follow_relationships",
-                "workout_posts",
-                "notifications"
-            )
-            
-            // Delete user documents from all collections
-            for (collection in collectionsToClean) {
-                try {
-                    val documents = firestore.collection(collection)
-                        .whereEqualTo("userId", userId)
-                        .get()
-                        .await()
-                    
-                    for (document in documents) {
-                        batch.delete(document.reference)
-                    }
-                    
-                    // Also check for user_id field (different naming convention)
-                    val documentsAlt = firestore.collection(collection)
-                        .whereEqualTo("user_id", userId)
-                        .get()
-                        .await()
-                    
-                    for (document in documentsAlt) {
-                        batch.delete(document.reference)
-                    }
-                } catch (e: Exception) {
-                    Timber.w(e, "Failed to query collection $collection for user deletion")
-                    // Continue with other collections
-                }
-            }
-            
-            // Also delete the main user document
-            val userRef = firestore.collection("users").document(userId)
-            batch.delete(userRef)
-            
             try {
-                // Commit the batch delete
-                batch.commit().await()
-            } catch (firestoreError: Exception) {
-                Timber.e(firestoreError, "Failed to delete Firestore data, but proceeding with auth account deletion")
-                // Don't fail the entire operation if Firestore cleanup fails
+                if (OfflineArchitectureFlags.FIX_AUTH_REPOSITORY) {
+                    markAccountForDeletionRoomFirst(userId)
+                } else {
+                    // List of collections to delete user data from
+                    val collectionsToClean = listOf(
+                        "users",
+                        "user_settings",
+                        "subscriptions",
+                        "workouts",
+                        "workout_templates",
+                        "custom_exercises",
+                        "user_profiles",
+                        "analytics_cache",
+                        "social_profiles",
+                        "follow_relationships",
+                        "workout_posts",
+                        "notifications"
+                    )
+
+                    legacyAuthDataSource.deleteUserData(userId, collectionsToClean)
+                }
+            } catch (legacyError: Exception) {
+                Timber.e(legacyError, "Failed to update deletion state, but proceeding with auth account deletion")
             }
             
             // Finally, delete the Firebase Auth account
@@ -945,15 +1171,17 @@ class AuthRepositoryImpl @Inject constructor(
                         return false
                     }
                     
-                    // Perform a simple Firestore operation to verify auth state
+                    if (OfflineArchitectureFlags.FIX_AUTH_REPOSITORY) {
+                        Timber.d("Room-first mode enabled; skipping Firestore auth synchronization check")
+                        return true
+                    }
+
                     try {
-                        firestore.collection("users").document(userId).get().await()
-                        // If we can perform a Firestore operation, auth is synchronized
+                        legacyAuthDataSource.verifyFirestoreAccess(userId)
                         Timber.d("Firestore auth state synchronized successfully for user $userId on attempt ${attempts + 1}")
                         return true
                     } catch (firestoreError: Exception) {
                         if (firestoreError.message?.contains("PERMISSION_DENIED") == true) {
-                            // Firestore hasn't synchronized yet
                             Timber.d("Firestore auth not synchronized yet on attempt ${attempts + 1}: ${firestoreError.message}")
                             attempts++
                             if (attempts < maxAttempts) {
@@ -962,7 +1190,6 @@ class AuthRepositoryImpl @Inject constructor(
                                 continue
                             }
                         } else {
-                            // Some other error - document doesn't exist is OK, permission denied is not
                             Timber.d("Firestore auth check completed (document access verified) on attempt ${attempts + 1}")
                             return true
                         }

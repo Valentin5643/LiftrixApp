@@ -138,7 +138,7 @@ object ErrorHandlingExtensions {
             ) {
                 Icon(
                     imageVector = Icons.Default.CloudOff,
-                    contentDescription = null,
+                    contentDescription = "Offline",
                     tint = LiftrixColors.TiffanyBlue,
                     modifier = Modifier.size(20.dp)
                 )
@@ -190,7 +190,7 @@ object ErrorHandlingExtensions {
             ) {
                 Icon(
                     imageVector = Icons.Default.Warning,
-                    contentDescription = null,
+                    contentDescription = "Warning",
                     tint = LiftrixColors.TiffanyBlue,
                     modifier = Modifier.size(20.dp)
                 )
@@ -241,7 +241,7 @@ object ErrorHandlingExtensions {
             ) {
                 Icon(
                     imageVector = Icons.Default.Error,
-                    contentDescription = null,
+                    contentDescription = "Error",
                     tint = LiftrixColors.TiffanyBlue,
                     modifier = Modifier.size(20.dp)
                 )
@@ -289,7 +289,7 @@ object ErrorHandlingExtensions {
             ) {
                 Icon(
                     imageVector = Icons.Default.Error,
-                    contentDescription = null,
+                    contentDescription = "Authentication error",
                     tint = LiftrixColors.TiffanyBlue,
                     modifier = Modifier.size(20.dp)
                 )
@@ -340,7 +340,7 @@ object ErrorHandlingExtensions {
             ) {
                 Icon(
                     imageVector = Icons.Default.Error,
-                    contentDescription = null,
+                    contentDescription = "Error",
                     tint = LiftrixColors.TiffanyBlue,
                     modifier = Modifier.size(20.dp)
                 )
@@ -401,7 +401,7 @@ object ErrorHandlingExtensions {
             ) {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
+                    contentDescription = "Success",
                     tint = LiftrixColors.Primary,
                     modifier = Modifier.size(20.dp)
                 )

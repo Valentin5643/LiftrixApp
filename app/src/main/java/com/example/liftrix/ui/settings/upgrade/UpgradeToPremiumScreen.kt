@@ -280,7 +280,7 @@ private fun HeroSection() {
             ) {
                 Icon(
                     imageVector = Icons.Default.Star,
-                    contentDescription = null,
+                    contentDescription = "Premium",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(48.dp)
                 )
@@ -328,7 +328,7 @@ private fun PremiumFeatureCard(
         ) {
             Icon(
                 imageVector = getFeatureIcon(feature.iconName),
-                contentDescription = null,
+                contentDescription = feature.title,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
             )
@@ -515,7 +515,7 @@ private fun ErrorState(
     ) {
         Icon(
             imageVector = Icons.Default.Error,
-            contentDescription = null,
+            contentDescription = "Error",
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(64.dp)
         )
@@ -585,7 +585,7 @@ private fun PurchaseSuccessDialog(
             ) {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
+                    contentDescription = "Success",
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Text("Welcome to Premium!")

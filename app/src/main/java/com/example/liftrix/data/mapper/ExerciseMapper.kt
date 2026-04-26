@@ -91,9 +91,10 @@ class ExerciseMapper @Inject constructor(
     /**
      * Convert domain Exercise to Room entity
      */
-    fun toEntity(exercise: Exercise): ExerciseEntity {
+    fun toEntity(exercise: Exercise, userId: String): ExerciseEntity {
         return ExerciseEntity(
             id = 0, // Always use 0 for new exercises to let database auto-generate ID
+            userId = userId,
             workoutId = exercise.workoutId.value,
             exerciseLibraryId = exercise.libraryExercise.id,
             orderIndex = exercise.orderIndex,

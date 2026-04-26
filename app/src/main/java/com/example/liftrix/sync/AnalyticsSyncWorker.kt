@@ -6,6 +6,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.Data
 import com.example.liftrix.domain.repository.ProgressStatsRepository
+import com.example.liftrix.domain.repository.markCalculationsClean
 import com.example.liftrix.data.remote.dto.AnalyticsDto
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixSuccess
@@ -13,6 +14,7 @@ import com.example.liftrix.domain.model.common.liftrixFailure
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import com.example.liftrix.config.OfflineArchitectureFlags
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.tasks.await
@@ -63,6 +65,13 @@ class AnalyticsSyncWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         return try {
+            val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+                OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
+            if (!OfflineArchitectureFlags.ROOM_FIRST_ENABLED) {
+                Timber.w("Analytics sync running in legacy mode (Room-first disabled)")
+            }
+            Timber.d("Analytics sync dirty gating enabled: $useDirtyFlagGating")
+
             // Enhanced authentication validation
             val authValidationResult = validateAuthentication()
             if (!authValidationResult.isValid) {
@@ -125,8 +134,8 @@ class AnalyticsSyncWorker @AssistedInject constructor(
             }
             
             // Mark calculations as synced in local database
-            progressStatsRepository.markCalculationsAsSynced(
-                userId, 
+            progressStatsRepository.markCalculationsClean(
+                userId,
                 pendingCalculations.map { it.id }
             )
             
@@ -152,18 +161,22 @@ class AnalyticsSyncWorker @AssistedInject constructor(
         var syncedCount = 0
         var conflictCount = 0
         var permissionErrors = 0
+        val collectionRef = firestore.collection(FIRESTORE_ANALYTICS_COLLECTION)
+        val docIds = calculations.map { calculation ->
+            "${userId}_${calculation.calculationType}_${calculation.timestamp}"
+        }
+        val remoteDocs = FirestorePrefetcher.prefetchByIds(collectionRef, docIds)
 
         calculations.forEach { calculation ->
             try {
                 val analyticsDto = mapToAnalyticsDto(calculation, userId)
-                val documentRef = firestore
-                    .collection(FIRESTORE_ANALYTICS_COLLECTION)
-                    .document("${userId}_${calculation.calculationType}_${calculation.timestamp}")
+                val docId = "${userId}_${calculation.calculationType}_${calculation.timestamp}"
+                val documentRef = collectionRef.document(docId)
 
                 // Check for existing document to handle conflicts
-                val existingDoc = documentRef.get().await()
+                val existingDoc = remoteDocs[docId]
                 
-                if (existingDoc.exists()) {
+                if (existingDoc?.exists() == true) {
                     val existingTimestamp = existingDoc.getLong("timestamp") ?: 0L
                     val localTimestamp = calculation.timestamp
                     

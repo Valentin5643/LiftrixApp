@@ -64,7 +64,7 @@ private fun WelcomeIllustration(
 ) {
     Icon(
         imageVector = Icons.Default.FitnessCenter,
-        contentDescription = null,
+        contentDescription = "Welcome",
         modifier = modifier.size(80.dp),
         tint = MaterialTheme.colorScheme.primary
     )

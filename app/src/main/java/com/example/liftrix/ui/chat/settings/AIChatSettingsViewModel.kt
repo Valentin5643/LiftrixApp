@@ -38,7 +38,7 @@ class AIChatSettingsViewModel @Inject constructor(
     private fun loadInitialData() {
         viewModelScope.launch {
             currentUserId = authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
+                onSuccess = { it?.value },
                 onFailure = { null }
             )
             currentUserId?.let { userId ->

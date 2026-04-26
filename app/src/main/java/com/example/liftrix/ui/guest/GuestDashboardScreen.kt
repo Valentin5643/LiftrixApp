@@ -149,7 +149,7 @@ private fun GuestDashboardHeader(
         ) {
             Icon(
                 imageVector = Icons.Default.Person,
-                contentDescription = null,
+                contentDescription = "Guest mode",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(32.dp)
             )
@@ -237,7 +237,7 @@ private fun SessionStatusCard(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.FitnessCenter,
-                                contentDescription = null,
+                                contentDescription = "Start workout",
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
@@ -310,7 +310,7 @@ private fun WorkoutProgressCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.FitnessCenter,
-                            contentDescription = null,
+                            contentDescription = "Workout progress",
                             tint = if (index < guestSession.workoutCount) {
                                 MaterialTheme.colorScheme.primary
                             } else {
@@ -412,7 +412,7 @@ private fun UpgradeBenefitItem(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = title,
             tint = MaterialTheme.colorScheme.onPrimaryContainer,
             modifier = Modifier.size(20.dp)
         )
@@ -486,7 +486,7 @@ private fun ErrorCard(
         ) {
             Icon(
                 imageVector = Icons.Default.Warning,
-                contentDescription = null,
+                contentDescription = "Error",
                 tint = MaterialTheme.colorScheme.onErrorContainer,
                 modifier = Modifier.size(32.dp)
             )

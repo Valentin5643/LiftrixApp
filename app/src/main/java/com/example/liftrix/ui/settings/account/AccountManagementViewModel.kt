@@ -74,7 +74,7 @@ class AccountManagementViewModel @Inject constructor(
 
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
+                    onSuccess = { it.value },
                     onFailure = { throw LiftrixError.AuthenticationError(
                         errorMessage = "User not authenticated",
                         errorCode = "NO_USER"
@@ -326,17 +326,20 @@ class AccountManagementViewModel @Inject constructor(
                     )
                 }
                 
-                val result = accountCommandUseCase.deleteAccount(password)
+                val result = accountCommandUseCase.deleteAccount(
+                    reauthProvider = "password",
+                    reauthPayload = password
+                )
                 
                 result.fold(
-                    onSuccess = {
-                        Timber.d("Account deleted successfully")
+                    onSuccess = { deletionJobId ->
+                        Timber.d("Account deletion queued successfully: $deletionJobId")
                         trackAccountAction("account_deleted")
                         updateState {
                             copy(
                                 isDeletingAccount = false,
                                 accountDeleted = true,
-                                successMessage = "Account deleted successfully",
+                                successMessage = "Account deletion started",
                                 error = null
                             )
                         }

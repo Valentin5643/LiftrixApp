@@ -14,6 +14,7 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import com.example.liftrix.data.sync.OfflineQueueManager
 import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.config.OfflineArchitectureFlags
 import kotlinx.coroutines.CancellationException
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
@@ -49,28 +50,6 @@ class UnifiedSyncWorker @AssistedInject constructor(
     private val syncOperationManager: SyncOperationManager,
     private val offlineQueueManager: OfflineQueueManager
 ) : BaseSyncWorker(context, params) {
-    
-    // Fallback constructor for when Hilt factory generation fails
-    constructor(context: Context, params: WorkerParameters) : this(
-        context,
-        params,
-        WorkerServiceLocator.getUnifiedSyncDependencies(context).run {
-            Timber.w("⚠️ UnifiedSyncWorker using FALLBACK constructor - Hilt factory failed!")
-            return@run this
-        }
-    )
-    
-    // Helper constructor to unpack the dependency structure
-    private constructor(
-        context: Context,
-        params: WorkerParameters,
-        deps: WorkerServiceLocator.UnifiedSyncDependencies
-    ) : this(
-        context, 
-        params,
-        deps.syncOperationManager, 
-        deps.offlineQueueManager
-    )
 
     override val workerName: String = "UnifiedSyncWorker"
     override val maxRetryCount: Int = 5
@@ -206,6 +185,12 @@ class UnifiedSyncWorker @AssistedInject constructor(
     override suspend fun performSync(userId: String): Result {
         try {
             val syncStartTime = System.currentTimeMillis()
+            val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+                OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
+            if (!OfflineArchitectureFlags.ROOM_FIRST_ENABLED) {
+                Timber.w("$workerName running in legacy mode (Room-first disabled)")
+            }
+            Timber.d("$workerName dirty gating enabled: $useDirtyFlagGating")
             
             // Extract sync parameters from input data
             val syncType = inputData.getString(KEY_SYNC_TYPE) ?: DEFAULT_SYNC_TYPE

@@ -228,7 +228,7 @@ private fun EmptyImageGallery(
         ) {
             Icon(
                 imageVector = Icons.Default.Add,
-                contentDescription = null,
+                contentDescription = "Add image",
                 modifier = Modifier.size(32.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
@@ -356,7 +356,7 @@ private fun ExerciseImageThumbnail(
         ) {
             Icon(
                 imageVector = if (isMainImage) Icons.Default.Star else Icons.Default.StarBorder,
-                contentDescription = null,
+                contentDescription = if (isMainImage) "Main image" else "Set as main image",
                 modifier = Modifier.padding(6.dp),
                 tint = if (isMainImage) {
                     MaterialTheme.colorScheme.primary
@@ -383,7 +383,7 @@ private fun ExerciseImageThumbnail(
         ) {
             Icon(
                 imageVector = Icons.Default.Close,
-                contentDescription = null,
+                contentDescription = "Remove image",
                 modifier = Modifier.padding(6.dp),
                 tint = MaterialTheme.colorScheme.onErrorContainer
             )
@@ -442,7 +442,7 @@ private fun AddImageThumbnail(
         ) {
             Icon(
                 imageVector = Icons.Default.Add,
-                contentDescription = null,
+                contentDescription = "Add image",
                 modifier = Modifier.size(32.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )

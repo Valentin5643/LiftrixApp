@@ -43,8 +43,13 @@ class EnforceUserScopingDetector : Detector(), SourceCodeScanner {
         if (!methodText.contains("@Query")) return
 
         // Extract query string from annotation
-        val queryMatch = Regex("@Query\\s*\\(\\s*\"([^\"]+)\"").find(methodText)
-        val queryValue = queryMatch?.groupValues?.get(1) ?: return
+        val queryMatch = Regex(
+            "@Query\\s*\\(\\s*(\"\"\"([\\s\\S]*?)\"\"\"|\"([^\"]+)\")",
+            setOf(RegexOption.DOT_MATCHES_ALL)
+        ).find(methodText)
+        val queryValue = queryMatch?.groups?.get(2)?.value
+            ?: queryMatch?.groups?.get(3)?.value
+            ?: return
 
         checkQueryForUserScoping(context, method, queryValue, className)
     }
@@ -57,15 +62,35 @@ class EnforceUserScopingDetector : Detector(), SourceCodeScanner {
     ) {
         val queryUpper = queryValue.uppercase()
 
-        // Only check SELECT queries
-        if (!queryUpper.trimStart().startsWith("SELECT")) return
+        val queryType = queryUpper.trimStart()
+        val isSelect = queryType.startsWith("SELECT")
+        val isUpdate = queryType.startsWith("UPDATE")
+        val isDelete = queryType.startsWith("DELETE")
+
+        if (!isSelect && !isUpdate && !isDelete) return
 
         // Tables that require user scoping
         val userScopedTables = listOf(
-            "WORKOUTS", "WORKOUT_SESSIONS", "EXERCISES", "SETS",
-            "TEMPLATES", "FOLDERS", "ACHIEVEMENTS", "ANALYTICS_CACHE",
-            "CHAT_HISTORY", "SOCIAL_PROFILES", "WORKOUT_POSTS",
-            "SYNC_QUEUE", "USER_SETTINGS", "NOTIFICATIONS"
+            "WORKOUTS",
+            "WORKOUT_SESSIONS",
+            "EXERCISES",
+            "EXERCISE_SETS",
+            "TEMPLATES",
+            "FOLDERS",
+            "ACHIEVEMENTS",
+            "ANALYTICS_CACHE",
+            "CHAT_HISTORY",
+            "SOCIAL_PROFILES",
+            "WORKOUT_POSTS",
+            "SYNC_QUEUE",
+            "USER_SETTINGS",
+            "NOTIFICATIONS",
+            "FOLLOW_RELATIONSHIPS",
+            "BLOCKED_USERS",
+            "GYM_BUDDIES",
+            "PERSONAL_RECORDS",
+            "PROGRESS_PHOTOS",
+            "DATA_EXPORTS"
         )
 
         // Check if query references user-scoped table
@@ -75,7 +100,7 @@ class EnforceUserScopingDetector : Detector(), SourceCodeScanner {
 
         if (!referencesUserScopedTable) return
 
-        // Check for user scoping in query or parameters
+        // Check for user scoping in WHERE clause
         val hasUserScoping = queryValue.contains("user_id") ||
                 queryValue.contains("userId") ||
                 queryValue.contains(":userId") ||
@@ -86,14 +111,60 @@ class EnforceUserScopingDetector : Detector(), SourceCodeScanner {
             paramName.contains("userid") || paramName.contains("user_id")
         }
 
-        if (!hasUserScoping && !hasUserIdParameter) {
+        // Enhanced validation for UPDATE queries
+        if (isUpdate) {
+            // Check if UPDATE attempts to modify user_id column (security violation)
+            val setClausePattern = Regex("SET\\s+.*?user_id\\s*=", RegexOption.IGNORE_CASE)
+            if (setClausePattern.containsMatchIn(queryValue)) {
+                val element: UElement = method
+                val location = context.getLocation(element)
+                context.report(
+                    ISSUE_UPDATE_USER_ID,
+                    location,
+                    "UPDATE query in '$className.${method.name}' attempts to modify user_id column. " +
+                    "This is a critical security violation - user_id must be immutable"
+                )
+                return
+            }
+
+            // Validate WHERE clause contains user_id
+            if (!hasUserScoping && !hasUserIdParameter) {
+                val element: UElement = method
+                val location = context.getLocation(element)
+                context.report(
+                    ISSUE_UPDATE_DELETE,
+                    location,
+                    "UPDATE query in '$className.${method.name}' is missing user scoping in WHERE clause. " +
+                    "Add 'WHERE user_id = :userId' to prevent cross-user data modification (SEC-003)"
+                )
+                return
+            }
+        }
+
+        // Enhanced validation for DELETE queries
+        if (isDelete) {
+            if (!hasUserScoping && !hasUserIdParameter) {
+                val element: UElement = method
+                val location = context.getLocation(element)
+                context.report(
+                    ISSUE_UPDATE_DELETE,
+                    location,
+                    "DELETE query in '$className.${method.name}' is missing user scoping in WHERE clause. " +
+                    "Add 'WHERE user_id = :userId' to prevent cross-user data deletion (SEC-003)"
+                )
+                return
+            }
+        }
+
+        // Standard validation for SELECT queries
+        if (isSelect && !hasUserScoping && !hasUserIdParameter) {
             val element: UElement = method
             val location = context.getLocation(element)
             context.report(
                 ISSUE,
                 location,
-"DAO query in '$className.${method.name}' is missing user scoping. " +
-                "Add 'WHERE user_id = `:userId`' to prevent data leakage"
+                "SELECT query in '$className.${method.name}' is missing user scoping. " +
+                "Add 'WHERE user_id = :userId' to prevent data leakage"
             )
         }
     }
@@ -109,6 +180,46 @@ class EnforceUserScopingDetector : Detector(), SourceCodeScanner {
             """,
             category = Category.SECURITY,
             priority = 9,
+            severity = Severity.ERROR,
+            implementation = Implementation(
+                EnforceUserScopingDetector::class.java,
+                Scope.JAVA_FILE_SCOPE
+            )
+        )
+
+        @JvmField
+        val ISSUE_UPDATE_DELETE: Issue = Issue.create(
+            id = "MissingUserScopingUpdateDelete",
+            briefDescription = "UPDATE/DELETE query missing user_id filter",
+            explanation = """
+                UPDATE and DELETE queries on user-scoped tables MUST include `user_id` in the WHERE clause \
+                to prevent cross-user data modification or deletion. This is a critical security requirement \
+                (SEC-003) that prevents privilege escalation attacks.
+
+                Add 'WHERE user_id = :userId' to all UPDATE and DELETE queries.
+            """,
+            category = Category.SECURITY,
+            priority = 10,
+            severity = Severity.ERROR,
+            implementation = Implementation(
+                EnforceUserScopingDetector::class.java,
+                Scope.JAVA_FILE_SCOPE
+            )
+        )
+
+        @JvmField
+        val ISSUE_UPDATE_USER_ID: Issue = Issue.create(
+            id = "UpdateUserIdViolation",
+            briefDescription = "UPDATE query attempts to modify user_id column",
+            explanation = """
+                Modifying the `user_id` column in an UPDATE query is a critical security violation. \
+                The user_id field is immutable and defines data ownership. Allowing modification could \
+                enable unauthorized access to other users' data.
+
+                Remove any SET clause that modifies user_id.
+            """,
+            category = Category.SECURITY,
+            priority = 10,
             severity = Severity.ERROR,
             implementation = Implementation(
                 EnforceUserScopingDetector::class.java,

@@ -1,5 +1,6 @@
 package com.example.liftrix.data.remote.realtime
 
+import com.example.liftrix.config.OfflineArchitectureFlags
 import com.example.liftrix.data.local.dao.PostCommentDao
 import com.example.liftrix.data.local.entity.PostCommentEntity
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -23,12 +25,18 @@ import javax.inject.Singleton
 /**
  * Service for real-time comment synchronization with Firestore
  * Provides live updates for comments on workout posts
+ *
+ * Refactored for offline-first architecture (SPEC-20241228):
+ * - Uses shared CoroutineScope with SupervisorJob for listener operations
+ * - Uses upsertFromRemote() for idempotent listener writes
+ * - Feature-flag gated for rollback support
  */
 @Singleton
 class CommentSyncService @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val commentDao: PostCommentDao
 ) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val listeners = mutableMapOf<String, ListenerRegistration>()
 
     /**
@@ -57,33 +65,33 @@ class CommentSyncService @Inject constructor(
 
                 snapshot?.let { querySnapshot ->
                     try {
-                        // Process document changes for efficient updates
+                        // Process document changes for efficient updates using shared scope
                         for (change in querySnapshot.documentChanges) {
                             when (change.type) {
                                 DocumentChange.Type.ADDED -> {
                                     val comment = parseCommentDocument(change.document.data, change.document.id)
-                                    comment?.let { 
-                                        CoroutineScope(Dispatchers.IO).launch {
-                                            insertCommentLocally(it, postId)
+                                    comment?.let {
+                                        scope.launch {
+                                            insertCommentFromRemote(it, postId)
                                         }
                                     }
                                 }
                                 DocumentChange.Type.MODIFIED -> {
                                     val comment = parseCommentDocument(change.document.data, change.document.id)
-                                    comment?.let { 
-                                        CoroutineScope(Dispatchers.IO).launch {
-                                            updateCommentLocally(it, postId)
+                                    comment?.let {
+                                        scope.launch {
+                                            updateCommentFromRemote(it, postId)
                                         }
                                     }
                                 }
                                 DocumentChange.Type.REMOVED -> {
-                                    CoroutineScope(Dispatchers.IO).launch {
+                                    scope.launch {
                                         deleteCommentLocally(change.document.id, postId)
                                     }
                                 }
                             }
                         }
-                        
+
                         trySend(Result.success(Unit))
                         Timber.d("Comment sync completed for post: $postId, changes: ${querySnapshot.documentChanges.size}")
                     } catch (e: Exception) {
@@ -271,21 +279,45 @@ class CommentSyncService @Inject constructor(
         Timber.d("Comment deleted: $commentId")
     }
 
-    private suspend fun insertCommentLocally(comment: PostCommentEntity, postId: String) {
+    /**
+     * IDEMPOTENT: Insert comment from REMOTE origin (Firestore listener ADDED).
+     * Uses upsertFromRemote() with timestamp deduplication, sets isDirty=false.
+     * Feature-flag gated for rollback support.
+     */
+    private suspend fun insertCommentFromRemote(comment: PostCommentEntity, postId: String) {
         try {
-            commentDao.insertComment(comment.copy(isSynced = true))
-            Timber.v("Inserted comment locally: ${comment.id}")
+            if (OfflineArchitectureFlags.USE_IDEMPOTENT_LISTENERS) {
+                // NEW: Room-first idempotent pattern
+                commentDao.upsertFromRemote(comment)
+                Timber.v("✅ IDEMPOTENT: Inserted comment from remote: ${comment.id}")
+            } else {
+                // LEGACY: Direct insert (feedback loop risk)
+                commentDao.insertComment(comment.copy(isSynced = true))
+                Timber.w("⚠️ LEGACY: Inserted comment (feedback loop risk): ${comment.id}")
+            }
         } catch (e: Exception) {
-            Timber.e(e, "Failed to insert comment locally: ${comment.id}")
+            Timber.e(e, "Failed to insert comment from remote: ${comment.id}")
         }
     }
 
-    private suspend fun updateCommentLocally(comment: PostCommentEntity, postId: String) {
+    /**
+     * IDEMPOTENT: Update comment from REMOTE origin (Firestore listener MODIFIED).
+     * Uses upsertFromRemote() with timestamp deduplication, sets isDirty=false.
+     * Feature-flag gated for rollback support.
+     */
+    private suspend fun updateCommentFromRemote(comment: PostCommentEntity, postId: String) {
         try {
-            commentDao.updateComment(comment.copy(isSynced = true))
-            Timber.v("Updated comment locally: ${comment.id}")
+            if (OfflineArchitectureFlags.USE_IDEMPOTENT_LISTENERS) {
+                // NEW: Room-first idempotent pattern
+                commentDao.upsertFromRemote(comment)
+                Timber.v("✅ IDEMPOTENT: Updated comment from remote: ${comment.id}")
+            } else {
+                // LEGACY: Direct update (feedback loop risk)
+                commentDao.updateComment(comment.copy(isSynced = true))
+                Timber.w("⚠️ LEGACY: Updated comment (feedback loop risk): ${comment.id}")
+            }
         } catch (e: Exception) {
-            Timber.e(e, "Failed to update comment locally: ${comment.id}")
+            Timber.e(e, "Failed to update comment from remote: ${comment.id}")
         }
     }
 
@@ -317,7 +349,7 @@ class CommentSyncService @Inject constructor(
                 editedAt = (data["edited_at"] as? com.google.firebase.Timestamp)?.toDate()?.time,
                 updatedAt = System.currentTimeMillis(),
                 isSynced = true, // From Firestore, so already synced
-                syncVersion = (data["sync_version"] as? Long)?.toInt() ?: 0
+                syncVersion = (data["sync_version"] as? Long) ?: 0L
             )
         } catch (e: Exception) {
             Timber.e(e, "Failed to parse comment document: $documentId")
@@ -327,4 +359,3 @@ class CommentSyncService @Inject constructor(
 
     private fun generateCommentId(): String = firestore.collection("post_comments").document().id
 }
-

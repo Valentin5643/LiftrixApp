@@ -63,8 +63,55 @@ data class SocialProfile(
      * Checks if profile has all basic information filled out
      */
     fun isComplete(): Boolean {
-        return displayName?.isNotBlank() == true && 
+        return displayName?.isNotBlank() == true &&
                bio?.isNotBlank() == true &&
                profilePhotoUrl?.isNotBlank() == true
     }
+}
+
+/**
+ * Represents the different states a profile can be in when loading.
+ *
+ * This prevents treating missing profiles as fatal errors and allows proper UI handling:
+ * - User has auth but no profile → Show "Create Profile" UI
+ * - Profile is private → Show "Private Profile" message
+ * - Profile loaded successfully → Show profile content
+ *
+ * Rationale:
+ * - Missing profiles are RECOVERABLE states (new users, incomplete onboarding, etc.)
+ * - UI needs to distinguish between "not found" vs "private" vs "loaded"
+ * - Analytics should not log errors for expected states like new users
+ */
+sealed class ProfileLoadState {
+    /**
+     * Profile loaded successfully from database.
+     */
+    data class Loaded(val profile: SocialProfile) : ProfileLoadState()
+
+    /**
+     * Profile does not exist (auth user exists but no profile document).
+     *
+     * Common causes:
+     * - New user who hasn't completed profile creation
+     * - Profile creation failed during onboarding
+     * - Profile was deleted but auth still exists
+     * - Dev/test account that bypassed profile creation
+     *
+     * UI should show: "Create Profile" or trigger profile creation flow
+     */
+    data object MissingProfile : ProfileLoadState()
+
+    /**
+     * Profile exists but is private and viewer is not a follower.
+     *
+     * UI should show: "This profile is private" message
+     */
+    data object PrivateProfile : ProfileLoadState()
+
+    /**
+     * Failed to load profile due to unexpected error (network, database, etc.).
+     *
+     * UI should show: Error message with retry option
+     */
+    data class LoadError(val error: String) : ProfileLoadState()
 }

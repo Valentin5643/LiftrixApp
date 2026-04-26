@@ -190,7 +190,7 @@ private fun VolumeAnalysisContent(
                     )
                     Icon(
                         imageVector = Icons.Default.BarChart,
-                        contentDescription = null,
+                        contentDescription = "Volume summary",
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -333,7 +333,7 @@ private fun VolumeStatItem(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = label,
             modifier = Modifier.size(16.dp),
             tint = when (isPositive) {
                 true -> MaterialTheme.colorScheme.tertiary
@@ -561,7 +561,7 @@ private fun VolumeAnalysisControlsCard(
                                 showGroupingMenu = false
                             },
                             leadingIcon = if (currentGroupBy == grouping) {
-                                { Icon(Icons.Default.BarChart, null) }
+                                { Icon(Icons.Default.BarChart, "Selected grouping") }
                             } else null
                         )
                     }

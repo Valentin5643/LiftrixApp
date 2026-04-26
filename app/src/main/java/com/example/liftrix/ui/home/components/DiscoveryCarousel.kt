@@ -197,7 +197,7 @@ private fun FollowButton(
         ) {
             Icon(
                 imageVector = Icons.Default.PersonRemove,
-                contentDescription = null,
+                contentDescription = "Following",
                 modifier = Modifier.size(16.dp)
             )
             
@@ -219,7 +219,7 @@ private fun FollowButton(
         ) {
             Icon(
                 imageVector = Icons.Default.PersonAdd,
-                contentDescription = null,
+                contentDescription = "Follow",
                 modifier = Modifier.size(16.dp)
             )
             
@@ -232,5 +232,4 @@ private fun FollowButton(
         }
     }
 }
-
 

@@ -13,7 +13,9 @@ import com.example.liftrix.data.mapper.UserProfileMapper
 import com.example.liftrix.data.sync.OfflineQueueManager
 import com.example.liftrix.data.model.SyncPayload
 import com.example.liftrix.data.model.SyncPayloadFactory
+import com.example.liftrix.data.remote.legacy.LegacyProfileFirestoreDataSource
 import com.example.liftrix.sync.SyncCoordinator
+import com.example.liftrix.config.OfflineArchitectureFlags
 import com.example.liftrix.domain.model.StreakData
 import com.example.liftrix.domain.model.UserProfile
 import com.example.liftrix.domain.model.common.LiftrixResult
@@ -23,7 +25,6 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.ProfileRepository
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.sync.ProfileSyncWorker
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -39,12 +40,12 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 class ProfileRepositoryImpl @Inject constructor(
     private val userProfileDao: UserProfileDao,
     private val userProfileMapper: UserProfileMapper,
-    private val firestore: FirebaseFirestore,
     @ApplicationContext private val context: Context,
     private val workoutRepository: WorkoutRepository,
     private val database: LiftrixDatabase,
     private val syncCoordinator: SyncCoordinator,
-    private val offlineQueueManager: OfflineQueueManager
+    private val offlineQueueManager: OfflineQueueManager,
+    private val legacyProfileDataSource: LegacyProfileFirestoreDataSource
 ) : ProfileRepository {
     
     private val workManager: WorkManager
@@ -202,21 +203,51 @@ class ProfileRepositoryImpl @Inject constructor(
 
     override suspend fun deleteProfile(userId: String): Result<Unit> {
         return try {
-            userProfileDao.deleteProfileForUser(userId)
-            
-            // Also delete from Firestore
-            firestore.collection("user_profiles").document(userId).delete().await()
-            
-            // Cancel any pending sync work for this user
+            if (OfflineArchitectureFlags.FIX_PROFILE_REPOSITORY) {
+                val profile = userProfileDao.getProfileForUserSuspend(userId)
+                    ?: return Result.success(Unit)
+                val updatedProfile = profile.copy(
+                    updatedAt = java.time.LocalDateTime.now(),
+                    isSynced = false
+                )
+                userProfileDao.upsertLocal(updatedProfile)
+
+                val payload = SyncPayloadFactory.createProfilePayload(
+                    userId = updatedProfile.userId,
+                    displayName = updatedProfile.displayName,
+                    email = "",
+                    profileImageUrl = updatedProfile.profileImageUrl,
+                    goals = updatedProfile.goals?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
+                    preferences = emptyMap(),
+                    syncVersion = updatedProfile.syncVersion,
+                    lastModified = System.currentTimeMillis()
+                )
+
+                offlineQueueManager.queueOperation(
+                    userId = userId,
+                    entityType = "PROFILE",
+                    entityId = userId,
+                    operation = "DELETE",
+                    data = payload
+                )
+                syncCoordinator.triggerEntitySync(userId, "profile")
+            } else {
+                userProfileDao.deleteProfileForUser(userId)
+                legacyDeleteProfile(userId)
+            }
+
             workManager.cancelUniqueWork("${ProfileSyncWorker.WORK_NAME}_$userId")
-            
-            Timber.d("User profile deleted successfully: $userId")
+            Timber.d("User profile deletion queued successfully: $userId")
             Result.success(Unit)
             
         } catch (e: Exception) {
             Timber.e(e, "Failed to delete user profile: $userId")
             Result.failure(e)
         }
+    }
+
+    private suspend fun legacyDeleteProfile(userId: String) {
+        legacyProfileDataSource.deleteProfile(userId)
     }
 
     override suspend fun hasProfile(userId: String): Boolean {

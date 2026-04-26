@@ -52,7 +52,7 @@ fun VolumeCalendarNavigation(
         ) {
             Icon(
                 imageVector = Icons.Default.ChevronLeft,
-                contentDescription = null, // Handled by button semantics
+                contentDescription = "Previous month",
                 tint = MaterialTheme.colorScheme.onSurface
             )
         }
@@ -76,7 +76,7 @@ fun VolumeCalendarNavigation(
         ) {
             Icon(
                 imageVector = Icons.Default.ChevronRight,
-                contentDescription = null, // Handled by button semantics
+                contentDescription = "Next month",
                 tint = MaterialTheme.colorScheme.onSurface
             )
         }

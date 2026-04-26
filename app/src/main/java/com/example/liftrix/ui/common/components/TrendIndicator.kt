@@ -58,7 +58,7 @@ fun TrendIndicator(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null, // Content description provided by parent Row
+            contentDescription = contentDesc,
             tint = color,
             modifier = Modifier.size(if (isCompact) 14.dp else 16.dp)
         )

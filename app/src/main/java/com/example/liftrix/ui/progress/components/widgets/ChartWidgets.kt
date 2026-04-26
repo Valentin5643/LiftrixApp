@@ -354,7 +354,7 @@ private fun ChartDisplay(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = icon,
-                        contentDescription = null,
+                        contentDescription = chartData.widgetType.displayName,
                         tint = chartColor,
                         modifier = Modifier.size(20.dp)
                     )

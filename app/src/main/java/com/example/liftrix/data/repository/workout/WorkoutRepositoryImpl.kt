@@ -20,6 +20,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import com.example.liftrix.sync.SyncCoordinator
 import com.example.liftrix.data.service.KotlinxWorkoutSerializationService
+import com.example.liftrix.data.service.CanonicalWorkoutJsonAdapter
+import com.example.liftrix.data.service.ExerciseConsistencyValidator
+import com.example.liftrix.config.OfflineArchitectureFlags
 import androidx.work.WorkManager
 import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.domain.model.Workout
@@ -90,7 +93,9 @@ class WorkoutRepositoryImpl @Inject constructor(
     private val exerciseMapper: ExerciseMapper,
     private val syncCoordinator: SyncCoordinator,
     private val offlineQueueManager: OfflineQueueManager,
+    private val canonicalJsonAdapter: CanonicalWorkoutJsonAdapter,
     private val kotlinxSerializer: KotlinxWorkoutSerializationService,
+    private val exerciseConsistencyValidator: ExerciseConsistencyValidator,
     @ApplicationContext private val context: Context
 ) : WorkoutRepository {
     
@@ -163,14 +168,7 @@ class WorkoutRepositoryImpl @Inject constructor(
             
             val insertResult = try {
                 withContext(Dispatchers.IO) {
-                    val existingEntity = workoutDao.getWorkoutByIdForUser(entity.id, entity.userId)
-                    
-                    if (existingEntity != null) {
-                        val updateResult = workoutDao.updateWorkout(entity)
-                        updateResult.toLong()
-                    } else {
-                        workoutDao.insertWorkout(entity)
-                    }
+                    workoutDao.upsertLocal(entity)
                 }
             } catch (e: Exception) {
                 throw e
@@ -184,11 +182,15 @@ class WorkoutRepositoryImpl @Inject constructor(
                         orderIndex = exerciseIndex
                     )
                     
-                    val exerciseEntity = exerciseMapper.toEntity(exerciseWithCorrectWorkoutId)
+                    val exerciseEntity = exerciseMapper.toEntity(
+                        exerciseWithCorrectWorkoutId,
+                        workout.userId
+                    )
                     val exerciseId = exerciseDao.insertExercise(exerciseEntity)
                     
                     exercise.sets.forEachIndexed { setIndex, set ->
                         val setEntity = ExerciseSetEntity(
+                            userId = workout.userId,
                             exerciseId = exerciseId,
                             setNumber = setIndex + 1,
                             reps = set.reps?.count,
@@ -198,9 +200,10 @@ class WorkoutRepositoryImpl @Inject constructor(
                             completedAt = set.completedAt?.toEpochMilli()
                         )
                         
-                        exerciseSetDao.insertSet(setEntity)
+                    exerciseSetDao.insertSet(setEntity)
                     }
                 }
+                validateExerciseConsistency(workout, entity.exercisesJson)
                 // Queue workout for sync after successful creation (use original workout for sync, not placeholder version)
                 queueWorkoutForSync(workout)
                 
@@ -366,11 +369,10 @@ class WorkoutRepositoryImpl @Inject constructor(
             val entity = workoutMapper.toEntity(workout, isSynced = false)
             Timber.d("🔥 UPDATE-WORKOUT-DEBUG: Updating entity with ID: ${entity.id}, Status: ${entity.status}, UserId: ${entity.userId}")
             
-            // Use insertWorkout with REPLACE strategy instead of updateWorkout
-            // This ensures the workout is either updated if it exists or created if it doesn't
+            // Use upsertLocal to mark workout dirty and refresh lastModified for sync
             // 🔥 DEBUG: Log before database update
             Timber.d("[WORKOUT-DB-UPDATE] About to update workout entity in database at ${System.currentTimeMillis()}")
-            val insertedId = workoutDao.insertWorkout(entity)
+            val insertedId = workoutDao.upsertLocal(entity)
             // 🔥 DEBUG: Log after database update
             Timber.d("[WORKOUT-DB-UPDATE] ✅ Database update completed at ${System.currentTimeMillis()}, result: $insertedId")
             
@@ -379,8 +381,8 @@ class WorkoutRepositoryImpl @Inject constructor(
                 
                 // 🔥 FIX: Also handle exercises and sets during update 
                 // Delete all existing exercises and sets for this workout first, then recreate them
-                exerciseDao.deleteExercisesForWorkout(workout.id.value)
-                exerciseSetDao.deleteSetsForWorkout(workout.id.value)
+                exerciseDao.deleteExercisesForWorkout(workout.id.value, workout.userId)
+                exerciseSetDao.deleteSetsForWorkout(workout.id.value, workout.userId)
                 
                 workout.exercises.forEachIndexed { exerciseIndex, exercise ->
                     // Create a modified exercise with correct workoutId and orderIndex
@@ -389,7 +391,7 @@ class WorkoutRepositoryImpl @Inject constructor(
                         orderIndex = exerciseIndex
                     )
                     val exerciseEntity = try {
-                        exerciseMapper.toEntity(exerciseWithCorrectWorkoutId)
+                        exerciseMapper.toEntity(exerciseWithCorrectWorkoutId, workout.userId)
                     } catch (e: Exception) {
                         throw RuntimeException("Failed to map exercise to entity during update: ${e.message}", e)
                     }
@@ -398,6 +400,7 @@ class WorkoutRepositoryImpl @Inject constructor(
                     // Create ExerciseSetEntity records for each set
                     exercise.sets.forEachIndexed { setIndex, set ->
                         val setEntity = ExerciseSetEntity(
+                            userId = workout.userId,
                             exerciseId = exerciseId,
                             setNumber = setIndex + 1,
                             reps = set.reps?.count,
@@ -411,7 +414,7 @@ class WorkoutRepositoryImpl @Inject constructor(
                         exerciseSetDao.insertSet(setEntity)
                     }
                 }
-                
+                validateExerciseConsistency(workout, entity.exercisesJson)
                 // Queue workout for sync after successful update
                 queueWorkoutForSync(workout)
                 
@@ -931,7 +934,10 @@ class WorkoutRepositoryImpl @Inject constructor(
                     try {
                         val feedWorkouts = postEntities.mapNotNull { postEntity ->
                             // Get the workout for this post
-                            val workoutEntity = workoutDao.getWorkoutById(postEntity.workoutId)
+                            val workoutEntity = workoutDao.getWorkoutByIdForUser(
+                                postEntity.workoutId,
+                                postEntity.userId
+                            )
                             if (workoutEntity != null) {
                                 val workout = workoutMapper.toDomain(workoutEntity)
                                 
@@ -1014,7 +1020,10 @@ class WorkoutRepositoryImpl @Inject constructor(
                         .collect { postEntities ->
                             val feedWorkouts = postEntities.mapNotNull { postEntity ->
                                 // Get the workout for this post
-                                val workoutEntity = workoutDao.getWorkoutById(postEntity.workoutId)
+                                val workoutEntity = workoutDao.getWorkoutByIdForUser(
+                                    postEntity.workoutId,
+                                    postEntity.userId
+                                )
                                 if (workoutEntity != null) {
                                     val workout = workoutMapper.toDomain(workoutEntity)
                                     
@@ -1385,7 +1394,14 @@ class WorkoutRepositoryImpl @Inject constructor(
                             Timber.d("🚀 KOTLINX-REPO: Deserializing exercises for workout ${workoutEntity.id}")
                         }
 
-                        kotlinxSerializer.deserializeExercises(workoutEntity.exercisesJson)
+                        if (canonicalJsonAdapter.isCanonicalJson(workoutEntity.exercisesJson)) {
+                            canonicalJsonAdapter.deserializeToDomain(
+                                workoutEntity.exercisesJson,
+                                WorkoutId(workoutEntity.id)
+                            )
+                        } else {
+                            kotlinxSerializer.deserializeExercises(workoutEntity.exercisesJson)
+                        }
                     } catch (e: Exception) {
                         Timber.e(e, "❌ SERIALIZATION-ERROR: Failed to deserialize exercises for workout ${workoutEntity.id}")
                         throw RuntimeException("Unable to load workout data. This workout uses an unsupported format. Please export and re-import your workouts.", e)
@@ -1470,6 +1486,49 @@ class WorkoutRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Failed to queue workout ${workout.id.value} for sync")
             // Don't fail the entire operation for sync queueing failure
+        }
+    }
+
+    private suspend fun validateExerciseConsistency(workout: Workout, exercisesJson: String) {
+        val result = exerciseConsistencyValidator.validateWorkoutConsistency(
+            workoutId = workout.id.value,
+            userId = workout.userId,
+            exercisesJson = exercisesJson
+        )
+
+        when (result) {
+            ExerciseConsistencyValidator.ConsistencyResult.Valid -> Unit
+            is ExerciseConsistencyValidator.ConsistencyResult.CountMismatch,
+            is ExerciseConsistencyValidator.ConsistencyResult.IdMismatch,
+            is ExerciseConsistencyValidator.ConsistencyResult.StaleTotals -> {
+                val canSelfHeal = when (result) {
+                    is ExerciseConsistencyValidator.ConsistencyResult.CountMismatch -> result.canSelfHeal
+                    is ExerciseConsistencyValidator.ConsistencyResult.IdMismatch -> result.canSelfHeal
+                    is ExerciseConsistencyValidator.ConsistencyResult.StaleTotals -> result.canSelfHeal
+                    else -> false
+                }
+                if (canSelfHeal && OfflineArchitectureFlags.ENABLE_CANONICAL_JSON_FORMAT) {
+                    val healedJson = exerciseConsistencyValidator.selfHealFromNormalized(
+                        workoutId = workout.id.value,
+                        userId = workout.userId
+                    )
+                    if (healedJson != exercisesJson) {
+                        workoutDao.updateExercisesJsonForWorkout(
+                            workoutId = workout.id.value,
+                            userId = workout.userId,
+                            exercisesJson = healedJson,
+                            updatedAt = Instant.now(),
+                            lastModified = System.currentTimeMillis()
+                        )
+                    }
+                } else if (canSelfHeal) {
+                    Timber.d("Exercise JSON self-heal skipped (canonical format disabled) for workout ${workout.id.value}")
+                }
+            }
+            is ExerciseConsistencyValidator.ConsistencyResult.JsonParseError,
+            is ExerciseConsistencyValidator.ConsistencyResult.FatalError -> {
+                Timber.w("Exercise JSON consistency validation failed for workout ${workout.id.value}")
+            }
         }
     }
     

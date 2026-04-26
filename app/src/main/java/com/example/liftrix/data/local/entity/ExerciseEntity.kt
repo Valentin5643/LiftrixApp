@@ -18,15 +18,17 @@ import java.time.Instant
     foreignKeys = [
         ForeignKey(
             entity = WorkoutEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["workout_id"],
+            parentColumns = ["id", "user_id"],
+            childColumns = ["workout_id", "user_id"],
             onDelete = ForeignKey.CASCADE
         )
     ],
     indices = [
-        Index(value = ["workout_id"], name = "index_exercises_workout_id"),
-        Index(value = ["exercise_library_id"], name = "index_exercises_exercise_library_id"),
-        Index(value = ["order_index"], name = "index_exercises_order_index")
+        Index(value = ["id", "user_id"], unique = true, name = "idx_exercises_id_user"),
+        Index(value = ["user_id", "workout_id"], name = "idx_exercises_user_workout"),
+        Index(value = ["workout_id", "user_id"], name = "idx_exercises_workout_user"),
+        Index(value = ["user_id", "exercise_library_id"], name = "idx_exercises_user_library"),
+        Index(value = ["user_id", "order_index"], name = "idx_exercises_user_order")
     ]
 )
 @TypeConverters(DateTimeConverters::class)
@@ -34,6 +36,9 @@ data class ExerciseEntity(
     @PrimaryKey(autoGenerate = true)
     @ColumnInfo(name = "id")
     val id: Long = 0,
+
+    @ColumnInfo(name = "user_id")
+    val userId: String,
     
     @ColumnInfo(name = "workout_id")
     val workoutId: String,

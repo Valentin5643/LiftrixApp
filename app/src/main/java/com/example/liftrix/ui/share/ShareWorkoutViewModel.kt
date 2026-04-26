@@ -64,7 +64,7 @@ class ShareWorkoutViewModel @Inject constructor(
                     }
                 )
                 
-                val result = workoutRepository.getWorkoutById(WorkoutId.fromString(workoutId), userId)
+                val result = workoutRepository.getWorkoutById(WorkoutId.fromString(workoutId), userId.value)
                 result.fold(
                     onSuccess = { workout ->
                         if (workout == null) {

@@ -160,7 +160,7 @@ private fun BenefitItem(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = title,
             tint = LiftrixColorsV2.Teal,
             modifier = Modifier.size(24.dp)
         )

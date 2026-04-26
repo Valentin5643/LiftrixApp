@@ -53,5 +53,11 @@ data class DataExportEntity(
     val isSynced: Boolean = false,
     
     @ColumnInfo(name = "sync_version")
-    val syncVersion: Int = 1
+    val syncVersion: Long = 1L,
+    
+    @ColumnInfo(name = "is_dirty", defaultValue = "0")
+    val isDirty: Boolean = false,
+    
+    @ColumnInfo(name = "last_modified", defaultValue = "0")
+    val lastModified: Long = 0L
 )

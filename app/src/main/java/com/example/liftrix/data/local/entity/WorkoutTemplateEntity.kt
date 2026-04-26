@@ -70,5 +70,11 @@ data class WorkoutTemplateEntity(
     val isSynced: Boolean = false,
     
     @ColumnInfo(name = "sync_version", defaultValue = "1")
-    val syncVersion: Int = 1
+    val syncVersion: Long = 1L,
+    
+    @ColumnInfo(name = "is_dirty", defaultValue = "0")
+    val isDirty: Boolean = false,
+    
+    @ColumnInfo(name = "last_modified", defaultValue = "0")
+    val lastModified: Long = 0L
 ) 

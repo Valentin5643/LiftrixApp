@@ -186,7 +186,7 @@ private fun PreviewHeader(
             ) {
                 Icon(
                     imageVector = Icons.Default.SwapVert,
-                    contentDescription = null,
+                    contentDescription = "Preview placement",
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.size(16.dp)
                 )

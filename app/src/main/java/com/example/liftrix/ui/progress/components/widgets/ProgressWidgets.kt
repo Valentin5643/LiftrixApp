@@ -371,7 +371,7 @@ private fun StrengthAnalyticsDisplay(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.FitnessCenter,
-                        contentDescription = null,
+                        contentDescription = "Strength analytics",
                         tint = primaryColor,
                         modifier = Modifier.size(24.dp)
                     )
@@ -526,7 +526,7 @@ private fun CompactAchievementItem(
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = Icons.Default.Star,
-                    contentDescription = null,
+                    contentDescription = "Achievement",
                     tint = primaryColor,
                     modifier = Modifier.size(12.dp)
                 )
@@ -636,7 +636,7 @@ private fun ProgressDisplay(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = icon,
-                        contentDescription = null,
+                        contentDescription = progressData.widgetType.displayName,
                         tint = primaryColor,
                         modifier = Modifier.size(24.dp)
                     )
@@ -762,7 +762,7 @@ private fun AchievementDisplay(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.EmojiEvents,
-                        contentDescription = null,
+                        contentDescription = "Personal record",
                         tint = primaryColor,
                         modifier = Modifier.size(20.dp)
                     )
@@ -964,7 +964,7 @@ private fun MilestoneItem(
         ) {
             Icon(
                 imageVector = if (milestone.isAchieved) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                contentDescription = null,
+                contentDescription = if (milestone.isAchieved) "Milestone achieved" else "Milestone pending",
                 tint = if (milestone.isAchieved) primaryColor else LiftrixColors.OnSurface.copy(alpha = 0.4f),
                 modifier = Modifier.size(16.dp)
             )
@@ -1006,7 +1006,7 @@ private fun AchievementItem(
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = Icons.Default.Star,
-                    contentDescription = null,
+                    contentDescription = "Achievement",
                     tint = primaryColor,
                     modifier = Modifier.size(16.dp)
                 )

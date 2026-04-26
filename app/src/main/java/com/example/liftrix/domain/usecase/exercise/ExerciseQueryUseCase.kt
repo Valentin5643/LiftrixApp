@@ -188,7 +188,7 @@ class ExerciseQueryUseCase @Inject constructor(
         if (userId != null) {
             combine(
                 exerciseRepository.searchExercisesFlow(query),
-                customExerciseRepository.searchCustomExercises(userId, query)
+                customExerciseRepository.searchCustomExercises(userId.value, query)
             ) { libraryExercises, customExercises ->
                 val searchableLibraryExercises = libraryExercises
                     .filter { exercise -> userEquipment.isEmpty() || userEquipment.contains(exercise.equipment) }
@@ -300,7 +300,7 @@ class ExerciseQueryUseCase @Inject constructor(
         return if (userId != null) {
             combine(
                 exerciseRepository.getAllExercisesFlow(),
-                customExerciseRepository.getAllCustomExercises(userId)
+                customExerciseRepository.getAllCustomExercises(userId.value)
             ) { libraryExercises, customExercises ->
                 val baseExercise = libraryExercises.find { it.id == exerciseId }
 
@@ -375,7 +375,7 @@ class ExerciseQueryUseCase @Inject constructor(
         return if (userId != null) {
             combine(
                 exerciseRepository.getVariationsByMovement(movementPattern, userEquipment),
-                customExerciseRepository.getAllCustomExercises(userId)
+                customExerciseRepository.getAllCustomExercises(userId.value)
             ) { libraryVariations, customExercises ->
                 val customVariations = customExercises.filter {
                     it.notes?.contains(movementPattern, ignoreCase = true) == true &&
@@ -435,7 +435,7 @@ class ExerciseQueryUseCase @Inject constructor(
                     isCompound = null,
                     maxDifficulty = maxDifficulty
                 ),
-                customExerciseRepository.getAllCustomExercises(userId)
+                customExerciseRepository.getAllCustomExercises(userId.value)
             ) { libraryExercises, customExercises ->
                 val filteredLibrary = libraryExercises
                     .filter {
@@ -575,7 +575,7 @@ class ExerciseQueryUseCase @Inject constructor(
             val historicalSetsData = mutableListOf<ExerciseHistoryData>()
 
             exerciseHistory.forEach { exerciseEntity ->
-                val sets = exerciseSetDao.getSetsByExercise(exerciseEntity.id)
+                val sets = exerciseSetDao.getSetsByExercise(exerciseEntity.id, userId)
                 val completedSets = sets.filter { it.reps != null && it.reps > 0 }
 
                 if (completedSets.isNotEmpty()) {

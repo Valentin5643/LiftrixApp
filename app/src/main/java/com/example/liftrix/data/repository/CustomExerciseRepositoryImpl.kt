@@ -12,7 +12,8 @@ import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.ExerciseType
 import com.example.liftrix.domain.repository.CustomExerciseRepository
 import com.example.liftrix.domain.service.MediaUploadService
-import com.google.firebase.firestore.FirebaseFirestore
+import com.example.liftrix.config.OfflineArchitectureFlags
+import com.example.liftrix.data.remote.legacy.LegacyCustomExerciseFirestoreDataSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -32,7 +33,7 @@ class CustomExerciseRepositoryImpl @Inject constructor(
     private val database: LiftrixDatabase,
     private val dao: CustomExerciseDao,
     private val mapper: CustomExerciseMapper,
-    private val firestore: FirebaseFirestore,
+    private val legacyDataSource: LegacyCustomExerciseFirestoreDataSource,
     private val mediaUploadService: MediaUploadService
 ) : CustomExerciseRepository {
     
@@ -40,10 +41,6 @@ class CustomExerciseRepositoryImpl @Inject constructor(
     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
     companion object {
-        private const val COLLECTION_CUSTOM_EXERCISES = "custom_exercises"
-        private const val FIELD_USER_ID = "userId"
-        private const val FIELD_NAME = "name"
-        private const val FIELD_CREATED_AT = "createdAt"
     }
     
     override suspend fun createCustomExercise(
@@ -145,7 +142,11 @@ class CustomExerciseRepositoryImpl @Inject constructor(
             )
             
             // Insert to local database
-            dao.insertCustomExercise(entity)
+            if (OfflineArchitectureFlags.FIX_CUSTOM_EXERCISE_REPOSITORY) {
+                dao.upsertLocal(entity)
+            } else {
+                dao.insertCustomExercise(entity)
+            }
             
             // Return the domain model
             val result = mapper.toDomain(entity)
@@ -224,9 +225,13 @@ class CustomExerciseRepositoryImpl @Inject constructor(
             val updatedEntity = mapper.updateEntity(existingEntity, exercise)
             
             // Update in local database
-            val rowsUpdated = dao.updateCustomExercise(updatedEntity)
-            if (rowsUpdated == 0) {
-                return@withContext Result.failure(IllegalStateException("Failed to update custom exercise"))
+            if (OfflineArchitectureFlags.FIX_CUSTOM_EXERCISE_REPOSITORY) {
+                dao.upsertLocal(updatedEntity)
+            } else {
+                val rowsUpdated = dao.updateCustomExercise(updatedEntity)
+                if (rowsUpdated == 0) {
+                    return@withContext Result.failure(IllegalStateException("Failed to update custom exercise"))
+                }
             }
             
             // Convert to domain model
@@ -385,47 +390,19 @@ class CustomExerciseRepositoryImpl @Inject constructor(
      * Syncs a custom exercise to Firestore
      */
     private suspend fun syncToFirestore(entity: com.example.liftrix.data.local.entity.CustomExerciseEntity) {
+        if (OfflineArchitectureFlags.FIX_CUSTOM_EXERCISE_REPOSITORY) {
+            return
+        }
+
         try {
-            val firestoreData = mapOf(
-                "id" to entity.id,
-                FIELD_USER_ID to entity.userId,
-                FIELD_NAME to entity.name,
-                "description" to entity.description,
-                "exerciseType" to entity.exerciseType.name,
-                "primaryMuscleGroup" to entity.primaryMuscleGroup.name,
-                "equipment" to entity.equipment.name,
-                "secondaryMuscleGroups" to (entity.secondaryMuscleGroups?.map { it.name } ?: emptyList()),
-                "difficulty" to entity.difficulty,
-                "instructions" to (entity.instructions ?: emptyList()),
-                "mainImageUrl" to entity.mainImageUrl,
-                "additionalImageUrls" to (entity.additionalImageUrls ?: emptyList()),
-                "videoUrl" to entity.videoUrl,
-                "tags" to (entity.tags ?: emptyList()),
-                "categories" to (entity.categories?.map { it.name } ?: emptyList()),
-                "notes" to entity.notes,
-                FIELD_CREATED_AT to entity.createdAt,
-                "updatedAt" to entity.updatedAt,
-                "syncVersion" to entity.syncVersion,
-                "lastModified" to entity.lastModified
-            )
-            
-            firestore.collection(COLLECTION_CUSTOM_EXERCISES)
-                .document(entity.id)
-                .set(firestoreData)
-                .addOnSuccessListener {
-                    // Mark as synced in local database using repository scope for structured concurrency
-                    repositoryScope.launch {
-                        try {
-                            dao.markCustomExercisesAsSynced(listOf(entity.id))
-                        } catch (e: Exception) {
-                            Timber.w(e, "Failed to mark exercise as synced")
-                        }
-                    }
+            legacyDataSource.syncExercise(entity)
+            repositoryScope.launch {
+                try {
+                    dao.markCustomExercisesAsSynced(listOf(entity.id))
+                } catch (e: Exception) {
+                    Timber.w(e, "Failed to mark exercise as synced")
                 }
-                .addOnFailureListener { e ->
-                    Timber.w(e, "Failed to sync custom exercise ${entity.id} to Firestore")
-                }
-                
+            }
         } catch (e: Exception) {
             Timber.e(e, "Error syncing custom exercise to Firestore")
             throw e
@@ -436,16 +413,12 @@ class CustomExerciseRepositoryImpl @Inject constructor(
      * Deletes a custom exercise from Firestore
      */
     private suspend fun deleteFromFirestore(userId: String, exerciseId: String) {
+        if (OfflineArchitectureFlags.FIX_CUSTOM_EXERCISE_REPOSITORY) {
+            return
+        }
+
         try {
-            firestore.collection(COLLECTION_CUSTOM_EXERCISES)
-                .document(exerciseId)
-                .delete()
-                .addOnSuccessListener {
-                }
-                .addOnFailureListener { e ->
-                    Timber.w(e, "Failed to delete custom exercise $exerciseId from Firestore")
-                }
-                
+            legacyDataSource.deleteExercise(exerciseId)
         } catch (e: Exception) {
             Timber.e(e, "Error deleting custom exercise from Firestore")
             throw e
@@ -457,6 +430,10 @@ class CustomExerciseRepositoryImpl @Inject constructor(
      */
     suspend fun syncUnsyncedExercises(userId: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            if (OfflineArchitectureFlags.FIX_CUSTOM_EXERCISE_REPOSITORY) {
+                return@withContext Result.success(Unit)
+            }
+
             val unsyncedExercises = dao.getUnsyncedCustomExercises(userId)
             
             for (exercise in unsyncedExercises) {

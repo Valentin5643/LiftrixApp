@@ -130,7 +130,7 @@ class ExerciseRankingDetailViewModel @Inject constructor(
                     }
                 )
                 val result = analyticsQueryUseCase.getExerciseRanking(
-                    userId = userId,
+                    userId = userId.value,
                     timeRange = _timeRange.value
                 )
                 

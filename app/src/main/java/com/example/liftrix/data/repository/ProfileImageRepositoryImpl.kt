@@ -1,6 +1,7 @@
 package com.example.liftrix.data.repository
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import com.example.liftrix.data.local.converter.DateTimeConverters
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.dao.SocialProfileDao
@@ -58,20 +59,68 @@ class ProfileImageRepositoryImpl @Inject constructor(
     companion object {
         private const val STORAGE_PATH_PROFILE_IMAGES = "profile_images"
         private const val PROFILE_IMAGE_FILENAME = "avatar.jpg"
+        private const val MIN_DIMENSION = 200
+        private const val MAX_DIMENSION = 4096
     }
-    
+
+    /**
+     * Validates image dimensions without loading the full bitmap into memory.
+     * Uses BitmapFactory.Options with inJustDecodeBounds to read metadata only.
+     *
+     * @param imageBytes The image data to validate
+     * @return LiftrixResult containing the width and height if valid, or ValidationError if invalid
+     */
+    private fun validateImageDimensions(
+        imageBytes: ByteArray
+    ): LiftrixResult<Pair<Int, Int>> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.ValidationError(
+                field = "image_dimensions",
+                violations = listOf(throwable.message ?: "Invalid dimensions"),
+                analyticsContext = mapOf("operation" to "VALIDATE_IMAGE_DIMENSIONS")
+            )
+        }
+    ) {
+        val options = BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+        BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size, options)
+
+        val width = options.outWidth
+        val height = options.outHeight
+
+        when {
+            width < MIN_DIMENSION || height < MIN_DIMENSION ->
+                throw IllegalArgumentException("Image too small (minimum ${MIN_DIMENSION}x${MIN_DIMENSION}px)")
+            width > MAX_DIMENSION || height > MAX_DIMENSION ->
+                throw IllegalArgumentException("Image too large (maximum ${MAX_DIMENSION}x${MAX_DIMENSION}px)")
+            else -> Pair(width, height)
+        }
+    }
+
     override suspend fun uploadProfileImage(
         userId: String,
         imageBytes: ByteArray
     ): LiftrixResult<String> = liftrixCatching(
-        errorMapper = { throwable -> 
+        errorMapper = { throwable ->
             LiftrixError.NetworkError("Failed to upload profile image: ${throwable.message}")
         }
     ) {
         Timber.d("🔄 Uploading profile image for user: $userId, size: ${imageBytes.size} bytes")
-        
+
         // Validate authentication and user context
         validateUserAuthentication(userId)
+
+        // Validate image dimensions before upload
+        validateImageDimensions(imageBytes).fold(
+            onSuccess = { (width, height) ->
+                Timber.d("✅ Image dimensions validated: ${width}x${height}px")
+            },
+            onFailure = { error ->
+                Timber.w("❌ Image dimension validation failed: $error")
+                throw error
+            }
+        )
         
         // Create user-scoped storage reference
         val storageRef = firebaseStorage.reference

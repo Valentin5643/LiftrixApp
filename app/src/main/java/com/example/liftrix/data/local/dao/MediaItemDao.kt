@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.MediaItemEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -114,7 +115,7 @@ interface MediaItemDao {
         SET is_synced = 1, sync_version = :syncVersion
         WHERE id = :mediaId
     """)
-    suspend fun markAsSynced(mediaId: String, syncVersion: Int)
+    suspend fun markAsSynced(mediaId: String, syncVersion: Long)
     
     @Query("""
         SELECT * FROM media_items 
@@ -124,4 +125,62 @@ interface MediaItemDao {
         LIMIT :limit
     """)
     suspend fun getPublicMediaItems(userId: String, limit: Int = 20): List<MediaItemEntity>
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert mediaitem from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(mediaItem: MediaItemEntity) {
+        val entity = mediaItem.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert mediaitem from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(mediaItem: MediaItemEntity) {
+        val local = getMediaItemForSync(mediaItem.id, mediaItem.userId)
+        if (local == null || mediaItem.lastModified > local.lastModified) {
+            val entity = mediaItem.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: MediaItemEntity)
+
+    /**
+     * Get dirty mediaitem that need upload to Firestore.
+     */
+    @Query("SELECT * FROM media_items WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyMediaItems(userId: String): List<MediaItemEntity>
+
+    /**
+     * Mark mediaitem as clean after successful Firestore upload.
+     */
+    @Query("UPDATE media_items SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local mediaitem for remote deduplication.
+     */
+    @Query("SELECT * FROM media_items WHERE id = :id AND user_id = :userId LIMIT 1")
+    suspend fun getMediaItemForSync(id: String, userId: String): MediaItemEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

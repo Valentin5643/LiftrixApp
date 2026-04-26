@@ -106,7 +106,7 @@ private fun ImportProgressContent(
                 isComplete -> {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
-                        contentDescription = null,
+                        contentDescription = "Import complete",
                         tint = LiftrixColorsV2.Light.Success,
                         modifier = Modifier.size(32.dp)
                     )
@@ -114,7 +114,7 @@ private fun ImportProgressContent(
                 isFailed -> {
                     Icon(
                         imageVector = Icons.Default.Error,
-                        contentDescription = null,
+                        contentDescription = "Import failed",
                         tint = LiftrixColorsV2.Light.Error,
                         modifier = Modifier.size(32.dp)
                     )
@@ -341,7 +341,7 @@ private fun ExportProgressContent(
                 isComplete -> {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
-                        contentDescription = null,
+                        contentDescription = "Export complete",
                         tint = LiftrixColorsV2.Light.Success,
                         modifier = Modifier.size(32.dp)
                     )
@@ -349,7 +349,7 @@ private fun ExportProgressContent(
                 isFailed -> {
                     Icon(
                         imageVector = Icons.Default.Error,
-                        contentDescription = null,
+                        contentDescription = "Export failed",
                         tint = LiftrixColorsV2.Light.Error,
                         modifier = Modifier.size(32.dp)
                     )

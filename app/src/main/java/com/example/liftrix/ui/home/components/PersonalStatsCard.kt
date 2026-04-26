@@ -155,7 +155,7 @@ private fun StatCard(
             ) {
                 Icon(
                     imageVector = icon,
-                    contentDescription = null,
+                    contentDescription = title,
                     modifier = Modifier.size(20.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -213,7 +213,7 @@ private fun CompactStatCard(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = title,
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
@@ -279,7 +279,7 @@ private fun EmptyStatsPlaceholder(
     ) {
         Icon(
             imageVector = Icons.Default.FitnessCenter,
-            contentDescription = null,
+            contentDescription = "No stats yet",
             modifier = Modifier.size(32.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )

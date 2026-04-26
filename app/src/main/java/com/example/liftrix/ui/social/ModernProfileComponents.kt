@@ -83,7 +83,7 @@ fun ModernStatCard(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = label,
                 modifier = Modifier.size(24.dp),
                 tint = iconColor
             )
@@ -123,7 +123,7 @@ fun ModernStatItem(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = label,
                 modifier = Modifier.size(16.dp),
                 tint = LiftrixColorsV2.Teal
             )
@@ -171,7 +171,7 @@ fun ModernConnectionActions(
                 ) {
                     Icon(
                         imageVector = Icons.Default.PersonAdd,
-                        contentDescription = null,
+                        contentDescription = "Follow",
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -197,7 +197,7 @@ fun ModernConnectionActions(
                 ) {
                     Icon(
                         imageVector = Icons.Default.HourglassEmpty,
-                        contentDescription = null,
+                        contentDescription = "Follow pending",
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -223,7 +223,7 @@ fun ModernConnectionActions(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Check,
-                        contentDescription = null,
+                        contentDescription = "Following",
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))

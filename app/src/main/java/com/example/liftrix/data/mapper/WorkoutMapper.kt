@@ -19,12 +19,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.example.liftrix.BuildConfig
 import com.example.liftrix.core.security.JsonInputValidator
+import com.example.liftrix.config.OfflineArchitectureFlags
+import com.example.liftrix.data.service.CanonicalWorkoutJsonAdapter
 
 @Singleton
 class WorkoutMapper @Inject constructor(
     private val exerciseMapper: ExerciseMapper,
     private val exerciseConversionService: ExerciseConversionService,
     private val kotlinxSerializer: KotlinxWorkoutSerializationService,
+    private val canonicalJsonAdapter: CanonicalWorkoutJsonAdapter,
     private val gson: Gson,
     private val jsonValidator: JsonInputValidator
 ) {
@@ -109,18 +112,32 @@ class WorkoutMapper @Inject constructor(
         }
 
         val exercises: List<Exercise> = try {
-            // Use kotlinx.serialization for all workout deserialization
-            if (BuildConfig.DEBUG) Timber.d("[KOTLINX] Using kotlinx.serialization for workout deserialization (${validatedJson.length} chars)")
-            parseWithKotlinxSerialization(validatedJson)
-        } catch (e: Exception) {
-            // Final fallback to empty list with detailed error logging
-            Timber.e(e, "[SCHEMA-DEBUG-4] 🔥 SCHEMA-ERROR: All exercise JSON parsing failed for workout ${entity.id}")
-            if (BuildConfig.DEBUG) {
-                Timber.e("[SCHEMA-DEBUG-4a] 🔥 SCHEMA-ERROR: JSON content: ${exercisesJson?.take(200)}...")
-                Timber.e("[SCHEMA-DEBUG-4b] 🔥 SCHEMA-ERROR: Exception type: ${e.javaClass.simpleName}")
-                Timber.e("[SCHEMA-DEBUG-4c] 🔥 SCHEMA-ERROR: This suggests either corrupted JSON or incompatible data structure")
+            if (canonicalJsonAdapter.isCanonicalJson(validatedJson)) {
+                if (BuildConfig.DEBUG) Timber.d("[CANONICAL] Parsing canonical workout JSON (${validatedJson.length} chars)")
+                canonicalJsonAdapter.deserializeToDomain(validatedJson, WorkoutId(id))
+            } else {
+                // Use kotlinx.serialization for all workout deserialization
+                if (BuildConfig.DEBUG) Timber.d("[KOTLINX] Using kotlinx.serialization for workout deserialization (${validatedJson.length} chars)")
+                parseWithKotlinxSerialization(validatedJson)
             }
-            emptyList<Exercise>()
+        } catch (e: Exception) {
+            if (canonicalJsonAdapter.isCanonicalJson(validatedJson)) {
+                try {
+                    canonicalJsonAdapter.deserializeToDomain(validatedJson, WorkoutId(id))
+                } catch (canonicalError: Exception) {
+                    Timber.e(canonicalError, "[CANONICAL] Failed to parse canonical workout JSON for ${entity.id}")
+                    emptyList()
+                }
+            } else {
+                // Final fallback to empty list with detailed error logging
+                Timber.e(e, "[SCHEMA-DEBUG-4] 🔥 SCHEMA-ERROR: All exercise JSON parsing failed for workout ${entity.id}")
+                if (BuildConfig.DEBUG) {
+                    Timber.e("[SCHEMA-DEBUG-4a] 🔥 SCHEMA-ERROR: JSON content: ${exercisesJson?.take(200)}...")
+                    Timber.e("[SCHEMA-DEBUG-4b] 🔥 SCHEMA-ERROR: Exception type: ${e.javaClass.simpleName}")
+                    Timber.e("[SCHEMA-DEBUG-4c] 🔥 SCHEMA-ERROR: This suggests either corrupted JSON or incompatible data structure")
+                }
+                emptyList()
+            }
         }
 
         // 🔥 SCHEMA-DEBUG: Log final result
@@ -180,8 +197,12 @@ class WorkoutMapper @Inject constructor(
             }
         }
         
-        // 🚀 KOTLINX-SERIALIZATION: Use kotlinx.serialization service for consistent serialization
-        val serializedJson = kotlinxSerializer.serializeExercisesSync(exercises)
+        val serializedJson = if (OfflineArchitectureFlags.ENABLE_CANONICAL_JSON_FORMAT) {
+            canonicalJsonAdapter.serializeFromDomain(exercises)
+        } else {
+            // 🚀 KOTLINX-SERIALIZATION: Use kotlinx.serialization service for consistent serialization
+            kotlinxSerializer.serializeExercisesSync(exercises)
+        }
         if (BuildConfig.DEBUG) {
             Timber.d("[KOTLINX] WorkoutMapper.toEntity: Generated JSON length=${serializedJson.length}")
             Timber.d("[KOTLINX] This JSON uses kotlinx.serialization with single schema version")
@@ -239,42 +260,52 @@ class WorkoutMapper @Inject constructor(
         val exercises: List<ExerciseDto> = try {
             if (exercisesJson.isNullOrBlank()) {
                 if (BuildConfig.DEBUG) Timber.d("[SYNC-BYPASS] No exercise JSON to parse")
-                emptyList<ExerciseDto>()
+                emptyList()
             } else {
-                // Use the same parsing logic that we know works from toDomain, but catch errors
-                val dataType = object : TypeToken<Map<String, Any>>() {}.type
-                val data: Map<String, Any>? = gson.fromJson(exercisesJson, dataType)
+                val trimmedJson = exercisesJson.trim()
 
                 when {
-                    data?.containsKey("exercises") == true -> {
-                        if (BuildConfig.DEBUG) Timber.d("[SYNC-BYPASS] Found exercises in JSON object format")
-                        val exercisesRaw = data["exercises"]
-                        if (exercisesRaw is List<*>) {
-                            // Convert each exercise map to ExerciseDto
-                            exercisesRaw.mapNotNull { exerciseMap ->
-                                try {
-                                    // Convert map to ExerciseDto using Gson
-                                    val exerciseJson = gson.toJson(exerciseMap)
-                                    gson.fromJson(exerciseJson, ExerciseDto::class.java)
-                                } catch (e: Exception) {
-                                    Timber.w("[SYNC-BYPASS] Failed to convert exercise: ${e.message}")
-                                    null
-                                }
-                            }
-                        } else {
-                            Timber.w("[SYNC-BYPASS] Exercises field is not a list: ${exercisesRaw?.javaClass?.simpleName}")
-                            emptyList<ExerciseDto>()
-                        }
+                    trimmedJson.startsWith("[") -> {
+                        if (BuildConfig.DEBUG) Timber.d("[SYNC-BYPASS] Found exercises in JSON array format")
+                        val listType = object : TypeToken<List<ExerciseDto>>() {}.type
+                        gson.fromJson<List<ExerciseDto>>(trimmedJson, listType) ?: emptyList()
                     }
                     else -> {
-                        if (BuildConfig.DEBUG) Timber.d("[SYNC-BYPASS] JSON doesn't contain exercises field, treating as empty")
-                        emptyList<ExerciseDto>()
+                        val dataType = object : TypeToken<Map<String, Any>>() {}.type
+                        val data: Map<String, Any>? = gson.fromJson(exercisesJson, dataType)
+
+                        when {
+                            data?.containsKey("exercises") == true -> {
+                                if (BuildConfig.DEBUG) Timber.d("[SYNC-BYPASS] Found exercises in JSON object format")
+                                val exercisesRaw = data["exercises"]
+                                if (exercisesRaw is List<*>) {
+                                    exercisesRaw.mapNotNull { exerciseMap ->
+                                        try {
+                                            val exerciseJson = gson.toJson(exerciseMap)
+                                            gson.fromJson(exerciseJson, ExerciseDto::class.java)
+                                        } catch (e: Exception) {
+                                            Timber.w("[SYNC-BYPASS] Failed to convert exercise: ${e.message}")
+                                            null
+                                        }
+                                    }
+                                } else {
+                                    Timber.w("[SYNC-BYPASS] Exercises field is not a list: ${exercisesRaw?.javaClass?.simpleName}")
+                                    emptyList()
+                                }
+                            }
+                            else -> {
+                                if (BuildConfig.DEBUG) {
+                                    Timber.d("[SYNC-BYPASS] JSON doesn't contain exercises field, treating as empty")
+                                }
+                                emptyList()
+                            }
+                        }
                     }
                 }
             }
         } catch (e: Exception) {
             Timber.e(e, "[SYNC-BYPASS] Failed to parse exercises JSON, using empty list")
-            emptyList<ExerciseDto>()
+            emptyList()
         }
 
         if (BuildConfig.DEBUG) {

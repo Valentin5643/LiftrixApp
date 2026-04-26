@@ -160,7 +160,7 @@ private fun NotificationBannerContent(
             // Notification type icon
             Icon(
                 imageVector = getNotificationIcon(notification.type),
-                contentDescription = null,
+                contentDescription = notification.title,
                 tint = colors.onBackground,
                 modifier = Modifier.size(24.dp)
             )

@@ -150,7 +150,7 @@ private fun AnomalySettingsContent(
             ) {
                 Icon(
                     imageVector = Icons.Default.RestartAlt,
-                    contentDescription = null,
+                    contentDescription = "Reset to defaults",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -206,7 +206,7 @@ private fun DetectionStatusCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Info,
-                        contentDescription = null,
+                        contentDescription = "Detection info",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(16.dp)
                     )
@@ -363,7 +363,7 @@ private fun ErrorState(
         ) {
             Icon(
                 imageVector = Icons.Default.Error,
-                contentDescription = null,
+                contentDescription = "Error",
                 tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(64.dp)
             )
@@ -386,7 +386,7 @@ private fun ErrorState(
             Button(onClick = onRetry) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
-                    contentDescription = null,
+                    contentDescription = "Retry",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -414,7 +414,7 @@ private fun EmptyState(
         ) {
             Icon(
                 imageVector = Icons.Default.Settings,
-                contentDescription = null,
+                contentDescription = "Settings",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(64.dp)
             )

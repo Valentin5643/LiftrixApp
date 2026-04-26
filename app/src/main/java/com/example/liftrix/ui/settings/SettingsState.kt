@@ -39,6 +39,7 @@ data class SettingsState(
     val isSigningOut: Boolean = false,
     val showLogoutDialog: Boolean = false,
     val showImagePickerDialog: Boolean = false,
+    val showDeleteAccountDialog: Boolean = false,
     val expandedCard: String? = null,
     val effectiveThemeState: Boolean = false,  // Actual theme state (dark/light) regardless of mode
     val isAdmin: Boolean = false  // Whether the current user has admin privileges

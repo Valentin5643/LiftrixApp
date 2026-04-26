@@ -122,7 +122,7 @@ private fun NotificationPermissionContent(
             // Header with icon
             Icon(
                 imageVector = Icons.Default.Notifications,
-                contentDescription = null,
+                contentDescription = "Notifications",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(64.dp)
             )
@@ -376,7 +376,7 @@ private fun NotificationExampleItem(example: NotificationExample) {
     ) {
         Icon(
             imageVector = example.icon,
-            contentDescription = null,
+            contentDescription = example.title,
             tint = example.color,
             modifier = Modifier.size(20.dp)
         )
@@ -419,7 +419,7 @@ private fun BenefitsList() {
             ) {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
+                    contentDescription = "Benefit",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(16.dp)
                 )

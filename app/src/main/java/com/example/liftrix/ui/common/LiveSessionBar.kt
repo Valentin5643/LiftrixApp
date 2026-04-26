@@ -180,7 +180,7 @@ private fun LiveSessionBarContent(
                     // Workout icon
                     Icon(
                         imageVector = Icons.Default.FitnessCenter,
-                        contentDescription = null,
+                        contentDescription = "Live session",
                         modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer
                     )

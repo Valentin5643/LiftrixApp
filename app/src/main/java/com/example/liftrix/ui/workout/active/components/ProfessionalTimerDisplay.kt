@@ -168,7 +168,7 @@ private fun FullTimerLayout(
         ) {
             Icon(
                 imageVector = primaryTimerData.icon,
-                contentDescription = null,
+                contentDescription = primaryTimerData.label,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp)
             )
@@ -232,7 +232,7 @@ private fun FullTimerLayout(
             ) {
                 Icon(
                     imageVector = getSessionIcon(timerState),
-                    contentDescription = null,
+                    contentDescription = "Session timer",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
@@ -306,7 +306,7 @@ private fun TimerSection(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = label,
                 tint = if (isActive) {
                     MaterialTheme.colorScheme.primary
                 } else {

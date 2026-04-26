@@ -8,22 +8,48 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.example.liftrix.data.local.entity.ExerciseEntity
+import com.example.liftrix.annotations.UserScoped
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ExerciseDao {
     
-    @Query("SELECT * FROM exercises WHERE workout_id = :workoutId ORDER BY order_index ASC")
-    suspend fun getExercisesByWorkout(workoutId: String): List<ExerciseEntity>
+    suspend fun getExercisesByWorkout(workoutId: String, userId: String): List<ExerciseEntity> {
+        return getExercisesForWorkout(workoutId, userId)
+    }
+
+    @Query("""
+        SELECT e.* FROM exercises e
+        JOIN workouts w ON e.workout_id = w.id
+        WHERE e.workout_id = :workoutId
+        AND w.user_id = :userId
+        ORDER BY e.order_index ASC
+    """)
+    @UserScoped
+    suspend fun getExercisesForWorkout(workoutId: String, userId: String): List<ExerciseEntity>
     
-    @Query("SELECT * FROM exercises WHERE workout_id = :workoutId ORDER BY order_index ASC")
-    suspend fun getExercisesByWorkoutId(workoutId: String): List<ExerciseEntity>
+    suspend fun getExercisesByWorkoutId(workoutId: String, userId: String): List<ExerciseEntity> {
+        return getExercisesForWorkout(workoutId, userId)
+    }
     
-    @Query("SELECT * FROM exercises WHERE workout_id = :workoutId ORDER BY order_index ASC")
-    fun getExercisesByWorkoutFlow(workoutId: String): Flow<List<ExerciseEntity>>
+    @Query("""
+        SELECT e.* FROM exercises e
+        JOIN workouts w ON e.workout_id = w.id
+        WHERE e.workout_id = :workoutId
+        AND w.user_id = :userId
+        ORDER BY e.order_index ASC
+    """)
+    @UserScoped
+    fun getExercisesByWorkoutFlow(workoutId: String, userId: String): Flow<List<ExerciseEntity>>
     
-    @Query("SELECT * FROM exercises WHERE id = :exerciseId")
-    suspend fun getExerciseById(exerciseId: Long): ExerciseEntity?
+    @Query("""
+        SELECT e.* FROM exercises e
+        JOIN workouts w ON e.workout_id = w.id
+        WHERE e.id = :exerciseId
+        AND w.user_id = :userId
+    """)
+    @UserScoped
+    suspend fun getExerciseById(exerciseId: Long, userId: String): ExerciseEntity?
     
     @Query("""
         SELECT e.* FROM exercises e 
@@ -33,10 +59,23 @@ interface ExerciseDao {
         ORDER BY e.created_at DESC 
         LIMIT :limit
     """)
+    @UserScoped
     suspend fun getExerciseHistory(userId: String, exerciseLibraryId: String, limit: Int): List<ExerciseEntity>
     
-    @Query("SELECT * FROM exercises WHERE exercise_library_id = :exerciseLibraryId ORDER BY created_at DESC LIMIT :limit")
-    suspend fun getExercisesByLibraryId(exerciseLibraryId: String, limit: Int): List<ExerciseEntity>
+    @Query("""
+        SELECT e.* FROM exercises e
+        JOIN workouts w ON e.workout_id = w.id
+        WHERE e.exercise_library_id = :exerciseLibraryId
+        AND w.user_id = :userId
+        ORDER BY e.created_at DESC
+        LIMIT :limit
+    """)
+    @UserScoped
+    suspend fun getExercisesByLibraryId(
+        exerciseLibraryId: String,
+        userId: String,
+        limit: Int
+    ): List<ExerciseEntity>
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExercise(exercise: ExerciseEntity): Long
@@ -50,25 +89,51 @@ interface ExerciseDao {
     @Delete
     suspend fun deleteExercise(exercise: ExerciseEntity): Int
     
-    @Query("DELETE FROM exercises WHERE id = :exerciseId")
-    suspend fun deleteExerciseById(exerciseId: Long): Int
+    @Query("""
+        DELETE FROM exercises
+        WHERE id = :exerciseId
+        AND workout_id IN (SELECT id FROM workouts WHERE user_id = :userId)
+    """)
+    @UserScoped
+    suspend fun deleteExerciseById(exerciseId: Long, userId: String): Int
     
-    @Query("DELETE FROM exercises WHERE workout_id = :workoutId")
-    suspend fun deleteExercisesForWorkout(workoutId: String): Int
+    @Query("""
+        DELETE FROM exercises
+        WHERE workout_id = :workoutId
+        AND workout_id IN (SELECT id FROM workouts WHERE user_id = :userId)
+    """)
+    @UserScoped
+    suspend fun deleteExercisesForWorkout(workoutId: String, userId: String): Int
     
-    @Query("SELECT COUNT(*) FROM exercises WHERE workout_id = :workoutId")
-    suspend fun getExerciseCountForWorkout(workoutId: String): Int
+    @Query("""
+        SELECT COUNT(*) FROM exercises
+        WHERE workout_id = :workoutId
+        AND workout_id IN (SELECT id FROM workouts WHERE user_id = :userId)
+    """)
+    @UserScoped
+    suspend fun getExerciseCountForWorkout(workoutId: String, userId: String): Int
     
-    @Query("SELECT MAX(order_index) FROM exercises WHERE workout_id = :workoutId")
-    suspend fun getMaxOrderIndex(workoutId: String): Int?
+    @Query("""
+        SELECT MAX(order_index) FROM exercises
+        WHERE workout_id = :workoutId
+        AND workout_id IN (SELECT id FROM workouts WHERE user_id = :userId)
+    """)
+    @UserScoped
+    suspend fun getMaxOrderIndex(workoutId: String, userId: String): Int?
     
-    @Query("UPDATE exercises SET order_index = :newIndex WHERE id = :exerciseId")
-    suspend fun updateExerciseOrder(exerciseId: Long, newIndex: Int): Int
+    @Query("""
+        UPDATE exercises
+        SET order_index = :newIndex
+        WHERE id = :exerciseId
+        AND workout_id IN (SELECT id FROM workouts WHERE user_id = :userId)
+    """)
+    @UserScoped
+    suspend fun updateExerciseOrder(exerciseId: Long, newIndex: Int, userId: String): Int
     
     @Transaction
-    suspend fun reorderExercises(workoutId: String, exerciseIds: List<Long>) {
+    suspend fun reorderExercises(workoutId: String, userId: String, exerciseIds: List<Long>) {
         exerciseIds.forEachIndexed { index, exerciseId ->
-            updateExerciseOrder(exerciseId, index)
+            updateExerciseOrder(exerciseId, index, userId)
         }
     }
     
@@ -78,6 +143,7 @@ interface ExerciseDao {
         WHERE w.user_id = :userId 
         ORDER BY e.created_at DESC
     """)
+    @UserScoped
     suspend fun getRecentlyUsedExerciseIds(userId: String): List<String>
     
     @Query("""
@@ -88,6 +154,7 @@ interface ExerciseDao {
         AND w.date BETWEEN :startDate AND :endDate
         ORDER BY e.created_at DESC
     """)
+    @UserScoped
     suspend fun getExerciseHistoryInDateRange(userId: String, exerciseLibraryId: String, startDate: String, endDate: String): List<ExerciseEntity>
     
     @Query("""
@@ -96,6 +163,7 @@ interface ExerciseDao {
         WHERE w.user_id = :userId 
         ORDER BY e.created_at DESC
     """)
+    @UserScoped
     suspend fun getAllExercisesForUser(userId: String): List<ExerciseEntity>
     
     @Query("""
@@ -103,6 +171,7 @@ interface ExerciseDao {
         JOIN workouts w ON e.workout_id = w.id 
         WHERE w.user_id = :userId AND e.workout_id = :workoutId
     """)
+    @UserScoped
     suspend fun validateWorkoutExerciseRelationship(userId: String, workoutId: String): Int
     
     // Enhanced analytics queries for dashboard real data integration
@@ -126,6 +195,7 @@ interface ExerciseDao {
         GROUP BY e.exercise_library_id
         ORDER BY MAX(e.created_at) DESC
     """)
+    @UserScoped
     suspend fun getUsedExerciseIds(userId: String, startDate: String, endDate: String): List<String>
     
     /**
@@ -153,6 +223,7 @@ interface ExerciseDao {
         GROUP BY e.exercise_library_id, el.name, el.primary_muscle_group
         ORDER BY exercise_frequency DESC, workout_days DESC
     """)
+    @UserScoped
     suspend fun getExerciseFrequency(
         userId: String,
         startDate: String,
@@ -183,6 +254,7 @@ interface ExerciseDao {
         GROUP BY el.primary_muscle_group
         ORDER BY exercise_count DESC
     """)
+    @UserScoped
     suspend fun getMuscleGroupDistribution(
         userId: String,
         startDate: String,

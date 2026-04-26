@@ -62,7 +62,7 @@ class SocialSyncStatusViewModel @Inject constructor(
 
     private fun monitorSyncStatus() {
         viewModelScope.launch {
-            authRepository.getCurrentUserId()?.let { userId ->
+            authRepository.getCurrentUserId()?.value?.let { userId ->
                 monitorWorkManagerStatus(userId)
                 monitorUnsyncedItems(userId)
             }
@@ -234,7 +234,7 @@ class SocialSyncStatusViewModel @Inject constructor(
     fun retrySync(syncType: SocialSyncType) {
         viewModelScope.launch {
             try {
-                val userId = authRepository.getCurrentUserId() ?: return@launch
+                val userId = authRepository.getCurrentUserId()?.value ?: return@launch
                 
                 when (syncType) {
                     SocialSyncType.PROFILE -> {
@@ -271,7 +271,7 @@ class SocialSyncStatusViewModel @Inject constructor(
     fun forceSyncAll() {
         viewModelScope.launch {
             try {
-                val userId = authRepository.getCurrentUserId() ?: return@launch
+                val userId = authRepository.getCurrentUserId()?.value ?: return@launch
                 
                 // Force sync all social features
                 Timber.d("Force syncing all social features for user $userId")

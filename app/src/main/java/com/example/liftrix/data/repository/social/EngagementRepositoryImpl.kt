@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import kotlin.math.*
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -580,18 +581,46 @@ class EngagementRepositoryImpl @Inject constructor(
                 errorMessage = "Failed to get post engagement stats",
                 analyticsContext = mapOf(
                     "post_id" to postId,
-                    "viewer_id" to viewerId
+                    "viewer_id" to viewerId,
+                    "error_detail" to (throwable.message ?: "Unknown error")
                 )
             )
         }
     ) {
         withContext(Dispatchers.IO) {
+            Timber.d("ENGAGEMENT_DEBUG: Fetching post $postId from Room for viewer $viewerId")
+
             val post = workoutPostDao.getPostById(postId)
-                ?: throw IllegalArgumentException("Post not found")
-            
+
+            if (post == null) {
+                Timber.w("ENGAGEMENT_DEBUG: Post $postId NOT FOUND in Room database")
+                Timber.w("ENGAGEMENT_DEBUG: This could indicate:")
+                Timber.w("  1. Post hasn't synced from Firestore to Room yet (sync lag)")
+                Timber.w("  2. Post was deleted but UI cache still shows it")
+                Timber.w("  3. Post author's profile doesn't exist yet (new user)")
+                Timber.w("ENGAGEMENT_DEBUG: Returning default engagement stats as fallback")
+
+                // Return default stats instead of throwing - makes UI more resilient
+                return@withContext PostEngagementStats(
+                    postId = postId,
+                    likeCount = 0,
+                    commentCount = 0,
+                    shareCount = 0,
+                    saveCount = 0,
+                    isLikedByViewer = false,
+                    isSavedByViewer = false
+                )
+            }
+
+            Timber.d("ENGAGEMENT_DEBUG: Post found - userId=${post.userId}, " +
+                "likeCount=${post.likeCount}, commentCount=${post.commentCount}, " +
+                "shareCount=${post.shareCount}, saveCount=${post.saveCount}")
+
             val isLiked = postLikeDao.isPostLikedByUser(postId, viewerId)
             val isSaved = savedPostDao.isPostSaved(viewerId, postId)
-            
+
+            Timber.d("ENGAGEMENT_DEBUG: Viewer engagement - isLiked=$isLiked, isSaved=$isSaved")
+
             PostEngagementStats(
                 postId = postId,
                 likeCount = post.likeCount,

@@ -148,11 +148,11 @@ class ProfileViewModel @Inject constructor(
                         emit(ProfileDataState.Loading)
                         
                         // Check if profile exists to set proper expectations
-                        val profileExists = profileQueryUseCase.hasProfile(userId).getOrElse { false }
+                        val profileExists = profileQueryUseCase.hasProfile(userId.value).getOrElse { false }
 
                         if (profileExists) {
                             // Profile exists, start observing
-                            profileRepository.getProfile(userId)
+                            profileRepository.getProfile(userId.value)
                                 .collect { profile ->
                                     if (profile != null) {
                                         emit(ProfileDataState.Loaded(profile))
@@ -222,16 +222,16 @@ class ProfileViewModel @Inject constructor(
         .flatMapLatest { userId ->
             flow<List<UserAchievement>> {
                 try {
-                    val result = calculateAchievementsUseCase(userId)
+                    val result = calculateAchievementsUseCase(userId.value)
                     result.fold(
                         onSuccess = { achievements -> emit(achievements) },
-                        onFailure = { 
-                            Timber.e(it, "Failed to calculate achievements for user: $userId")
+                        onFailure = {
+                            Timber.e(it, "Failed to calculate achievements for user: ${userId.value}")
                             emit(emptyList<UserAchievement>())
                         }
                     )
                 } catch (e: Exception) {
-                    Timber.e(e, "Error calculating achievements for user: $userId")
+                    Timber.e(e, "Error calculating achievements for user: ${userId.value}")
                     emit(emptyList<UserAchievement>())
                 }
             }
@@ -276,10 +276,10 @@ class ProfileViewModel @Inject constructor(
         .filterNotNull()
         .flatMapLatest { userId ->
             combine(
-                syncStatusRepository.getSyncStatus(userId),
-                flow { 
+                syncStatusRepository.getSyncStatus(userId.value),
+                flow {
                     try {
-                        emit(syncManager.getUnsyncedCount(userId))
+                        emit(syncManager.getUnsyncedCount(userId.value))
                     } catch (e: Exception) {
                         emit(0)
                     }
@@ -316,16 +316,16 @@ class ProfileViewModel @Inject constructor(
                         is ProfileDataState.Missing -> ProfileLoadingState.Missing
                         is ProfileDataState.Loaded -> ProfileLoadingState.Loaded(profileDataState.profile.copy(achievements = achievements))
                         is ProfileDataState.NoAuth -> ProfileLoadingState.Loading
-                        is ProfileDataState.Error -> ProfileLoadingState.Missing
+                        is ProfileDataState.Error -> ProfileLoadingState.Error(profileDataState.throwable)
                     }
                     
                     val shouldShowLoading = profileDataState is ProfileDataState.Loading || 
                                           profileDataState is ProfileDataState.NoAuth
-                    
+
                     // 🚨 CRITICAL CHECK - Detect unexpected userId changes
                     val previousUserId = currentState.userId
-                    if (previousUserId != null && userId != null && previousUserId != userId) {
-                        Timber.e("[VIEWMODEL-STATE] ⚠️  USER ID CHANGED UNEXPECTEDLY: $previousUserId -> $userId")
+                    if (previousUserId != null && userId != null && previousUserId != userId.value) {
+                        Timber.e("[VIEWMODEL-STATE] ⚠️  USER ID CHANGED UNEXPECTEDLY: $previousUserId -> ${userId.value}")
                         Timber.e("[VIEWMODEL-STATE] This could cause data to appear missing!")
                     } else if (previousUserId != null && userId == null) {
                         Timber.e("[VIEWMODEL-STATE] ⚠️  USER ID BECAME NULL: $previousUserId -> null")
@@ -333,7 +333,7 @@ class ProfileViewModel @Inject constructor(
                     }
                     
                     currentState.copy(
-                        userId = userId,
+                        userId = userId?.value,
                         profileState = profileState,
                         achievements = achievements,
                         isLoading = shouldShowLoading,
@@ -406,11 +406,11 @@ class ProfileViewModel @Inject constructor(
                 if (userId == null) {
                     return@launch
                 }
-                
+
                 // Check if profile exists in database
-                val hasProfile = profileQueryUseCase.hasProfile(userId).getOrElse { false }
-                val hasCompletedProfile = profileQueryUseCase.hasCompletedProfile(userId).getOrElse { false }
-                val profileData = profileRepository.getUserProfile(userId).getOrNull()
+                val hasProfile = profileQueryUseCase.hasProfile(userId.value).getOrElse { false }
+                val hasCompletedProfile = profileQueryUseCase.hasCompletedProfile(userId.value).getOrElse { false }
+                val profileData = profileRepository.getUserProfile(userId.value).getOrNull()
                 
                 updateState { currentState ->
                     currentState.copy(
@@ -480,9 +480,9 @@ class ProfileViewModel @Inject constructor(
             try {
                 val userId = currentUserId.value
                 if (userId != null) {
-                    Timber.d("Refreshing profile data for user: $userId")
+                    Timber.d("Refreshing profile data for user: ${userId.value}")
                     // Trigger immediate sync to refresh profile data
-                    val refreshResult = profileRepository.syncNow(userId)
+                    val refreshResult = profileRepository.syncNow(userId.value)
                     if (refreshResult.isFailure) {
                         Timber.w(refreshResult.exceptionOrNull(), "Profile refresh failed, but continuing with reactive updates")
                     }
@@ -500,34 +500,34 @@ class ProfileViewModel @Inject constructor(
             try {
                 val userId = currentUserId.value
                 if (userId == null) {
-                    updateState { 
+                    updateState {
                         it.copy(
                             error = ProfileError.Authentication("User not authenticated")
                         )
                     }
                     return@launch
                 }
-                
-                updateState { 
+
+                updateState {
                     it.copy(
                         imageUploadState = ImageUploadState.Uploading(progress = 0F),
                         error = null,
                         lastOperation = ProfileOperation.UploadImage(imageUri, cropRect)
                     )
                 }
-                
-                Timber.d("Starting image upload for user: $userId")
+
+                Timber.d("Starting image upload for user: ${userId.value}")
                 
                 // Ensure profile exists before attempting upload
                 val currentProfile = profileFlow.value
                 if (currentProfile == null) {
-                    Timber.w("Profile not found for user: $userId, checking if profile exists...")
-                    
+                    Timber.w("Profile not found for user: ${userId.value}, checking if profile exists...")
+
                     // Attempt to load profile to trigger creation if needed
                     try {
-                        val profileExists = profileRepository.getProfile(userId).first() != null
+                        val profileExists = profileRepository.getProfile(userId.value).first() != null
                         if (!profileExists) {
-                            updateState { 
+                            updateState {
                                 it.copy(
                                     imageUploadState = ImageUploadState.Error("Profile setup incomplete. Please complete your profile first."),
                                     error = ProfileError.Database("Profile not found - please complete profile setup")
@@ -536,8 +536,8 @@ class ProfileViewModel @Inject constructor(
                             return@launch
                         }
                     } catch (e: Exception) {
-                        Timber.e(e, "Failed to verify profile existence for user: $userId")
-                        updateState { 
+                        Timber.e(e, "Failed to verify profile existence for user: ${userId.value}")
+                        updateState {
                             it.copy(
                                 imageUploadState = ImageUploadState.Error("Profile verification failed. Please try again."),
                                 error = ProfileError.Database("Profile verification failed")
@@ -568,7 +568,7 @@ class ProfileViewModel @Inject constructor(
                 inputStream.close()
 
                 val result = profileImageOperationsUseCase.upload(
-                    userId = userId,
+                    userId = userId.value,
                     imageBytes = imageBytes
                 )
                 
@@ -619,25 +619,25 @@ class ProfileViewModel @Inject constructor(
             try {
                 val userId = currentUserId.value
                 if (userId == null) {
-                    updateState { 
+                    updateState {
                         it.copy(
                             error = ProfileError.Authentication("User not authenticated")
                         )
                     }
                     return@launch
                 }
-                
-                updateState { 
+
+                updateState {
                     it.copy(
                         imageUploadState = ImageUploadState.Uploading(progress = 0.5f),
                         error = null,
                         lastOperation = ProfileOperation.DeleteImage
                     )
                 }
-                
-                Timber.d("Starting image deletion for user: $userId")
-                
-                val result = profileImageOperationsUseCase.delete(userId)
+
+                Timber.d("Starting image deletion for user: ${userId.value}")
+
+                val result = profileImageOperationsUseCase.delete(userId.value)
                 
                 if (result.isSuccess) {
                     updateState { 
@@ -735,57 +735,57 @@ class ProfileViewModel @Inject constructor(
             try {
                 val userId = currentUserId.value
                 if (userId == null) {
-                    updateState { 
+                    updateState {
                         it.copy(
                             error = ProfileError.Authentication("User not authenticated")
                         )
                     }
                     return@launch
                 }
-                
+
                 // 🔍 FORENSIC LOGGING - Authentication State During Profile Update
                 val authUid = auth.currentUser?.uid
                 val authDisplayName = auth.currentUser?.displayName
                 val authEmail = auth.currentUser?.email
                 Timber.d("[DATA-INTEGRITY] Profile save initiated:")
-                Timber.d("[DATA-INTEGRITY] - userId from flow: $userId")
+                Timber.d("[DATA-INTEGRITY] - userId from flow: ${userId.value}")
                 Timber.d("[DATA-INTEGRITY] - auth.currentUser.uid: $authUid")
                 Timber.d("[DATA-INTEGRITY] - auth.currentUser.displayName: $authDisplayName")
                 Timber.d("[DATA-INTEGRITY] - auth.currentUser.email: $authEmail")
                 Timber.d("[DATA-INTEGRITY] - profile.userId: ${profile.userId}")
                 Timber.d("[DATA-INTEGRITY] - profile.displayName: ${profile.displayName}")
-                
+
                 // 🚨 CRITICAL CHECK - Verify auth consistency
-                if (userId != authUid) {
-                    Timber.e("[DATA-INTEGRITY] ⚠️  AUTH MISMATCH DETECTED: userId=$userId vs authUid=$authUid")
-                    updateState { 
+                if (userId.value != authUid) {
+                    Timber.e("[DATA-INTEGRITY] ⚠️  AUTH MISMATCH DETECTED: userId=${userId.value} vs authUid=$authUid")
+                    updateState {
                         it.copy(
                             error = ProfileError.Authentication("Authentication state inconsistent. Please sign out and back in.")
                         )
                     }
                     return@launch
                 }
-                
-                if (profile.userId != userId) {
-                    Timber.e("[DATA-INTEGRITY] ⚠️  PROFILE USERID MISMATCH: profile.userId=${profile.userId} vs currentUserId=$userId")
-                    updateState { 
+
+                if (profile.userId != userId.value) {
+                    Timber.e("[DATA-INTEGRITY] ⚠️  PROFILE USERID MISMATCH: profile.userId=${profile.userId} vs currentUserId=${userId.value}")
+                    updateState {
                         it.copy(
                             error = ProfileError.ValidationError("Profile user ID mismatch. Please refresh and try again.")
                         )
                     }
                     return@launch
                 }
-                
-                updateState { 
+
+                updateState {
                     it.copy(
                         isLoading = true,
                         error = null,
                         lastOperation = ProfileOperation.SaveProfile(profile)
                     )
                 }
-                
-                Timber.d("[DATA-INTEGRITY] Saving profile for user: $userId - all checks passed")
-                
+
+                Timber.d("[DATA-INTEGRITY] Saving profile for user: ${userId.value} - all checks passed")
+
                 val result = profileCommandUseCase.saveProfile(profile, strictValidation = false)
                 
                 if (result.isSuccess) {
@@ -795,10 +795,10 @@ class ProfileViewModel @Inject constructor(
                     Timber.d("[DATA-INTEGRITY] Profile save successful:")
                     Timber.d("[DATA-INTEGRITY] - post-save auth.uid: $postSaveAuthUid")
                     Timber.d("[DATA-INTEGRITY] - post-save auth.displayName: $postSaveAuthDisplayName")
-                    
-                    if (postSaveAuthUid != userId) {
-                        Timber.e("[DATA-INTEGRITY] ⚠️  AUTH STATE CHANGED DURING SAVE: $userId -> $postSaveAuthUid")
-                        updateState { 
+
+                    if (postSaveAuthUid != userId.value) {
+                        Timber.e("[DATA-INTEGRITY] ⚠️  AUTH STATE CHANGED DURING SAVE: ${userId.value} -> $postSaveAuthUid")
+                        updateState {
                             it.copy(
                                 isLoading = false,
                                 error = ProfileError.Authentication("Authentication changed during save. Data may be inconsistent.")
@@ -806,7 +806,7 @@ class ProfileViewModel @Inject constructor(
                         }
                         return@launch
                     }
-                    
+
                     updateState { currentState ->
                         currentState.copy(
                             isLoading = false,
@@ -815,24 +815,24 @@ class ProfileViewModel @Inject constructor(
                             lastOperation = null
                         )
                     }
-                    Timber.i("[DATA-INTEGRITY] Profile save successful for user: $userId - auth state stable")
-                    
+                    Timber.i("[DATA-INTEGRITY] Profile save successful for user: ${userId.value} - auth state stable")
+
                     // Refresh achievements after profile save
                     refreshAchievements()
-                    
+
                     // Clear success message after delay
                     clearMessageAfterDelay(isSuccess = true)
-                    
+
                 } else {
                     val error = result.exceptionOrNull()
                     val errorMessage = error?.message ?: "Failed to save profile"
-                    updateState { 
+                    updateState {
                         it.copy(
                             isLoading = false,
                             error = ProfileError.SaveFailed(errorMessage)
                         )
                     }
-                    Timber.e(error, "Profile save failed for user: $userId")
+                    Timber.e(error, "Profile save failed for user: ${userId.value}")
                 }
                 
             } catch (e: Exception) {
@@ -856,10 +856,10 @@ class ProfileViewModel @Inject constructor(
                     Timber.w("Cannot refresh achievements - no current user")
                     return@launch
                 }
-                
-                Timber.d("Refreshing achievements for user: $userId")
-                
-                val result = calculateAchievementsUseCase(userId)
+
+                Timber.d("Refreshing achievements for user: ${userId.value}")
+
+                val result = calculateAchievementsUseCase(userId.value)
                 
                 result.fold(
                     onSuccess = { achievements ->
@@ -875,10 +875,10 @@ class ProfileViewModel @Inject constructor(
                                 profileState = updatedProfileState
                             )
                         }
-                        Timber.i("Achievement refresh successful for user: $userId, found ${achievements.size} achievements")
+                        Timber.i("Achievement refresh successful for user: ${userId.value}, found ${achievements.size} achievements")
                     },
                     onFailure = { error ->
-                        Timber.e(error, "Achievement refresh failed for user: $userId")
+                        Timber.e(error, "Achievement refresh failed for user: ${userId.value}")
                         updateState { currentState ->
                             val updatedProfileState = when (val current = currentState.profileState) {
                                 is ProfileLoadingState.Loaded -> ProfileLoadingState.Loaded(
@@ -975,7 +975,7 @@ class ProfileViewModel @Inject constructor(
                 val userId = currentUserId.value
                 if (userId != null) {
                     Timber.d("ProfileViewModel: Triggering profile sync for user $userId")
-                    val result = syncCoordinator.triggerEntitySync(userId, "profile")
+                    val result = syncCoordinator.triggerEntitySync(userId.value, "profile")
                     if (result.isFailure) {
                         Timber.e("ProfileViewModel: Profile sync failed - ${result.exceptionOrNull()?.message}")
                     }
@@ -997,7 +997,7 @@ class ProfileViewModel @Inject constructor(
                 val userId = currentUserId.value
                 if (userId != null) {
                     Timber.d("ProfileViewModel: Triggering immediate sync for user $userId")
-                    val result = syncCoordinator.triggerImmediateSync(userId)
+                    val result = syncCoordinator.triggerImmediateSync(userId.value)
                     if (result.isFailure) {
                         Timber.e("ProfileViewModel: Immediate sync failed - ${result.exceptionOrNull()?.message}")
                     }
@@ -1019,7 +1019,7 @@ class ProfileViewModel @Inject constructor(
                 val userId = currentUserId.value
                 if (userId != null) {
                     Timber.d("ProfileViewModel: Triggering force sync all for user $userId")
-                    val result = syncCoordinator.triggerImmediateSync(userId)
+                    val result = syncCoordinator.triggerImmediateSync(userId.value)
                     if (result.isFailure) {
                         Timber.e("ProfileViewModel: Force sync all failed - ${result.exceptionOrNull()?.message}")
                     }
@@ -1045,8 +1045,8 @@ class ProfileViewModel @Inject constructor(
                 }
                 
                 Timber.d("ProfileViewModel: Toggling auto-sync for user $userId to $enabled")
-                
-                val result = syncPreferencesRepository.setAutoSyncEnabled(userId, enabled)
+
+                val result = syncPreferencesRepository.setAutoSyncEnabled(userId.value, enabled)
                 result.fold(
                     onSuccess = {
                         Timber.i("ProfileViewModel: Auto-sync toggle successful for user $userId: $enabled")
@@ -1103,7 +1103,7 @@ class ProfileViewModel @Inject constructor(
             // For now, we'll use a blocking approach but in production you'd want to
             // make this reactive with StateFlow
             kotlinx.coroutines.runBlocking {
-                val result = syncPreferencesRepository.getLastSyncTime(userId)
+                val result = syncPreferencesRepository.getLastSyncTime(userId.value)
                 result.fold(
                     onSuccess = { timestamp ->
                         if (timestamp != null) {
@@ -1144,7 +1144,7 @@ class ProfileViewModel @Inject constructor(
         return currentUserId
             .filterNotNull()
             .flatMapLatest { userId ->
-                syncPreferencesRepository.observeAutoSyncStatus(userId)
+                syncPreferencesRepository.observeAutoSyncStatus(userId.value)
             }
             .stateIn(
                 scope = viewModelScope,

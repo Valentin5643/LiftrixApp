@@ -278,7 +278,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                     }
                 )
 
-                val result = folderRepository.getOrCreateDefaultFolder(userId)
+                val result = folderRepository.getOrCreateDefaultFolder(userId.value)
                 if (result.isSuccess) {
                     val defaultFolder = result.getOrNull()
 
@@ -337,7 +337,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
             
             // Strategy 1: Try to get existing folders first (faster and safer)
             val existingFolders = try {
-                folderRepository.getAllFoldersForUser(userId).first()
+                folderRepository.getAllFoldersForUser(userId.value).first()
             } catch (e: Exception) {
                 Timber.w(e, "🔥 FOLDER-INIT: Failed to query existing folders, will try creation")
                 emptyList()
@@ -364,7 +364,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                         return null
                     }
                 )
-                val result = folderRepository.getOrCreateDefaultFolder(userIdForFolder)
+                val result = folderRepository.getOrCreateDefaultFolder(userIdForFolder.value)
                 
                 if (result.isSuccess) {
                     val defaultFolder = result.getOrNull()
@@ -391,7 +391,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                         Timber.d("🔥 FOLDER-INIT: Folder already exists, re-querying")
                         // Re-query folders since one apparently exists now
                         val retryFolders = try {
-                            folderRepository.getAllFoldersForUser(userId).first()
+                            folderRepository.getAllFoldersForUser(userId.value).first()
                         } catch (e: Exception) {
                             emptyList()
                         }
@@ -594,7 +594,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                                     throw IllegalStateException("Authentication failed")
                                 }
                             )
-                            val existingFolders = folderRepository.getAllFoldersForUser(userIdForFolder).first()
+                            val existingFolders = folderRepository.getAllFoldersForUser(userIdForFolder.value).first()
                             
                             if (existingFolders.isNotEmpty()) {
                                 // Use default folder or first available folder
@@ -618,7 +618,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                                             throw IllegalStateException("Authentication failed")
                                         }
                                     )
-                                    val defaultResult = folderRepository.getOrCreateDefaultFolder(userIdForCreate)
+                                    val defaultResult = folderRepository.getOrCreateDefaultFolder(userIdForCreate.value)
                                     
                                     if (defaultResult.isSuccess) {
                                         val defaultFolder = defaultResult.getOrNull()
@@ -659,7 +659,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                 timber.log.Timber.d("🔥 TEMPLATE-VIEWMODEL-DEBUG: Final parameters - userId: $userId, name: $templateName, folderId: $effectiveFolderId, exercises: ${exercisesToSave.size}")
 
                 val result = templateCommandUseCase.create(
-                    userId = userId,
+                    userId = userId.value,
                     name = templateName,
                     folderId = effectiveFolderId,
                     description = templateDescription,
@@ -992,7 +992,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                 
                 val defaultsResult = exerciseQueryUseCase.getExerciseDefaults(
                     exerciseId = templateExercise.exerciseId,
-                    userId = userId,
+                    userId = userId.value,
                     exerciseLibrary = exerciseLibrary
                 )
                 
@@ -1064,7 +1064,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
 
                     // Create a temporary template for duration estimation
                     val tempTemplate = WorkoutTemplate.create(
-                        userId = userId,
+                        userId = userId.value,
                         name = "Temporary",
                         folderId = "temp",
                         exercises = currentData.exercises
@@ -1345,7 +1345,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                 )
                 val templateResult = workoutTemplateRepository.getTemplateById(
                     WorkoutTemplateId(templateId),
-                    userId
+                    userId.value
                 )
                 
                 if (templateResult.isSuccess) {
@@ -1415,7 +1415,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                 )
                 Timber.d("🔥 FOLDERS-DEBUG: Starting folder loading for user: $userId")
 
-                folderRepository.getAllFoldersForUser(userId)
+                folderRepository.getAllFoldersForUser(userId.value)
                     .catch { error ->
                         Timber.e(error, "🔥 FOLDERS-DEBUG: Error in folder flow - continuing with empty list")
                         // Emit empty list instead of crashing

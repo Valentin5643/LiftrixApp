@@ -145,7 +145,7 @@ class QRCodeGenerationUseCase @Inject constructor(
      */
     private suspend fun getCurrentUserId(): String? {
         return try {
-            authRepository.getCurrentUserId()
+            authRepository.getCurrentUserId()?.value
         } catch (e: Exception) {
             Timber.e(e, "Failed to get current user ID")
             null

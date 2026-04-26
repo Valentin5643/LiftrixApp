@@ -165,7 +165,7 @@ fun FrequencyMetricCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.CalendarToday,
-                        contentDescription = null,
+                        contentDescription = "Weekly frequency",
                         modifier = Modifier.size(18.dp),
                         tint = LiftrixColors.Secondary
                     )

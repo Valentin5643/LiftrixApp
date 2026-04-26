@@ -414,7 +414,7 @@ private fun SectionHeader(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = title,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(24.dp)
         )
@@ -483,7 +483,7 @@ private fun ErrorState(
     ) {
         Icon(
             imageVector = Icons.Default.Error,
-            contentDescription = null,
+            contentDescription = "Error",
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(64.dp)
         )
@@ -519,7 +519,7 @@ private fun ErrorState(
             Button(onClick = onRetry) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
-                    contentDescription = null,
+                    contentDescription = "Retry",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))

@@ -66,14 +66,14 @@ class ModerationService @Inject constructor(
             ?: throw IllegalStateException("User not authenticated")
 
         // Check if user has already reported this content
-        if (contentReportsDao.hasUserReported(reporterId, contentId)) {
+        if (contentReportsDao.hasUserReported(reporterId.value, contentId)) {
             throw IllegalStateException("Content already reported by this user")
         }
 
         // Create report
         val report = ContentReportEntity(
             id = UUID.randomUUID().toString(),
-            reporterUserId = reporterId,
+            reporterUserId = reporterId.value,
             contentType = contentType.name,
             contentId = contentId,
             reason = reason.name,
@@ -107,7 +107,7 @@ class ModerationService @Inject constructor(
             hideContent(contentType, contentId)
         }
 
-        Timber.i("Content reported: $contentId by $reporterId (reason: ${reason.name})")
+        Timber.i("Content reported: $contentId by ${reporterId.value} (reason: ${reason.name})")
     }
 
     /**
@@ -141,7 +141,7 @@ class ModerationService @Inject constructor(
         val userId = authRepository.getCurrentUserId()
             ?: throw IllegalStateException("User not authenticated")
 
-        contentReportsDao.getReportsByUser(userId)
+        contentReportsDao.getReportsByUser(userId.value)
             .map { it.toDomainModel() }
     }
 
@@ -166,7 +166,7 @@ class ModerationService @Inject constructor(
         val userId = authRepository.getCurrentUserId()
             ?: return@liftrixCatching false
 
-        contentReportsDao.hasUserReported(userId, contentId)
+        contentReportsDao.hasUserReported(userId.value, contentId)
     }
 
     /**

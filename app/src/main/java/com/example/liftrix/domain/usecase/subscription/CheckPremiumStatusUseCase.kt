@@ -32,11 +32,11 @@ class CheckPremiumStatusUseCase @Inject constructor(
                 Timber.d("No authenticated user found - returning false for premium status")
                 return flowOf(false)
             }
-            
-            subscriptionRepository.getSubscriptionStatus(currentUserId)
+
+            subscriptionRepository.getSubscriptionStatus(currentUserId.value)
                 .map { subscription ->
                     val hasActive = subscription?.isActive == true
-                    Timber.d("Premium status check for user $currentUserId: $hasActive")
+                    Timber.d("Premium status check for user ${currentUserId.value}: $hasActive")
                     hasActive
                 }
         } catch (e: Exception) {
@@ -83,8 +83,8 @@ class CheckPremiumStatusUseCase @Inject constructor(
                 Timber.d("No authenticated user found - returning null for subscription details")
                 return flowOf(null)
             }
-            
-            subscriptionRepository.getSubscriptionStatus(currentUserId)
+
+            subscriptionRepository.getSubscriptionStatus(currentUserId.value)
         } catch (e: Exception) {
             Timber.e(e, "Error getting subscription details")
             flowOf(null)

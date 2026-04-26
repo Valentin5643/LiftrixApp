@@ -87,7 +87,7 @@ fun RedesignedExerciseCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.FitnessCenter,
-                    contentDescription = null,
+                    contentDescription = "Exercise",
                     tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(20.dp)
                 )
@@ -234,7 +234,7 @@ fun RedesignedExerciseCard(
         ) {
             Icon(
                 imageVector = Icons.Default.Add,
-                contentDescription = null,
+                contentDescription = "Add set",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(18.dp)
             )
@@ -264,7 +264,7 @@ fun RedesignedExerciseCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.Edit,
-                    contentDescription = null,
+                    contentDescription = "Add notes",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
@@ -601,7 +601,7 @@ fun ExerciseOptionsMenu(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.SwapVert,
-                        contentDescription = null,
+                        contentDescription = "Reorder exercise",
                         tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(20.dp)
                     )
@@ -622,7 +622,7 @@ fun ExerciseOptionsMenu(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.SwapHoriz,
-                        contentDescription = null,
+                        contentDescription = "Change exercise",
                         tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(20.dp)
                     )
@@ -644,7 +644,7 @@ fun ExerciseOptionsMenu(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = null,
+                        contentDescription = "Remove exercise",
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(20.dp)
                     )
@@ -957,7 +957,7 @@ fun AnomalyNudgeDialog(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Warning,
-                        contentDescription = null,
+                        contentDescription = "Warning",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(28.dp)
                     )
@@ -1007,7 +1007,7 @@ fun AnomalyNudgeDialog(
                         
                         Icon(
                             imageVector = Icons.Default.ArrowForward,
-                            contentDescription = null,
+                            contentDescription = "From previous to current",
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.align(Alignment.CenterVertically)
                         )
@@ -1101,7 +1101,7 @@ fun AnomalyNudgeDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Check,
-                            contentDescription = null,
+                            contentDescription = "Fix value",
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))

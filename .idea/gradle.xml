@@ -24,6 +24,8 @@
             <option value="$PROJECT_DIR$/app" />
             <option value="$PROJECT_DIR$/buildSrc" />
             <option value="$PROJECT_DIR$/lint-rules" />
+            <option value="$PROJECT_DIR$/user-scoping-annotations" />
+            <option value="$PROJECT_DIR$/user-scoping-processor" />
           </set>
         </option>
       </GradleProjectSettings>

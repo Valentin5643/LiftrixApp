@@ -82,13 +82,13 @@ class SupportViewModel @Inject constructor(
                 val deviceInfo = appInfoService.getDeviceInfo()
 
                 // Get user's existing tickets
-                val userTickets = supportService.getUserTickets(userId).fold(
+                val userTickets = supportService.getUserTickets(userId.value).fold(
                     onSuccess = { it },
                     onFailure = { emptyList() }
                 )
 
                 val data = SupportUiState.Data(
-                    ticketForm = TicketForm(userId = userId),
+                    ticketForm = TicketForm(userId = userId.value),
                     deviceInfo = deviceInfo,
                     userTickets = userTickets
                 )

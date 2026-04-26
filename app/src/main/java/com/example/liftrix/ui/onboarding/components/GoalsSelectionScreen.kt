@@ -214,7 +214,7 @@ private fun GoalChip(
             {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
+                    contentDescription = "Selected",
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -479,7 +479,7 @@ private fun GoalsValidationMessage(
             ) {
                 Icon(
                     imageVector = Icons.Default.Error,
-                    contentDescription = null,
+                    contentDescription = "Goals error",
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(16.dp)
                 )
@@ -504,7 +504,7 @@ private fun GoalsValidationMessage(
             ) {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
+                    contentDescription = "Goals selection valid",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(16.dp)
                 )

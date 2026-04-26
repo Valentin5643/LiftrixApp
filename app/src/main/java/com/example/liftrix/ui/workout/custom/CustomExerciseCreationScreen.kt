@@ -155,7 +155,7 @@ fun CustomExerciseCreationScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Info,
-                            contentDescription = null,
+                            contentDescription = "Error",
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(48.dp)
                         )
@@ -185,7 +185,7 @@ fun CustomExerciseCreationScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = null,
+                            contentDescription = "Create exercise",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(48.dp)
                         )
@@ -230,7 +230,7 @@ fun CustomExerciseCreationScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = null,
+                                        contentDescription = "Exercise created",
                                         tint = LiftrixColorsV2.Teal,
                                         modifier = Modifier.size(24.dp)
                                     )
@@ -353,7 +353,7 @@ private fun CreationSection(
             ) {
                 Icon(
                     imageVector = icon,
-                    contentDescription = null,
+                    contentDescription = title,
                     tint = LiftrixColorsV2.Teal,
                     modifier = Modifier.size(20.dp)
                 )

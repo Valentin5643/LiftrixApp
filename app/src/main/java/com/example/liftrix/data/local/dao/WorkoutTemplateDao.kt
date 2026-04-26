@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.WorkoutTemplateEntity
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
@@ -222,4 +223,62 @@ interface WorkoutTemplateDao {
             "avgDifficulty" to 3.0 // Placeholder value
         )
     }
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert workouttemplate from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(workoutTemplate: WorkoutTemplateEntity) {
+        val entity = workoutTemplate.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert workouttemplate from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(workoutTemplate: WorkoutTemplateEntity) {
+        val local = getWorkoutTemplateForSync(workoutTemplate.id, workoutTemplate.userId)
+        if (local == null || workoutTemplate.lastModified > local.lastModified) {
+            val entity = workoutTemplate.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: WorkoutTemplateEntity)
+
+    /**
+     * Get dirty workouttemplate that need upload to Firestore.
+     */
+    @Query("SELECT * FROM workout_templates WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyWorkoutTemplates(userId: String): List<WorkoutTemplateEntity>
+
+    /**
+     * Mark workouttemplate as clean after successful Firestore upload.
+     */
+    @Query("UPDATE workout_templates SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local workouttemplate for remote deduplication.
+     */
+    @Query("SELECT * FROM workout_templates WHERE id = :id AND user_id = :userId LIMIT 1")
+    suspend fun getWorkoutTemplateForSync(id: String, userId: String): WorkoutTemplateEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 } 

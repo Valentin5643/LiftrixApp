@@ -191,7 +191,11 @@ private fun RestTimerCard(
                     } else {
                         Icon(
                             imageVector = if (isPaused) Icons.Filled.Pause else Icons.Filled.Timer,
-                            contentDescription = null,
+                            contentDescription = when {
+                                isRestCompleted -> "Rest complete"
+                                isPaused -> "Rest paused"
+                                else -> "Rest timer"
+                            },
                             modifier = Modifier.size(20.dp),
                             tint = contentColor.copy(alpha = 0.8f)
                         )
@@ -269,7 +273,11 @@ private fun RestTimerCard(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.RestaurantMenu,
-                        contentDescription = null,
+                        contentDescription = when {
+                            restTimer.isStrengthTimer() -> "Strength rest"
+                            restTimer.isCardioTimer() -> "Cardio rest"
+                            else -> "Rest break"
+                        },
                         modifier = Modifier.size(14.dp),
                         tint = contentColor.copy(alpha = 0.7f)
                     )

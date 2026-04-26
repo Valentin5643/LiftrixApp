@@ -365,7 +365,7 @@ private fun MetricItem(
             if (icon != null) {
                 Icon(
                     imageVector = icon,
-                    contentDescription = null,
+                    contentDescription = label,
                     tint = valueColor,
                     modifier = Modifier.padding(end = 2.dp)
                 )

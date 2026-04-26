@@ -52,7 +52,7 @@ class EditSessionViewModel @Inject constructor(
         // Get current user ID
         viewModelScope.launch {
             currentUserId = authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
+                onSuccess = { userId -> userId.value },
                 onFailure = { null }
             )
         }
@@ -78,7 +78,7 @@ class EditSessionViewModel @Inject constructor(
         viewModelScope.launch {
             updateState { EditSessionUiState.Loading }
             val userId = authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
+                onSuccess = { it.value },
                 onFailure = { "" }
             )
             val result = workoutQueryUseCase.getSessionForEditing(sessionId, userId)

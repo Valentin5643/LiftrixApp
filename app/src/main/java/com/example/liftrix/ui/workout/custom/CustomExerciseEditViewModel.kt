@@ -104,7 +104,7 @@ class CustomExerciseEditViewModel @Inject constructor(
                     return@launch
                 }
 
-                val result = customExerciseRepository.getCustomExercise(userId, CustomExerciseId.fromString(exerciseId))
+                val result = customExerciseRepository.getCustomExercise(userId.value, CustomExerciseId.fromString(exerciseId))
                 result.fold(
                     onSuccess = { exercise ->
                         val formState = fromCustomExercise(exercise)
@@ -308,7 +308,7 @@ class CustomExerciseEditViewModel @Inject constructor(
 
                 // First get the current exercise, then update it
                 val existingExerciseResult = customExerciseRepository.getCustomExercise(
-                    userId,
+                    userId.value,
                     CustomExerciseId.fromString(currentState.exerciseId)
                 )
                 existingExerciseResult.fold(
@@ -323,7 +323,7 @@ class CustomExerciseEditViewModel @Inject constructor(
                             difficulty = currentState.difficulty,
                             videoUrl = currentState.videoUrl.trim().takeIf { it.isNotBlank() }
                         )
-                        val updateResult = customExerciseRepository.updateCustomExercise(userId, updatedExercise)
+                        val updateResult = customExerciseRepository.updateCustomExercise(userId.value, updatedExercise)
                         updateResult.fold(
                             onSuccess = { exercise ->
                                 Timber.i("Successfully updated custom exercise: ${exercise.id}")
@@ -370,7 +370,7 @@ class CustomExerciseEditViewModel @Inject constructor(
                     return@launch
                 }
 
-                val result = customExerciseRepository.deleteCustomExercise(userId, CustomExerciseId.fromString(currentState.exerciseId))
+                val result = customExerciseRepository.deleteCustomExercise(userId.value, CustomExerciseId.fromString(currentState.exerciseId))
                 result.fold(
                     onSuccess = {
                         Timber.i("Successfully deleted custom exercise: ${currentState.exerciseId}")

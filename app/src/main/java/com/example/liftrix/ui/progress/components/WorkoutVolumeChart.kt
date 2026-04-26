@@ -124,7 +124,7 @@ fun WorkoutVolumeChart(
                 
                 Icon(
                     imageVector = Icons.Default.FitnessCenter,
-                    contentDescription = null,
+                    contentDescription = "Volume trend",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(GridSystem.iconMedium)
                 )
@@ -231,7 +231,7 @@ private fun ModernEmptyState() {
     ) {
         Icon(
             imageVector = Icons.Default.FitnessCenter,
-            contentDescription = null,
+            contentDescription = "No volume data",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(GridSystem.iconLarge)
         )
@@ -406,7 +406,11 @@ private fun MetricCard(
                             VolumeMetricTrend.DECREASING -> Icons.Default.TrendingDown
                             VolumeMetricTrend.STABLE -> Icons.Default.TrendingFlat
                         },
-                        contentDescription = null,
+                        contentDescription = when (it) {
+                            VolumeMetricTrend.INCREASING -> "Trend increasing"
+                            VolumeMetricTrend.DECREASING -> "Trend decreasing"
+                            VolumeMetricTrend.STABLE -> "Trend stable"
+                        },
                         tint = when (it) {
                             VolumeMetricTrend.INCREASING -> MaterialTheme.colorScheme.primary
                             VolumeMetricTrend.DECREASING -> MaterialTheme.colorScheme.error

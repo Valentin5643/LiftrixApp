@@ -38,9 +38,10 @@ class ExerciseSetMapper @Inject constructor() {
     /**
      * Convert domain ExerciseSet to Room entity
      */
-    fun toEntity(set: ExerciseSet, exerciseId: Long): ExerciseSetEntity {
+    fun toEntity(set: ExerciseSet, exerciseId: Long, userId: String): ExerciseSetEntity {
         return ExerciseSetEntity(
             id = if (set.id.value.isNotBlank() && set.id.value != "0") set.id.value.toLong() else 0,
+            userId = userId,
             exerciseId = exerciseId,
             setNumber = set.setNumber,
             reps = set.reps?.count,
@@ -76,18 +77,19 @@ class ExerciseSetMapper @Inject constructor() {
 
     /**
      * Convert Firestore DTO to domain ExerciseSet
+     * CRITICAL FIX: Normalizes setNumber to minimum 1 to handle legacy data
      */
     fun fromFirestoreDto(dto: ExerciseSetDto): ExerciseSet {
         return ExerciseSet(
             id = ExerciseSetId.generate(), // Generate new ID for Firestore data
-            setNumber = dto.setNumber,
+            setNumber = kotlin.math.max(1, dto.setNumber), // NORMALIZE: Ensure setNumber >= 1
             reps = if (dto.reps > 0) Reps.of(dto.reps) else null,
             weight = if (dto.weightKg > 0) Weight.fromKilograms(dto.weightKg) else null,
             time = dto.timeSeconds?.let { Duration.ofSeconds(it.toLong()) },
             distance = dto.distanceMeters?.let { Distance.fromMeters(it) },
             rpe = dto.rpe?.let { RPE.fromInt(it) },
-            completedAt = dto.completedAt?.let { 
-                Instant.ofEpochSecond(it.seconds, it.nanoseconds.toLong()) 
+            completedAt = dto.completedAt?.let {
+                Instant.ofEpochSecond(it.seconds, it.nanoseconds.toLong())
             },
             notes = dto.notes
         )
@@ -129,11 +131,12 @@ class ExerciseSetMapper @Inject constructor() {
     
     /**
      * Converts JSON to domain model for legacy Room storage
+     * CRITICAL FIX: Normalizes setNumber to minimum 1 to handle legacy data
      */
     fun fromJson(json: ExerciseSetJson): ExerciseSet {
         return ExerciseSet(
             id = ExerciseSetId.generate(),
-            setNumber = json.setNumber,
+            setNumber = kotlin.math.max(1, json.setNumber), // NORMALIZE: Ensure setNumber >= 1
             reps = json.reps?.let { Reps.of(it) },
             weight = json.weightKg?.let { Weight.fromKilograms(it) },
             time = json.timeSeconds?.let { Duration.ofSeconds(it.toLong()) },

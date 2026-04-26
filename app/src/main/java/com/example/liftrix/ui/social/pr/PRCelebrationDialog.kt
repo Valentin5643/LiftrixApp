@@ -185,7 +185,7 @@ private fun PRCelebrationContent(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Visibility,
-                                contentDescription = null,
+                                contentDescription = "View workout",
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -236,7 +236,7 @@ private fun PRCelebrationHeader(
         // Trophy icon with animation
         Icon(
             imageVector = Icons.Default.EmojiEvents,
-            contentDescription = null,
+            contentDescription = "Personal record",
             tint = Color(0xFFFFD700), // Gold color
             modifier = Modifier
                 .size(80.dp)
@@ -402,7 +402,7 @@ private fun PRStatColumn(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = label,
             tint = if (isImprovement) {
                 Color(0xFF4CAF50) // Green for improvement
             } else {
@@ -669,4 +669,3 @@ private fun PRCelebrationDialogPreview() {
         )
     }
 }
-

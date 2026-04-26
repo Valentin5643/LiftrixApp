@@ -198,7 +198,7 @@ private fun ProfileSummaryCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Edit,
-                        contentDescription = null,
+                        contentDescription = "Edit profile",
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -251,7 +251,7 @@ private fun ProfileSection(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = title,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(20.dp)
         )

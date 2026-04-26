@@ -249,7 +249,7 @@ class FeedRepositoryImpl @Inject constructor(
             Timber.d("🔍 WORKOUT-POSTS-DEBUG: Creating post for user=$userId, workout=${request.workoutId}, visibility=${request.visibility}")
             
             // Get workout details for metadata
-            val workout = workoutDao.getWorkoutById(request.workoutId)
+            val workout = workoutDao.getWorkoutByIdForUser(request.workoutId, userId)
             
             val calculatedVolume = calculateTotalVolume(workout)
             Timber.d("🔍 POST-CREATION-DEBUG: About to create post entity - workoutId=${request.workoutId}, calculatedVolume=$calculatedVolume")
@@ -623,8 +623,8 @@ class FeedRepositoryImpl @Inject constructor(
                     Timber.w("PFP_DEBUG: 🔥 CURRENT_USER_ID_ERROR: Failed to get current user ID", e)
                     null
                 }
-                
-                val firebaseAuthPhoto = if (entity.userId == currentUserId) {
+
+                val firebaseAuthPhoto = if (entity.userId == currentUserId?.value) {
                     try {
                         val authUser = authRepository.getCurrentUser()
                         Timber.d("PFP_DEBUG: 🔍 AUTH_CHECK: User ${entity.userId} is current user, checking Firebase Auth photo")
@@ -1070,8 +1070,8 @@ class FeedRepositoryImpl @Inject constructor(
                 Timber.w("PFP_DEBUG: 🔥 FALLBACK_CURRENT_USER_ERROR: Failed to get current user ID during fallback", e)
                 null
             }
-            
-            val firebaseAuthPhotoUrl = if (userId == currentUserId) {
+
+            val firebaseAuthPhotoUrl = if (userId == currentUserId?.value) {
                 try {
                     val authUser = authRepository.getCurrentUser()
                     Timber.d("PFP_DEBUG: 🔍 FALLBACK_AUTH_CHECK: User $userId is current user, checking Firebase Auth photo")

@@ -57,7 +57,7 @@ class SocialProfileCommandUseCase @Inject constructor(
         val userId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw IllegalStateException("User not authenticated")
 
-        Timber.i("[SOCIAL-PROFILE] 🔨 Creating social profile for user: $userId")
+        Timber.i("[SOCIAL-PROFILE] 🔨 Creating social profile for user: ${userId.value}")
         Timber.d("[SOCIAL-PROFILE]   - Username: '$username'")
         Timber.d("[SOCIAL-PROFILE]   - Display Name: '$displayName'")
         Timber.d("[SOCIAL-PROFILE]   - Bio: ${if (bio != null) "'$bio'" else "null"}")
@@ -82,7 +82,7 @@ class SocialProfileCommandUseCase @Inject constructor(
             Timber.w("[SOCIAL-PROFILE] ⚠️ Username '$username' is taken, attempting cleanup...")
 
             // Try to clean up orphaned username from previous failed signups
-            val cleanupResult = profileRepository.cleanupOrphanedUsername(username, userId).getOrThrow()
+            val cleanupResult = profileRepository.cleanupOrphanedUsername(username, userId.value).getOrThrow()
             if (cleanupResult) {
                 Timber.i("[SOCIAL-PROFILE] ✅ Username '$username' cleaned up and is now available")
                 // Username is now available, continue
@@ -97,7 +97,7 @@ class SocialProfileCommandUseCase @Inject constructor(
         // Create profile with social-enabled defaults
         val now = System.currentTimeMillis()
         val profile = SocialProfile(
-            userId = userId,
+            userId = userId.value,
             username = username.lowercase().trim(),
             displayName = displayName.trim(),
             bio = bio?.trim(),
@@ -116,7 +116,7 @@ class SocialProfileCommandUseCase @Inject constructor(
 
         val result = profileRepository.createProfile(profile).getOrThrow()
 
-        Timber.i("[SOCIAL-PROFILE] ✅ Social profile created successfully for user: $userId")
+        Timber.i("[SOCIAL-PROFILE] ✅ Social profile created successfully for user: ${userId.value}")
         Timber.i("[SOCIAL-PROFILE]   - User should now appear in search results")
         Timber.i("[SOCIAL-PROFILE]   - Profile will sync to Firebase social_profiles collection")
 
@@ -172,7 +172,7 @@ class SocialProfileCommandUseCase @Inject constructor(
             personalWebsite = personalWebsite
         )
 
-        profileRepository.updateProfile(userId, updates).getOrThrow()
+        profileRepository.updateProfile(userId.value, updates).getOrThrow()
     }
 
     /**
@@ -199,7 +199,7 @@ class SocialProfileCommandUseCase @Inject constructor(
             ?: throw IllegalStateException("User not authenticated")
 
         // Ensure the privacy settings belong to the current user
-        val settingsForUser = privacySettings.copy(userId = userId)
+        val settingsForUser = privacySettings.copy(userId = userId.value)
 
         privacyRepository.updatePrivacySettings(settingsForUser).getOrThrow()
     }

@@ -13,9 +13,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -38,6 +37,7 @@ import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.cards.CompactLiftrixCard
 import com.example.liftrix.ui.components.layouts.GridSystem
 import com.example.liftrix.ui.theme.LiftrixColors
+import com.example.liftrix.ui.profile.components.ProfileImageDisplay
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -100,13 +100,15 @@ private fun FriendWorkoutHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
     ) {
-        // Profile image with enhanced styling
-        ProfileImage(
+        // Profile image with consistent ProfileImageDisplay component
+        ProfileImageDisplay(
             imageUrl = user.photoUrl,
             displayName = user.displayName ?: "User",
-            size = 40.dp
+            userId = user.uid,
+            size = 40.dp,
+            contentDescription = "Profile picture of ${user.displayName}"
         )
-        
+
         // User name with enhanced typography
         Text(
             text = user.displayName ?: "User",
@@ -233,7 +235,7 @@ private fun MetadataItem(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = text,
             modifier = Modifier.size(16.dp),
             tint = MaterialTheme.colorScheme.primary
         )
@@ -306,51 +308,6 @@ private fun PersonalWorkoutSummary(
                         color = MaterialTheme.colorScheme.primary,
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(2.dp)
                     )
-            )
-        }
-    }
-}
-
-/**
- * Enhanced profile image component with modern styling
- */
-@Composable
-private fun ProfileImage(
-    imageUrl: String?,
-    displayName: String,
-    size: Dp,
-    modifier: Modifier = Modifier
-) {
-    // Enhanced initials-based approach with better styling
-    val initials = displayName
-        .trim()
-        .split(' ')
-        .take(2)
-        .mapNotNull { it.firstOrNull()?.uppercaseChar() }
-        .joinToString("")
-        .ifEmpty { "?" }
-    
-    Box(
-        modifier = modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primary),
-        contentAlignment = Alignment.Center
-    ) {
-        if (initials == "?") {
-            Icon(
-                imageVector = Icons.Default.Person,
-                contentDescription = "User avatar",
-                tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(size * 0.6f)
-            )
-        } else {
-            Text(
-                text = initials,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimary,
-                textAlign = TextAlign.Center
             )
         }
     }

@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.FriendEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -82,4 +83,61 @@ interface FriendDao {
     
     @Query("SELECT COUNT(*) FROM friends WHERE friend_user_id = :userId AND status = 'ACCEPTED'")
     suspend fun getFollowersCount(userId: String): Int
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert friend from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(friend: FriendEntity) {
+        val entity = friend.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert friend from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(friend: FriendEntity) {
+        val local = getFriendForSync(friend.userId, friend.friendUserId)
+        if (local == null || friend.lastModified > local.lastModified) {
+            val entity = friend.copy(
+                isDirty = false,
+                isSynced = true
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: FriendEntity)
+
+    /**
+     * Get dirty friend that need upload to Firestore.
+     */
+    @Query("SELECT * FROM friends WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyFriends(userId: String): List<FriendEntity>
+
+    /**
+     * Mark friend as clean after successful Firestore upload.
+     */
+    @Query("UPDATE friends SET is_dirty = 0, is_synced = 1 WHERE user_id = :userId AND friend_user_id IN (:ids)")
+    suspend fun markAsClean(ids: List<String>, userId: String): Int
+
+    /**
+     * Get local friend for remote deduplication.
+     */
+    @Query("SELECT * FROM friends WHERE user_id = :userId AND friend_user_id = :friendUserId LIMIT 1")
+    suspend fun getFriendForSync(userId: String, friendUserId: String): FriendEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 } 

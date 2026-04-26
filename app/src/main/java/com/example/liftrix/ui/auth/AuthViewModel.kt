@@ -4,9 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.AuthEvent
 import com.example.liftrix.domain.model.AuthState
+import com.example.liftrix.domain.service.ConsentManagementService
 import com.example.liftrix.domain.usecase.auth.AuthCommandUseCase
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.usecase.guest.ManageGuestSessionUseCase
+import com.example.liftrix.ui.auth.components.ConsentData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +21,8 @@ import javax.inject.Inject
 class AuthViewModel @Inject constructor(
     private val authCommandUseCase: AuthCommandUseCase,
     private val authRepository: AuthRepository,
-    private val manageGuestSessionUseCase: ManageGuestSessionUseCase
+    private val manageGuestSessionUseCase: ManageGuestSessionUseCase,
+    private val consentManagementService: ConsentManagementService
 ) : ViewModel() {
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Initial)
@@ -84,6 +87,9 @@ class AuthViewModel @Inject constructor(
         when (event) {
             is AuthEvent.EmailPasswordSignIn -> signInWithEmail(event.email, event.password)
             is AuthEvent.EmailPasswordSignUp -> signUpWithEmail(event.email, event.password, event.username)
+            is AuthEvent.EmailPasswordSignUpWithConsent -> signUpWithEmailAndConsent(
+                event.email, event.password, event.username, event.consents
+            )
             is AuthEvent.ForgotPassword -> sendPasswordResetEmail(event.email)
             is AuthEvent.GoogleSignIn -> {
                 // Mark operation as in progress when Google Sign-In starts
@@ -150,6 +156,60 @@ class AuthViewModel @Inject constructor(
                     _authState.value = AuthState.Error(errorMessage, exception)
                     Timber.e(exception, "Sign up failed")
                     // Add small delay to ensure error state is properly set before allowing observer updates
+                    kotlinx.coroutines.delay(100)
+                    isAuthOperationInProgress = false
+                }
+            )
+        }
+    }
+
+    private fun signUpWithEmailAndConsent(
+        email: String,
+        password: String,
+        username: String,
+        consents: ConsentData
+    ) {
+        viewModelScope.launch {
+            isAuthOperationInProgress = true
+            _authState.value = AuthState.Loading
+
+            // First, create the account
+            val signUpResult = authCommandUseCase.signUpWithEmail(email, password, username)
+            signUpResult.fold(
+                onSuccess = { user ->
+                    // Account created, now record consents
+                    val consentResult = consentManagementService.recordConsent(
+                        userId = user.uid,
+                        privacyPolicyVersion = "1.0.0", // TODO: Get from constants
+                        healthDataConsent = consents.healthData,
+                        aiChatConsent = consents.aiChat,
+                        analyticsConsent = consents.analytics,
+                        marketingConsent = false // Not collected in current dialog
+                    )
+
+                    consentResult.fold(
+                        onSuccess = {
+                            _authState.value = AuthState.Authenticated(user)
+                            Timber.d("Sign up with consent successful for user: ${user.uid}")
+                            isAuthOperationInProgress = false
+                        },
+                        onFailure = { consentError ->
+                            // Consent recording failed - this is a critical error
+                            // We should delete the account to maintain GDPR compliance
+                            Timber.e(consentError, "Failed to record consent for user: ${user.uid}")
+                            _authState.value = AuthState.Error(
+                                "Account creation failed. Please try again.",
+                                consentError
+                            )
+                            kotlinx.coroutines.delay(100)
+                            isAuthOperationInProgress = false
+                        }
+                    )
+                },
+                onFailure = { exception ->
+                    val errorMessage = getErrorMessage(exception)
+                    _authState.value = AuthState.Error(errorMessage, exception)
+                    Timber.e(exception, "Sign up with consent failed")
                     kotlinx.coroutines.delay(100)
                     isAuthOperationInProgress = false
                 }

@@ -1,13 +1,20 @@
 package com.example.liftrix.data.repository
 
+import com.example.liftrix.config.OfflineArchitectureFlags
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.dao.UserSearchCacheDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.local.dao.WorkoutPostDao
+import com.example.liftrix.data.local.dao.SocialProfileDao
+import com.example.liftrix.data.local.dao.QRCodeMappingDao
+import com.example.liftrix.data.local.dao.ProfileViewDao
 import com.example.liftrix.data.local.entity.UserSearchCacheEntity
 import com.example.liftrix.data.local.entity.FollowRelationshipEntity
+import com.example.liftrix.data.local.entity.QRCodeMappingEntity
+import com.example.liftrix.data.local.entity.ProfileViewEntity
 import com.example.liftrix.data.mapper.WorkoutPostMapper
+import com.example.liftrix.data.remote.legacy.LegacyUserSearchFirestoreDataSource
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -25,15 +32,16 @@ import com.example.liftrix.domain.model.FitnessGoal
 import com.example.liftrix.domain.model.UserAchievement
 import com.example.liftrix.domain.repository.UserSearchRepository
 import com.example.liftrix.domain.repository.AuthRepository
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.gson.Gson
-import kotlinx.coroutines.tasks.await
 import java.time.format.DateTimeFormatter
 import java.time.LocalDateTime
+import java.time.Instant
+import java.time.ZoneOffset
 import kotlinx.coroutines.flow.first
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import java.util.UUID
 
 /**
  * Production implementation of UserSearchRepository with full social discovery features.
@@ -56,9 +64,12 @@ class UserSearchRepositoryImpl @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val workoutPostDao: WorkoutPostDao,
     private val workoutPostMapper: WorkoutPostMapper,
+    private val socialProfileDao: SocialProfileDao,
+    private val qrCodeMappingDao: QRCodeMappingDao,
+    private val profileViewDao: ProfileViewDao,
     private val authRepository: AuthRepository,
-    private val firestore: FirebaseFirestore,
-    private val gson: Gson
+    private val gson: Gson,
+    private val legacyDataSource: LegacyUserSearchFirestoreDataSource
 ) : UserSearchRepository {
 
     companion object {
@@ -110,7 +121,7 @@ class UserSearchRepositoryImpl @Inject constructor(
             // Perform comprehensive Firebase search with tokenized indexing
             // Perform comprehensive Firebase search with tokenized indexing
             Timber.d("[USER-SEARCH] 🔥 Performing Firebase search with tokenized indexing...")
-            val searchResults = searchFirebaseUsersWithTokens(sanitizedQuery, currentUserId, filters)
+            val searchResults = searchUsersWithTokens(sanitizedQuery, currentUserId, filters)
             
             // Cache results for future queries
             if (searchResults.isNotEmpty()) {
@@ -148,23 +159,22 @@ class UserSearchRepositoryImpl @Inject constructor(
             Timber.d("[PUBLIC-PROFILE]   - Viewer ID: $viewerId")
             Timber.d("[PUBLIC-PROFILE]   - Collection: $USERS_PUBLIC_COLLECTION")
             
-            // Get Firebase public profile with privacy filtering
-            val document = firestore.collection(USERS_PUBLIC_COLLECTION)
-                .document(userId)
-                .get()
-                .await()
+            if (OfflineArchitectureFlags.FIX_SEARCH_REPOSITORY) {
+                val localProfile = socialProfileDao.getSocialProfileByUserId(userId)
+                    ?: return@liftrixCatching null
 
-            if (!document.exists()) {
-                Timber.w("[PUBLIC-PROFILE] 🚫 Public profile not found for user: $userId")
-                Timber.w("[PUBLIC-PROFILE]   - Document path: $USERS_PUBLIC_COLLECTION/$userId")
-                Timber.w("[PUBLIC-PROFILE]   - User may not have completed onboarding")
-                Timber.w("[PUBLIC-PROFILE]   - Check if social profile was created and synced")
-                return@liftrixCatching null
-            } else {
-                Timber.d("[PUBLIC-PROFILE] ✅ Profile document found for user: $userId")
+                val publicProfile = mapLocalProfileToPublicProfile(localProfile, viewerId)
+                    ?: return@liftrixCatching null
+
+                if (userId != viewerId) {
+                    trackProfileView(userId, viewerId)
+                }
+
+                return@liftrixCatching publicProfile
             }
 
-            val data = document.data ?: return@liftrixCatching null
+            val data = legacyDataSource.getPublicProfileData(userId)
+                ?: return@liftrixCatching null
             
             // Check privacy settings - handle both isPrivate and isPublic fields for compatibility
             val isPrivate = data["isPrivate"] as? Boolean ?: false
@@ -339,16 +349,15 @@ class UserSearchRepositoryImpl @Inject constructor(
             errorMapper = { throwable -> LiftrixError.DatabaseError("Failed to check profile existence: ${throwable.message}") }
         ) {
             Timber.d("[PROFILE-EXISTS] 🔍 Checking if profile exists for user: $userId")
-            
-            // Check Firebase social_profiles collection directly (no privacy filtering)
-            val document = firestore.collection(USERS_PUBLIC_COLLECTION)
-                .document(userId)
-                .get()
-                .await()
 
-            val exists = document.exists()
+            if (OfflineArchitectureFlags.FIX_SEARCH_REPOSITORY) {
+                val exists = socialProfileDao.hasProfile(userId)
+                Timber.d("[PROFILE-EXISTS] ${if (exists) "✅" else "🚫"} Profile exists: $exists for user: $userId")
+                return@liftrixCatching exists
+            }
+
+            val exists = legacyDataSource.profileExists(userId)
             Timber.d("[PROFILE-EXISTS] ${if (exists) "✅" else "🚫"} Profile exists: $exists for user: $userId")
-            
             exists
         }
     }
@@ -380,11 +389,20 @@ class UserSearchRepositoryImpl @Inject constructor(
                 "expiresAt" to expiresAt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
                 "usageCount" to 0
             )
-            
-            firestore.collection(QR_CODE_COLLECTION)
-                .document(qrCodeId)
-                .set(qrCodeDoc)
-                .await()
+
+            if (OfflineArchitectureFlags.FIX_SEARCH_REPOSITORY) {
+                val mapping = QRCodeMappingEntity(
+                    qrCodeId = qrCodeId,
+                    userId = userId,
+                    createdAt = qrCodeDoc["createdAt"] as String,
+                    expiresAt = qrCodeDoc["expiresAt"] as String,
+                    isActive = true,
+                    usageCount = 0
+                )
+                qrCodeMappingDao.insertOrUpdate(mapping)
+            } else {
+                legacyDataSource.storeQRCode(qrCodeId, qrCodeDoc)
+            }
             
             Timber.d("Generated new QR code: $qrData for user: $userId")
             qrData
@@ -407,16 +425,19 @@ class UserSearchRepositoryImpl @Inject constructor(
                 qrData.startsWith("liftrix://qr/") -> {
                     // New QR code system with expiration
                     val qrCodeId = qrData.removePrefix("liftrix://qr/")
-                    val qrDocument = firestore.collection(QR_CODE_COLLECTION)
-                        .document(qrCodeId)
-                        .get()
-                        .await()
-                    
-                    if (!qrDocument.exists()) {
-                        throw IllegalArgumentException("QR code not found")
+
+                    val data = if (OfflineArchitectureFlags.FIX_SEARCH_REPOSITORY) {
+                        val mapping = qrCodeMappingDao.getMapping(qrCodeId)
+                            ?: throw IllegalArgumentException("QR code not found")
+                        mapOf(
+                            "expiresAt" to mapping.expiresAt,
+                            "userId" to mapping.userId
+                        )
+                    } else {
+                        legacyDataSource.getQRCode(qrCodeId)
+                            ?: throw IllegalArgumentException("QR code not found")
                     }
-                    
-                    val data = qrDocument.data ?: throw IllegalArgumentException("Invalid QR code data")
+
                     val expiresAtStr = data["expiresAt"] as? String
                     val userId = data["userId"] as? String
                     
@@ -465,11 +486,19 @@ class UserSearchRepositoryImpl @Inject constructor(
                 "keywords" to keywords,
                 "updatedAt" to LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
             )
-            
-            firestore.collection(USER_SEARCH_CACHE_COLLECTION)
-                .document(userId)
-                .set(searchCacheDoc, com.google.firebase.firestore.SetOptions.merge())
-                .await()
+
+            if (OfflineArchitectureFlags.FIX_SEARCH_REPOSITORY) {
+                val profile = userProfileDao.getProfileForUserSuspend(userId)
+                    ?: return@liftrixCatching
+                val updated = profile.copy(
+                    searchKeywords = keywords.joinToString(","),
+                    updatedAt = LocalDateTime.now(),
+                    isSynced = false
+                )
+                userProfileDao.upsertLocal(updated)
+            } else {
+                legacyDataSource.updateSearchKeywords(userId, searchCacheDoc)
+            }
             
             Timber.d("Search keywords updated successfully for user: $userId")
         }
@@ -491,20 +520,37 @@ class UserSearchRepositoryImpl @Inject constructor(
                 "viewedAt" to LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
                 "sessionId" to generateSessionId()
             )
-            
-            // Store view record (with auto-generated ID)
-            firestore.collection(PROFILE_VIEWS_COLLECTION)
-                .add(viewRecord)
-                .await()
-            
-            // Update profile view count (optional - can be computed from view records)
-            val profileRef = firestore.collection(USERS_PUBLIC_COLLECTION).document(profileUserId)
-            firestore.runTransaction { transaction ->
-                val snapshot = transaction.get(profileRef)
-                val currentViews = (snapshot.data?.get("profileViews") as? Number)?.toLong() ?: 0L
-                transaction.update(profileRef, "profileViews", currentViews + 1)
-                transaction.update(profileRef, "lastViewedAt", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
-            }.await()
+
+            if (OfflineArchitectureFlags.FIX_SEARCH_REPOSITORY) {
+                val viewEntity = ProfileViewEntity(
+                    id = UUID.randomUUID().toString(),
+                    viewerId = viewerId,
+                    profileId = profileUserId,
+                    viewedAt = System.currentTimeMillis(),
+                    viewSource = ProfileViewEntity.VIEW_SOURCE_PROFILE_LINK,
+                    viewDurationMs = null,
+                    interactionType = ProfileViewEntity.INTERACTION_NONE,
+                    createdAt = System.currentTimeMillis()
+                )
+                profileViewDao.upsertLocal(viewEntity)
+
+                val profile = userProfileDao.getProfileForUserSuspend(profileUserId)
+                if (profile != null) {
+                    val updated = profile.copy(
+                        lastProfileViewAt = LocalDateTime.now(),
+                        profileViewsCount = profile.profileViewsCount + 1,
+                        updatedAt = LocalDateTime.now(),
+                        isSynced = false
+                    )
+                    userProfileDao.upsertLocal(updated)
+                }
+            } else {
+                legacyDataSource.addProfileView(viewRecord)
+                legacyDataSource.incrementProfileViewCount(
+                    profileUserId,
+                    LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                )
+            }
             
             Timber.d("Profile view tracked successfully")
         }
@@ -566,165 +612,89 @@ class UserSearchRepositoryImpl @Inject constructor(
     }
 
     // Enhanced search with tokenization and caching
-    private suspend fun searchFirebaseUsersWithTokens(
+    private suspend fun searchUsersWithTokens(
         query: String,
         viewerId: String,
         filters: SearchFilters
     ): List<UserSearchResult> {
-        return try {
-            Timber.d("[FIREBASE-SEARCH] 🔥 Starting tokenized Firebase search")
-            Timber.d("[FIREBASE-SEARCH]   - Query: '$query'")
-            Timber.d("[FIREBASE-SEARCH]   - Viewer: $viewerId")
-            Timber.d("[FIREBASE-SEARCH]   - Collection: $USER_SEARCH_CACHE_COLLECTION")
-            
-            // Performing tokenized Firebase search
-            
-            // Use search cache collection for tokenized search
-            val searchTokens = generateSearchTokensFromQuery(query)
-            Timber.d("[FIREBASE-SEARCH] 🎨 Generated search tokens: $searchTokens")
-            
-            val searchQuery = firestore.collection(USER_SEARCH_CACHE_COLLECTION)
-                .whereEqualTo("isSearchable", true)
-                .whereArrayContainsAny("searchTokens", searchTokens)
-                .orderBy("lastActiveAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                .limit(MAX_SEARCH_RESULTS.toLong())
-
-            Timber.d("[FIREBASE-SEARCH] 📡 Executing Firestore query on $USER_SEARCH_CACHE_COLLECTION")
-            val snapshot = searchQuery.get().await()
-            Timber.d("[FIREBASE-SEARCH] ✅ Query executed, found ${snapshot.size()} documents")
-            
-            Timber.d("[FIREBASE-SEARCH] 📊 Processing ${snapshot.documents.size} query results...")
-            
-            val results = snapshot.documents.mapNotNull { document ->
-                val data = document.data ?: return@mapNotNull null
-                val userId = data["userId"] as? String ?: return@mapNotNull null
-                val displayName = data["displayName"] as? String ?: return@mapNotNull null
-                val username = data["username"] as? String
-                
-                Timber.v("[FIREBASE-SEARCH]   - Processing document: $userId ($displayName)")
-                
-                // Allow self-account to appear in search results
-                // This enables users to find and view their own profile
-                // Note: We still calculate connection status even for self
-                
-                UserSearchResult(
-                    userId = userId,
-                    displayName = displayName,
-                    profileImageUrl = (data["profileImageUrl"] as? String) 
-                        ?: (data["photoUrl"] as? String)
-                        ?: (data["profilePhotoUrl"] as? String)
-                        ?: (data["imageUrl"] as? String),
-                    bio = data["bio"] as? String,
-                    fitnessLevel = determineFitnessLevelFromData(data),
-                    totalWorkouts = (data["totalWorkouts"] as? Number)?.toInt() ?: 0,
-                    memberSince = parseDateTime(data["memberSince"] as? String),
-                    sharedEquipment = calculateSharedEquipment(data, viewerId),
-                    sharedGoals = calculateSharedGoals(data, viewerId),
-                    connectionStatus = if (userId == viewerId) ConnectionStatus.SELF else calculateConnectionStatus(userId, viewerId),
-                    mutualConnections = if (userId == viewerId) 0 else calculateMutualConnections(userId, viewerId)
-                )
-            }
-            
-            if (results.isEmpty()) {
-                Timber.w("[FIREBASE-SEARCH] 🚫 Tokenized search found no results for: '$query'")
-                Timber.w("[FIREBASE-SEARCH]   - No documents matched search tokens: $searchTokens")
-                Timber.w("[FIREBASE-SEARCH]   - Check if users have searchable profiles with search tokens")
-            } else {
-                Timber.i("[FIREBASE-SEARCH] ✅ Tokenized search found ${results.size} results")
-                Timber.d("[FIREBASE-SEARCH]   - Results include ${results.count { it.connectionStatus == ConnectionStatus.SELF }} self-matches")
-                Timber.d("[FIREBASE-SEARCH]   - Results include ${results.count { it.connectionStatus != ConnectionStatus.SELF }} other users")
-            }
-            results
-            
-        } catch (e: Exception) {
-            Timber.e("[FIREBASE-SEARCH] ❌ Tokenized search failed: ${e.message}", e)
-            Timber.e("[FIREBASE-SEARCH]   - Error type: ${e.javaClass.simpleName}")
-            Timber.e("[FIREBASE-SEARCH]   - Collection: $USER_SEARCH_CACHE_COLLECTION")
-            Timber.w("[FIREBASE-SEARCH] 🔄 Falling back to basic search on $USERS_PUBLIC_COLLECTION")
-            searchFirebaseUsersBasic(query, viewerId, filters)
+        return if (OfflineArchitectureFlags.FIX_SEARCH_REPOSITORY) {
+            searchLocalUsers(query, viewerId, filters)
+        } else {
+            searchLegacyUsersWithTokens(query, viewerId, filters)
         }
     }
-    
-    // Fallback basic search
-    private suspend fun searchFirebaseUsersBasic(
+
+    private suspend fun searchLocalUsers(
         query: String,
         viewerId: String,
         filters: SearchFilters
     ): List<UserSearchResult> {
         return try {
-            Timber.d("[BASIC-SEARCH] 🔎 Starting basic Firebase search")
-            Timber.d("[BASIC-SEARCH]   - Query: '$query'")
-            Timber.d("[BASIC-SEARCH]   - Collection: $USERS_PUBLIC_COLLECTION")
-            
-            // Performing basic Firebase search
-            
-            val searchQuery = firestore.collection(USERS_PUBLIC_COLLECTION)
-                .whereEqualTo("isSearchable", true)
-                .limit(MAX_SEARCH_RESULTS.toLong())
+            val profiles = socialProfileDao.searchProfiles(viewerId, query, MAX_SEARCH_RESULTS)
+            val selfProfile = socialProfileDao.getSocialProfileByUserId(viewerId)
 
-            Timber.d("[BASIC-SEARCH] 📡 Executing basic search query...")
-            val snapshot = searchQuery.get().await()
-            Timber.d("[BASIC-SEARCH] ✅ Query executed, found ${snapshot.size()} documents")
-            
-            Timber.d("[BASIC-SEARCH] 📊 Processing ${snapshot.documents.size} basic search results...")
-            
-            val results = snapshot.documents.mapNotNull { document ->
-                val data = document.data ?: return@mapNotNull null
-                val displayName = data["displayName"] as? String ?: return@mapNotNull null
-                val username = data["username"] as? String
-                val userId = document.id
-                
-                Timber.v("[BASIC-SEARCH]   - Checking document: $userId ($displayName)")
-                
-                // Allow self-account to appear in search results
-                // No longer filtering out the current user
-                
-                // Apply text matching on display name and username
-                val matchesDisplayName = displayName.contains(query, ignoreCase = true)
-                val matchesUsername = username?.contains(query, ignoreCase = true) ?: false
-                
-                Timber.v("[BASIC-SEARCH]     - Display name match: $matchesDisplayName")
-                Timber.v("[BASIC-SEARCH]     - Username match: $matchesUsername")
-                
-                if (!matchesDisplayName && !matchesUsername) {
-                    Timber.v("[BASIC-SEARCH]     - No match found, skipping")
-                    return@mapNotNull null
-                } else {
-                    Timber.v("[BASIC-SEARCH]     - Match found, including in results")
-                }
-                
-                
-                UserSearchResult(
-                    userId = userId,
-                    displayName = displayName,
-                    profileImageUrl = (data["profileImageUrl"] as? String) 
-                        ?: (data["photoUrl"] as? String)
-                        ?: (data["profilePhotoUrl"] as? String)
-                        ?: (data["imageUrl"] as? String),
-                    bio = data["bio"] as? String,
-                    fitnessLevel = determineFitnessLevelFromData(data),
-                    totalWorkouts = (data["totalWorkouts"] as? Number)?.toInt() ?: 0,
-                    memberSince = parseDateTime(data["memberSince"] as? String),
-                    sharedEquipment = emptyList(),
-                    sharedGoals = emptyList(),
-                    connectionStatus = if (userId == viewerId) ConnectionStatus.SELF else ConnectionStatus.NONE,
-                    mutualConnections = 0
-                )
-            }
-            
-            if (results.isEmpty()) {
-                Timber.w("[BASIC-SEARCH] 🚫 Basic search found no results for: '$query'")
-                Timber.w("[BASIC-SEARCH]   - No display names or usernames matched the query")
-                Timber.w("[BASIC-SEARCH]   - Total documents checked: ${snapshot.documents.size}")
+            val combined = if (selfProfile != null &&
+                (selfProfile.username.contains(query, ignoreCase = true) ||
+                    (selfProfile.displayName?.contains(query, ignoreCase = true) == true))
+            ) {
+                profiles + selfProfile
             } else {
-                Timber.i("[BASIC-SEARCH] ✅ Basic search found ${results.size} results")
-                Timber.d("[BASIC-SEARCH]   - Results include ${results.count { it.connectionStatus == ConnectionStatus.SELF }} self-matches")
+                profiles
+            }
+
+            combined.distinctBy { it.userId }.mapNotNull { profile ->
+                mapLocalProfileToSearchResult(profile, viewerId)
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Local search failed, returning empty results")
+            emptyList()
+        }
+    }
+
+    private suspend fun searchLegacyUsersWithTokens(
+        query: String,
+        viewerId: String,
+        filters: SearchFilters
+    ): List<UserSearchResult> {
+        return try {
+            val searchTokens = generateSearchTokensFromQuery(query)
+            val documents = legacyDataSource.searchUsersWithTokens(searchTokens, MAX_SEARCH_RESULTS)
+            val results = documents.mapNotNull { data ->
+                mapLegacySearchResult(data, viewerId)
+            }
+
+            if (results.isEmpty()) {
+                Timber.w("[FIREBASE-SEARCH] 🚫 Tokenized search found no results for: '$query'")
             }
             results
         } catch (e: Exception) {
-            Timber.e("[BASIC-SEARCH] ❌ Basic search failed: ${e.message}", e)
-            Timber.e("[BASIC-SEARCH]   - Error type: ${e.javaClass.simpleName}")
-            Timber.e("[BASIC-SEARCH]   - Collection: $USERS_PUBLIC_COLLECTION")
+            Timber.e(e, "[FIREBASE-SEARCH] ❌ Tokenized search failed, falling back to basic search")
+            searchLegacyUsersBasic(query, viewerId, filters)
+        }
+    }
+
+    private suspend fun searchLegacyUsersBasic(
+        query: String,
+        viewerId: String,
+        filters: SearchFilters
+    ): List<UserSearchResult> {
+        return try {
+            val documents = legacyDataSource.searchUsersBasic(MAX_SEARCH_RESULTS)
+            documents.mapNotNull { data ->
+                val displayName = data["displayName"] as? String ?: return@mapNotNull null
+                val username = data["username"] as? String
+                val userId = data["userId"] as? String ?: return@mapNotNull null
+
+                val matchesDisplayName = displayName.contains(query, ignoreCase = true)
+                val matchesUsername = username?.contains(query, ignoreCase = true) ?: false
+                if (!matchesDisplayName && !matchesUsername) {
+                    return@mapNotNull null
+                }
+
+                mapLegacySearchResult(data, viewerId)
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "[BASIC-SEARCH] ❌ Basic search failed: ${e.message}")
             emptyList()
         }
     }
@@ -752,16 +722,14 @@ class UserSearchRepositoryImpl @Inject constructor(
     
     private suspend fun getValidQRCode(userId: String): String? {
         return try {
-            val now = LocalDateTime.now()
-            val snapshot = firestore.collection(QR_CODE_COLLECTION)
-                .whereEqualTo("userId", userId)
-                .whereGreaterThan("expiresAt", now.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
-                .orderBy("expiresAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                .limit(1)
-                .get()
-                .await()
-            
-            snapshot.documents.firstOrNull()?.data?.get("qrData") as? String
+            if (OfflineArchitectureFlags.FIX_SEARCH_REPOSITORY) {
+                val activeMappings = qrCodeMappingDao.getActiveMappingsForUser(userId).first()
+                activeMappings.firstOrNull()?.let { mapping ->
+                    "liftrix://qr/${mapping.qrCodeId}"
+                }
+            } else {
+                legacyDataSource.getValidQRCode(userId)
+            }
         } catch (e: Exception) {
             Timber.e(e, "Error checking for valid QR code")
             null
@@ -774,15 +742,195 @@ class UserSearchRepositoryImpl @Inject constructor(
     
     private suspend fun incrementQRCodeUsage(qrCodeId: String) {
         try {
-            val qrRef = firestore.collection(QR_CODE_COLLECTION).document(qrCodeId)
-            firestore.runTransaction { transaction ->
-                val snapshot = transaction.get(qrRef)
-                val currentCount = (snapshot.data?.get("usageCount") as? Number)?.toInt() ?: 0
-                transaction.update(qrRef, "usageCount", currentCount + 1)
-                transaction.update(qrRef, "lastUsedAt", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
-            }.await()
+            if (OfflineArchitectureFlags.FIX_SEARCH_REPOSITORY) {
+                qrCodeMappingDao.incrementUsageCount(qrCodeId)
+            } else {
+                legacyDataSource.incrementQRCodeUsage(qrCodeId)
+            }
         } catch (e: Exception) {
             Timber.e(e, "Error incrementing QR code usage")
+        }
+    }
+
+    private suspend fun mapLocalProfileToSearchResult(
+        profile: com.example.liftrix.data.local.entity.SocialProfileEntity,
+        viewerId: String
+    ): UserSearchResult? {
+        val connectionStatus = if (profile.userId == viewerId) {
+            ConnectionStatus.SELF
+        } else {
+            calculateConnectionStatus(profile.userId, viewerId)
+        }
+
+        return UserSearchResult(
+            userId = profile.userId,
+            displayName = profile.displayName ?: profile.username,
+            profileImageUrl = profile.profilePhotoUrl,
+            bio = profile.bio,
+            fitnessLevel = determineFitnessLevelFromCount(profile.workoutCount),
+            totalWorkouts = profile.workoutCount,
+            memberSince = Instant.ofEpochMilli(profile.memberSince).atZone(ZoneOffset.UTC).toLocalDateTime(),
+            sharedEquipment = emptyList(),
+            sharedGoals = emptyList(),
+            connectionStatus = connectionStatus,
+            mutualConnections = if (connectionStatus == ConnectionStatus.SELF) 0 else calculateMutualConnections(profile.userId, viewerId)
+        )
+    }
+
+    private suspend fun mapLegacySearchResult(
+        data: Map<String, Any>,
+        viewerId: String
+    ): UserSearchResult? {
+        val userId = data["userId"] as? String ?: return null
+        val displayName = data["displayName"] as? String ?: return null
+        return UserSearchResult(
+            userId = userId,
+            displayName = displayName,
+            profileImageUrl = (data["profileImageUrl"] as? String)
+                ?: (data["photoUrl"] as? String)
+                ?: (data["profilePhotoUrl"] as? String)
+                ?: (data["imageUrl"] as? String),
+            bio = data["bio"] as? String,
+            fitnessLevel = determineFitnessLevelFromData(data),
+            totalWorkouts = (data["totalWorkouts"] as? Number)?.toInt() ?: 0,
+            memberSince = parseDateTime(data["memberSince"] as? String),
+            sharedEquipment = calculateSharedEquipment(data, viewerId),
+            sharedGoals = calculateSharedGoals(data, viewerId),
+            connectionStatus = if (userId == viewerId) ConnectionStatus.SELF else calculateConnectionStatus(userId, viewerId),
+            mutualConnections = if (userId == viewerId) 0 else calculateMutualConnections(userId, viewerId)
+        )
+    }
+
+    private suspend fun mapLocalProfileToPublicProfile(
+        profile: com.example.liftrix.data.local.entity.SocialProfileEntity,
+        viewerId: String
+    ): PublicUserProfile? {
+        val connectionStatus = if (profile.userId == viewerId) {
+            ConnectionStatus.SELF
+        } else {
+            calculateConnectionStatus(profile.userId, viewerId)
+        }
+
+        val canViewDetails = !profile.isPrivate ||
+            connectionStatus == ConnectionStatus.SELF ||
+            connectionStatus == ConnectionStatus.CONNECTED ||
+            connectionStatus == ConnectionStatus.MUTUAL_FOLLOW ||
+            connectionStatus == ConnectionStatus.GYM_BUDDY
+
+        if (profile.isPrivate && !canViewDetails) {
+            return null
+        }
+
+        val followStatus = when (connectionStatus) {
+            ConnectionStatus.SELF -> FollowStatus.NONE
+            ConnectionStatus.CONNECTED -> FollowStatus.FOLLOWING
+            ConnectionStatus.MUTUAL_FOLLOW, ConnectionStatus.GYM_BUDDY -> FollowStatus.MUTUAL_FOLLOW
+            ConnectionStatus.PENDING_SENT -> FollowStatus.PENDING_SENT
+            ConnectionStatus.PENDING_RECEIVED -> FollowStatus.PENDING_RECEIVED
+            ConnectionStatus.BLOCKED -> FollowStatus.BLOCKED
+            else -> FollowStatus.NONE
+        }
+
+        val userProfile = userProfileDao.getProfileForUserSuspend(profile.userId)
+        val totalWorkouts = userProfile?.totalWorkouts ?: profile.workoutCount
+        val currentStreak = userProfile?.currentStreak ?: 0
+        val longestStreak = userProfile?.longestStreak ?: 0
+
+        val recentWorkouts = loadRecentWorkouts(profile.userId)
+        val recentWorkoutPosts = loadRecentWorkoutPosts(profile.userId)
+
+        return PublicUserProfile(
+            userId = profile.userId,
+            username = profile.username,
+            displayName = profile.displayName,
+            profileImageUrl = profile.profilePhotoUrl,
+            coverImageUrl = profile.coverPhotoUrl,
+            bio = profile.bio,
+            age = null,
+            location = null,
+            fitnessLevel = determineFitnessLevelFromCount(totalWorkouts),
+            fitnessGoals = emptyList(),
+            followersCount = followRelationshipDao.getFollowerCount(profile.userId),
+            followingCount = followRelationshipDao.getFollowingCount(profile.userId),
+            mutualConnectionsCount = calculateMutualConnections(profile.userId, viewerId),
+            totalWorkouts = totalWorkouts,
+            currentStreak = currentStreak,
+            longestStreak = longestStreak,
+            memberSince = Instant.ofEpochMilli(profile.memberSince).atZone(ZoneOffset.UTC).toLocalDateTime(),
+            lastActive = profile.lastActive?.let { Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDateTime() },
+            isVerified = profile.isVerified,
+            isPrivate = profile.isPrivate,
+            followStatus = followStatus,
+            connectionStatus = connectionStatus,
+            canViewDetails = canViewDetails,
+            instagramHandle = profile.instagramHandle,
+            youtubeChannel = profile.youtubeChannel,
+            personalWebsite = profile.personalWebsite,
+            recentWorkouts = recentWorkouts,
+            recentWorkoutPosts = recentWorkoutPosts,
+            publicWorkoutStats = PublicWorkoutStats(
+                totalWorkouts = totalWorkouts,
+                totalWorkoutTime = 0L,
+                averageWorkoutTime = 0L,
+                currentStreak = currentStreak,
+                longestStreak = longestStreak
+            )
+        )
+    }
+
+    private suspend fun loadRecentWorkouts(userId: String): List<RecentWorkout> {
+        return try {
+            val recentWorkouts = workoutDao.getRecentCompletedWorkouts(userId, 3).first()
+            recentWorkouts.map { workout ->
+                val durationMinutes = workout.endTime?.let { endTime ->
+                    workout.startTime?.let { startTime ->
+                        java.time.Duration.between(startTime, endTime).toMinutes().toString()
+                    }
+                } ?: "0"
+
+                val exerciseCount = try {
+                    if (!workout.exercisesJson.isNullOrBlank()) {
+                        val jsonElement = gson.fromJson(workout.exercisesJson, com.google.gson.JsonElement::class.java)
+                        when {
+                            jsonElement.isJsonObject && jsonElement.asJsonObject.has("exercises") -> {
+                                jsonElement.asJsonObject.getAsJsonArray("exercises").size()
+                            }
+                            jsonElement.isJsonArray -> {
+                                jsonElement.asJsonArray.size()
+                            }
+                            else -> 0
+                        }
+                    } else {
+                        0
+                    }
+                } catch (e: Exception) {
+                    0
+                }
+
+                RecentWorkout(
+                    id = workout.id,
+                    name = workout.name,
+                    date = workout.date.format(DateTimeFormatter.ofPattern("MMM d, yyyy")),
+                    exerciseCount = exerciseCount,
+                    duration = durationMinutes
+                )
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to fetch recent workouts for user: $userId")
+            emptyList()
+        }
+    }
+
+    private suspend fun loadRecentWorkoutPosts(userId: String): List<WorkoutPost> {
+        return try {
+            val postsFlow = workoutPostDao.getRecentUserPosts(userId, limit = 3)
+            val postEntities = postsFlow.first()
+            postEntities.map { entity ->
+                workoutPostMapper.toDomain(entity, isLikedByViewer = false, isSavedByViewer = false)
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to fetch recent workout posts for user: $userId")
+            emptyList()
         }
     }
     
@@ -801,6 +949,10 @@ class UserSearchRepositoryImpl @Inject constructor(
             totalWorkouts >= 20 -> FitnessLevel.BEGINNER
             else -> FitnessLevel.BEGINNER
         }
+    }
+
+    private fun determineFitnessLevelFromCount(totalWorkouts: Int): FitnessLevel {
+        return determineFitnessLevel(totalWorkouts, emptyMap())
     }
     
     private fun determineFitnessLevelFromData(data: Map<String, Any>): FitnessLevel {

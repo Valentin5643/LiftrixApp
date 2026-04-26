@@ -17,6 +17,7 @@ import com.example.liftrix.domain.model.WeightUnit
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.FieldValue
+import com.example.liftrix.config.OfflineArchitectureFlags
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
@@ -78,8 +79,10 @@ class SettingsSyncWorkerV2 @AssistedInject constructor(
             )
             
             val forceSync = inputData.getBoolean("forceSync", false)
+            val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+                OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
 
-            Timber.d("Starting bidirectional settings sync for user $userId (forceSync: $forceSync)")
+            Timber.d("Starting settings sync for user $userId (forceSync: $forceSync, dirty gating: $useDirtyFlagGating)")
             
             val docRef = firestore
                 .collection("users")
@@ -87,57 +90,89 @@ class SettingsSyncWorkerV2 @AssistedInject constructor(
                 .collection("settings")
                 .document("preferences")
             
-            // Download remote settings
+            // Download remote settings (remote -> local)
             val remoteDoc = docRef.get().await()
-            val localSettings = settingsDao.getSettingsForUser(userId)
-            
-            // Merge settings with last-write-wins as per specification
-            val mergedSettings = if (remoteDoc.exists() && localSettings != null) {
-                val remoteSettings = remoteDoc.toSettingsEntity(userId)
-                if (localSettings.updatedAt.isAfter(remoteSettings.updatedAt)) {
-                    localSettings
-                } else {
-                    remoteSettings
+            val remoteLastModified = if (remoteDoc.exists()) {
+                when (val remoteValue = remoteDoc.get("lastModified")) {
+                    is com.google.firebase.Timestamp -> remoteValue.toDate().time
+                    is Number -> remoteValue.toLong()
+                    else -> 0L
                 }
             } else {
-                localSettings ?: createDefaultSettings(userId)
+                0L
+            }
+            if (remoteDoc.exists()) {
+                val remoteSettings = remoteDoc.toSettingsEntity(userId).copy(
+                    isDirty = false,
+                    isSynced = true,
+                    syncVersion = remoteDoc.getLong("syncVersion") ?: 0L,
+                    lastModified = remoteLastModified
+                )
+                settingsDao.upsertFromRemote(remoteSettings)
+            }
+
+            var localSettings = settingsDao.getSettingsForUser(userId)
+            if (localSettings == null && !remoteDoc.exists()) {
+                val defaultSettings = createDefaultSettings(userId)
+                settingsDao.upsertLocal(defaultSettings)
+                localSettings = settingsDao.getSettingsForUser(userId)
+            }
+
+            val settingsToUpload = if (useDirtyFlagGating) {
+                settingsDao.getDirtySettings(userId)
+            } else {
+                localSettings?.let { settings ->
+                    if (!settings.isSynced || forceSync) listOf(settings) else emptyList()
+                } ?: emptyList()
+            }
+
+            if (settingsToUpload.isEmpty()) {
+                Timber.d("No settings changes to sync for user $userId")
+                return@withContext Result.success(
+                    Data.Builder()
+                        .putInt(KEY_SYNC_COUNT, 0)
+                        .build()
+                )
+            }
+
+            var syncedCount = 0
+            settingsToUpload.forEach { settings ->
+                if (remoteLastModified > settings.lastModified) {
+                    return@forEach
+                }
+
+                val settingsData = mapOf(
+                    "userId" to userId,
+                    "weightUnit" to when (settings.weightUnit) {
+                        WeightUnit.KILOGRAMS -> "KG"
+                        WeightUnit.POUNDS -> "LBS"
+                    },
+                    "distanceUnit" to settings.distanceUnit,
+                    "darkMode" to settings.darkMode,
+                    "notifications" to settings.notificationsEnabled,
+                    "privateProfile" to settings.privateProfile,
+                    "hideStats" to settings.hideStats,
+                    "allowMessages" to settings.allowMessages,
+                    "autoPlayVideos" to settings.autoPlayVideos,
+                    "lastModified" to settings.lastModified,
+                    "updatedAt" to FieldValue.serverTimestamp(),
+                    "syncVersion" to System.currentTimeMillis()
+                )
+                
+                docRef.set(settingsData, SetOptions.merge()).await()
+                settingsDao.markAsClean(
+                    ids = listOf(userId),
+                    userId = userId,
+                    syncVersion = System.currentTimeMillis()
+                )
+                syncedCount++
             }
             
-            // Save merged settings locally
-            settingsDao.upsertSettings(mergedSettings)
-            
-            // Upload to Firebase with all fields as per specification
-            val settingsData = mapOf(
-                "userId" to userId,
-                "weightUnit" to when (mergedSettings.weightUnit) {
-                    WeightUnit.KILOGRAMS -> "KG"
-                    WeightUnit.POUNDS -> "LBS"
-                },
-                "distanceUnit" to mergedSettings.distanceUnit,
-                "darkMode" to mergedSettings.darkMode,
-                "notifications" to mergedSettings.notificationsEnabled,
-                "privateProfile" to mergedSettings.privateProfile,
-                "hideStats" to mergedSettings.hideStats,
-                "allowMessages" to mergedSettings.allowMessages,
-                "autoPlayVideos" to mergedSettings.autoPlayVideos,
-                "updatedAt" to FieldValue.serverTimestamp(),
-                "syncVersion" to System.currentTimeMillis()
-            )
-            
-            docRef.set(settingsData, SetOptions.merge()).await()
-            
-            // Mark as synced
-            settingsDao.markAsSynced(
-                userId = userId,
-                isSynced = true,
-                version = System.currentTimeMillis().toInt()
-            )
-            
-            Timber.d("Successfully completed bidirectional settings sync for user $userId")
+            Timber.d("Successfully completed settings sync for user $userId")
             
             return@withContext Result.success(
                 Data.Builder()
-                    .putInt(KEY_SYNC_COUNT, 1)
+                    .putInt(KEY_SYNC_COUNT, syncedCount)
                     .build()
             )
             
@@ -174,7 +209,7 @@ class SettingsSyncWorkerV2 @AssistedInject constructor(
             allowMessages = true,
             autoPlayVideos = true,
             isSynced = false,
-            syncVersion = 0
+            syncVersion = 0L
         )
     }
     
@@ -199,7 +234,7 @@ class SettingsSyncWorkerV2 @AssistedInject constructor(
             allowMessages = getBoolean("allowMessages") ?: true,
             autoPlayVideos = getBoolean("autoPlayVideos") ?: true,
             isSynced = true,
-            syncVersion = (getLong("syncVersion") ?: 0).toInt()
+            syncVersion = getLong("syncVersion") ?: 0L
         )
     }
 }

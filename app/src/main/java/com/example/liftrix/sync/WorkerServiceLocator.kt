@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.domain.repository.SyncStatusRepository
+import com.example.liftrix.domain.service.NotificationHandler
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -34,6 +35,9 @@ object WorkerServiceLocator {
         fun profileCleanupService(): com.example.liftrix.data.service.ProfileCleanupService
         fun cleanupMetricsCollector(): com.example.liftrix.analytics.CleanupMetricsCollector
         fun achievementDao(): com.example.liftrix.data.local.dao.AchievementDao
+        fun deadLetterQueueDao(): com.example.liftrix.data.local.dao.DeadLetterQueueDao
+        fun analyticsService(): com.example.liftrix.domain.service.AnalyticsService
+        fun notificationHandler(): NotificationHandler
         fun offlineQueueManager(): com.example.liftrix.data.sync.OfflineQueueManager
         fun syncOperationManager(): SyncOperationManager
     }
@@ -129,10 +133,13 @@ object WorkerServiceLocator {
      */
     data class WorkoutSyncDependencies(
         val workoutDao: com.example.liftrix.data.local.dao.WorkoutDao,
+        val deadLetterDao: com.example.liftrix.data.local.dao.DeadLetterQueueDao,
         val workoutMapper: com.example.liftrix.data.mapper.WorkoutMapper,
         val firestore: com.google.firebase.firestore.FirebaseFirestore,
         val auth: com.google.firebase.auth.FirebaseAuth,
-        val conflictResolver: com.example.liftrix.service.sync.ConflictResolver
+        val conflictResolver: com.example.liftrix.service.sync.ConflictResolver,
+        val analyticsService: com.example.liftrix.domain.service.AnalyticsService,
+        val notificationHandler: NotificationHandler
     )
     
     fun getWorkoutSyncDependencies(context: Context): WorkoutSyncDependencies {
@@ -141,10 +148,13 @@ object WorkerServiceLocator {
             val database = entryPoint.database()
             WorkoutSyncDependencies(
                 workoutDao = database.workoutDao(),
+                deadLetterDao = database.deadLetterQueueDao(),
                 workoutMapper = entryPoint.workoutMapper(),
                 firestore = entryPoint.firestore(),
                 auth = entryPoint.firebaseAuth(),
-                conflictResolver = entryPoint.conflictResolver()
+                conflictResolver = entryPoint.conflictResolver(),
+                analyticsService = entryPoint.analyticsService(),
+                notificationHandler = entryPoint.notificationHandler()
             )
         } catch (e: Exception) {
             Timber.e(e, "WorkerServiceLocator: Failed to get WorkoutSync dependencies via Hilt")
@@ -274,6 +284,25 @@ object WorkerServiceLocator {
         } catch (e: Exception) {
             Timber.e(e, "WorkerServiceLocator: Failed to get UnifiedSync dependencies via Hilt")
             throw IllegalStateException("Cannot provide UnifiedSync dependencies for worker fallback", e)
+        }
+    }
+
+    /**
+     * Get DeadLetterCleanupWorker dependencies bundle
+     */
+    data class DeadLetterCleanupDependencies(
+        val offlineQueueManager: com.example.liftrix.data.sync.OfflineQueueManager
+    )
+
+    fun getDeadLetterCleanupDependencies(context: Context): DeadLetterCleanupDependencies {
+        return try {
+            val entryPoint = getEntryPoint(context)
+            DeadLetterCleanupDependencies(
+                offlineQueueManager = entryPoint.offlineQueueManager()
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "WorkerServiceLocator: Failed to get DeadLetterCleanup dependencies via Hilt")
+            throw IllegalStateException("Cannot provide DeadLetterCleanup dependencies for worker fallback", e)
         }
     }
 }

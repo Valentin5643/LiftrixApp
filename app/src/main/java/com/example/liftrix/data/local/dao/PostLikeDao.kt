@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.PostLikeEntity
 import com.example.liftrix.data.local.dto.PostLikeWithProfile
 import kotlinx.coroutines.flow.Flow
@@ -89,4 +90,61 @@ interface PostLikeDao {
         WHERE id = :likeId
     """)
     suspend fun markAsSynced(likeId: String)
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert postlike from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(postLike: PostLikeEntity) {
+        val entity = postLike.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert postlike from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(postLike: PostLikeEntity) {
+        val local = getPostLikeForSync(postLike.id, postLike.userId)
+        if (local == null || postLike.lastModified > local.lastModified) {
+            val entity = postLike.copy(
+                isDirty = false,
+                isSynced = true
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: PostLikeEntity)
+
+    /**
+     * Get dirty postlike that need upload to Firestore.
+     */
+    @Query("SELECT * FROM post_likes WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyPostLikes(userId: String): List<PostLikeEntity>
+
+    /**
+     * Mark postlike as clean after successful Firestore upload.
+     */
+    @Query("UPDATE post_likes SET is_dirty = 0, is_synced = 1 WHERE id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String): Int
+
+    /**
+     * Get local postlike for remote deduplication.
+     */
+    @Query("SELECT * FROM post_likes WHERE id = :id AND user_id = :userId LIMIT 1")
+    suspend fun getPostLikeForSync(id: String, userId: String): PostLikeEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

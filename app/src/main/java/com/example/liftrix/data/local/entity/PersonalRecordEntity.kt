@@ -67,6 +67,9 @@ data class PersonalRecordEntity(
     @ColumnInfo(name = "sync_version")
     val syncVersion: Long = 0,
     
+    @ColumnInfo(name = "is_dirty", defaultValue = "0")
+    val isDirty: Boolean = false,
+    
     @ColumnInfo(name = "last_modified")
     val lastModified: Long = System.currentTimeMillis()
 ) {

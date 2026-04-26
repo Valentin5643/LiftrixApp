@@ -151,12 +151,12 @@ class HomeViewModel @Inject constructor(
     fun loadHomeData() {
         viewModelScope.launch {
             val userId = authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
-                onFailure = {
-                    logError(it, "loadHomeData")
-                    return@launch
-                }
+                onSuccess = { it?.value },
+                onFailure = { null }
             )
+            if (userId == null) {
+                return@launch
+            }
 
             val result = workoutRepository.getRecentWorkouts(userId, RECENT_WORKOUTS_LIMIT).first()
 
@@ -206,12 +206,13 @@ class HomeViewModel @Inject constructor(
         feedObservationJob = viewModelScope.launch {
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
-                    onFailure = {
-                        Timber.e(it, "Failed to get user ID for feed")
-                        return@launch
-                    }
+                    onSuccess = { it?.value },
+                    onFailure = { null }
                 )
+                if (userId == null) {
+                    Timber.e("Failed to get user ID for feed")
+                    return@launch
+                }
 
                 updateHomeScreenData { it.copy(workoutFeedState = FeedState.Loading) }
                 currentFeedOffset = 0
@@ -300,12 +301,13 @@ class HomeViewModel @Inject constructor(
         recommendationsObservationJob = viewModelScope.launch {
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
-                    onFailure = {
-                        Timber.e(it, "Failed to get user ID for recommendations")
-                        return@launch
-                    }
+                    onSuccess = { it?.value },
+                    onFailure = { null }
                 )
+                if (userId == null) {
+                    Timber.e("Failed to get user ID for recommendations")
+                    return@launch
+                }
 
                 updateHomeScreenData { it.copy(recommendationsState = RecommendationsState.Loading) }
                 currentRecommendationsOffset = 0
@@ -659,13 +661,14 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
-                    onFailure = {
-                        Timber.e(it, "Failed to get user ID")
-                        return@launch
-                    }
+                    onSuccess = { it?.value },
+                    onFailure = { null }
                 )
-                observeWorkoutDataReactively(userId)
+                if (userId != null) {
+                    observeWorkoutDataReactively(userId)
+                } else {
+                    Timber.e("Failed to get user ID")
+                }
             } catch (e: Exception) {
                 Timber.e(e, "Failed to toggle recent activity filter")
             }
@@ -888,13 +891,13 @@ class HomeViewModel @Inject constructor(
     }
 
 
-    private val currentUserIdFlow: StateFlow<String> = 
+    private val currentUserIdFlow: StateFlow<String?> =
         authRepository.currentUser
-            .map { it?.uid ?: "" }
+            .map { it?.uid }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.Eagerly,
-                initialValue = ""
+                initialValue = null
             )
 
     /**
@@ -902,7 +905,7 @@ class HomeViewModel @Inject constructor(
      * Transforms existing workout data into StatCard and ActivityCard format
      */
     private val workoutStatsFlow: StateFlow<WorkoutStats> = currentUserIdFlow
-        .filter { it.isNotEmpty() }
+        .filterNotNull()
         .flatMapLatest { userId ->
             flow {
                 try {

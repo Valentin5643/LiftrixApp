@@ -481,7 +481,7 @@ fun AccessibleIconButton(
     ) {
         Icon(
             imageVector = imageVector,
-            contentDescription = null, // Handled by button semantics
+            contentDescription = contentDescription,
             modifier = Modifier.size(iconSize)
         )
     }

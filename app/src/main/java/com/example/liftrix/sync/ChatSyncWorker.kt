@@ -19,6 +19,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.FieldValue
+import com.example.liftrix.config.OfflineArchitectureFlags
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
@@ -88,6 +89,8 @@ class ChatSyncWorker @AssistedInject constructor(
                 workDataOf(KEY_ERROR_MESSAGE to "User not authenticated")
             )
         }
+        val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+            OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
         
         try {
             Timber.d("Starting chat sync for user: $userId")
@@ -95,11 +98,11 @@ class ChatSyncWorker @AssistedInject constructor(
             var syncedCount = 0
             
             // 1. Sync chat preferences
-            val preferencesSynced = syncPreferences(userId)
+            val preferencesSynced = syncPreferences(userId, useDirtyFlagGating)
             if (preferencesSynced) syncedCount++
             
             // 2. Sync chat history in batches
-            val messagesSynced = syncChatHistory(userId)
+            val messagesSynced = syncChatHistory(userId, useDirtyFlagGating)
             syncedCount += messagesSynced
             
             Timber.d("Chat sync completed for user $userId. Synced $syncedCount items")
@@ -125,13 +128,60 @@ class ChatSyncWorker @AssistedInject constructor(
     /**
      * Syncs chat preferences to Firebase.
      */
-    private suspend fun syncPreferences(userId: String): Boolean {
+    private suspend fun syncPreferences(userId: String, useDirtyFlagGating: Boolean): Boolean {
         try {
-            val preferences = chatPreferencesDao.getUnsyncedPreferences(userId)
+            val preferences = if (useDirtyFlagGating) {
+                chatPreferencesDao.getDirtyChatPreferences(userId).firstOrNull()
+            } else {
+                chatPreferencesDao.getUnsyncedPreferences(userId)
+            }
             
             if (preferences == null) {
                 Timber.d("No unsynced preferences for user $userId")
                 return false
+            }
+
+            val docRef = firestore.collection("users")
+                .document(userId)
+                .collection("chat_preferences")
+                .document("settings")
+            val remoteDoc = docRef.get().await()
+            if (remoteDoc.exists()) {
+                val remoteLastModified = when (val remoteValue = remoteDoc.get("lastModified")) {
+                    is com.google.firebase.Timestamp -> remoteValue.toDate().time
+                    is Number -> remoteValue.toLong()
+                    else -> 0L
+                }
+                if (remoteLastModified > preferences.lastModified) {
+                    val remoteEntity = preferences.copy(
+                        preferredLanguage = remoteDoc.getString("preferredLanguage")
+                            ?: preferences.preferredLanguage,
+                        autoDetectLanguage = remoteDoc.getBoolean("autoDetectLanguage")
+                            ?: preferences.autoDetectLanguage,
+                        chatNotificationsEnabled = remoteDoc.getBoolean("chatNotificationsEnabled")
+                            ?: preferences.chatNotificationsEnabled,
+                        conversationHistoryEnabled = remoteDoc.getBoolean("conversationHistoryEnabled")
+                            ?: preferences.conversationHistoryEnabled,
+                        workoutContextSharing = remoteDoc.getBoolean("workoutContextSharing")
+                            ?: preferences.workoutContextSharing,
+                        maxMessagesPerDay = remoteDoc.getLong("maxMessagesPerDay")?.toInt()
+                            ?: preferences.maxMessagesPerDay,
+                        maxTokensPerMonth = remoteDoc.getLong("maxTokensPerMonth")?.toInt()
+                            ?: preferences.maxTokensPerMonth,
+                        autoClearDays = remoteDoc.getLong("autoClearDays")?.toInt()
+                            ?: preferences.autoClearDays,
+                        userContextPrompt = remoteDoc.getString("userContextPrompt")
+                            ?: preferences.userContextPrompt,
+                        updatedAt = remoteDoc.getLong("updatedAt") ?: preferences.updatedAt,
+                        isDirty = false,
+                        isSynced = true,
+                        syncVersion = remoteDoc.getLong("syncVersion")
+                            ?: preferences.syncVersion,
+                        lastModified = remoteLastModified
+                    )
+                    chatPreferencesDao.upsertFromRemote(remoteEntity)
+                    return false
+                }
             }
             
             val preferencesData = mapOf(
@@ -145,20 +195,20 @@ class ChatSyncWorker @AssistedInject constructor(
                 "autoClearDays" to preferences.autoClearDays,
                 "userContextPrompt" to preferences.userContextPrompt,
                 "updatedAt" to preferences.updatedAt,
-                "syncVersion" to 1,
+                "syncVersion" to 1L,
+                "lastModified" to preferences.lastModified,
                 "lastSyncedAt" to FieldValue.serverTimestamp()
             )
             
             // Upload to Firebase
-            firestore.collection("users")
-                .document(userId)
-                .collection("chat_preferences")
-                .document("settings")
-                .set(preferencesData, SetOptions.merge())
-                .await()
+            docRef.set(preferencesData, SetOptions.merge()).await()
             
             // Mark as synced in local database
-            chatPreferencesDao.markAsSynced(userId, version = 1)
+            chatPreferencesDao.markAsClean(
+                ids = listOf(userId),
+                userId = userId,
+                syncVersion = System.currentTimeMillis()
+            )
             
             Timber.d("Synced chat preferences for user $userId")
             return true
@@ -172,9 +222,13 @@ class ChatSyncWorker @AssistedInject constructor(
     /**
      * Syncs chat history to Firebase in batches.
      */
-    private suspend fun syncChatHistory(userId: String): Int {
+    private suspend fun syncChatHistory(userId: String, useDirtyFlagGating: Boolean): Int {
         try {
-            val unsyncedMessages = chatHistoryDao.getUnsyncedMessages(userId)
+            val unsyncedMessages = if (useDirtyFlagGating) {
+                chatHistoryDao.getDirtyChatHistories(userId)
+            } else {
+                chatHistoryDao.getUnsyncedMessages(userId)
+            }
             
             if (unsyncedMessages.isEmpty()) {
                 Timber.d("No unsynced messages for user $userId")
@@ -185,11 +239,64 @@ class ChatSyncWorker @AssistedInject constructor(
             
             var totalSynced = 0
             
+            val collectionRef = firestore.collection("users")
+                .document(userId)
+                .collection("chat_history")
+
             // Process messages in batches
             unsyncedMessages.chunked(BATCH_SIZE).forEach { batch ->
+                val messagesToUpload = mutableListOf<ChatHistoryEntity>()
+                val remoteDocs = FirestorePrefetcher.prefetchByIds(
+                    collection = collectionRef,
+                    ids = batch.map { it.id }
+                )
+
+                for (message in batch) {
+                    val remoteDoc = remoteDocs[message.id]
+                    if (remoteDoc?.exists() == true) {
+                        val remoteLastModified = when (val remoteValue = remoteDoc.get("lastModified")) {
+                            is com.google.firebase.Timestamp -> remoteValue.toDate().time
+                            is Number -> remoteValue.toLong()
+                            else -> 0L
+                        }
+                        if (remoteLastModified > message.lastModified) {
+                            val remoteEntity = message.copy(
+                                conversationId = remoteDoc.getString("conversationId")
+                                    ?: message.conversationId,
+                                messageType = remoteDoc.getString("messageType")
+                                    ?: message.messageType,
+                                language = remoteDoc.getString("language")
+                                    ?: message.language,
+                                content = remoteDoc.getString("content")
+                                    ?: message.content,
+                                workoutContext = remoteDoc.getString("workoutContext")
+                                    ?: message.workoutContext,
+                                tokenCount = remoteDoc.getLong("tokenCount")?.toInt()
+                                    ?: message.tokenCount,
+                                processingTimeMs = remoteDoc.getLong("processingTimeMs")
+                                    ?: message.processingTimeMs,
+                                createdAt = remoteDoc.getLong("createdAt") ?: message.createdAt,
+                                isDirty = false,
+                                isSynced = true,
+                                syncVersion = remoteDoc.getLong("syncVersion")
+                                    ?: message.syncVersion,
+                                lastModified = remoteLastModified
+                            )
+                            chatHistoryDao.upsertFromRemote(remoteEntity)
+                            continue
+                        }
+                    }
+
+                    messagesToUpload.add(message)
+                }
+
+                if (messagesToUpload.isEmpty()) {
+                    return@forEach
+                }
+
                 val firestoreBatch = firestore.batch()
                 
-                batch.forEach { message ->
+                messagesToUpload.forEach { message ->
                     val messageData = mapOf(
                         "conversationId" to message.conversationId,
                         "messageType" to message.messageType,
@@ -199,14 +306,12 @@ class ChatSyncWorker @AssistedInject constructor(
                         "tokenCount" to message.tokenCount,
                         "processingTimeMs" to message.processingTimeMs,
                         "createdAt" to message.createdAt,
-                        "syncVersion" to 1,
+                        "syncVersion" to 1L,
+                        "lastModified" to message.lastModified,
                         "lastSyncedAt" to FieldValue.serverTimestamp()
                     )
                     
-                    val docRef = firestore.collection("users")
-                        .document(userId)
-                        .collection("chat_history")
-                        .document(message.id)
+                    val docRef = collectionRef.document(message.id)
                     
                     firestoreBatch.set(docRef, messageData, SetOptions.merge())
                 }
@@ -215,11 +320,15 @@ class ChatSyncWorker @AssistedInject constructor(
                 firestoreBatch.commit().await()
                 
                 // Mark messages as synced in local database
-                val messageIds = batch.map { it.id }
-                chatHistoryDao.markMessagesAsSynced(userId, messageIds, version = 1)
+                val messageIds = messagesToUpload.map { it.id }
+                chatHistoryDao.markAsClean(
+                    ids = messageIds,
+                    userId = userId,
+                    syncVersion = System.currentTimeMillis()
+                )
                 
-                totalSynced += batch.size
-                Timber.d("Synced batch of ${batch.size} messages")
+                totalSynced += messagesToUpload.size
+                Timber.d("Synced batch of ${messagesToUpload.size} messages")
             }
             
             return totalSynced
@@ -247,6 +356,11 @@ class ChatSyncWorker @AssistedInject constructor(
                 .await()
             
             if (preferencesDoc.exists()) {
+                val remoteLastModified = when (val remoteValue = preferencesDoc.get("lastModified")) {
+                    is com.google.firebase.Timestamp -> remoteValue.toDate().time
+                    is Number -> remoteValue.toLong()
+                    else -> 0L
+                }
                 val preferences = ChatPreferencesEntity(
                     userId = userId,
                     preferredLanguage = preferencesDoc.getString("preferredLanguage") ?: "en",
@@ -258,12 +372,14 @@ class ChatSyncWorker @AssistedInject constructor(
                     maxTokensPerMonth = preferencesDoc.getLong("maxTokensPerMonth")?.toInt() ?: 100000,
                     autoClearDays = preferencesDoc.getLong("autoClearDays")?.toInt() ?: 30,
                     userContextPrompt = preferencesDoc.getString("userContextPrompt"),
+                    isDirty = false,
                     isSynced = true,
-                    syncVersion = (preferencesDoc.getLong("syncVersion") ?: 1).toInt(),
+                    syncVersion = preferencesDoc.getLong("syncVersion") ?: 1L,
+                    lastModified = remoteLastModified,
                     updatedAt = preferencesDoc.getLong("updatedAt") ?: System.currentTimeMillis()
                 )
                 
-                chatPreferencesDao.insertOrUpdatePreferences(preferences)
+                chatPreferencesDao.upsertFromRemote(preferences)
             }
             
             // Download recent chat history (last 100 messages)
@@ -277,6 +393,11 @@ class ChatSyncWorker @AssistedInject constructor(
             
             val messages = messagesSnapshot.documents.mapNotNull { doc ->
                 try {
+                    val remoteLastModified = when (val remoteValue = doc.get("lastModified")) {
+                        is com.google.firebase.Timestamp -> remoteValue.toDate().time
+                        is Number -> remoteValue.toLong()
+                        else -> 0L
+                    }
                     ChatHistoryEntity(
                         id = doc.id,
                         userId = userId,
@@ -288,8 +409,10 @@ class ChatSyncWorker @AssistedInject constructor(
                         tokenCount = doc.getLong("tokenCount")?.toInt(),
                         processingTimeMs = doc.getLong("processingTimeMs"),
                         createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis(),
+                        isDirty = false,
                         isSynced = true,
-                        syncVersion = (doc.getLong("syncVersion") ?: 1).toInt()
+                        syncVersion = doc.getLong("syncVersion") ?: 1L,
+                        lastModified = remoteLastModified
                     )
                 } catch (e: Exception) {
                     Timber.e(e, "Error parsing message document: ${doc.id}")
@@ -299,7 +422,7 @@ class ChatSyncWorker @AssistedInject constructor(
             
             if (messages.isNotEmpty()) {
                 messages.forEach { message ->
-                    chatHistoryDao.insertMessage(message)
+                    chatHistoryDao.upsertFromRemote(message)
                 }
                 Timber.d("Downloaded ${messages.size} messages for user $userId")
             }

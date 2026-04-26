@@ -18,6 +18,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
+import com.example.liftrix.config.OfflineArchitectureFlags
+import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.tasks.await
@@ -51,43 +53,9 @@ class TemplateSyncWorker @AssistedInject constructor(
     private val conflictResolver: ConflictResolver,
     private val auth: FirebaseAuth
 ) : BaseSyncWorker(context, params) {
-    
-    // 🔧 HOTFIX: Fallback constructor for when Hilt factory generation fails
-    // This allows WorkManager to instantiate the worker via reflection
-    // TEMPORARY: Remove once Hilt assisted factories are confirmed working
-    constructor(context: Context, params: WorkerParameters) : this(
-        context,
-        params,
-        WorkerServiceLocator.getTemplateSyncDependencies(context).run {
-            Timber.w("⚠️ TemplateSyncWorker using FALLBACK constructor - Hilt factory failed!")
-            return@run this
-        }
-    )
-    
-    // Helper constructor to unpack the dependency structure
-    private constructor(
-        context: Context,
-        params: WorkerParameters,
-        deps: WorkerServiceLocator.TemplateSyncDependencies
-    ) : this(
-        context, params,
-        deps.templateDao, deps.firestore, deps.conflictResolver, deps.auth
-    )
 
     init {
-        val processName = getProcessName()
-        Timber.d("✅ TemplateSyncWorker constructed with Hilt dependency injection in process: $processName")
-    }
-    
-    private fun getProcessName(): String {
-        return try {
-            val processName = applicationContext.packageManager
-                .getApplicationLabel(applicationContext.applicationInfo)
-                .toString()
-            processName
-        } catch (e: Exception) {
-            "unknown"
-        }
+        Timber.d("✅ TemplateSyncWorker constructed with Hilt dependency injection")
     }
 
     override val workerName: String = "TemplateSyncWorker"
@@ -127,63 +95,95 @@ class TemplateSyncWorker @AssistedInject constructor(
             )
         }
         
-        val unsyncedTemplates = templateDao.getUnsyncedTemplates(userId)
+        val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+            OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
+        val unsyncedTemplates = if (useDirtyFlagGating) {
+            templateDao.getDirtyWorkoutTemplates(userId)
+        } else {
+            templateDao.getUnsyncedTemplates(userId)
+        }
         
         if (unsyncedTemplates.isEmpty()) {
             Timber.d("No unsynced templates found for user $userId")
             return@withContext Result.success()
         }
 
-        Timber.d("Found ${unsyncedTemplates.size} unsynced templates for user $userId")
+        Timber.d("Found ${unsyncedTemplates.size} templates to sync for user $userId (dirty gating: $useDirtyFlagGating)")
             
             var successCount = 0
             var failureCount = 0
+            val collectionRef = firestore
+                .collection("users")
+                .document(userId)
+                .collection("templates")
 
-            // Process templates individually for better error handling
-            unsyncedTemplates.forEach { template ->
-                try {
-                    val docRef = firestore
-                        .collection("users")
-                        .document(userId)
-                        .collection("templates")
-                        .document(template.id)
-                    
-                    // Check for remote version for conflict resolution
-                    val remoteDoc = docRef.get().await()
-                    
-                    val shouldSync = if (remoteDoc.exists()) {
-                        val remoteTemplate = remoteDoc.data
-                        val remoteUpdatedAt = remoteTemplate?.get("updatedAt") as? Long ?: 0
-                        
-                        // Simple last-write-wins, but preserve usage statistics
-                        if (template.updatedAt.epochSecond > remoteUpdatedAt) {
-                            true // Local is newer
-                        } else {
-                            // Remote is newer, but merge usage statistics
-                            val remoteUsageCount = remoteTemplate?.get("usageCount") as? Long ?: 0
-                            val remoteLastUsedAt = remoteTemplate?.get("lastUsedAt") as? Long
-                            
-                            // Keep the higher usage count and most recent usage
-                            val mergedUsageCount = maxOf(template.usageCount, remoteUsageCount.toInt())
-                            val mergedLastUsedAt = if (remoteLastUsedAt != null && template.lastUsedAt != null) {
-                                if (remoteLastUsedAt > template.lastUsedAt.epochSecond) {
-                                    remoteLastUsedAt
-                                } else {
-                                    template.lastUsedAt.epochSecond
-                                }
-                            } else {
-                                remoteLastUsedAt ?: template.lastUsedAt?.epochSecond
-                            }
-                            
-                            // Update local template with merged usage statistics
-                            // This would require an update method in the DAO
-                            false // Don't sync, remote is newer
+            // Process templates in batches for efficient prefetch and writes
+            unsyncedTemplates.chunked(BATCH_SIZE).forEach { batch ->
+                val remoteDocs = FirestorePrefetcher.prefetchByIds(
+                    collection = collectionRef,
+                    ids = batch.map { it.id }
+                )
+                val firestoreBatch = firestore.batch()
+                val templatesToMarkClean = mutableListOf<String>()
+                var batchHasWrites = false
+
+                batch.forEach { template ->
+                    try {
+                        if (useDirtyFlagGating && !template.isDirty) {
+                            return@forEach
                         }
-                    } else {
-                        true // No remote version, sync local
-                    }
-                    
-                    if (shouldSync) {
+
+                        val docRef = collectionRef.document(template.id)
+                        
+                        // Check for remote version for conflict resolution
+                        val remoteDoc = remoteDocs[template.id]
+
+                        if (remoteDoc?.exists() == true) {
+                            val remoteLastModified = when (val remoteValue = remoteDoc.get("lastModified")) {
+                                is com.google.firebase.Timestamp -> remoteValue.toDate().time
+                                is Number -> remoteValue.toLong()
+                                else -> 0L
+                            }
+                            if (remoteLastModified > template.lastModified) {
+                                val gson = Gson()
+                                val exercisesJson = when (val remoteExercises = remoteDoc.get("exercises")) {
+                                    is List<*> -> gson.toJson(remoteExercises)
+                                    is String -> remoteExercises
+                                    else -> template.templateExercisesJson
+                                }
+                                val updatedAt = when (val remoteUpdatedAt = remoteDoc.get("updatedAt")) {
+                                    is com.google.firebase.Timestamp -> remoteUpdatedAt.toDate().toInstant()
+                                    is Number -> java.time.Instant.ofEpochSecond(remoteUpdatedAt.toLong())
+                                    else -> template.updatedAt
+                                }
+                                val createdAt = when (val remoteCreatedAt = remoteDoc.get("createdAt")) {
+                                    is com.google.firebase.Timestamp -> remoteCreatedAt.toDate().toInstant()
+                                    is Number -> java.time.Instant.ofEpochSecond(remoteCreatedAt.toLong())
+                                    else -> template.createdAt
+                                }
+                                val remoteEntity = template.copy(
+                                    templateExercisesJson = exercisesJson,
+                                    estimatedDurationMinutes = (remoteDoc.getLong("estimatedDurationMinutes")
+                                        ?: template.estimatedDurationMinutes?.toLong())?.toInt(),
+                                    difficultyLevel = (remoteDoc.getLong("difficultyLevel")
+                                        ?: template.difficultyLevel?.toLong())?.toInt(),
+                                    folderId = remoteDoc.getString("folderId") ?: template.folderId,
+                                    usageCount = (remoteDoc.getLong("usageCount") ?: template.usageCount.toLong()).toInt(),
+                                    lastUsedAt = (remoteDoc.getLong("lastUsedAt"))?.let {
+                                        java.time.Instant.ofEpochSecond(it)
+                                    } ?: template.lastUsedAt,
+                                    createdAt = createdAt,
+                                    updatedAt = updatedAt,
+                                    isDirty = false,
+                                    isSynced = true,
+                                    syncVersion = System.currentTimeMillis(),
+                                    lastModified = remoteLastModified
+                                )
+                                templateDao.upsertFromRemote(remoteEntity)
+                                return@forEach
+                            }
+                        }
+                        
                         // Parse the JSON exercises string into a proper list for Firestore validation
                         val exercisesList = try {
                             Json.decodeFromString<List<TemplateExercise>>(template.templateExercisesJson)
@@ -208,32 +208,46 @@ class TemplateSyncWorker @AssistedInject constructor(
                             "createdAt" to template.createdAt.epochSecond,
                             // Add all required sync metadata fields
                             "syncVersion" to template.syncVersion,
-                            "lastModified" to FieldValue.serverTimestamp(),
+                            "lastModified" to template.lastModified,
                             "isSynced" to true
                         )
                         
-                        docRef.set(templateData, SetOptions.merge()).await()
+                        firestoreBatch.set(docRef, templateData, SetOptions.merge())
+                        templatesToMarkClean.add(template.id)
+                        batchHasWrites = true
+                        
+                    } catch (e: Exception) {
+                        when {
+                            e.message?.contains("PERMISSION_DENIED") == true -> {
+                                Timber.e(e, "Permission denied syncing template: ${template.id}. Check Firestore security rules.")
+                            }
+                            e.message?.contains("INVALID_ARGUMENT") == true -> {
+                                Timber.e(e, "Invalid data syncing template: ${template.id}. Check field types and validation.")
+                            }
+                            else -> {
+                                Timber.e(e, "Failed to sync template: ${template.id}")
+                            }
+                        }
+                        failureCount++
                     }
-                    
-                    // Mark as synced in local database
-                    templateDao.markTemplatesAsSynced(listOf(template.id))
-                    
-                    successCount++
-                    Timber.d("Successfully synced template: ${template.id}")
-                    
+                }
+
+                if (!batchHasWrites) {
+                    return@forEach
+                }
+
+                try {
+                    firestoreBatch.commit().await()
+                    templateDao.markAsClean(
+                        ids = templatesToMarkClean,
+                        userId = userId,
+                        syncVersion = System.currentTimeMillis()
+                    )
+                    successCount += templatesToMarkClean.size
+                    Timber.d("Successfully synced batch of ${templatesToMarkClean.size} templates")
                 } catch (e: Exception) {
-                    when {
-                        e.message?.contains("PERMISSION_DENIED") == true -> {
-                            Timber.e(e, "Permission denied syncing template: ${template.id}. Check Firestore security rules.")
-                        }
-                        e.message?.contains("INVALID_ARGUMENT") == true -> {
-                            Timber.e(e, "Invalid data syncing template: ${template.id}. Check field types and validation.")
-                        }
-                        else -> {
-                            Timber.e(e, "Failed to sync template: ${template.id}")
-                        }
-                    }
-                    failureCount++
+                    Timber.e(e, "Failed to commit template batch of ${templatesToMarkClean.size}")
+                    failureCount += templatesToMarkClean.size
                 }
             }
             

@@ -54,12 +54,12 @@ class GetMutedUsersCountUseCase @Inject constructor(
                     )
                 )
 
-            timber.log.Timber.d("Retrieving muted users count for user: $userId")
+            timber.log.Timber.d("Retrieving muted users count for user: ${userId.value}")
 
             // Get muted users count from repository as reactive stream
-            notificationRepository.getMutedUsersCount(userId)
+            notificationRepository.getMutedUsersCount(userId.value)
                 .map { count ->
-                    timber.log.Timber.d("Muted users count for user $userId: $count")
+                    timber.log.Timber.d("Muted users count for user ${userId.value}: $count")
                     LiftrixResult.success(count)
                 }
                 .catch { throwable ->
@@ -164,17 +164,17 @@ class GetMutedUsersCountUseCase @Inject constructor(
         val userId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw IllegalStateException("User not authenticated")
 
-        timber.log.Timber.d("Getting current muted users count for user: $userId")
+        timber.log.Timber.d("Getting current muted users count for user: ${userId.value}")
 
         // Get the first emission from the reactive stream
         val count = try {
-            notificationRepository.getMutedUsersCount(userId).first()
+            notificationRepository.getMutedUsersCount(userId.value).first()
         } catch (e: Exception) {
-            timber.log.Timber.w(e, "Error getting current muted count for user: $userId, returning 0")
+            timber.log.Timber.w(e, "Error getting current muted count for user: ${userId.value}, returning 0")
             0 // Graceful fallback to zero
         }
 
-        timber.log.Timber.d("Current muted users count for user $userId: $count")
+        timber.log.Timber.d("Current muted users count for user ${userId.value}: $count")
         count
     }
 
@@ -228,11 +228,11 @@ class GetMutedUsersCountUseCase @Inject constructor(
                     )
                 )
 
-            timber.log.Timber.d("Retrieving muted users list for user: $userId")
+            timber.log.Timber.d("Retrieving muted users list for user: ${userId.value}")
 
-            notificationRepository.getMutedUsers(userId)
+            notificationRepository.getMutedUsers(userId.value)
                 .map { mutedUsers ->
-                    timber.log.Timber.d("Retrieved ${mutedUsers.size} muted users for user: $userId")
+                    timber.log.Timber.d("Retrieved ${mutedUsers.size} muted users for user: ${userId.value}")
                     LiftrixResult.success(mutedUsers)
                 }
                 .catch { throwable ->

@@ -266,7 +266,7 @@ private fun AchievementBadge(
                 ) {
                     Icon(
                         imageVector = getAchievementIcon(achievement.achievementType),
-                        contentDescription = null,
+                        contentDescription = achievement.title,
                         tint = Color.White,
                         modifier = Modifier.size(20.dp)
                     )
@@ -343,7 +343,7 @@ private fun AchievementDetailModal(
                         ) {
                             Icon(
                                 imageVector = getAchievementIcon(achievement.achievementType),
-                                contentDescription = null,
+                                contentDescription = achievement.title,
                                 tint = getAchievementBorderColor(achievement.achievementType),
                                 modifier = Modifier.size(24.dp)
                             )
@@ -425,7 +425,7 @@ private fun EmptyAchievementState(
         ) {
             Icon(
                 imageVector = Icons.Default.Stars,
-                contentDescription = null,
+                contentDescription = "No achievements",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(48.dp)
             )

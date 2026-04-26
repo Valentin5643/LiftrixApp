@@ -163,7 +163,7 @@ fun FolderAddWorkoutForm(
             ) {
                 Icon(
                     imageVector = Icons.Filled.Add,
-                    contentDescription = null,
+                    contentDescription = "Create workout",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
@@ -243,7 +243,7 @@ fun FolderReorderForm(
             ) {
                 Icon(
                     imageVector = Icons.Filled.Reorder,
-                    contentDescription = null,
+                    contentDescription = "Reorder workouts",
                     tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.size(24.dp)
                 )
@@ -331,7 +331,7 @@ fun FolderDeleteConfirmation(
             ) {
                 Icon(
                     imageVector = Icons.Filled.Warning,
-                    contentDescription = null,
+                    contentDescription = "Warning",
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(24.dp)
                 )

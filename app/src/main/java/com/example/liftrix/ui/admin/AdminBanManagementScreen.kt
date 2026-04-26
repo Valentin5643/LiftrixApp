@@ -215,7 +215,7 @@ private fun AdminPermissionDeniedCard() {
         ) {
             Icon(
                 imageVector = Icons.Default.Block,
-                contentDescription = null,
+                contentDescription = "Access denied",
                 tint = LiftrixColorsV2.Dark.Error,
                 modifier = Modifier.size(64.dp)
             )
@@ -813,7 +813,7 @@ private fun AdminLogCard(log: AdminBanInfo) {
             ) {
                 Icon(
                     imageVector = if (log.status == "active") Icons.Default.Block else Icons.Default.CheckCircle,
-                    contentDescription = null,
+                    contentDescription = if (log.status == "active") "User banned" else "User unbanned",
                     tint = if (log.status == "active") LiftrixColorsV2.Dark.Error else LiftrixColorsV2.Dark.Success,
                     modifier = Modifier.size(20.dp)
                 )
@@ -862,7 +862,7 @@ private fun EmptySearchResults() {
         ) {
             Icon(
                 imageVector = Icons.Default.Search,
-                contentDescription = null,
+                contentDescription = "No users found",
                 modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -896,7 +896,7 @@ private fun EmptyBannedUsers() {
         ) {
             Icon(
                 imageVector = Icons.Default.CheckCircle,
-                contentDescription = null,
+                contentDescription = "No banned users",
                 modifier = Modifier.size(64.dp),
                 tint = LiftrixColorsV2.Dark.Success
             )

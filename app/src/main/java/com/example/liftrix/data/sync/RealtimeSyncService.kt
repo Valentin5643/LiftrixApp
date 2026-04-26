@@ -1,24 +1,33 @@
 package com.example.liftrix.data.sync
 
+import com.example.liftrix.config.OfflineArchitectureFlags
 import com.example.liftrix.data.local.dao.WorkoutDao
+import com.example.liftrix.data.local.entity.WorkoutEntity
+import com.example.liftrix.domain.model.WorkoutStatus
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Real-time sync service for handling Firestore listeners during active workout sessions.
- * 
+ *
  * This service implements the core real-time synchronization requirements as specified
  * in the Firebase sync infrastructure. It provides:
  * - Real-time workout synchronization during active sessions
@@ -26,19 +35,25 @@ import javax.inject.Singleton
  * - Error handling with authentication validation
  * - Direct integration with Room database for local updates
  * - Lifecycle-aware listener management to prevent memory leaks
- * 
+ *
  * Key Features:
  * - Firestore snapshot listeners for < 1 second update latency
  * - User-scoped data access with Firebase Auth integration
  * - Memory leak prevention through lifecycle observers and proper cleanup
  * - Error resilience with graceful degradation
  * - Automatic cleanup when app goes to background
+ *
+ * Refactored for offline-first architecture (SPEC-20241228):
+ * - Parses Firestore data inline to WorkoutEntity
+ * - Uses upsertFromRemote() for idempotent listener writes
+ * - Feature-flag gated for rollback support
  */
 @Singleton
 class RealtimeSyncService @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val auth: FirebaseAuth,
-    private val workoutDao: WorkoutDao
+    private val workoutDao: WorkoutDao,
+    private val gson: Gson
 ) {
     
     private val supervisorJob = SupervisorJob()
@@ -182,30 +197,131 @@ class RealtimeSyncService @Inject constructor(
     }
     
     /**
-     * Processes workout updates received from Firestore and updates the local database.
-     * 
+     * IDEMPOTENT: Processes workout updates from REMOTE origin (Firestore listener).
+     * Uses upsertFromRemote() with timestamp deduplication, sets isDirty=false.
+     * Feature-flag gated for rollback support.
+     *
      * @param workoutId The ID of the workout being updated
      * @param remoteData The workout data from Firestore
      */
     private suspend fun processWorkoutUpdate(workoutId: String, remoteData: Map<String, Any>) {
         try {
-            // Parse remote workout data and update local database
-            // This is a simplified version - in practice, you would need proper
-            // data mapping and conflict resolution integration
-            
-            val lastModified = remoteData["lastModified"] as? Long ?: System.currentTimeMillis()
-            val syncVersion = remoteData["syncVersion"] as? Long ?: 0L
-            
-            // Check if this update is newer than local data
-            // This is where the ConflictResolver would be integrated
-            
-            Timber.d("RealtimeSyncService: Processing update for workout $workoutId (version: $syncVersion)")
-            
-            // Update local database with newer data
-            // workoutDao.updateIfNewer(workoutEntity) - actual implementation would require proper entity mapping
-            
+            if (OfflineArchitectureFlags.USE_IDEMPOTENT_LISTENERS) {
+                // NEW: Room-first idempotent pattern
+                val lastModified = toEpochMillis(remoteData["lastModified"]) ?: System.currentTimeMillis()
+                val syncVersion = (remoteData["syncVersion"] as? Number)?.toLong()
+                    ?: (remoteData["version"] as? Number)?.toLong()
+                    ?: 0L
+                val userId = remoteData["userId"] as? String ?: currentUserId ?: return
+
+                Timber.d("RealtimeSyncService: Processing update for workout $workoutId (version: $syncVersion, lastModified: $lastModified)")
+
+                // Parse Firestore data to WorkoutEntity
+                val workoutEntity = WorkoutEntity(
+                    id = workoutId,
+                    userId = userId,
+                    name = remoteData["name"] as? String ?: "",
+                    date = toLocalDate(remoteData["date"]) ?: LocalDate.now(),
+                    exercisesJson = buildExercisesJson(remoteData),
+                    status = parseStatus(remoteData["status"]),
+                    startTime = toInstant(remoteData["startTime"]),
+                    endTime = toInstant(remoteData["endTime"]),
+                    notes = remoteData["notes"] as? String,
+                    templateId = remoteData["templateId"] as? String,
+                    createdAt = toInstant(remoteData["createdAt"]) ?: Instant.now(),
+                    updatedAt = toInstant(remoteData["updatedAt"])
+                        ?: toInstant(remoteData["createdAt"])
+                        ?: Instant.now(),
+                    isDirty = false,  // From Firestore, don't sync back
+                    isSynced = true,
+                    syncVersion = syncVersion,
+                    lastModified = lastModified
+                )
+
+                // IDEMPOTENT: Only applies if remote is newer (timestamp check in DAO)
+                workoutDao.upsertFromRemote(workoutEntity)
+                // NO SYNC TRIGGER - already from Firestore
+
+                Timber.d("✅ IDEMPOTENT: Updated workout from real-time listener: $workoutId (Room-first)")
+            } else {
+                // LEGACY: Stub implementation (feedback loop risk)
+                val lastModified = remoteData["lastModified"] as? Long ?: System.currentTimeMillis()
+                val syncVersion = remoteData["syncVersion"] as? Long ?: 0L
+
+                Timber.w("⚠️ LEGACY: Workout update received but not processed (stub implementation): $workoutId (version: $syncVersion)")
+            }
+
         } catch (e: Exception) {
             Timber.e(e, "RealtimeSyncService: Error processing workout update for $workoutId")
+        }
+    }
+
+    private fun parseStatus(value: Any?): WorkoutStatus {
+        val statusString = value as? String
+        return if (statusString.isNullOrBlank()) {
+            WorkoutStatus.PLANNED
+        } else {
+            try {
+                WorkoutStatus.valueOf(statusString)
+            } catch (_: IllegalArgumentException) {
+                WorkoutStatus.PLANNED
+            }
+        }
+    }
+
+    private fun buildExercisesJson(remoteData: Map<String, Any>): String {
+        val exercisesJson = remoteData["exercisesJson"] as? String
+        if (!exercisesJson.isNullOrBlank()) {
+            return exercisesJson
+        }
+
+        val exercises = remoteData["exercises"]
+        val payload = mutableMapOf<String, Any>(
+            "exercises" to when (exercises) {
+                is List<*> -> exercises
+                is Map<*, *> -> listOf(exercises)
+                is String -> return exercises
+                else -> emptyList<Any>()
+            }
+        )
+
+        (remoteData["totalVolume"] as? Number)?.toDouble()?.let { payload["totalVolume"] = it }
+        (remoteData["duration"] as? Number)?.toLong()?.let { payload["duration"] = it }
+
+        return gson.toJson(payload)
+    }
+
+    private fun toInstant(value: Any?): Instant? {
+        return when (value) {
+            is Timestamp -> value.toDate().toInstant()
+            is Date -> value.toInstant()
+            is Instant -> value
+            is Long -> Instant.ofEpochMilli(value)
+            is Number -> Instant.ofEpochMilli(value.toLong())
+            else -> null
+        }
+    }
+
+    private fun toLocalDate(value: Any?): LocalDate? {
+        return when (value) {
+            is LocalDate -> value
+            is Timestamp -> value.toDate().toInstant().atZone(ZoneOffset.UTC).toLocalDate()
+            is Date -> value.toInstant().atZone(ZoneOffset.UTC).toLocalDate()
+            is Instant -> value.atZone(ZoneOffset.UTC).toLocalDate()
+            is Long -> Instant.ofEpochMilli(value).atZone(ZoneOffset.UTC).toLocalDate()
+            is Number -> Instant.ofEpochMilli(value.toLong()).atZone(ZoneOffset.UTC).toLocalDate()
+            else -> null
+        }
+    }
+
+    private fun toEpochMillis(value: Any?): Long? {
+        return when (value) {
+            is Timestamp -> value.toDate().time
+            is Date -> value.time
+            is Instant -> value.toEpochMilli()
+            is Long -> value
+            is Number -> value.toLong()
+            else -> null
         }
     }
     

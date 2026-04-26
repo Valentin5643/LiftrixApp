@@ -379,7 +379,7 @@ private fun WeightValidationMessage(
             ) {
                 Icon(
                     imageVector = Icons.Default.Error,
-                    contentDescription = null,
+                    contentDescription = "Weight error",
                     tint = LiftrixColorsV2.DataViz.Series1,
                     modifier = Modifier.size(16.dp)
                 )
@@ -404,7 +404,7 @@ private fun WeightValidationMessage(
             ) {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
+                    contentDescription = "Weight valid",
                     tint = LiftrixColorsV2.Teal,
                     modifier = Modifier.size(16.dp)
                 )

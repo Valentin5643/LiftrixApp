@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -283,6 +284,10 @@ private fun LegalDocumentContent(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var scrollToAnchorId by rememberSaveable { mutableStateOf<String?>(null) }
+    var scrollRequestKey by rememberSaveable { mutableStateOf(0) }
+    val anchors = remember(document) { document?.let { extractHtmlAnchors(it) } ?: emptyList() }
+
     LazyColumn(
         modifier = modifier,
         contentPadding = PaddingValues(16.dp),
@@ -300,7 +305,14 @@ private fun LegalDocumentContent(
             item {
                 DocumentContentCard(
                     content = document,
-                    isRefreshing = isRefreshing
+                    isRefreshing = isRefreshing,
+                    anchors = anchors,
+                    onJumpToAnchor = { anchorId ->
+                        scrollToAnchorId = anchorId
+                        scrollRequestKey += 1
+                    },
+                    scrollToAnchorId = scrollToAnchorId,
+                    scrollRequestKey = scrollRequestKey
                 )
             }
         }
@@ -315,17 +327,19 @@ private fun LastUpdatedCard(
     lastUpdated: String,
     modifier: Modifier = Modifier
 ) {
-    ElevatedLiftrixCard(modifier = modifier) {
+    ElevatedLiftrixCard(
+        modifier = modifier,
+        contentPadding = PaddingValues(16.dp)
+    ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+                .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Schedule,
-                contentDescription = null,
+                contentDescription = "Last updated",
                 tint = MaterialTheme.colorScheme.primary
             )
             
@@ -346,19 +360,35 @@ private fun LastUpdatedCard(
 }
 
 /**
- * Document content card
+ * Document content card with hybrid HTML rendering
+ *
+ * Uses HtmlContent composable which intelligently chooses:
+ * - HtmlCompat (default) for semantic HTML
+ * - WebView (fallback) for complex CSS
  */
 @Composable
 private fun DocumentContentCard(
     content: String,
     isRefreshing: Boolean,
+    anchors: List<HtmlAnchor>,
+    onJumpToAnchor: (String) -> Unit,
+    scrollToAnchorId: String?,
+    scrollRequestKey: Int,
     modifier: Modifier = Modifier
 ) {
-    ElevatedLiftrixCard(modifier = modifier) {
+    ElevatedLiftrixCard(
+        modifier = modifier,
+        contentPadding = PaddingValues(16.dp)
+    ) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            DocumentControls(
+                anchors = anchors,
+                onJumpToAnchor = onJumpToAnchor
+            )
+
             if (isRefreshing) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -375,15 +405,69 @@ private fun DocumentContentCard(
                     )
                 }
             }
-            
-            // Document content - simplified text display
-            // In a real implementation, you might use a WebView or Markdown renderer
-            Text(
-                text = content,
-                style = MaterialTheme.typography.bodyMedium,
-                lineHeight = MaterialTheme.typography.bodyMedium.lineHeight,
-                color = MaterialTheme.colorScheme.onSurface
+
+            // Hybrid HTML renderer: HtmlCompat (default) → WebView (fallback)
+            // Handles both plain text and HTML content intelligently
+            HtmlContent(
+                html = content,
+                modifier = Modifier.fillMaxWidth(),
+                anchors = anchors,
+                scrollToAnchorId = scrollToAnchorId,
+                scrollRequestKey = scrollRequestKey
             )
+        }
+    }
+}
+
+@Composable
+private fun DocumentControls(
+    anchors: List<HtmlAnchor>,
+    onJumpToAnchor: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isMenuExpanded by remember { mutableStateOf(false) }
+    val hasAnchors = anchors.isNotEmpty()
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box {
+                TextButton(
+                    onClick = { isMenuExpanded = true },
+                    enabled = hasAnchors
+                ) {
+                    Text("Jump to section")
+                    Icon(
+                        imageVector = Icons.Default.ExpandMore,
+                        contentDescription = "Expand sections"
+                    )
+                }
+                DropdownMenu(
+                    expanded = isMenuExpanded,
+                    onDismissRequest = { isMenuExpanded = false }
+                ) {
+                    anchors.forEach { anchor ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = anchor.title,
+                                    modifier = Modifier.padding(start = if (anchor.level >= 3) 12.dp else 0.dp)
+                                )
+                            },
+                            onClick = {
+                                isMenuExpanded = false
+                                onJumpToAnchor(anchor.id)
+                            }
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -404,7 +488,7 @@ private fun LegalDocumentErrorContent(
     ) {
         Icon(
             imageVector = Icons.Default.Error,
-            contentDescription = null,
+            contentDescription = "Error",
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.error
         )
@@ -447,7 +531,7 @@ private fun LegalDocumentEmptyContent(
     ) {
         Icon(
             imageVector = Icons.Default.Description,
-            contentDescription = null,
+            contentDescription = "Document",
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -483,6 +567,433 @@ private fun LegalDocumentEmptyContent(
 private fun PrivacyPolicyScreenPreview() {
     LiftrixTheme {
         // Preview would need mock ViewModel
+    }
+}
+
+/**
+ * AI Disclaimer screen displaying the AI usage disclaimer
+ *
+ * Features:
+ * - WebView or text display of AI disclaimer content
+ * - Download as PDF option
+ * - Last updated date display
+ * - Loading and error states
+ * - Accessibility support
+ *
+ * @param onNavigateBack Callback to navigate back to previous screen
+ * @param viewModel LegalDocumentViewModel for managing content state
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AIDisclaimerScreen(
+    onNavigateBack: () -> Unit,
+    viewModel: LegalDocumentViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(viewModel) {
+        viewModel.loadAIDisclaimer()
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "AI Disclaimer",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Navigate back"
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { viewModel.refreshContent() }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh content"
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { viewModel.downloadAsPdf("ai_disclaimer") }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "Download as PDF"
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        }
+    ) { paddingValues ->
+        val currentUiState = uiState
+        when (currentUiState) {
+            is LegalDocumentUiState.Loading -> {
+                LegalDocumentLoadingContent(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+
+            is LegalDocumentUiState.Success -> {
+                LegalDocumentContent(
+                    document = currentUiState.data.aiDisclaimer,
+                    lastUpdated = currentUiState.data.aiDisclaimerLastUpdated,
+                    isRefreshing = currentUiState.data.isRefreshing,
+                    onRefresh = { viewModel.refreshContent() },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+
+            is LegalDocumentUiState.Error -> {
+                LegalDocumentErrorContent(
+                    error = currentUiState.error,
+                    onRetry = { viewModel.loadAIDisclaimer() },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+
+            is LegalDocumentUiState.Empty -> {
+                LegalDocumentEmptyContent(
+                    onRetry = { viewModel.loadAIDisclaimer() },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Community Guidelines screen displaying community conduct policies
+ *
+ * @param onNavigateBack Callback to navigate back to previous screen
+ * @param viewModel LegalDocumentViewModel for managing content state
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CommunityGuidelinesScreen(
+    onNavigateBack: () -> Unit,
+    viewModel: LegalDocumentViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(viewModel) {
+        viewModel.loadCommunityGuidelines()
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Community Guidelines",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Navigate back"
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { viewModel.refreshContent() }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh content"
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { viewModel.downloadAsPdf("community_guidelines") }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "Download as PDF"
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        }
+    ) { paddingValues ->
+        val currentUiState = uiState
+        when (currentUiState) {
+            is LegalDocumentUiState.Loading -> {
+                LegalDocumentLoadingContent(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+
+            is LegalDocumentUiState.Success -> {
+                LegalDocumentContent(
+                    document = currentUiState.data.communityGuidelines,
+                    lastUpdated = currentUiState.data.communityGuidelinesLastUpdated,
+                    isRefreshing = currentUiState.data.isRefreshing,
+                    onRefresh = { viewModel.refreshContent() },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+
+            is LegalDocumentUiState.Error -> {
+                LegalDocumentErrorContent(
+                    error = currentUiState.error,
+                    onRetry = { viewModel.loadCommunityGuidelines() },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+
+            is LegalDocumentUiState.Empty -> {
+                LegalDocumentEmptyContent(
+                    onRetry = { viewModel.loadCommunityGuidelines() },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Content Moderation Policy screen
+ *
+ * @param onNavigateBack Callback to navigate back to previous screen
+ * @param viewModel LegalDocumentViewModel for managing content state
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ContentModerationPolicyScreen(
+    onNavigateBack: () -> Unit,
+    viewModel: LegalDocumentViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(viewModel) {
+        viewModel.loadContentModerationPolicy()
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Content Moderation Policy",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Navigate back"
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { viewModel.refreshContent() }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh content"
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { viewModel.downloadAsPdf("content_moderation_policy") }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "Download as PDF"
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        }
+    ) { paddingValues ->
+        val currentUiState = uiState
+        when (currentUiState) {
+            is LegalDocumentUiState.Loading -> {
+                LegalDocumentLoadingContent(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+
+            is LegalDocumentUiState.Success -> {
+                LegalDocumentContent(
+                    document = currentUiState.data.contentModerationPolicy,
+                    lastUpdated = currentUiState.data.contentModerationPolicyLastUpdated,
+                    isRefreshing = currentUiState.data.isRefreshing,
+                    onRefresh = { viewModel.refreshContent() },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+
+            is LegalDocumentUiState.Error -> {
+                LegalDocumentErrorContent(
+                    error = currentUiState.error,
+                    onRetry = { viewModel.loadContentModerationPolicy() },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+
+            is LegalDocumentUiState.Empty -> {
+                LegalDocumentEmptyContent(
+                    onRetry = { viewModel.loadContentModerationPolicy() },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Refund and Subscription Policy screen
+ *
+ * @param onNavigateBack Callback to navigate back to previous screen
+ * @param viewModel LegalDocumentViewModel for managing content state
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RefundSubscriptionPolicyScreen(
+    onNavigateBack: () -> Unit,
+    viewModel: LegalDocumentViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(viewModel) {
+        viewModel.loadRefundSubscriptionPolicy()
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Refund & Subscription Policy",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Navigate back"
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { viewModel.refreshContent() }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh content"
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { viewModel.downloadAsPdf("refund_subscription_policy") }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "Download as PDF"
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        }
+    ) { paddingValues ->
+        val currentUiState = uiState
+        when (currentUiState) {
+            is LegalDocumentUiState.Loading -> {
+                LegalDocumentLoadingContent(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+
+            is LegalDocumentUiState.Success -> {
+                LegalDocumentContent(
+                    document = currentUiState.data.refundSubscriptionPolicy,
+                    lastUpdated = currentUiState.data.refundSubscriptionPolicyLastUpdated,
+                    isRefreshing = currentUiState.data.isRefreshing,
+                    onRefresh = { viewModel.refreshContent() },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+
+            is LegalDocumentUiState.Error -> {
+                LegalDocumentErrorContent(
+                    error = currentUiState.error,
+                    onRetry = { viewModel.loadRefundSubscriptionPolicy() },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+
+            is LegalDocumentUiState.Empty -> {
+                LegalDocumentEmptyContent(
+                    onRetry = { viewModel.loadRefundSubscriptionPolicy() },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+        }
     }
 }
 

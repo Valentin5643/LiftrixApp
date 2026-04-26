@@ -94,6 +94,32 @@ data class PostEngagementStats(
 )
 
 /**
+ * Represents the source of engagement data to distinguish real data from fallbacks.
+ *
+ * This prevents misleading scenarios where:
+ * - UI shows "0 likes" but data failed to load (should show "Could not load")
+ * - Analytics logs "0 engagement" when actually data was unavailable
+ * - Users see wrong state without knowing data is stale/fallback
+ */
+sealed class EngagementDataSource {
+    /**
+     * Data successfully loaded from the database.
+     */
+    data class Loaded(val stats: PostEngagementStats) : EngagementDataSource()
+
+    /**
+     * Data fetch failed, using fallback/default values.
+     * @param reason Human-readable reason for fallback (e.g., "Post not found in Room")
+     */
+    data class Fallback(val reason: String, val fallbackStats: PostEngagementStats) : EngagementDataSource()
+
+    /**
+     * Data completely unavailable (e.g., no network, no cache).
+     */
+    data object Unavailable : EngagementDataSource()
+}
+
+/**
  * Engagement action types for analytics
  */
 enum class EngagementAction {

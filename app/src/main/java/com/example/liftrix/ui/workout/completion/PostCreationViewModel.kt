@@ -184,29 +184,29 @@ class PostCreationViewModel @Inject constructor(
                 errorMessage = "User not authenticated for post creation",
                 analyticsContext = mapOf("workout_id" to workoutId)
             )
-        
+
         // CRITICAL: Ensure social profile exists before creating post
         // This prevents foreign key constraint failures
         // But NEVER replaces existing profiles
-        ensureSocialProfileExists(userId)
+        ensureSocialProfileExists(userId.value)
 
         updateState { UiState.Loading }
 
         // Get workout details
-        val workoutResult = workoutRepository.getWorkoutById(WorkoutId(workoutId), userId)
+        val workoutResult = workoutRepository.getWorkoutById(WorkoutId(workoutId), userId.value)
         val workout = workoutResult.fold(
             onSuccess = { it ?: throw LiftrixError.NotFoundError(
                 errorMessage = "Workout not found",
                 resourceType = "workout",
                 resourceId = workoutId,
-                analyticsContext = mapOf("user_id" to userId)
+                analyticsContext = mapOf("user_id" to userId.value)
             ) },
             onFailure = { error ->
                 throw LiftrixError.NotFoundError(
                     errorMessage = "Failed to retrieve workout",
                     resourceType = "workout",
                     resourceId = workoutId,
-                    analyticsContext = mapOf("user_id" to userId)
+                    analyticsContext = mapOf("user_id" to userId.value)
                 )
             }
         )
@@ -214,7 +214,7 @@ class PostCreationViewModel @Inject constructor(
         // Upload media if present
         val mediaUrls = if (mediaUris.isNotEmpty()) {
             updateState { UiState.Loading }
-            uploadMedia(mediaUris, userId)
+            uploadMedia(mediaUris, userId.value)
         } else {
             emptyList()
         }
@@ -258,7 +258,7 @@ class PostCreationViewModel @Inject constructor(
         // Create post entity using corrected volume
         val post = WorkoutPost(
             id = UUID.randomUUID().toString(),
-            userId = userId,
+            userId = userId.value,
             workoutId = workoutId,
             caption = caption.trim(),
             mediaUrls = mediaUrls,

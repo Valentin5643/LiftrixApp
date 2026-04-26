@@ -142,7 +142,7 @@ fun ExpandableSettingsCard(
                             ) {
                                 Icon(
                                     imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                    contentDescription = null,
+                                    contentDescription = if (isExpanded) "Collapse $title" else "Expand $title",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(24.dp)
                                 )

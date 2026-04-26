@@ -242,7 +242,7 @@ private fun FrequencyStatItem(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = label,
             modifier = Modifier.size(16.dp),
             tint = when (isPositive) {
                 true -> MaterialTheme.colorScheme.tertiary

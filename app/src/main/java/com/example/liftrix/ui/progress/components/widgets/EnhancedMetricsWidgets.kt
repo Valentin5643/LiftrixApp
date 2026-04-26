@@ -255,7 +255,7 @@ fun EnhancedMuscleGroupWidget(
                         
                         Icon(
                             imageVector = Icons.Default.DonutLarge,
-                            contentDescription = null,
+                            contentDescription = "Distribution",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(24.dp)
                         )
@@ -455,7 +455,7 @@ private fun EnhancedMetricDisplay(
                 ) {
                     Icon(
                         imageVector = icon,
-                        contentDescription = null,
+                        contentDescription = "Metric",
                         tint = primaryColor,
                         modifier = Modifier.size(18.dp)
                     )

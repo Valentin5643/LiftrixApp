@@ -108,7 +108,7 @@ private fun GuestNudgeCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Person,
-                        contentDescription = null,
+                        contentDescription = "Guest mode",
                         tint = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -179,7 +179,7 @@ private fun GuestLimitWarningCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Warning,
-                        contentDescription = null,
+                        contentDescription = "Limit warning",
                         tint = MaterialTheme.colorScheme.onErrorContainer
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -255,7 +255,7 @@ fun GuestLimitReachedDialog(
             ) {
                 Icon(
                     imageVector = Icons.Default.Warning,
-                    contentDescription = null,
+                    contentDescription = "Limit reached",
                     tint = MaterialTheme.colorScheme.error
                 )
                 Spacer(modifier = Modifier.width(8.dp))

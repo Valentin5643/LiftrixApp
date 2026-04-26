@@ -136,7 +136,7 @@ private fun OfflineBannerContent(
             // Status Icon
             Icon(
                 imageVector = bannerData.icon,
-                contentDescription = null,
+                contentDescription = bannerData.title,
                 tint = bannerData.iconColor,
                 modifier = Modifier.padding(top = 2.dp)
             )
@@ -182,7 +182,7 @@ private fun OfflineBannerContent(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Refresh,
-                                contentDescription = null,
+                                contentDescription = "Retry sync",
                                 modifier = Modifier.padding(end = 4.dp)
                             )
                             Text("Retry")
@@ -254,7 +254,7 @@ fun CompactOfflineIndicator(
                 ) {
                     Icon(
                         imageVector = data.icon,
-                        contentDescription = null,
+                        contentDescription = data.text,
                         tint = data.iconColor,
                         modifier = Modifier.size(14.dp)
                     )

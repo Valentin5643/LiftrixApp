@@ -11,7 +11,6 @@ import com.example.liftrix.domain.repository.SyncStatus
 import com.example.liftrix.domain.repository.SyncResult
 import com.example.liftrix.domain.repository.WorkoutUpdate
 import com.example.liftrix.domain.repository.SyncError
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,7 +28,6 @@ import javax.inject.Singleton
  */
 @Singleton
 class SyncRepositoryImpl @Inject constructor(
-    private val firestore: FirebaseFirestore,
     private val firebaseDataSource: FirebaseDataSource,
     private val userProfileDao: UserProfileDao,
     private val workoutDao: WorkoutDao,

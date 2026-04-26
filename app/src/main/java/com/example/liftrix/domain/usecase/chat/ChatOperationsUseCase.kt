@@ -263,18 +263,18 @@ class ChatOperationsUseCase @Inject constructor(
 
         validateConfirmation(confirmationText, language)
 
-        val messageCountBefore = chatHistoryDao.getTotalMessageCount(userId)
-        val tokenUsageBefore = chatHistoryDao.getTotalTokenUsage(userId) ?: 0
+        val messageCountBefore = chatHistoryDao.getTotalMessageCount(userId.value)
+        val tokenUsageBefore = chatHistoryDao.getTotalTokenUsage(userId.value) ?: 0
 
-        Timber.d("Clearing chat history for user: $userId. Messages: $messageCountBefore, Tokens: $tokenUsageBefore")
+        Timber.d("Clearing chat history for user: ${userId.value}. Messages: $messageCountBefore, Tokens: $tokenUsageBefore")
 
-        val deletedCount = chatHistoryDao.clearAllHistory(userId)
+        val deletedCount = chatHistoryDao.clearAllHistory(userId.value)
 
-        Timber.i("Chat history cleared for user: $userId. Deleted $deletedCount messages.")
+        Timber.i("Chat history cleared for user: ${userId.value}. Deleted $deletedCount messages.")
 
-        val remainingCount = chatHistoryDao.getTotalMessageCount(userId)
+        val remainingCount = chatHistoryDao.getTotalMessageCount(userId.value)
         if (remainingCount > 0) {
-            Timber.w("History clear incomplete: $remainingCount messages remain for user $userId")
+            Timber.w("History clear incomplete: $remainingCount messages remain for user ${userId.value}")
         }
 
         deletedCount
@@ -306,22 +306,22 @@ class ChatOperationsUseCase @Inject constructor(
         val userId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw IllegalStateException("User not authenticated")
 
-        Timber.d("Starting chat history export for user: $userId in format: $format")
+        Timber.d("Starting chat history export for user: ${userId.value} in format: $format")
 
-        val allMessages = chatHistoryDao.getAllMessagesForExport(userId)
+        val allMessages = chatHistoryDao.getAllMessagesForExport(userId.value)
 
         if (allMessages.isEmpty()) {
-            Timber.i("No chat history found for user: $userId")
+            Timber.i("No chat history found for user: ${userId.value}")
             return@liftrixCatching when (format) {
-                ExportFormat.JSON -> generateEmptyExport(userId)
+                ExportFormat.JSON -> generateEmptyExport(userId.value)
             }
         }
 
         val exportData = when (format) {
-            ExportFormat.JSON -> exportToJson(allMessages, userId)
+            ExportFormat.JSON -> exportToJson(allMessages, userId.value)
         }
 
-        Timber.i("Successfully exported ${allMessages.size} messages for user: $userId")
+        Timber.i("Successfully exported ${allMessages.size} messages for user: ${userId.value}")
         exportData
     }
 

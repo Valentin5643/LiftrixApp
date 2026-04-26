@@ -1,5 +1,6 @@
 package com.example.liftrix.domain.usecase.auth
 
+import com.example.liftrix.core.identity.UserId
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -36,7 +37,7 @@ class AuthQueryUseCase @Inject constructor(
      *                    If false, returns immediately with current auth state.
      * @return LiftrixResult containing user ID or error
      */
-    suspend operator fun invoke(waitForAuth: Boolean = false): LiftrixResult<String> = liftrixCatching(
+    suspend operator fun invoke(waitForAuth: Boolean = false): LiftrixResult<UserId> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.AuthenticationError(
                 errorMessage = "Failed to get user ID: ${throwable.message}",
@@ -63,7 +64,7 @@ class AuthQueryUseCase @Inject constructor(
      * @return User ID if authenticated
      * @throws Exception if user is not authenticated
      */
-    private suspend fun getUserIdImmediate(): String {
+    private suspend fun getUserIdImmediate(): UserId {
         val userId = authRepository.getCurrentUserId()
         return userId ?: throw LiftrixError.AuthenticationError(
             errorMessage = "User not authenticated",
@@ -82,7 +83,7 @@ class AuthQueryUseCase @Inject constructor(
      * @return User ID if authenticated
      * @throws Exception if user is not authenticated after wait
      */
-    private suspend fun getUserIdWithWait(): String {
+    private suspend fun getUserIdWithWait(): UserId {
         // First try direct Firebase Auth check for immediate response
         val directUserId = authRepository.getCurrentUserId()
         if (directUserId != null) {
@@ -93,10 +94,11 @@ class AuthQueryUseCase @Inject constructor(
             // Wait for auth state flow with extended timeout for cold starts
             withTimeout(20_000) { // 20 second timeout for cold starts
                 val user = authRepository.currentUser.first { it != null }
-                user?.uid ?: throw LiftrixError.AuthenticationError(
+                val uid = user?.uid ?: throw LiftrixError.AuthenticationError(
                     errorMessage = "User not authenticated after wait",
                     errorCode = "USER_NOT_AUTHENTICATED_AFTER_WAIT"
                 )
+                UserId(uid)
             }
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
             // Final fallback to direct Firebase Auth check

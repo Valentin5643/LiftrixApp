@@ -10,6 +10,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.Data
 import com.example.liftrix.domain.repository.SyncStatusRepository
 import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.config.OfflineArchitectureFlags
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
@@ -53,19 +54,10 @@ import kotlinx.coroutines.supervisorScope
 class MasterSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
-    private val syncStatusRepository: SyncStatusRepository
+    private val syncStatusRepository: SyncStatusRepository,
+    private val firestore: com.google.firebase.firestore.FirebaseFirestore,
+    private val firebaseAuth: com.google.firebase.auth.FirebaseAuth
 ) : BaseSyncWorker(context, params) {
-
-    // 🔧 HOTFIX: Fallback constructor for when Hilt factory generation fails
-    // This allows WorkManager to instantiate the worker via reflection
-    // TEMPORARY: Remove once Hilt assisted factories are confirmed working
-    constructor(context: Context, params: WorkerParameters) : this(
-        context,
-        params,
-        WorkerServiceLocator.getSyncStatusRepository(context)
-    ) {
-        Timber.w("⚠️ MasterSyncWorker using FALLBACK constructor - Hilt factory failed!")
-    }
 
     init {
         Timber.d("✅ MasterSyncWorker constructed with Hilt DI")
@@ -90,6 +82,12 @@ class MasterSyncWorker @AssistedInject constructor(
     override suspend fun performSync(userId: String): Result {
 
         Timber.d("MasterSyncWorker: Starting periodic sync for user $userId")
+        val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+            OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
+        if (!OfflineArchitectureFlags.ROOM_FIRST_ENABLED) {
+            Timber.w("MasterSyncWorker running in legacy mode (Room-first disabled)")
+        }
+        Timber.d("MasterSyncWorker dirty gating enabled: $useDirtyFlagGating")
         
         try {
             // Check cancellation before starting
@@ -370,9 +368,7 @@ class MasterSyncWorker @AssistedInject constructor(
             
             // Test that Firebase services are available
             try {
-                val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-                if (auth.currentUser == null) {
+                if (firebaseAuth.currentUser == null) {
                     errors.add("Firebase Auth: User not authenticated")
                     Timber.w("❌ Firebase Auth: User not authenticated")
                 } else {

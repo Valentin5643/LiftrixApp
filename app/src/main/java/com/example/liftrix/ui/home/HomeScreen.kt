@@ -365,7 +365,7 @@ private fun EnhancedHomeContent(
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
                         imageVector = Icons.Default.ArrowForward,
-                        contentDescription = null,
+                        contentDescription = "View all workouts",
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
@@ -565,7 +565,7 @@ private fun SectionHeader(
                 Spacer(modifier = Modifier.width(4.dp))
                 Icon(
                     imageVector = Icons.Default.ArrowForward,
-                    contentDescription = null,
+                    contentDescription = "View all",
                     modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )

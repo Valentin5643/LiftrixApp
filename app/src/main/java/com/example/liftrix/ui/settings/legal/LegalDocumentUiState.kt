@@ -14,8 +14,16 @@ sealed class LegalDocumentUiState {
     data class Data(
         val privacyPolicy: String? = null,
         val termsOfService: String? = null,
+        val aiDisclaimer: String? = null,
+        val communityGuidelines: String? = null,
+        val contentModerationPolicy: String? = null,
+        val refundSubscriptionPolicy: String? = null,
         val privacyPolicyLastUpdated: String? = null,
         val termsOfServiceLastUpdated: String? = null,
+        val aiDisclaimerLastUpdated: String? = null,
+        val communityGuidelinesLastUpdated: String? = null,
+        val contentModerationPolicyLastUpdated: String? = null,
+        val refundSubscriptionPolicyLastUpdated: String? = null,
         val isRefreshing: Boolean = false,
         val downloadInProgress: Boolean = false,
         val downloadProgress: Float = 0f
@@ -24,19 +32,44 @@ sealed class LegalDocumentUiState {
          * Checks if any documents are available
          */
         val hasAnyDocument: Boolean
-            get() = privacyPolicy != null || termsOfService != null
-        
+            get() = privacyPolicy != null || termsOfService != null || aiDisclaimer != null ||
+                    communityGuidelines != null || contentModerationPolicy != null || refundSubscriptionPolicy != null
+
         /**
          * Checks if privacy policy is available
          */
         val hasPrivacyPolicy: Boolean
             get() = !privacyPolicy.isNullOrBlank()
-        
+
         /**
          * Checks if terms of service is available
          */
         val hasTermsOfService: Boolean
             get() = !termsOfService.isNullOrBlank()
+
+        /**
+         * Checks if AI disclaimer is available
+         */
+        val hasAIDisclaimer: Boolean
+            get() = !aiDisclaimer.isNullOrBlank()
+
+        /**
+         * Checks if community guidelines are available
+         */
+        val hasCommunityGuidelines: Boolean
+            get() = !communityGuidelines.isNullOrBlank()
+
+        /**
+         * Checks if content moderation policy is available
+         */
+        val hasContentModerationPolicy: Boolean
+            get() = !contentModerationPolicy.isNullOrBlank()
+
+        /**
+         * Checks if refund & subscription policy is available
+         */
+        val hasRefundSubscriptionPolicy: Boolean
+            get() = !refundSubscriptionPolicy.isNullOrBlank()
     }
     
     /**

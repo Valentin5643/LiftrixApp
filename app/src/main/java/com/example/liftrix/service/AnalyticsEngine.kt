@@ -317,7 +317,10 @@ class AnalyticsEngine @Inject constructor(
      * @param workoutId The ID of the workout to calculate metrics for
      * @return LiftrixResult containing calculated WorkoutMetrics or error information
      */
-    suspend fun calculateWorkoutMetrics(workoutId: com.example.liftrix.domain.model.WorkoutId): LiftrixResult<com.example.liftrix.domain.model.analytics.WorkoutMetrics> = withContext(Dispatchers.IO) {
+    suspend fun calculateWorkoutMetrics(
+        workoutId: com.example.liftrix.domain.model.WorkoutId,
+        userId: String
+    ): LiftrixResult<com.example.liftrix.domain.model.analytics.WorkoutMetrics> = withContext(Dispatchers.IO) {
         return@withContext try {
             // Check memory pressure before expensive calculation
             handleMemoryPressure()
@@ -328,7 +331,7 @@ class AnalyticsEngine @Inject constructor(
                 Timber.d("Calculating workout metrics for workoutId: ${workoutId.value}")
                 
                 // Query actual workout data from database
-                val workoutEntity = workoutDao.getWorkoutById(workoutId.value)
+                val workoutEntity = workoutDao.getWorkoutByIdForUser(workoutId.value, userId)
                 if (workoutEntity == null) {
                     throw LiftrixError.NotFoundError(
                         errorMessage = "Workout not found",

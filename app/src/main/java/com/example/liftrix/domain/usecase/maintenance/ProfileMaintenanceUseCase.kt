@@ -104,11 +104,20 @@ class ProfileMaintenanceUseCase @Inject constructor(
                     profileCleanupService.performOrphanedProfileCleanup(excludeUserId = request.targetUserId)
                         .copy(orphanedProfilesRemoved = 0) // Don't actually remove in dry run
                 } else {
-                    ProfileCleanupService.CleanupResult(0, 0, 0, 0, emptyList(), 0) // Detection only
+                    ProfileCleanupService.CleanupResult(
+                        trueOrphansFound = 0,
+                        unverifiedProfilesFound = 0,
+                        orphanedProfilesRemoved = 0,
+                        firestoreDocumentsRemoved = 0,
+                        roomRecordsRemoved = 0,
+                        errors = emptyList(),
+                        cleanupTimeMs = 0
+                    ) // Detection only
                 }
-                
-                if (cleanupResult.orphanedProfilesFound > 0) {
-                    recommendations.add("Found ${cleanupResult.orphanedProfilesFound} orphaned profiles - consider running CLEANUP_ORPHANED_PROFILES")
+
+                val totalFound = cleanupResult.trueOrphansFound + cleanupResult.unverifiedProfilesFound
+                if (totalFound > 0) {
+                    recommendations.add("Found $totalFound profiles (true orphans: ${cleanupResult.trueOrphansFound}, unverified: ${cleanupResult.unverifiedProfilesFound}) - consider running CLEANUP_ORPHANED_PROFILES")
                 }
             }
             
@@ -116,12 +125,13 @@ class ProfileMaintenanceUseCase @Inject constructor(
                 Timber.d("🛠️ MAINTENANCE: Cleaning up orphaned profiles...")
                 cleanupResult = if (request.dryRun) {
                     val dryResult = profileCleanupService.performOrphanedProfileCleanup(excludeUserId = request.targetUserId)
-                    recommendations.add("DRY RUN: Would remove ${dryResult.orphanedProfilesFound} orphaned profiles")
+                    val totalFound = dryResult.trueOrphansFound + dryResult.unverifiedProfilesFound
+                    recommendations.add("DRY RUN: Would check $totalFound profiles (true orphans: ${dryResult.trueOrphansFound}, unverified: ${dryResult.unverifiedProfilesFound})")
                     dryResult.copy(orphanedProfilesRemoved = 0)
                 } else {
                     profileCleanupService.performOrphanedProfileCleanup(excludeUserId = request.targetUserId)
                 }
-                
+
                 if (cleanupResult.orphanedProfilesRemoved > 0) {
                     recommendations.add("Successfully cleaned up ${cleanupResult.orphanedProfilesRemoved} orphaned profiles")
                 }
@@ -129,8 +139,16 @@ class ProfileMaintenanceUseCase @Inject constructor(
             
             MaintenanceOperation.VALIDATE_USER_DATA_INTEGRITY -> {
                 Timber.d("🛠️ MAINTENANCE: Validating user data integrity...")
-                cleanupResult = ProfileCleanupService.CleanupResult(0, 0, 0, 0, emptyList(), 0)
-                
+                cleanupResult = ProfileCleanupService.CleanupResult(
+                    trueOrphansFound = 0,
+                    unverifiedProfilesFound = 0,
+                    orphanedProfilesRemoved = 0,
+                    firestoreDocumentsRemoved = 0,
+                    roomRecordsRemoved = 0,
+                    errors = emptyList(),
+                    cleanupTimeMs = 0
+                )
+
                 // Check specific user if provided, otherwise check current integrity
                 request.targetUserId?.let { userId ->
                     val isOrphaned = profileCleanupService.isUserOrphaned(userId)
@@ -146,7 +164,8 @@ class ProfileMaintenanceUseCase @Inject constructor(
                 Timber.d("🛠️ MAINTENANCE: Performing full system cleanup...")
                 cleanupResult = if (request.dryRun) {
                     val dryResult = profileCleanupService.performOrphanedProfileCleanup()
-                    recommendations.add("DRY RUN: Full cleanup would remove ${dryResult.orphanedProfilesFound} orphaned profiles")
+                    val totalFound = dryResult.trueOrphansFound + dryResult.unverifiedProfilesFound
+                    recommendations.add("DRY RUN: Full cleanup would check $totalFound profiles (true orphans: ${dryResult.trueOrphansFound}, unverified: ${dryResult.unverifiedProfilesFound})")
                     dryResult.copy(orphanedProfilesRemoved = 0)
                 } else {
                     val result = profileCleanupService.performOrphanedProfileCleanup()
@@ -157,25 +176,37 @@ class ProfileMaintenanceUseCase @Inject constructor(
             
             MaintenanceOperation.GENERATE_HEALTH_REPORT -> {
                 Timber.d("🛠️ MAINTENANCE: Generating system health report...")
-                cleanupResult = ProfileCleanupService.CleanupResult(0, 0, 0, 0, emptyList(), 0)
-                
+                cleanupResult = ProfileCleanupService.CleanupResult(
+                    trueOrphansFound = 0,
+                    unverifiedProfilesFound = 0,
+                    orphanedProfilesRemoved = 0,
+                    firestoreDocumentsRemoved = 0,
+                    roomRecordsRemoved = 0,
+                    errors = emptyList(),
+                    cleanupTimeMs = 0
+                )
+
                 // Generate a basic health report
                 val detectionResult = profileCleanupService.performOrphanedProfileCleanup(excludeUserId = null)
-                
+                val totalFound = detectionResult.trueOrphansFound + detectionResult.unverifiedProfilesFound
+
                 healthReport = SystemHealthReport(
-                    totalUsers = detectionResult.orphanedProfilesFound + 1, // Approximate
+                    totalUsers = totalFound + 1, // Approximate
                     activeUsers = 1, // At least current user
-                    orphanedProfiles = detectionResult.orphanedProfilesFound,
-                    inconsistentProfiles = detectionResult.orphanedProfilesFound,
+                    orphanedProfiles = detectionResult.trueOrphansFound,  // Only TRUE orphans
+                    inconsistentProfiles = detectionResult.unverifiedProfilesFound,  // Unverified profiles
                     syncIssues = detectionResult.errors.size,
                     lastMaintenanceTime = System.currentTimeMillis(),
                     healthScore = calculateHealthScore(detectionResult),
                     criticalIssues = detectionResult.errors
                 )
-                
+
                 recommendations.add("System health score: ${healthReport.healthScore}/100")
                 if (healthReport.orphanedProfiles > 0) {
-                    recommendations.add("${healthReport.orphanedProfiles} orphaned profiles detected - consider cleanup")
+                    recommendations.add("${healthReport.orphanedProfiles} true orphaned profiles detected - consider cleanup")
+                }
+                if (healthReport.inconsistentProfiles > 0) {
+                    recommendations.add("${healthReport.inconsistentProfiles} unverified profiles detected - server validation recommended")
                 }
                 if (healthReport.healthScore < 80) {
                     recommendations.add("System health below 80% - maintenance required")
@@ -239,16 +270,22 @@ class ProfileMaintenanceUseCase @Inject constructor(
     
     /**
      * Calculates system health score based on cleanup results
+     *
+     * Scoring:
+     * - True orphans: -10 points each (critical issue)
+     * - Unverified profiles: -2 points each (minor issue, client-limited)
+     * - Errors: -15 points each (serious issue)
      */
     private fun calculateHealthScore(cleanupResult: ProfileCleanupService.CleanupResult): Int {
         val baseScore = 100
-        
+
         // Deduct points for issues
-        val orphanedPenalty = cleanupResult.orphanedProfilesFound * 10
-        val errorPenalty = cleanupResult.errors.size * 15
-        
-        val finalScore = (baseScore - orphanedPenalty - errorPenalty).coerceIn(0, 100)
-        
+        val trueOrphanPenalty = cleanupResult.trueOrphansFound * 10  // Critical
+        val unverifiedPenalty = cleanupResult.unverifiedProfilesFound * 2  // Minor (client-limited)
+        val errorPenalty = cleanupResult.errors.size * 15  // Serious
+
+        val finalScore = (baseScore - trueOrphanPenalty - unverifiedPenalty - errorPenalty).coerceIn(0, 100)
+
         return finalScore
     }
     

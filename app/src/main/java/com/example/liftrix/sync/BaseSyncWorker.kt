@@ -328,7 +328,7 @@ abstract class BaseSyncWorker(
      * Create sync metadata that complies with Firestore security rules
      * Firestore security rules expect: syncVersion (int), lastModified (timestamp), isSynced (bool)
      */
-    protected fun createSyncMetadata(syncVersion: Int = 1): Map<String, Any> {
+    protected fun createSyncMetadata(syncVersion: Long = 1L): Map<String, Any> {
         return mapOf(
             "syncVersion" to syncVersion,
             "lastModified" to FieldValue.serverTimestamp(),
@@ -342,7 +342,7 @@ abstract class BaseSyncWorker(
      * @param syncVersion The sync version (defaults to 1)
      * @return New map with sync metadata added
      */
-    protected fun addSyncMetadata(data: Map<String, Any?>, syncVersion: Int = 1): Map<String, Any?> {
+    protected fun addSyncMetadata(data: Map<String, Any?>, syncVersion: Long = 1L): Map<String, Any?> {
         return data + createSyncMetadata(syncVersion)
     }
 
@@ -350,7 +350,7 @@ abstract class BaseSyncWorker(
      * Create sync metadata for templates that comply with Firestore security rules
      * Templates require additional fields beyond base sync metadata
      */
-    protected fun createTemplateSyncMetadata(syncVersion: Int = 1): Map<String, Any> {
+    protected fun createTemplateSyncMetadata(syncVersion: Long = 1L): Map<String, Any> {
         return mapOf(
             "syncVersion" to syncVersion,
             "lastModified" to FieldValue.serverTimestamp(),

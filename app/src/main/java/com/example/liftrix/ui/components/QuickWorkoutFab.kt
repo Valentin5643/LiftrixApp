@@ -36,7 +36,7 @@ fun QuickWorkoutFab(
         ) {
             Icon(
                 imageVector = Icons.Default.Add,
-                contentDescription = null
+                contentDescription = "Start quick workout"
             )
             Text(
                 text = "Quick Workout",

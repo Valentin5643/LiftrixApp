@@ -130,7 +130,7 @@ private fun SectionHeader(
             
             Icon(
                 imageVector = Icons.Default.ArrowForward,
-                contentDescription = null,
+                contentDescription = "View all friends",
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
@@ -198,7 +198,7 @@ private fun EmptyFriendsState(
         ) {
             Icon(
                 imageVector = Icons.Default.Group,
-                contentDescription = null,
+                contentDescription = "No friends yet",
                 modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
             )
@@ -231,7 +231,7 @@ private fun EmptyFriendsState(
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = null,
+                    contentDescription = "Add friends",
                     modifier = Modifier.size(18.dp)
                 )
                 

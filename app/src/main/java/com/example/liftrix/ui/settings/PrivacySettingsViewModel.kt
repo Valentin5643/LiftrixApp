@@ -81,7 +81,7 @@ class PrivacySettingsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
+                    onSuccess = { it.value },
                     onFailure = { throw IllegalStateException("User not authenticated") }
                 )
                 val result = privacySettingsRepository.getPrivacySettings(userId)
@@ -137,7 +137,7 @@ class PrivacySettingsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
+                    onSuccess = { it.value },
                     onFailure = { throw IllegalStateException("User not authenticated") }
                 )
                 privacySettingsRepository.observePrivacySettings(userId)
@@ -162,7 +162,7 @@ class PrivacySettingsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
+                    onSuccess = { it.value },
                     onFailure = { throw IllegalStateException("User not authenticated") }
                 )
                 val result = privacySettingsRepository.createPrivacySettings(userId)
@@ -315,7 +315,7 @@ class PrivacySettingsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
+                    onSuccess = { it.value },
                     onFailure = { throw IllegalStateException("User not authenticated") }
                 )
                 privacySettingsRepository.deletePrivacySettings(userId)
