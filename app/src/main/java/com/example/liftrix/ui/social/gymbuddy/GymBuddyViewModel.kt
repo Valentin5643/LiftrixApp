@@ -10,12 +10,15 @@ import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.social.GymBuddyRepository
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.domain.service.QRCodeService
-import com.example.liftrix.domain.usecase.social.SocialProfileQueryUseCase
 import com.example.liftrix.ui.common.event.ViewModelEvent
+import android.net.Uri
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.security.SecureRandom
 import javax.inject.Inject
 
 /**
@@ -30,8 +33,7 @@ class GymBuddyViewModel @Inject constructor(
     private val gymBuddyRepository: GymBuddyRepository,
     private val authRepository: AuthRepository,
     private val analyticsService: AnalyticsService,
-    private val qrCodeService: QRCodeService,
-    private val socialProfileQueryUseCase: SocialProfileQueryUseCase
+    private val qrCodeService: QRCodeService
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GymBuddyUiState())
@@ -151,6 +153,11 @@ class GymBuddyViewModel @Inject constructor(
      * Generates a QR code for buddy pairing
      */
     private fun generateQrCode() {
+        val existingQrCode = _uiState.value.qrCode
+        if (existingQrCode != null && !existingQrCode.isExpired()) {
+            return
+        }
+
         viewModelScope.launch {
             try {
                 val currentUser = authRepository.getCurrentUser()
@@ -160,47 +167,26 @@ class GymBuddyViewModel @Inject constructor(
                 }
 
                 updateState { copy(isGeneratingQr = true, error = null) }
-
-                // Get user's social profile for QR data
-                val socialProfileResult = socialProfileQueryUseCase.invoke(currentUser.uid)
-                if (socialProfileResult.isFailure) {
-                    updateState { 
-                        copy(
-                            isGeneratingQr = false,
-                            error = "Failed to load user profile: ${socialProfileResult.exceptionOrNull()?.message}"
-                        ) 
-                    }
-                    return@launch
-                }
-
-                val socialProfile = socialProfileResult.getOrNull()
-                if (socialProfile == null || socialProfile.username.isBlank()) {
-                    // User needs to complete social profile setup first
-                    updateState { 
-                        copy(
-                            isGeneratingQr = false,
-                            error = "Please complete your social profile setup to use Gym Buddy features"
-                        ) 
-                    }
-                    return@launch
-                }
                 
                 val userProfile = QRUserProfile(
-                    displayName = socialProfile.displayName.toString(),
-                    username = socialProfile.username
+                    displayName = currentUser.displayName ?: "Liftrix User",
+                    username = currentUser.email.substringBefore('@').ifBlank { currentUser.uid.take(8) }
                 )
 
-                // Create gym buddy pairing token with expiration
-                val pairingToken = "liftrix://gym-buddy/${currentUser.uid}?token=${System.currentTimeMillis()}"
-                val expiresAt = System.currentTimeMillis() + (5 * 60 * 1000) // 5 minutes
+                val expiresAt = System.currentTimeMillis() + QR_EXPIRATION_MS
+                val pairingPayload = createGymBuddyQrPayload(
+                    userId = currentUser.uid,
+                    expiresAt = expiresAt
+                )
 
-                // Generate QR code bitmap
-                val qrResult = qrCodeService.generateQRCode(pairingToken, size = 300, margin = 1)
+                val qrResult = withContext(Dispatchers.Default) {
+                    qrCodeService.generateQRCode(pairingPayload, size = 300, margin = 1)
+                }
                 
                 qrResult.fold(
                     onSuccess = { bitmap ->
                         val qrCodeData = QRCodeData(
-                            token = pairingToken,
+                            token = pairingPayload,
                             expiresAt = expiresAt,
                             bitmap = bitmap
                         )
@@ -440,6 +426,23 @@ class GymBuddyViewModel @Inject constructor(
         _uiState.value = _uiState.value.transform()
     }
 
+    private fun createGymBuddyQrPayload(userId: String, expiresAt: Long): String {
+        val token = ByteArray(QR_TOKEN_BYTES).also { SecureRandom().nextBytes(it) }
+        val encodedToken = android.util.Base64.encodeToString(
+            token,
+            android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING
+        )
+
+        return Uri.Builder()
+            .scheme("liftrix")
+            .authority("gym-buddy")
+            .appendQueryParameter("userId", userId)
+            .appendQueryParameter("token", encodedToken)
+            .appendQueryParameter("expiresAt", expiresAt.toString())
+            .build()
+            .toString()
+    }
+
     // Analytics tracking methods
 
     /**
@@ -627,6 +630,11 @@ class GymBuddyViewModel @Inject constructor(
                 Timber.w(exception, "Failed to track notifications toggle")
             }
         }
+    }
+
+    companion object {
+        private const val QR_EXPIRATION_MS = 5 * 60 * 1000L
+        private const val QR_TOKEN_BYTES = 16
     }
 }
 

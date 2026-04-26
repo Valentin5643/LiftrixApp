@@ -30,9 +30,9 @@ import android.graphics.Bitmap
 import androidx.compose.ui.graphics.Color
 
 /**
- * Screen for displaying QR codes for profile sharing
+ * Screen for displaying QR codes for in-app friend pairing
  * 
- * Generates and displays QR codes containing profile URLs with sharing capabilities.
+ * Generates and displays QR codes containing app-native payloads with sharing capabilities.
  * Includes options to save, share, and customize QR code appearance.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -172,14 +172,14 @@ private fun QRCodeContent(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "Share Your Profile",
+                text = "Add Friend",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
             
             Text(
-                text = "Others can scan this QR code to view your public profile",
+                text = "Others can scan this QR code in Liftrix to connect with you",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -225,7 +225,7 @@ private fun QRCodeDisplay(
     LiftrixCard(
         modifier = modifier
             .semantics {
-                contentDescription = "QR code for profile sharing"
+                contentDescription = "QR code for friend pairing"
             }
     ) {
         Box(
@@ -236,7 +236,7 @@ private fun QRCodeDisplay(
         ) {
             Image(
                 bitmap = qrCodeBitmap.asImageBitmap(),
-                contentDescription = "Profile QR code",
+                contentDescription = "Friend QR code",
                 modifier = Modifier
                     .size(250.dp)
                     .clip(RoundedCornerShape(12.dp))
@@ -274,7 +274,7 @@ private fun ProfileUrlCard(
                 )
                 
                 Text(
-                    text = "Profile Link",
+                    text = "In-app code",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Medium
                 )
@@ -362,17 +362,17 @@ private fun InstructionsCard(
             ) {
                 InstructionItem(
                     number = "1",
-                    text = "Share this QR code with others via social media, messaging, or print"
+                    text = "Share this QR code with another Liftrix user"
                 )
                 
                 InstructionItem(
                     number = "2",
-                    text = "They can scan it with their camera to view your public profile"
+                    text = "They can scan it with the Liftrix scanner"
                 )
                 
                 InstructionItem(
                     number = "3",
-                    text = "Only information you've made public will be visible to them"
+                    text = "The app connects you as gym buddies after a successful scan"
                 )
             }
         }

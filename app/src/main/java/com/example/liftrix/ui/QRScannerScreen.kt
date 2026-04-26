@@ -48,6 +48,7 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.DecodeHintType
 import com.google.zxing.MultiFormatReader
+import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.RGBLuminanceSource
 import com.google.zxing.common.HybridBinarizer
 import kotlinx.coroutines.Dispatchers
@@ -98,10 +99,11 @@ fun QRScannerScreen(
         viewModel.handleEvent(QRScannerEvent.InitializeScanner)
     }
 
-    // Handle scanned QR code
-    LaunchedEffect(uiState.scannedCode) {
-        uiState.scannedCode?.let { code ->
-            onQrCodeScanned(code)
+    LaunchedEffect(uiState.connectionSuccess, uiState.connectedBuddyId) {
+        if (uiState.connectionSuccess) {
+            uiState.connectedBuddyId?.let { buddyId ->
+                onQrCodeScanned(buddyId)
+            }
         }
     }
 
@@ -133,6 +135,7 @@ fun QRScannerScreen(
         QRScanningOverlay(
             isProcessing = uiState.isProcessing,
             error = uiState.error,
+            successMessage = uiState.successMessage,
             onRetry = { viewModel.handleEvent(QRScannerEvent.RetryScanning) },
             modifier = Modifier.align(Alignment.Center)
         )
@@ -227,28 +230,35 @@ private fun analyzeQRCode(
     try {
         val mediaImage = imageProxy.image
         if (mediaImage != null) {
-            val bitmap = imageProxyToBitmap(imageProxy)
-            if (bitmap != null) {
-                val width = bitmap.width
-                val height = bitmap.height
-                val pixels = IntArray(width * height)
-                bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+            val yBuffer = mediaImage.planes[0].buffer
+            val yData = ByteArray(yBuffer.remaining())
+            yBuffer.get(yData)
 
-                val source = RGBLuminanceSource(width, height, pixels)
-                val binaryBitmap = BinaryBitmap(HybridBinarizer(source))
+            val source = PlanarYUVLuminanceSource(
+                yData,
+                mediaImage.width,
+                mediaImage.height,
+                0,
+                0,
+                mediaImage.width,
+                mediaImage.height,
+                false
+            )
+            val binaryBitmap = BinaryBitmap(HybridBinarizer(source))
 
-                val hints = mapOf(
-                    DecodeHintType.TRY_HARDER to true,
-                    DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE),
-                    DecodeHintType.CHARACTER_SET to "UTF-8"
-                )
+            val hints = mapOf(
+                DecodeHintType.TRY_HARDER to true,
+                DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE),
+                DecodeHintType.CHARACTER_SET to "UTF-8"
+            )
 
-                try {
-                    val result = reader.decode(binaryBitmap, hints)
-                    onQRCodeDetected(result.text)
-                } catch (e: Exception) {
-                    // No QR code found in this frame, continue scanning
-                }
+            try {
+                val result = reader.decode(binaryBitmap, hints)
+                onQRCodeDetected(result.text)
+            } catch (e: Exception) {
+                // No QR code found in this frame, continue scanning
+            } finally {
+                reader.reset()
             }
         }
     } catch (e: Exception) {
@@ -328,6 +338,7 @@ private fun QRScannerTopBar(
 private fun QRScanningOverlay(
     isProcessing: Boolean,
     error: String?,
+    successMessage: String?,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -461,6 +472,37 @@ private fun QRScanningOverlay(
                     ) {
                         Text("Retry")
                     }
+                }
+            }
+        }
+
+        if (successMessage != null) {
+            Box(
+                modifier = Modifier
+                    .size(280.dp)
+                    .background(
+                        Color(0xFF16A34A).copy(alpha = 0.9f),
+                        RoundedCornerShape(12.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(40.dp)
+                    )
+                    Text(
+                        text = successMessage,
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
         }

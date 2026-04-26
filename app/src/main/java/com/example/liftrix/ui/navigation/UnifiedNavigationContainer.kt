@@ -1058,7 +1058,22 @@ fun UnifiedNavigationContainer(
                 composable<LiftrixRoute.GymBuddy> {
                     com.example.liftrix.ui.social.gymbuddy.GymBuddyScreen(
                         onNavigateToQrScanner = {
-                            // QR Scanner navigation placeholder
+                            navController.navigate(LiftrixRoute.QRScanner)
+                        }
+                    )
+                }
+
+                composable<LiftrixRoute.QRScanner> {
+                    val coroutineScope = rememberCoroutineScope()
+                    com.example.liftrix.ui.QRScannerScreen(
+                        onQrCodeScanned = {
+                            coroutineScope.launch {
+                                kotlinx.coroutines.delay(900)
+                                navController.popBackStackSafely()
+                            }
+                        },
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
                         }
                     )
                 }

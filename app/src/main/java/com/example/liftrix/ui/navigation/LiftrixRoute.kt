@@ -403,6 +403,12 @@ sealed class LiftrixRoute {
      */
     @Serializable
     data object GymBuddy : LiftrixRoute()
+
+    /**
+     * QR scanner screen for in-app gym buddy pairing.
+     */
+    @Serializable
+    data object QRScanner : LiftrixRoute()
     
     /**
      * User workouts screen showing all completed workouts with social engagement metrics

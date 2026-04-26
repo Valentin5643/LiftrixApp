@@ -104,14 +104,14 @@ class QRCodeDisplayViewModel @Inject constructor(
                         userId = userId,
                         qrType = "GYM_BUDDY",
                         additionalProperties = mapOf(
-                            "has_shareable_url" to (qrCodeResult.shareableUrl != null)
+                            "payload_type" to "in_app"
                         )
                     )
 
                     updateState { currentState ->
                         currentState.copy(
                             qrCodeBitmap = qrCodeBitmap,
-                            profileUrl = qrCodeResult.shareableUrl,
+                            profileUrl = null,
                             isLoading = false,
                             error = null
                         )
@@ -207,7 +207,7 @@ class QRCodeDisplayViewModel @Inject constructor(
                     action = Intent.ACTION_SEND
                     type = "image/png"
                     putExtra(Intent.EXTRA_STREAM, contentUri)
-                    putExtra(Intent.EXTRA_TEXT, "Check out my Liftrix profile!")
+                    putExtra(Intent.EXTRA_TEXT, "Scan my Liftrix QR code in the app to connect.")
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }

@@ -236,6 +236,13 @@ fun NavController.navigateToGymBuddy() {
 }
 
 /**
+ * Navigate to the in-app QR scanner for gym buddy pairing.
+ */
+fun NavController.navigateToQRScanner() {
+    navigate(LiftrixRoute.QRScanner)
+}
+
+/**
  * Navigate to post creation screen for creating and sharing workout posts
  * 
  * @param workoutId Unique identifier for the workout to create a post from

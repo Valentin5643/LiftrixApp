@@ -210,7 +210,7 @@ import com.example.liftrix.data.local.entity.SyncPreferencesEntity
         PRNotificationPreferencesEntity::class,
         PersonalRecordEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 @TypeConverters(

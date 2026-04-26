@@ -221,6 +221,7 @@ class LegacyNavigationWrapper @Inject constructor(
                 is LiftrixRoute.FollowingList -> "Replace with: navController.navigate(LiftrixRoute.FollowingList(userId, listType))"
                 LiftrixRoute.NotificationSettings -> "Replace with: navController.navigate(LiftrixRoute.NotificationSettings)"
                 LiftrixRoute.GymBuddy -> "Replace with: navController.navigate(LiftrixRoute.GymBuddy)"
+                LiftrixRoute.QRScanner -> "Replace with: navController.navigate(LiftrixRoute.QRScanner)"
                 LiftrixRoute.AccountDeletion -> "Replace with: navController.navigate(LiftrixRoute.AccountDeletion)"
                 LiftrixRoute.EmailChange -> "Replace with: navController.navigate(LiftrixRoute.EmailChange)"
                 LiftrixRoute.PasswordChange -> "Replace with: navController.navigate(LiftrixRoute.PasswordChange)"

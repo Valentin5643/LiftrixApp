@@ -24,7 +24,7 @@ import javax.inject.Inject
  * - Each QR code has a unique identifier for security
  * - QR codes respect user privacy settings
  * - QR codes can be disabled by the user at any time
- * - QR code data includes profile deep link for easy access
+ * - QR code data is an app-native payload and does not depend on external websites
  */
 class QRCodeGenerationUseCase @Inject constructor(
     private val userSearchRepository: UserSearchRepository,
@@ -74,7 +74,7 @@ class QRCodeGenerationUseCase @Inject constructor(
                 expiresAt = if (request.expirationHours > 0) {
                     System.currentTimeMillis() + (request.expirationHours * 60 * 60 * 1000)
                 } else null,
-                shareableUrl = generateShareableUrl(qrCodeData),
+                shareableUrl = qrCodeData,
                 isTemporary = request.expirationHours > 0
             )
             
@@ -201,14 +201,6 @@ class QRCodeGenerationUseCase @Inject constructor(
     private fun canViewOwnProfile(): Boolean {
         // Users should always be able to view their own profile
         return true
-    }
-    
-    /**
-     * Generates a shareable URL from QR code data
-     */
-    private fun generateShareableUrl(qrCodeData: String): String {
-        // Create a deep link URL that can be shared or opened directly
-        return "https://liftrix.app/profile?qr=$qrCodeData"
     }
     
     companion object {

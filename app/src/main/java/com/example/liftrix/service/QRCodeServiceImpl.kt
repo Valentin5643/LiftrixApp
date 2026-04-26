@@ -43,8 +43,8 @@ class QRCodeServiceImpl @Inject constructor() : QRCodeService {
         private const val MIN_QR_SIZE = 100
         private const val MAX_QR_SIZE = 1000
         private const val PROFILE_URL_PREFIX = "liftrix://profile/"
-        private const val WEB_URL_PREFIX = "https://liftrix.app/profile?qr="
-        private const val GYM_BUDDY_PREFIX = "liftrix://gym-buddy/"
+        private const val GYM_BUDDY_PREFIX = "liftrix://gym-buddy"
+        private const val INTERNAL_QR_PREFIX = "liftrix://qr/"
         private const val ENCRYPTION_ALGORITHM = "AES/CBC/PKCS5Padding"
         private const val KEY_ALGORITHM = "AES"
     }
@@ -150,10 +150,9 @@ class QRCodeServiceImpl @Inject constructor() : QRCodeService {
             return false
         }
         
-        // Check for supported URL formats
         return data.startsWith(PROFILE_URL_PREFIX) || 
-               data.startsWith(WEB_URL_PREFIX) ||
                data.startsWith(GYM_BUDDY_PREFIX) ||
+               data.startsWith(INTERNAL_QR_PREFIX) ||
                data.matches(Regex("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$")) || // UUID format
                data.startsWith("eyJ") // Base64 encoded JSON (encrypted payload)
     }
