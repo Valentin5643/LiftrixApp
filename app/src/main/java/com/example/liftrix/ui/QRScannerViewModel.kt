@@ -126,7 +126,7 @@ class QRScannerViewModel @Inject constructor(
                 }
 
                 // Check if current user is available
-                val scannerUserId = currentUserId ?: authRepository.getCurrentUserId().also {
+                val scannerUserId = currentUserId ?: authRepository.getCurrentUserId()?.value.also {
                     currentUserId = it
                 }
 
@@ -141,14 +141,18 @@ class QRScannerViewModel @Inject constructor(
                 }
 
                 if (isResolvableProfileQr(qrCode)) {
-                    val resolvedUserId = userSearchRepository.resolveQRCodeProfile(qrCode).getOrElse { throwable ->
+                    val resolutionResult = userSearchRepository.resolveQRCodeProfile(qrCode)
+                    val resolvedUserId = resolutionResult.getOrNull()
+                    if (resolvedUserId == null) {
                         updateState {
                             copy(
                                 isProcessing = false,
                                 error = "This QR code is expired or no longer valid."
                             )
                         }
-                        trackQrProcessingError(qrCode, throwable)
+                        resolutionResult.exceptionOrNull()?.let { throwable ->
+                            trackQrProcessingError(qrCode, throwable)
+                        }
                         return@launch
                     }
 

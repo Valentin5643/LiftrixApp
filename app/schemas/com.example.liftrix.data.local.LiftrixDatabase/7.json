@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 7,
-    "identityHash": "184bdab1a3957c72c072613638f47a18",
+    "identityHash": "40dea27cab979241419bc657e0822852",
     "entities": [
       {
         "tableName": "workouts",
@@ -6997,7 +6997,7 @@
       },
       {
         "tableName": "gym_buddy_activities",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `buddy_id` TEXT NOT NULL, `workouts_together_count` INTEGER NOT NULL, `last_workout_together` INTEGER, `total_prs_celebrated` INTEGER NOT NULL, `encouragement_messages_sent` INTEGER NOT NULL, `workout_templates_shared` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `gym_buddies`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`buddy_id`) REFERENCES `gym_buddies`(`buddy_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `buddy_id` TEXT NOT NULL, `workouts_together_count` INTEGER NOT NULL, `last_workout_together` INTEGER, `total_prs_celebrated` INTEGER NOT NULL, `encouragement_messages_sent` INTEGER NOT NULL, `workout_templates_shared` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -7084,30 +7084,7 @@
             "createSql": "CREATE INDEX IF NOT EXISTS `index_gym_buddy_activities_buddy_id` ON `${TABLE_NAME}` (`buddy_id`)"
           }
         ],
-        "foreignKeys": [
-          {
-            "table": "gym_buddies",
-            "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
-            "columns": [
-              "user_id"
-            ],
-            "referencedColumns": [
-              "user_id"
-            ]
-          },
-          {
-            "table": "gym_buddies",
-            "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
-            "columns": [
-              "buddy_id"
-            ],
-            "referencedColumns": [
-              "buddy_id"
-            ]
-          }
-        ]
+        "foreignKeys": []
       },
       {
         "tableName": "content_reports",
@@ -9186,7 +9163,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '184bdab1a3957c72c072613638f47a18')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '40dea27cab979241419bc657e0822852')"
     ]
   }
 }
