@@ -199,6 +199,26 @@ fun UnifiedMainNavigationContainer(
                     com.example.liftrix.ui.social.FriendsScreen(
                         onNavigateBack = {
                             navController.navigateUp()
+                        },
+                        onNavigateToGymBuddy = {
+                            navController.navigate("gym_buddy")
+                        }
+                    )
+                }
+                composable("gym_buddy") {
+                    com.example.liftrix.ui.social.gymbuddy.GymBuddyScreen(
+                        onNavigateToQrScanner = {
+                            navController.navigate("qr_scanner")
+                        }
+                    )
+                }
+                composable("qr_scanner") {
+                    com.example.liftrix.ui.QRScannerScreen(
+                        onQrCodeScanned = {
+                            navController.navigateUp()
+                        },
+                        onNavigateBack = {
+                            navController.navigateUp()
                         }
                     )
                 }

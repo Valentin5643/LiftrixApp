@@ -68,7 +68,8 @@ class UnifiedWorkoutSessionManager @Inject constructor(
     private val workoutRepository: WorkoutRepository,
     private val feedRepository: FeedRepository,
     private val cacheManager: CacheManager,
-    private val cacheInvalidationService: CacheInvalidationService
+    private val cacheInvalidationService: CacheInvalidationService,
+    private val gymBuddyWorkoutCompletionNotifier: GymBuddyWorkoutCompletionNotifier
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val sharedPrefs: SharedPreferences = context.getSharedPreferences(
@@ -229,6 +230,9 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                         
                         // Invalidate analytics cache after workout completion using enhanced invalidation service
                         invalidateWorkoutRelatedCache(savedWorkout)
+
+                        // Notify real Gym Buddy recipients only after the completed workout is persisted.
+                        notifyGymBuddiesWorkoutCompleted(savedWorkout)
                         
                         // Only clear session after confirmed database save
                         clearSession()
@@ -807,6 +811,14 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             // Fallback to basic cache invalidation
             fallbackCacheInvalidation(workout.userId)
             // Don't let cache invalidation failure affect workout completion
+        }
+    }
+
+    private suspend fun notifyGymBuddiesWorkoutCompleted(workout: Workout) {
+        try {
+            gymBuddyWorkoutCompletionNotifier.notifyWorkoutCompleted(workout)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to send Gym Buddy workout-completion notification")
         }
     }
     

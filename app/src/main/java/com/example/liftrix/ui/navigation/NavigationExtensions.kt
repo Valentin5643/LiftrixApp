@@ -152,15 +152,6 @@ fun NavController.navigateToPublicProfile(userId: String) {
 }
 
 /**
- * Navigate to QR code display screen for profile sharing
- * 
- * @param userId Optional user ID for QR code generation (defaults to current user)
- */
-fun NavController.navigateToQRCodeDisplay(userId: String? = null) {
-    navigate(LiftrixRoute.QRCodeDisplay(userId))
-}
-
-/**
  * Navigate to profile screen - main profile display with achievements and settings
  * 
  * @param userId Optional user ID for viewing other users' profiles (defaults to current user)

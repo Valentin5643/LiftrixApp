@@ -7,7 +7,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
@@ -40,7 +39,7 @@ import com.example.liftrix.ui.profile.components.CompactProfileImage
 fun FriendsScreen(
     onNavigateBack: () -> Unit, // Kept for backward compatibility, but navigation handled by global TopAppBar
     onNavigateToUserSearch: () -> Unit = {},
-    onNavigateToQRCode: () -> Unit = {},
+    onNavigateToGymBuddy: () -> Unit = {},
     onNavigateToUserProfile: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SocialViewModel = hiltViewModel()
@@ -136,13 +135,19 @@ fun FriendsScreen(
             )
         }
         
+        GymBuddiesEntryCard(
+            onClick = onNavigateToGymBuddy,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        )
+
         // Tab Content
         when (selectedTabIndex) {
             0 -> FollowingTab(
                 uiState = uiState,
                 onEvent = viewModel::onEvent,
                 onNavigateToUserSearch = onNavigateToUserSearch,
-                onNavigateToQRCode = onNavigateToQRCode,
                 onUserClick = { userId -> viewModel.onEvent(SocialEvent.NavigateToUserProfile(userId)) },
                 modifier = Modifier.fillMaxSize()
             )
@@ -156,6 +161,59 @@ fun FriendsScreen(
     }
 }
 
+@Composable
+private fun GymBuddiesEntryCard(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier.semantics {
+            contentDescription = "Open Gym Buddies"
+        },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.QrCodeScanner,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(28.dp)
+            )
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = "Gym Buddies",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Show your QR code or scan a code to add a buddy",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                )
+            }
+
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+    }
+}
+
 /**
  * Following tab with search and list of people you follow
  */
@@ -164,7 +222,6 @@ private fun FollowingTab(
     uiState: SocialUiState,
     onEvent: (SocialEvent) -> Unit,
     onNavigateToUserSearch: () -> Unit,
-    onNavigateToQRCode: () -> Unit,
     onUserClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -190,7 +247,6 @@ private fun FollowingTab(
         SearchFollowingUsers(
             searchQuery = followingSearchQuery,
             onSearchQueryChange = { followingSearchQuery = it },
-            onNavigateToQRCode = onNavigateToQRCode,
             modifier = Modifier.padding(16.dp)
         )
         
@@ -233,7 +289,6 @@ private fun FollowersTab(
 private fun SearchFollowingUsers(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
-    onNavigateToQRCode: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -270,16 +325,6 @@ private fun SearchFollowingUsers(
             ),
             modifier = Modifier.weight(1f)
         )
-        
-        // Add QR code button for gym buddy pairing
-        IconButton(
-            onClick = onNavigateToQRCode
-        ) {
-            Icon(
-                Icons.Default.QrCode,
-                contentDescription = "Gym buddy QR code"
-            )
-        }
     }
 }
 

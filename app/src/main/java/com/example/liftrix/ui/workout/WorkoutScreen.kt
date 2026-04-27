@@ -93,6 +93,7 @@ fun WorkoutScreen(
     onNavigateToActiveWorkout: (templateId: String?) -> Unit,
     onNavigateToWorkoutCreation: (folderId: String?) -> Unit,
     onNavigateToEditWorkout: (workoutId: String) -> Unit,
+    onNavigateToTemplateBuddyShare: (templateId: String) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: WorkoutViewModel = hiltViewModel(),
     syncStatusViewModel: SyncStatusViewModel = hiltViewModel(),
@@ -132,6 +133,7 @@ fun WorkoutScreen(
                     }
                 },
                 onNavigateToEditWorkout = onNavigateToEditWorkout,
+                onNavigateToTemplateBuddyShare = onNavigateToTemplateBuddyShare,
                 onCreateFolder = { folderName -> 
                     viewModel.handleEvent(WorkoutEvent.CreateFolder(folderName))
                 },
@@ -197,6 +199,7 @@ private fun WorkoutContent(
     onNavigateToActiveWorkout: (templateId: String?) -> Unit,
     onNavigateToWorkoutCreation: (folderId: String?) -> Unit,
     onNavigateToEditWorkout: (workoutId: String) -> Unit,
+    onNavigateToTemplateBuddyShare: (templateId: String) -> Unit,
     onCreateFolder: (String) -> Unit,
     viewModel: WorkoutViewModel,
     syncStatusViewModel: SyncStatusViewModel,
@@ -275,6 +278,9 @@ private fun WorkoutContent(
                         onEditWorkout = { workout -> 
                             Timber.d("🔥 EDIT-WORKOUT-DEBUG: WorkoutScreen - onEditWorkout called with workout: id=${workout.id.value}, name=${workout.name}, userId=${workout.userId}")
                             onNavigateToEditWorkout(workout.id.value) 
+                        },
+                        onShareWorkout = { workout ->
+                            onNavigateToTemplateBuddyShare(workout.id.value)
                         },
                         onCreateWorkout = { folderId ->
                             onNavigateToWorkoutCreation(folderId)

@@ -102,6 +102,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
             // Process based on type for background/killed app
             when (notificationType) {
                 "GYM_BUDDY_PR" -> handleGymBuddyPR(message)
+                "GYM_BUDDY_WORKOUT_COMPLETED" -> handleGymBuddyWorkoutCompleted(message)
                 "FOLLOW_REQUEST" -> handleFollowRequest(message)
                 "POST_ENGAGEMENT" -> handlePostEngagement(message)
                 "WORKOUT_REMINDER" -> handleWorkoutReminder(message)
@@ -145,6 +146,24 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
             .setLights(0xFF00FF00.toInt(), 1000, 500) // Green light
             .build()
         
+        NotificationManagerCompat.from(this)
+            .notify(generateNotificationId(), notification)
+    }
+
+    private fun handleGymBuddyWorkoutCompleted(message: RemoteMessage) {
+        val title = message.data["title"] ?: "Your Gym Buddy Finished a Workout"
+        val body = message.data["body"] ?: "Your gym buddy just finished a workout"
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_GYM_BUDDY)
+            .setSmallIcon(R.drawable.ic_fitness_center)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(createMainAppPendingIntent(message))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .build()
+
         NotificationManagerCompat.from(this)
             .notify(generateNotificationId(), notification)
     }

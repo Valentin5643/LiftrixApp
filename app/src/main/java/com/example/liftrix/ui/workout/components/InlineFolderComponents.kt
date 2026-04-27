@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Assignment
@@ -94,6 +95,7 @@ fun LazyItemScope.InlineFolderSection(
     onEditFolder: (String) -> Unit = {},
     onStartWorkout: (WorkoutTemplate) -> Unit,
     onEditWorkout: (WorkoutTemplate) -> Unit,
+    onShareWorkout: (WorkoutTemplate) -> Unit = {},
     onMoveWorkout: ((WorkoutTemplate, Offset) -> Unit)? = null,
     onFolderPositionChanged: ((String, androidx.compose.ui.geometry.Rect) -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -143,6 +145,7 @@ fun LazyItemScope.InlineFolderSection(
                             workout = workout,
                             onStartWorkout = { onStartWorkout(workout) },
                             onEditWorkout = { onEditWorkout(workout) },
+                            onShareWorkout = { onShareWorkout(workout) },
                             onMoveWorkout = onMoveWorkout
                         )
                     }
@@ -289,6 +292,7 @@ private fun FolderWorkoutCard(
     workout: WorkoutTemplate,
     onStartWorkout: () -> Unit,
     onEditWorkout: () -> Unit,
+    onShareWorkout: () -> Unit,
     onMoveWorkout: ((WorkoutTemplate, Offset) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -427,6 +431,18 @@ private fun FolderWorkoutCard(
                     Icon(
                         imageVector = Icons.Default.Edit,
                         contentDescription = "Edit workout",
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                IconButton(
+                    onClick = onShareWorkout,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "Share with gym buddy",
                         modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )

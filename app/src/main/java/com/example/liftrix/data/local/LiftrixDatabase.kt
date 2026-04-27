@@ -79,6 +79,7 @@ import com.example.liftrix.data.local.dao.PersonalRecordDao
 import com.example.liftrix.data.local.dao.ConsentDao
 import com.example.liftrix.data.local.dao.AccountRestrictionDao
 import com.example.liftrix.data.local.dao.ModerationActionDao
+import com.example.liftrix.data.local.dao.TemplateShareEventDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.local.entity.ChatPreferencesEntity
@@ -148,6 +149,7 @@ import com.example.liftrix.data.local.entity.SyncPreferencesEntity
 import com.example.liftrix.data.local.entity.UserConsentEntity
 import com.example.liftrix.data.local.entity.AccountRestrictionEntity
 import com.example.liftrix.data.local.entity.ModerationActionEntity
+import com.example.liftrix.data.local.entity.TemplateShareEventEntity
 
 
 
@@ -221,8 +223,9 @@ import com.example.liftrix.data.local.entity.ModerationActionEntity
         UserConsentEntity::class,
         AccountRestrictionEntity::class,
         ModerationActionEntity::class,
+        TemplateShareEventEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(
@@ -302,6 +305,7 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun consentDao(): ConsentDao
     abstract fun accountRestrictionDao(): AccountRestrictionDao
     abstract fun moderationActionDao(): ModerationActionDao
+    abstract fun templateShareEventDao(): TemplateShareEventDao
 
     companion object {
         val MIGRATION_3_4 = object : Migration(3, 4) {
@@ -317,6 +321,41 @@ abstract class LiftrixDatabase : RoomDatabase() {
                 database.execSQL(
                     "CREATE INDEX IF NOT EXISTS idx_follow_relationships_mutual " +
                         "ON follow_relationships(follower_id, following_id, status)"
+                )
+            }
+        }
+
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS template_share_events (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        sender_id TEXT NOT NULL,
+                        receiver_id TEXT,
+                        template_id TEXT NOT NULL,
+                        delivery_mode TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        created_at INTEGER NOT NULL,
+                        expires_at INTEGER NOT NULL,
+                        accepted_at INTEGER,
+                        is_synced INTEGER NOT NULL DEFAULT 0,
+                        is_dirty INTEGER NOT NULL DEFAULT 1,
+                        last_modified INTEGER NOT NULL DEFAULT 0
+                    )
+                    """.trimIndent()
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS idx_template_share_sender_receiver_status " +
+                        "ON template_share_events(sender_id, receiver_id, status)"
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS idx_template_share_sender_status " +
+                        "ON template_share_events(sender_id, status)"
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS idx_template_share_receiver_status " +
+                        "ON template_share_events(receiver_id, status)"
                 )
             }
         }

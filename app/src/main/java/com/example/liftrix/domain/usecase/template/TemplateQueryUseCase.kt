@@ -6,11 +6,16 @@ import com.example.liftrix.data.mapper.WorkoutTemplateMapper
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.model.WorkoutTemplate
+import com.example.liftrix.domain.model.WorkoutTemplateId
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.flatMapLiftrix
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.common.liftrixFailure
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.model.sharing.SharedTemplatePreview
+import com.example.liftrix.domain.model.sharing.TemplateShareEvent
+import com.example.liftrix.domain.repository.UserSearchRepository
+import com.example.liftrix.domain.repository.sharing.TemplateShareRepository
 import com.example.liftrix.domain.repository.template.TemplateRepository
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import kotlinx.coroutines.flow.Flow
@@ -44,7 +49,9 @@ class TemplateQueryUseCase @Inject constructor(
     private val workoutTemplateDao: WorkoutTemplateDao,
     private val workoutMapper: WorkoutMapper,
     private val workoutTemplateMapper: WorkoutTemplateMapper,
-    private val errorHandler: ErrorHandler
+    private val errorHandler: ErrorHandler,
+    private val templateShareRepository: TemplateShareRepository,
+    private val userSearchRepository: UserSearchRepository
 ) {
 
     // ========== SIMPLE QUERY OPERATIONS ==========
@@ -155,6 +162,60 @@ class TemplateQueryUseCase @Inject constructor(
                     )
                 }
             }
+    }
+
+    suspend fun getPendingSharesFromBuddy(
+        senderId: String,
+        receiverId: String
+    ): LiftrixResult<List<TemplateShareEvent>> {
+        if (senderId.isBlank() || receiverId.isBlank()) {
+            return liftrixFailure(
+                LiftrixError.ValidationError(
+                    field = "templateShareLookup",
+                    violations = listOf("Sender and receiver IDs are required")
+                )
+            )
+        }
+
+        return templateShareRepository.getPendingSharesFromBuddy(senderId, receiverId)
+    }
+
+    suspend fun getSharedTemplatePreview(
+        shareId: String,
+        receiverId: String
+    ): LiftrixResult<SharedTemplatePreview> = liftrixCatching(
+        errorMapper = { throwable ->
+            when (throwable) {
+                is LiftrixError -> throwable
+                else -> LiftrixError.DataRetrievalError(
+                    errorMessage = "Failed to load shared workout preview",
+                    operation = "GET_SHARED_TEMPLATE_PREVIEW"
+                )
+            }
+        }
+    ) {
+        val share = templateShareRepository.getPendingShareForReceiver(shareId, receiverId).getOrThrow()
+            ?: throw LiftrixError.NotFoundError(
+                errorMessage = "Shared workout is no longer available",
+                resourceType = "TemplateShareEvent",
+                resourceId = shareId
+            )
+
+        val template = templateRepository.getTemplateById(
+            WorkoutTemplateId(share.templateId),
+            share.senderId
+        ).getOrThrow()
+
+        val senderName = userSearchRepository.getPublicProfile(
+            userId = share.senderId,
+            viewerId = receiverId
+        ).getOrNull()?.displayName ?: "Gym Buddy"
+
+        SharedTemplatePreview(
+            shareEvent = share,
+            template = template,
+            senderName = senderName
+        )
     }
 
     // ========== PRIVATE HELPER METHODS ==========

@@ -73,7 +73,6 @@ import java.time.format.DateTimeFormatter
 fun PublicProfileScreen(
     userId: String,
     onNavigateBack: () -> Unit,
-    onNavigateToQRCode: (String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PublicProfileViewModel = hiltViewModel()
 ) {
@@ -103,7 +102,6 @@ fun PublicProfileScreen(
             // Top app bar
             ProfileTopBar(
                 onNavigateBack = onNavigateBack,
-                onQRCodeClick = { onNavigateToQRCode(userId) },
                 isLoading = uiState.isLoading,
                 onBlockUser = { viewModel.handleEvent(PublicProfileEvent.BlockUser) },
                 onReportProfile = { viewModel.handleEvent(PublicProfileEvent.ReportProfile) },
@@ -191,7 +189,6 @@ fun PublicProfileScreen(
 @Composable
 fun ProfileTopBar(
         onNavigateBack: () -> Unit,
-        onQRCodeClick: () -> Unit,
         isLoading: Boolean,
         modifier: Modifier = Modifier,
         onBlockUser: () -> Unit = {},
@@ -212,13 +209,6 @@ fun ProfileTopBar(
             },
             actions = {
                 if (!isLoading) {
-                    IconButton(onClick = onQRCodeClick) {
-                        Icon(
-                            imageVector = Icons.Default.QrCode,
-                            contentDescription = "Show QR code"
-                        )
-                    }
-
                     // More options menu (only for other users' profiles)
                     if (!isOwnProfile) {
                         IconButton(onClick = { showOptionsMenu = true }) {
@@ -1459,8 +1449,7 @@ private fun PublicProfileScreenPreview() {
         LiftrixTheme {
             PublicProfileScreen(
                 userId = "1",
-                onNavigateBack = { },
-                onNavigateToQRCode = { }
+                onNavigateBack = { }
             )
         }
     }

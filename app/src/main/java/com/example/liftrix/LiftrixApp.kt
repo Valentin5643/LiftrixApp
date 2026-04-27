@@ -279,6 +279,8 @@ class LiftrixApp : Application() {
      * Only creates channels on Android O+ where they are required.
      */
     private fun createNotificationChannels() {
+        com.example.liftrix.services.NotificationChannelManager(this).initializeChannels()
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 

@@ -68,14 +68,6 @@ sealed class LiftrixRoute {
     ) : LiftrixRoute()
     
     /**
-     * QR code display screen for profile sharing
-     * 
-     * @param userId Unique identifier for the user whose QR code to generate (defaults to current user)
-     */
-    @Serializable
-    data class QRCodeDisplay(val userId: String? = null) : LiftrixRoute()
-    
-    /**
      * Social onboarding screen for first-time social feature setup
      */
     @Serializable
@@ -409,6 +401,15 @@ sealed class LiftrixRoute {
      */
     @Serializable
     data object QRScanner : LiftrixRoute()
+
+    @Serializable
+    data class TemplateBuddyShare(val templateId: String) : LiftrixRoute()
+
+    @Serializable
+    data class WorkoutSharedWithYou(val shareId: String) : LiftrixRoute()
+
+    @Serializable
+    data class WorkoutShareInbox(val senderId: String) : LiftrixRoute()
     
     /**
      * User workouts screen showing all completed workouts with social engagement metrics

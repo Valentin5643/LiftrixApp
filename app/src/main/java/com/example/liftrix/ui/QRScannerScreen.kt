@@ -69,6 +69,8 @@ fun QRScannerScreen(
     onQrCodeScanned: (String) -> Unit,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onTemplateShareFound: (String) -> Unit = {},
+    onMultipleTemplateSharesFound: (String) -> Unit = {},
     viewModel: QRScannerViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -104,6 +106,15 @@ fun QRScannerScreen(
             uiState.connectedBuddyId?.let { buddyId ->
                 onQrCodeScanned(buddyId)
             }
+        }
+    }
+
+    LaunchedEffect(uiState.pendingTemplateShareId, uiState.pendingTemplateShareSenderId, uiState.pendingTemplateShareCount) {
+        val shareId = uiState.pendingTemplateShareId
+        val senderId = uiState.pendingTemplateShareSenderId
+        when {
+            shareId != null -> onTemplateShareFound(shareId)
+            senderId != null && uiState.pendingTemplateShareCount > 1 -> onMultipleTemplateSharesFound(senderId)
         }
     }
 

@@ -72,6 +72,28 @@ fun NavGraphBuilder.homeGraph(
             FriendsScreen(
                 onNavigateBack = {
                     navController.popBackStack()
+                },
+                onNavigateToGymBuddy = {
+                    navController.navigate(HomeRoutes.GYM_BUDDY)
+                }
+            )
+        }
+
+        composable(HomeRoutes.GYM_BUDDY) {
+            com.example.liftrix.ui.social.gymbuddy.GymBuddyScreen(
+                onNavigateToQrScanner = {
+                    navController.navigate(HomeRoutes.QR_SCANNER)
+                }
+            )
+        }
+
+        composable(HomeRoutes.QR_SCANNER) {
+            com.example.liftrix.ui.QRScannerScreen(
+                onQrCodeScanned = {
+                    navController.popBackStack()
+                },
+                onNavigateBack = {
+                    navController.popBackStack()
                 }
             )
         }
@@ -100,6 +122,8 @@ object HomeRoutes {
     const val WORKOUT_DETAIL = "home/workout_detail/{workoutId}"
     const val RECENT_WORKOUTS = "home/recent_workouts"
     const val MY_WORKOUTS = "home/my_workouts"
+    const val GYM_BUDDY = "home/gym_buddy"
+    const val QR_SCANNER = "home/qr_scanner"
 }
 
  
