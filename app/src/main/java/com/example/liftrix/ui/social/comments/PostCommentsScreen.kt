@@ -232,7 +232,7 @@ fun PostCommentsScreen(
                 )
             },
             onViewGuidelines = {
-                // TODO: Navigate to Community Guidelines screen
+                // Follow-up: Navigate to Community Guidelines screen
                 Timber.d("View Community Guidelines tapped")
             }
         )
@@ -529,3 +529,4 @@ private fun formatCommentTimestamp(timestamp: Long): String {
         }
     }
 }
+

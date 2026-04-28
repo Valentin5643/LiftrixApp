@@ -45,6 +45,7 @@ class SocialOnboardingViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        coEvery { checkUsernameAvailabilityUseCase(any()) } returns LiftrixResult.success(true)
         
         viewModel = SocialOnboardingViewModel(
             createSocialProfileUseCase = createSocialProfileUseCase,
@@ -211,7 +212,8 @@ class SocialOnboardingViewModelTest {
 
     @Test
     fun `createProfile succeeds with valid data`() = runTest {
-        val mockProfile = mockk<SocialProfile>()
+        val mockProfile = mockk<SocialProfile>(relaxed = true)
+        coEvery { mockProfile.username } returns "testuser"
         coEvery { 
             createSocialProfileUseCase(any(), any(), any())
         } returns LiftrixResult.success(mockProfile)
@@ -262,8 +264,9 @@ class SocialOnboardingViewModelTest {
         
         viewModel.handleEvent(SocialOnboardingEvent.UpdateUsername("testuser"))
         viewModel.handleEvent(SocialOnboardingEvent.UpdateDisplayName("Test User"))
+        testDispatcher.scheduler.runCurrent()
         viewModel.handleEvent(SocialOnboardingEvent.CreateProfile)
-        testDispatcher.scheduler.advanceUntilIdle()
+        testDispatcher.scheduler.runCurrent()
         
         val state = viewModel.uiState.value
         assertEquals("Invalid username", state.usernameError)
@@ -351,7 +354,7 @@ class SocialOnboardingViewModelTest {
         coEvery { createSocialProfileUseCase(any(), any(), any()) } coAnswers {
             // Simulate delay to test loading state
             kotlinx.coroutines.delay(100)
-            LiftrixResult.success(mockk<SocialProfile>())
+            LiftrixResult.success(mockk<SocialProfile>(relaxed = true))
         }
         
         // Navigate to PROFILE_CREATION step first

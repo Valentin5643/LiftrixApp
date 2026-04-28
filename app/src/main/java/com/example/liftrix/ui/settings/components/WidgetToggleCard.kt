@@ -286,6 +286,11 @@ fun WidgetPreviewThumbnail(
         AnalyticsWidget.MuscleGroupDistribution -> Icons.Default.DonutLarge
         AnalyticsWidget.RecoveryMetrics -> Icons.Default.SelfImprovement
         AnalyticsWidget.MonthlySummary -> Icons.Default.CalendarMonth
+        AnalyticsWidget.ExerciseRanking -> Icons.Default.EmojiEvents
+        AnalyticsWidget.WorkoutDuration -> Icons.Default.Timer
+        AnalyticsWidget.RecentAchievements -> Icons.Default.EmojiEvents
+        AnalyticsWidget.ConsistencyScore -> Icons.Default.CheckCircle
+        AnalyticsWidget.ProgressiveOverload -> Icons.Default.ShowChart
         
         // Hidden/deprecated widgets
         AnalyticsWidget.WorkoutFrequency -> Icons.Default.Timeline

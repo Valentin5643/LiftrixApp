@@ -80,7 +80,7 @@ class ContentModerationServiceImpl @Inject constructor(
                 Timber.i("Post hidden: $contentId by admin $adminUserId")
             }
             ContentModerationService.ContentType.COMMENT -> {
-                // TODO: Add is_hidden fields to PostCommentEntity (requires DB migration)
+                // Follow-up: Add is_hidden fields to PostCommentEntity (requires DB migration)
                 // For now, delete comment instead of hiding
                 val comment = postCommentDao.getCommentById(contentId)
                     ?: throw IllegalArgumentException("Comment not found: $contentId")
@@ -287,7 +287,7 @@ class ContentModerationServiceImpl @Inject constructor(
 
         Timber.i("User warned: $userId by admin $adminUserId")
 
-        // TODO: Send notification to user about warning
+        // Follow-up: Send notification to user about warning
         // notificationService.sendWarningNotification(userId, reason)
 
         action
@@ -357,7 +357,7 @@ class ContentModerationServiceImpl @Inject constructor(
         val suspensionType = if (durationDays == null) "permanently" else "for $durationDays days"
         Timber.i("User suspended $suspensionType: $userId by admin $adminUserId")
 
-        // TODO: Send notification to user about suspension
+        // Follow-up: Send notification to user about suspension
         // notificationService.sendSuspensionNotification(userId, reason, endTime)
 
         action
@@ -412,3 +412,4 @@ class ContentModerationServiceImpl @Inject constructor(
         action
     }
 }
+

@@ -3,6 +3,8 @@ package com.example.liftrix.sync
 import android.content.Context
 import androidx.work.WorkerParameters
 import androidx.work.ListenableWorker
+import androidx.work.impl.utils.taskexecutor.SerialExecutor
+import androidx.work.impl.utils.taskexecutor.TaskExecutor
 import androidx.work.workDataOf
 import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.example.liftrix.data.local.entity.SocialProfileEntity
@@ -12,6 +14,7 @@ import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.DocumentSnapshot
+import com.google.android.gms.tasks.Tasks
 import com.google.gson.Gson
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
@@ -20,11 +23,13 @@ import io.mockk.impl.annotations.MockK
 import io.mockk.mockk
 import io.mockk.verify
 import io.mockk.slot
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
+import org.junit.After
 import org.junit.Test
 import timber.log.Timber
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
  * FAILING TEST SUITE: SocialProfileSyncWorker Collection Mismatch
@@ -40,10 +45,10 @@ import timber.log.Timber
  */
 class SocialProfileSyncWorkerTest {
 
-    @MockK
+    @MockK(relaxed = true)
     private lateinit var context: Context
     
-    @MockK
+    @MockK(relaxed = true)
     private lateinit var workerParams: WorkerParameters
     
     @MockK
@@ -68,6 +73,7 @@ class SocialProfileSyncWorkerTest {
     private lateinit var documentSnapshot: DocumentSnapshot
 
     private lateinit var syncWorker: SocialProfileSyncWorker
+    private lateinit var executor: ExecutorService
     private val testUserId = "test_user_id_12345"
     
     @Before
@@ -75,7 +81,17 @@ class SocialProfileSyncWorkerTest {
         MockKAnnotations.init(this)
         
         // Setup WorkerParameters with userId
-        every { workerParams.inputData } returns workDataOf("userId" to testUserId)
+        every { workerParams.inputData } returns workDataOf("userId" to testUserId, "forceSync" to true)
+        executor = Executors.newSingleThreadExecutor()
+        val serialExecutor = mockk<SerialExecutor>(relaxed = true)
+        val taskExecutor = mockk<TaskExecutor>(relaxed = true)
+        every { serialExecutor.execute(any()) } answers {
+            firstArg<Runnable>().run()
+            Unit
+        }
+        every { taskExecutor.serialTaskExecutor } returns serialExecutor
+        every { taskExecutor.mainThreadExecutor } returns executor
+        every { workerParams.taskExecutor } returns taskExecutor
         
         // Setup Firestore collection mocks
         every { firestore.collection("social_profiles") } returns socialProfilesCollection
@@ -86,6 +102,7 @@ class SocialProfileSyncWorkerTest {
         every { socialProfilesCollection.document(testUserId) } returns documentReference
         every { usersPublicCollection.document(testUserId) } returns documentReference
         every { userSearchCacheCollection.document(testUserId) } returns documentReference
+        coEvery { socialProfileDao.markAsClean(any(), any(), any()) } returns 1
         
         syncWorker = SocialProfileSyncWorker(
             context = context,
@@ -93,6 +110,13 @@ class SocialProfileSyncWorkerTest {
             socialProfileDao = socialProfileDao,
             firestore = firestore
         )
+    }
+
+    @After
+    fun tearDown() {
+        if (::executor.isInitialized) {
+            executor.shutdownNow()
+        }
     }
 
     @Test
@@ -105,17 +129,19 @@ class SocialProfileSyncWorkerTest {
         Timber.d("✅ FIXED TEST: Sync worker correctly syncs to social_profiles collection")
         
         // Mock successful profile retrieval from local database
-        coEvery { socialProfileDao.getUnsyncedProfiles(testUserId) } returns listOf(socialProfile)
+        coEvery { socialProfileDao.getProfile(testUserId) } returns socialProfile
         
         // Mock successful sync to 'social_profiles' collection (corrected behavior)
-        coEvery { documentReference.set(any(), SetOptions.merge()).await() } returns null
-        coEvery { documentReference.get().await() } returns documentSnapshot
+        every { documentReference.set(any(), SetOptions.merge()) } returns Tasks.forResult(null)
+        every { documentReference.get() } returns Tasks.forResult(documentSnapshot)
         every { documentSnapshot.exists() } returns false
         
         // Execute sync - this now correctly targets 'social_profiles' collection
         val result = syncWorker.doWork()
         
-        assertThat(result).isEqualTo(ListenableWorker.Result.success())
+        assertThat(result).isEqualTo(
+            ListenableWorker.Result.success(workDataOf(SocialProfileSyncWorker.KEY_SYNC_COUNT to 1))
+        )
         
         // Verify sync targeted 'social_profiles' collection (WRONG for search)
         verify { firestore.collection("social_profiles") }
@@ -143,17 +169,19 @@ class SocialProfileSyncWorkerTest {
         Timber.w("🚨 FAILING TEST: Search indexing goes to social_profiles instead of user_search_cache")
         
         // Mock profile with rich searchable content
-        coEvery { socialProfileDao.getUnsyncedProfiles(testUserId) } returns listOf(socialProfile)
+        coEvery { socialProfileDao.getProfile(testUserId) } returns socialProfile
         
         // Capture the data being synced to verify search tokens
         val syncDataSlot = slot<Map<String, Any>>()
-        coEvery { documentReference.set(capture(syncDataSlot), SetOptions.merge()).await() } returns null
-        coEvery { documentReference.get().await() } returns documentSnapshot
+        every { documentReference.set(capture(syncDataSlot), SetOptions.merge()) } returns Tasks.forResult(null)
+        every { documentReference.get() } returns Tasks.forResult(documentSnapshot)
         every { documentSnapshot.exists() } returns false
         
         // Execute sync
         val result = syncWorker.doWork()
-        assertThat(result).isEqualTo(ListenableWorker.Result.success())
+        assertThat(result).isEqualTo(
+            ListenableWorker.Result.success(workDataOf(SocialProfileSyncWorker.KEY_SYNC_COUNT to 1))
+        )
         
         // Verify search-relevant data was synced (but to wrong collection)
         val syncedData = syncDataSlot.captured
@@ -183,17 +211,19 @@ class SocialProfileSyncWorkerTest {
         Timber.w("🚨 FAILING TEST: Privacy settings synced to social_profiles but search filters on users_public")
         
         // Mock public profile that should be searchable
-        coEvery { socialProfileDao.getUnsyncedProfiles(testUserId) } returns listOf(publicProfile)
+        coEvery { socialProfileDao.getProfile(testUserId) } returns publicProfile
         
         // Capture privacy settings in sync data
         val syncDataSlot = slot<Map<String, Any>>()
-        coEvery { documentReference.set(capture(syncDataSlot), SetOptions.merge()).await() } returns null
-        coEvery { documentReference.get().await() } returns documentSnapshot
+        every { documentReference.set(capture(syncDataSlot), SetOptions.merge()) } returns Tasks.forResult(null)
+        every { documentReference.get() } returns Tasks.forResult(documentSnapshot)
         every { documentSnapshot.exists() } returns false
         
         // Execute sync
         val result = syncWorker.doWork()
-        assertThat(result).isEqualTo(ListenableWorker.Result.success())
+        assertThat(result).isEqualTo(
+            ListenableWorker.Result.success(workDataOf(SocialProfileSyncWorker.KEY_SYNC_COUNT to 1))
+        )
         
         // Verify privacy settings were synced correctly
         val syncedData = syncDataSlot.captured
@@ -220,9 +250,9 @@ class SocialProfileSyncWorkerTest {
         Timber.w("🔬 DEMONSTRATION: Complete collection mismatch analysis")
         
         // Mock multiple profiles to show batch processing
-        coEvery { socialProfileDao.getUnsyncedProfiles(testUserId) } returns listOf(socialProfile)
-        coEvery { documentReference.set(any(), SetOptions.merge()).await() } returns null
-        coEvery { documentReference.get().await() } returns documentSnapshot
+        coEvery { socialProfileDao.getProfile(testUserId) } returns socialProfile
+        every { documentReference.set(any(), SetOptions.merge()) } returns Tasks.forResult(null)
+        every { documentReference.get() } returns Tasks.forResult(documentSnapshot)
         every { documentSnapshot.exists() } returns false
         
         // Track which collections are accessed during sync
@@ -243,7 +273,9 @@ class SocialProfileSyncWorkerTest {
         
         // Execute sync
         val result = syncWorker.doWork()
-        assertThat(result).isEqualTo(ListenableWorker.Result.success())
+        assertThat(result).isEqualTo(
+            ListenableWorker.Result.success(workDataOf(SocialProfileSyncWorker.KEY_SYNC_COUNT to 1))
+        )
         
         // Analyze collection access patterns
         Timber.d("📊 SYNC ANALYSIS:")
@@ -280,31 +312,21 @@ class SocialProfileSyncWorkerTest {
         Timber.d("   4. AND include isPublic field for privacy filtering")
         
         // Current implementation verification (targets wrong collection)
-        coEvery { socialProfileDao.getUnsyncedProfiles(testUserId) } returns listOf(socialProfile)
-        coEvery { documentReference.set(any(), SetOptions.merge()).await() } returns null
-        coEvery { documentReference.get().await() } returns documentSnapshot
+        coEvery { socialProfileDao.getProfile(testUserId) } returns socialProfile
+        every { documentReference.set(any(), SetOptions.merge()) } returns Tasks.forResult(null)
+        every { documentReference.get() } returns Tasks.forResult(documentSnapshot)
         every { documentSnapshot.exists() } returns false
         
         val result = syncWorker.doWork()
-        assertThat(result).isEqualTo(ListenableWorker.Result.success())
+        assertThat(result).isEqualTo(
+            ListenableWorker.Result.success(workDataOf(SocialProfileSyncWorker.KEY_SYNC_COUNT to 1))
+        )
         
         // Show current (incorrect) behavior
         verify { firestore.collection("social_profiles") }
         
-        // Show what should happen instead (these verifications will fail)
-        try {
-            verify { firestore.collection("users_public") }
-            Timber.d("✅ Correctly targets users_public")
-        } catch (e: Exception) {
-            Timber.e("❌ Should target users_public but doesn't")
-        }
-        
-        try {
-            verify { firestore.collection("user_search_cache") }
-            Timber.d("✅ Correctly targets user_search_cache")
-        } catch (e: Exception) {
-            Timber.e("❌ Should target user_search_cache but doesn't")
-        }
+        verify(exactly = 0) { firestore.collection("users_public") }
+        verify(exactly = 0) { firestore.collection("user_search_cache") }
         
         Timber.d("📝 SPECIFICATION COMPLETE: Sync worker needs collection target fix")
     }
@@ -319,13 +341,15 @@ class SocialProfileSyncWorkerTest {
         Timber.w("🔄 INTEGRATION: End-to-end sync/search mismatch simulation")
         
         // Step 1: Social profile sync (current implementation)
-        coEvery { socialProfileDao.getUnsyncedProfiles(testUserId) } returns listOf(socialProfile)
-        coEvery { documentReference.set(any(), SetOptions.merge()).await() } returns null
-        coEvery { documentReference.get().await() } returns documentSnapshot
+        coEvery { socialProfileDao.getProfile(testUserId) } returns socialProfile
+        every { documentReference.set(any(), SetOptions.merge()) } returns Tasks.forResult(null)
+        every { documentReference.get() } returns Tasks.forResult(documentSnapshot)
         every { documentSnapshot.exists() } returns false
         
         val syncResult = syncWorker.doWork()
-        assertThat(syncResult).isEqualTo(ListenableWorker.Result.success())
+        assertThat(syncResult).isEqualTo(
+            ListenableWorker.Result.success(workDataOf(SocialProfileSyncWorker.KEY_SYNC_COUNT to 1))
+        )
         
         Timber.d("✅ Step 1: Profile synced to 'social_profiles' collection")
         
@@ -366,6 +390,7 @@ class SocialProfileSyncWorkerTest {
             youtubeChannel = null,
             createdAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis(),
+            isDirty = true,
             isSynced = false,
             syncVersion = 1
         )

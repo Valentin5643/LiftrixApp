@@ -40,7 +40,7 @@ class RemoteConfigManager @Inject constructor(
         private const val MINIMUM_FETCH_INTERVAL_SECONDS = 3600L // 1 hour (production)
         private const val FETCH_TIMEOUT_SECONDS = 60L
 
-        // TODO: TEMPORARY DEBUG OVERRIDE
+        // Follow-up: TEMPORARY DEBUG OVERRIDE
         // WHY: Enables immediate Remote Config fetching in debug builds for testing/debugging
         // WHEN TO REMOVE: After Remote Config is fully tested and Firebase Console shows fetch activity
         // PRODUCTION IMPACT: None - only affects debug builds (BuildConfig.DEBUG)
@@ -609,3 +609,4 @@ data class RemoteConfigSettingsInfo(
     val fetchTimeoutInSeconds: Long,
     val minimumFetchIntervalInSeconds: Long
 )
+

@@ -265,6 +265,51 @@ sealed class AnalyticsWidget(
         category = WidgetCategory.PROGRESS,
         complexity = WidgetComplexity.MODERATE
     )
+
+    @Serializable
+    data object ExerciseRanking : AnalyticsWidget(
+        id = "exercise_ranking",
+        displayName = "Exercise Ranking",
+        description = "Top performing exercises by progress and volume",
+        category = WidgetCategory.ANALYTICS,
+        complexity = WidgetComplexity.MODERATE
+    )
+
+    @Serializable
+    data object WorkoutDuration : AnalyticsWidget(
+        id = "workout_duration",
+        displayName = "Workout Duration",
+        description = "Session duration trends over time",
+        category = WidgetCategory.CHARTS,
+        complexity = WidgetComplexity.SIMPLE
+    )
+
+    @Serializable
+    data object RecentAchievements : AnalyticsWidget(
+        id = "recent_achievements",
+        displayName = "Recent Achievements",
+        description = "Latest personal records and milestones",
+        category = WidgetCategory.PROGRESS,
+        complexity = WidgetComplexity.SIMPLE
+    )
+
+    @Serializable
+    data object ConsistencyScore : AnalyticsWidget(
+        id = "consistency_score",
+        displayName = "Consistency Score",
+        description = "Workout consistency and adherence tracking",
+        category = WidgetCategory.METRICS,
+        complexity = WidgetComplexity.SIMPLE
+    )
+
+    @Serializable
+    data object ProgressiveOverload : AnalyticsWidget(
+        id = "progressive_overload",
+        displayName = "Progressive Overload",
+        description = "Progressive overload analysis across exercises",
+        category = WidgetCategory.ANALYTICS,
+        complexity = WidgetComplexity.COMPLEX
+    )
     
     /**
      * Gets the widget priority for layout ordering (lower = higher priority)
@@ -295,6 +340,11 @@ sealed class AnalyticsWidget(
         MonthlySummary -> 5
         RecoveryMetrics -> 6
         MuscleGroupDistribution -> 7
+        ExerciseRanking -> 8
+        WorkoutDuration -> 9
+        RecentAchievements -> 10
+        ConsistencyScore -> 11
+        ProgressiveOverload -> 12
     }
     
     /**
@@ -348,14 +398,15 @@ sealed class AnalyticsWidget(
          * All available analytics widgets - only non-deprecated widgets shown in UI
          */
         fun getAllWidgets(): List<AnalyticsWidget> = listOf(
-            // CHARTS Category (2 widgets) - VolumeChart deprecated, replaced by VolumeAnalytics
-            FrequencyChart, ProgressChart,
+            // CHARTS Category
+            FrequencyChart, ProgressChart, WorkoutDuration,
             
-            // PROGRESS Category (2 widgets) - StrengthProgress, PersonalRecords, OneRMProgression, VolumeLoadProgression deprecated
-            StrengthAnalytics, MonthlySummary,
+            // PROGRESS Category
+            StrengthAnalytics, MonthlySummary, RecentAchievements,
             
-            // ANALYTICS Category (3 widgets) - VolumeTrends deprecated, replaced by VolumeAnalytics
-            VolumeAnalytics, RecoveryMetrics, MuscleGroupDistribution
+            // ANALYTICS Category
+            VolumeAnalytics, RecoveryMetrics, MuscleGroupDistribution, ExerciseRanking,
+            ConsistencyScore, ProgressiveOverload
         ).filter { !it.isDeprecated }
         
         /**
@@ -365,6 +416,8 @@ sealed class AnalyticsWidget(
             // Active widgets
             FrequencyChart, ProgressChart, StrengthAnalytics, MonthlySummary,
             VolumeAnalytics, RecoveryMetrics, MuscleGroupDistribution,
+            ExerciseRanking, WorkoutDuration, RecentAchievements,
+            ConsistencyScore, ProgressiveOverload,
             
             // Deprecated widgets (for migration lookup)
             StrengthProgress, PersonalRecords, OneRMProgression,

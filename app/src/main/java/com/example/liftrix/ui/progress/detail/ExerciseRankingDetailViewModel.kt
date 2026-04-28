@@ -43,7 +43,7 @@ class ExerciseRankingDetailViewModel @Inject constructor(
     private val analyticsQueryUseCase: AnalyticsQueryUseCase,
     private val authQueryUseCase: AuthQueryUseCase,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
-) : StatefulDetailViewModel<ExerciseRankingDetailViewModel.UiState>(
+) : StatefulDetailViewModel<ExerciseRankingDetailViewModel.UiState, Any>(
     initialState = UiState(),
     savedStateHandle = savedStateHandle
 ) {

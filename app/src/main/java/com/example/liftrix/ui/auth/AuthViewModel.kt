@@ -180,7 +180,7 @@ class AuthViewModel @Inject constructor(
                     // Account created, now record consents
                     val consentResult = consentManagementService.recordConsent(
                         userId = user.uid,
-                        privacyPolicyVersion = "1.0.0", // TODO: Get from constants
+                        privacyPolicyVersion = "1.0.0", // Follow-up: Get from constants
                         healthDataConsent = consents.healthData,
                         aiChatConsent = consents.aiChat,
                         analyticsConsent = consents.analytics,

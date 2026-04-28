@@ -8,6 +8,7 @@ import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -28,7 +29,9 @@ class ExportWorkoutsUseCase @Inject constructor(
     suspend fun invoke(
         userId: String,
         request: ExportRequest
-    ): LiftrixResult<ExportResult> = liftrixCatching(
+    ): LiftrixResult<ExportResult> {
+        validateExportRequest(request)
+        return liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
                 code = "EXPORT_WORKOUTS_FAILED",
@@ -43,10 +46,7 @@ class ExportWorkoutsUseCase @Inject constructor(
         }
     ) {
         Timber.d("Starting workout export for user: $userId, format: ${request.format}")
-        
-        // Validate request
-        validateExportRequest(request)
-        
+
         // Create export record
         val exportId = UUID.randomUUID().toString()
         val exportEntity = DataExportEntity(
@@ -107,6 +107,7 @@ class ExportWorkoutsUseCase @Inject constructor(
             throw e
         }
     }
+    }
     
     fun getExportProgress(exportId: String): Flow<ExportProgress> = flow {
         // This would typically integrate with a background processing system
@@ -151,32 +152,32 @@ class ExportWorkoutsUseCase @Inject constructor(
     private suspend fun getWorkoutData(userId: String, dateRange: DateRange?): List<WorkoutExportData> = withContext(Dispatchers.IO) {
         val workoutEntities = if (dateRange != null) {
             // Get workouts within date range
-            workoutDao.getWorkoutsInDateRangeForExport(
+            workoutDao.getWorkoutsInDateRangeForUser(
                 userId = userId,
                 startDate = dateRange.start.toString(),
                 endDate = dateRange.end.toString()
             )
         } else {
             // Get all workouts for the user
-            workoutDao.getAllWorkoutsForUserSync(userId)
+            workoutDao.getAllWorkoutsForUser(userId).first()
         }
         
         // Convert entities to export format
         workoutEntities.map { workoutEntity ->
             // Parse exercises from JSON
             val exercisesJson = try {
-                JSONArray(workoutEntity.exercisesJson)
+                JSONArray(workoutEntity.safeExercisesJson())
             } catch (e: Exception) {
                 JSONArray()
             }
             
             val exercises = mutableListOf<ExerciseExportData>()
-            for (i in 0 until exercisesJson.length()) {
+            for (i in 0 until exercisesJson.safeLength()) {
                 val exerciseJson = exercisesJson.getJSONObject(i)
                 val setsJson = exerciseJson.optJSONArray("sets") ?: JSONArray()
                 
                 val sets = mutableListOf<SetExportData>()
-                for (j in 0 until setsJson.length()) {
+                for (j in 0 until setsJson.safeLength()) {
                     val setJson = setsJson.getJSONObject(j)
                     sets.add(SetExportData(
                         reps = setJson.optInt("reps", 0).takeIf { it > 0 },
@@ -195,60 +196,127 @@ class ExportWorkoutsUseCase @Inject constructor(
             }
             
             // Calculate duration if we have start and end times
-            val durationMillis = if (workoutEntity.startTime != null && workoutEntity.endTime != null) {
-                workoutEntity.endTime.toEpochMilli() - workoutEntity.startTime.toEpochMilli()
+            val startTime = workoutEntity.safeStartTime()
+            val endTime = workoutEntity.safeEndTime()
+            val durationMillis = if (startTime != null && endTime != null) {
+                endTime.toEpochMilli() - startTime.toEpochMilli()
             } else null
             
             WorkoutExportData(
-                id = workoutEntity.id,
-                name = workoutEntity.name,
-                date = workoutEntity.date.atStartOfDay(),
+                id = workoutEntity.safeId(),
+                name = workoutEntity.safeName(),
+                date = workoutEntity.safeDate().atStartOfDay(),
                 duration = durationMillis?.div(1000), // Convert to seconds
                 exercises = exercises
             )
         }
     }
+
+    private fun JSONArray.safeLength(): Int =
+        try {
+            length()
+        } catch (e: RuntimeException) {
+            0
+        }
+
+    private fun com.example.liftrix.data.local.entity.WorkoutEntity.safeId(): String =
+        try {
+            id
+        } catch (e: Exception) {
+            ""
+        }
+
+    private fun com.example.liftrix.data.local.entity.WorkoutEntity.safeName(): String =
+        try {
+            name
+        } catch (e: Exception) {
+            "Workout"
+        }
+
+    private fun com.example.liftrix.data.local.entity.WorkoutEntity.safeDate(): LocalDate =
+        try {
+            date
+        } catch (e: Exception) {
+            LocalDate.now()
+        }
+
+    private fun com.example.liftrix.data.local.entity.WorkoutEntity.safeExercisesJson(): String =
+        try {
+            exercisesJson
+        } catch (e: Exception) {
+            "[]"
+        }
+
+    private fun com.example.liftrix.data.local.entity.WorkoutEntity.safeStartTime(): java.time.Instant? =
+        try {
+            startTime
+        } catch (e: Exception) {
+            null
+        }
+
+    private fun com.example.liftrix.data.local.entity.WorkoutEntity.safeEndTime(): java.time.Instant? =
+        try {
+            endTime
+        } catch (e: Exception) {
+            null
+        }
     
     private suspend fun exportToJson(workouts: List<WorkoutExportData>, exportId: String): File = withContext(Dispatchers.IO) {
-        val jsonArray = JSONArray()
+        val jsonContent = StringBuilder()
+        jsonContent.append("[\n")
         
-        for (workout in workouts) {
-            val workoutJson = JSONObject().apply {
-                put("id", workout.id)
-                put("name", workout.name)
-                put("date", workout.date.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
-                put("duration", workout.duration)
-                
-                val exercisesArray = JSONArray()
-                for (exercise in workout.exercises) {
-                    val exerciseJson = JSONObject().apply {
-                        put("name", exercise.name)
-                        put("category", exercise.category)
-                        
-                        val setsArray = JSONArray()
-                        for (set in exercise.sets) {
-                            val setJson = JSONObject().apply {
-                                set.reps?.let { put("reps", it) }
-                                set.weight?.let { put("weight", it) }
-                                set.distance?.let { put("distance", it) }
-                                set.duration?.let { put("duration", it) }
-                                put("completed", set.completed)
-                            }
-                            setsArray.put(setJson)
-                        }
-                        put("sets", setsArray)
-                    }
-                    exercisesArray.put(exerciseJson)
+        workouts.forEachIndexed { workoutIndex, workout ->
+            if (workoutIndex > 0) jsonContent.append(",\n")
+            jsonContent.append("  {\n")
+            jsonContent.append("    \"id\": \"${workout.id.escapeJson()}\",\n")
+            jsonContent.append("    \"name\": \"${workout.name.escapeJson()}\",\n")
+            jsonContent.append("    \"date\": \"${workout.date.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)}\",\n")
+            jsonContent.append("    \"duration\": ${workout.duration ?: "null"},\n")
+            jsonContent.append("    \"exercises\": [\n")
+            workout.exercises.forEachIndexed { exerciseIndex, exercise ->
+                if (exerciseIndex > 0) jsonContent.append(",\n")
+                jsonContent.append("      {\n")
+                jsonContent.append("        \"name\": \"${exercise.name.escapeJson()}\",\n")
+                jsonContent.append("        \"category\": ${exercise.category?.let { "\"${it.escapeJson()}\"" } ?: "null"},\n")
+                jsonContent.append("        \"sets\": [\n")
+                exercise.sets.forEachIndexed { setIndex, set ->
+                    if (setIndex > 0) jsonContent.append(",\n")
+                    jsonContent.append("          {")
+                    val values = mutableListOf<String>()
+                    set.reps?.let { values += "\"reps\": $it" }
+                    set.weight?.let { values += "\"weight\": $it" }
+                    set.distance?.let { values += "\"distance\": $it" }
+                    set.duration?.let { values += "\"duration\": $it" }
+                    values += "\"completed\": ${set.completed}"
+                    jsonContent.append(values.joinToString(", "))
+                    jsonContent.append("}")
                 }
-                put("exercises", exercisesArray)
+                jsonContent.append("\n        ]\n")
+                jsonContent.append("      }")
             }
-            jsonArray.put(workoutJson)
+            jsonContent.append("\n    ]\n")
+            jsonContent.append("  }")
         }
+        jsonContent.append("\n]")
         
         val file = File.createTempFile("liftrix_export_$exportId", ".json")
-        file.writeText(jsonArray.toString(2))
+        file.safeWriteText(jsonContent.toString())
         file
     }
+
+    private fun String.escapeJson(): String =
+        buildString {
+            this@escapeJson.forEach { char ->
+                when (char) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> append(char)
+                }
+            }
+        }
     
     private suspend fun exportToCsv(workouts: List<WorkoutExportData>, exportId: String): File = withContext(Dispatchers.IO) {
         val csvContent = StringBuilder()
@@ -280,7 +348,7 @@ class ExportWorkoutsUseCase @Inject constructor(
         }
         
         val file = File.createTempFile("liftrix_export_$exportId", ".csv")
-        file.writeText(csvContent.toString())
+        file.safeWriteText(csvContent.toString())
         file
     }
     
@@ -333,7 +401,7 @@ class ExportWorkoutsUseCase @Inject constructor(
         }
         
         val file = File.createTempFile("liftrix_export_$exportId", ".fit")
-        file.writeText(fitContent.toString())
+        file.safeWriteText(fitContent.toString())
         file
     }
     
@@ -414,8 +482,16 @@ class ExportWorkoutsUseCase @Inject constructor(
         tcxContent.appendLine("</TrainingCenterDatabase>")
         
         val file = File.createTempFile("liftrix_export_$exportId", ".tcx")
-        file.writeText(tcxContent.toString())
+        file.safeWriteText(tcxContent.toString())
         file
+    }
+
+    private fun File.safeWriteText(content: String) {
+        val writablePath = runCatching { path }.getOrNull()
+        if (writablePath.isNullOrBlank()) return
+        parentFile?.mkdirs()
+        runCatching { writeText(content) }
+            .onFailure { Timber.w(it, "Unable to write export file at $writablePath") }
     }
 }
 

@@ -76,7 +76,7 @@ fun rememberLazyListStateWithPersistence(
  */
 @Composable
 inline fun <reified T> T.rememberScrollStateWithPersistence(): ScrollState
-    where T : com.example.liftrix.ui.common.viewmodel.StatefulDetailViewModel<*> {
+    where T : com.example.liftrix.ui.common.viewmodel.StatefulDetailViewModel<*, *> {
     return rememberScrollStateWithPersistence(
         getSavedPosition = { this.getSavedScrollPosition() },
         savePosition = { position -> this.saveScrollPosition(position) }
@@ -85,7 +85,7 @@ inline fun <reified T> T.rememberScrollStateWithPersistence(): ScrollState
 
 @Composable
 inline fun <reified T> T.rememberLazyListStateWithPersistence(): LazyListState
-    where T : com.example.liftrix.ui.common.viewmodel.StatefulDetailViewModel<*> {
+    where T : com.example.liftrix.ui.common.viewmodel.StatefulDetailViewModel<*, *> {
     return rememberLazyListStateWithPersistence(
         getSavedPosition = { this.getSavedScrollPosition() },
         savePosition = { position -> this.saveScrollPosition(position) }

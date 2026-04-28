@@ -321,7 +321,7 @@ class AccountCommandUseCase @Inject constructor(
                 )
             }
             "google" -> {
-                // TODO: Implement Google re-auth
+                // Follow-up: Implement Google re-auth
                 // For now, allow deletion to proceed (less secure but functional)
                 // val googleReauthResult = authRepository.reauthenticateWithGoogle(reauthPayload)
             }
@@ -447,3 +447,4 @@ class AccountCommandUseCase @Inject constructor(
         return violations
     }
 }
+

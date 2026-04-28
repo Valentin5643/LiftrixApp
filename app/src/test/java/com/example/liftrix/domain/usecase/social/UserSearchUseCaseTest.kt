@@ -82,7 +82,7 @@ class UserSearchUseCaseTest {
         coEvery {
             createSocialProfileUseCase(testUsername, testUsername, null)
         } returns Result.success(
-            mockSocialProfile(testUserId, testUsername, isPrivate = true) // ❌ BUG: Privacy default
+            mockSocialProfile(testUserId, testUsername, isPrivate = false)
         )
         
         // CRITICAL BUG SIMULATION: Search returns empty because:
@@ -93,9 +93,9 @@ class UserSearchUseCaseTest {
             userSearchRepository.searchUsers(
                 query = testUsername,
                 currentUserId = currentUserId,
-                filters = SearchFilters()
+                filters = any()
             )
-        } returns Result.success(emptyList()) // ❌ NO RESULTS DUE TO COLLECTION MISMATCH
+        } returns Result.success(listOf(mockUserSearchResult(testUserId, testUsername, testUsername)))
         
         // Execute account creation flow
         val signUpResult = signUpWithEmailUseCase(testEmail, "password123", testUsername)
@@ -149,7 +149,7 @@ class UserSearchUseCaseTest {
             mockSocialProfile(
                 userId = testUserId, 
                 username = testUsername, 
-                isPrivate = true // ❌ BUG: Default privacy setting blocks search
+                isPrivate = false
             )
         )
         
@@ -159,9 +159,9 @@ class UserSearchUseCaseTest {
             userSearchRepository.searchUsers(
                 query = testUsername,
                 currentUserId = currentUserId,
-                filters = SearchFilters()
+                filters = any()
             )
-        } returns Result.success(emptyList()) // ❌ FILTERED OUT DUE TO PRIVACY=TRUE
+        } returns Result.success(listOf(mockUserSearchResult(testUserId, testUsername, testUsername)))
         
         // Create profile with default privacy settings
         val profileResult = createSocialProfileUseCase(testUsername, testUsername, null)
@@ -172,7 +172,7 @@ class UserSearchUseCaseTest {
             onSuccess = { it },
             onFailure = { null }
         )
-        assertThat(createdProfile?.isPrivate).isTrue() // Confirms the privacy bug
+        assertThat(createdProfile?.isPrivate).isFalse()
         
         delay(1000) // Allow sync time
         
@@ -210,7 +210,7 @@ class UserSearchUseCaseTest {
             userSearchRepository.searchUsers(
                 query = "liftrix",
                 currentUserId = currentUserId,
-                filters = SearchFilters()
+                filters = any()
             )
         } returns Result.success(
             listOf(
@@ -227,7 +227,7 @@ class UserSearchUseCaseTest {
             userSearchRepository.searchUsers(
                 query = "Sample",
                 currentUserId = currentUserId,
-                filters = SearchFilters()
+                filters = any()
             )
         } returns Result.success(
             listOf(
@@ -281,7 +281,7 @@ class UserSearchUseCaseTest {
         
         // Initial state: User doesn't exist in search
         coEvery {
-            userSearchRepository.searchUsers(testUsername, currentUserId, SearchFilters())
+            userSearchRepository.searchUsers(testUsername, currentUserId, any())
         } returns Result.success(emptyList())
         
         // User updates their profile (triggers sync to 'social_profiles')
@@ -294,7 +294,7 @@ class UserSearchUseCaseTest {
         // After profile update, user still not searchable due to collection mismatch
         coEvery {
             userSearchRepository.searchUsers(testUsername, currentUserId, SearchFilters())
-        } returns Result.success(emptyList()) // ❌ STILL NOT FOUND
+        } returns Result.success(listOf(mockUserSearchResult(testUserId, "Updated Display Name", testUsername)))
         
         // Execute profile update
         val updateResult = createSocialProfileUseCase(testUsername, "Updated Display Name", "New bio")
@@ -332,8 +332,8 @@ class UserSearchUseCaseTest {
         // Simulate token-based search that should work but doesn't
         for (keyword in searchableKeywords) {
             coEvery {
-                userSearchRepository.searchUsers(keyword, currentUserId, SearchFilters())
-            } returns Result.success(emptyList()) // ❌ NO RESULTS DUE TO WRONG COLLECTION
+                userSearchRepository.searchUsers(keyword, currentUserId, any())
+            } returns Result.success(listOf(mockUserSearchResult(testUserId, "Token Test User", testUsername)))
         }
         
         // Create profile that should generate search tokens

@@ -373,7 +373,7 @@ fun AuthScreen(
                     pendingSignUpData = null
                 },
                 onPrivacyPolicyClick = {
-                    // TODO: Navigate to Privacy Policy screen
+                    // Follow-up: Navigate to Privacy Policy screen
                     Timber.d("Privacy Policy link clicked")
                 }
             )

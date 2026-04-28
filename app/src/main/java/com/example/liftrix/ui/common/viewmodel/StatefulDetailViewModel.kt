@@ -52,10 +52,17 @@ import timber.log.Timber
  * @param initialState The initial state value
  * @param savedStateHandle Android's SavedStateHandle for state persistence
  */
-abstract class StatefulDetailViewModel<S : Any>(
+abstract class StatefulDetailViewModel<S : Any, E : Any>(
     initialState: S,
     protected val savedStateHandle: SavedStateHandle
 ) : ModernBaseViewModel<S>(initialState), StateCleanupManager.StateCleanupAware {
+
+    constructor(
+        savedStateHandle: SavedStateHandle,
+        @Suppress("UNUSED_PARAMETER") errorHandler: com.example.liftrix.domain.usecase.common.ErrorHandler
+    ) : this("" as S, savedStateHandle)
+
+    open fun handleEvent(event: E) = Unit
 
     companion object {
         private const val STATE_VERSION_KEY = "state_version"
