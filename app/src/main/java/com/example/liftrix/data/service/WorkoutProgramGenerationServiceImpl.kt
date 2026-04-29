@@ -93,6 +93,21 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
         )
     }
 
+    override suspend fun modifyProgramJson(
+        userId: String,
+        userPrompt: String,
+        systemPrompt: String,
+        inputPayload: String,
+        language: Language
+    ): LiftrixResult<WorkoutProgramJsonResponse> = generateJson(
+        userId = userId,
+        userPrompt = userPrompt,
+        systemPrompt = systemPrompt,
+        requestPayload = inputPayload,
+        language = language,
+        stage = "modify"
+    )
+
     private suspend fun generateJson(
         userId: String,
         userPrompt: String,

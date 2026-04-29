@@ -113,6 +113,9 @@ fun ChatbotScreen(
                 onSaveGeneratedProgram = {
                     viewModel.handleEvent(ChatbotEvent.SaveGeneratedProgram)
                 },
+                onOverwriteGeneratedProgram = {
+                    viewModel.handleEvent(ChatbotEvent.OverwriteGeneratedProgram)
+                },
                 onDismissGeneratedProgram = {
                     viewModel.handleEvent(ChatbotEvent.DismissGeneratedProgram)
                 },
@@ -237,6 +240,7 @@ private fun MessageList(
     generatedProgramSaved: Boolean,
     currentLanguage: Language,
     onSaveGeneratedProgram: () -> Unit,
+    onOverwriteGeneratedProgram: () -> Unit,
     onDismissGeneratedProgram: () -> Unit,
     onReportMessage: (messageId: String, messageContent: String, reason: AIReportReason, notes: String?) -> Unit,
     modifier: Modifier = Modifier
@@ -278,6 +282,7 @@ private fun MessageList(
                     isSaved = generatedProgramSaved,
                     currentLanguage = currentLanguage,
                     onSave = onSaveGeneratedProgram,
+                    onOverwrite = onOverwriteGeneratedProgram,
                     onDismiss = onDismissGeneratedProgram,
                     modifier = Modifier.animateItem()
                 )
@@ -304,6 +309,7 @@ private fun GeneratedProgramPreviewCard(
     isSaved: Boolean,
     currentLanguage: Language,
     onSave: () -> Unit,
+    onOverwrite: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -323,13 +329,41 @@ private fun GeneratedProgramPreviewCard(
             )
             Text(
                 text = if (currentLanguage == Language.ROMANIAN) {
-                    "${result.program.days.size} zile generate"
+                    if (result.sourceReference != null) {
+                        "${result.program.days.size} zile modificate"
+                    } else {
+                        "${result.program.days.size} zile generate"
+                    }
                 } else {
-                    "${result.program.days.size} generated days"
+                    if (result.sourceReference != null) {
+                        "${result.program.days.size} modified days"
+                    } else {
+                        "${result.program.days.size} generated days"
+                    }
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.75f)
             )
+
+            result.sourceReference?.let { source ->
+                Text(
+                    text = "Source: ${source.sourceName}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LiftrixColorsV2.onSurfaceVariant
+                )
+            }
+
+            if (result.changeSummaries.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    result.changeSummaries.take(4).forEach { change ->
+                        Text(
+                            text = "${change.type.name.lowercase().replace('_', ' ')}: ${change.before} -> ${change.after}. ${change.reason}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = LiftrixColorsV2.onSurfaceVariant
+                        )
+                    }
+                }
+            }
 
             result.program.days.forEach { day ->
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -353,6 +387,14 @@ private fun GeneratedProgramPreviewCard(
                 )
             }
 
+            result.optionalQuestion?.let { question ->
+                Text(
+                    text = question,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
+
             Row(
                 horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.small),
                 verticalAlignment = Alignment.CenterVertically
@@ -365,9 +407,18 @@ private fun GeneratedProgramPreviewCard(
                         text = when {
                             isSaved -> if (currentLanguage == Language.ROMANIAN) "Salvat" else "Saved"
                             isSaving -> if (currentLanguage == Language.ROMANIAN) "Se salveaza" else "Saving"
+                            result.sourceReference != null -> if (currentLanguage == Language.ROMANIAN) "Copiaza" else "Save Copy"
                             else -> if (currentLanguage == Language.ROMANIAN) "Salveaza" else "Save"
                         }
                     )
+                }
+                if (result.saveTargetTemplateId != null) {
+                    OutlinedButton(
+                        onClick = onOverwrite,
+                        enabled = !isSaving && !isSaved
+                    ) {
+                        Text(text = if (currentLanguage == Language.ROMANIAN) "Suprascrie" else "Overwrite")
+                    }
                 }
                 TextButton(onClick = onDismiss) {
                     Text(text = if (currentLanguage == Language.ROMANIAN) "Inchide" else "Dismiss")

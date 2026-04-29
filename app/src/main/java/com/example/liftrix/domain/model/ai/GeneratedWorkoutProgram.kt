@@ -32,6 +32,92 @@ data class GeneratedWorkoutProgramResponse(
 )
 
 @Serializable
+data class ModifiedWorkoutProgramResponse(
+    @SerialName("schema_version")
+    val schemaVersion: String = GeneratedWorkoutProgram.SCHEMA_VERSION,
+    val task: WorkoutProgramAiTask = WorkoutProgramAiTask.MODIFY_WORKOUT_PROGRAM,
+    val source: WorkoutProgramSourceReference,
+    val program: GeneratedWorkoutProgram,
+    val changes: List<WorkoutProgramChangeSummary>,
+    val significance: WorkoutModificationSignificance = WorkoutModificationSignificance.MINOR,
+    @SerialName("confirmation_required")
+    val confirmationRequired: Boolean = true,
+    @SerialName("optional_question")
+    val optionalQuestion: String? = null
+)
+
+@Serializable
+data class WorkoutProgramSourceReference(
+    @SerialName("source_type")
+    val sourceType: WorkoutProgramSourceType,
+    @SerialName("source_id")
+    val sourceId: String,
+    @SerialName("source_name")
+    val sourceName: String
+)
+
+@Serializable
+enum class WorkoutProgramSourceType {
+    @SerialName("template")
+    TEMPLATE,
+    @SerialName("generated_preview")
+    GENERATED_PREVIEW
+}
+
+@Serializable
+data class WorkoutProgramChangeSummary(
+    val type: WorkoutProgramChangeType,
+    @SerialName("exercise_id")
+    val exerciseId: String? = null,
+    val before: String,
+    val after: String,
+    val reason: String
+)
+
+@Serializable
+enum class WorkoutProgramChangeType {
+    @SerialName("sets")
+    SETS,
+    @SerialName("reps")
+    REPS,
+    @SerialName("rest")
+    REST,
+    @SerialName("exercise_substitution")
+    EXERCISE_SUBSTITUTION,
+    @SerialName("order")
+    ORDER,
+    @SerialName("notes")
+    NOTES,
+    @SerialName("difficulty")
+    DIFFICULTY,
+    @SerialName("duration")
+    DURATION
+}
+
+@Serializable
+enum class WorkoutModificationSignificance {
+    @SerialName("minor")
+    MINOR,
+    @SerialName("significant")
+    SIGNIFICANT
+}
+
+@Serializable
+enum class WorkoutProgramAiTask {
+    @SerialName("generate_workout_program")
+    GENERATE_WORKOUT_PROGRAM,
+    @SerialName("modify_workout_program")
+    MODIFY_WORKOUT_PROGRAM,
+    @SerialName("update_plan_from_progress")
+    UPDATE_PLAN_FROM_PROGRESS
+}
+
+enum class WorkoutModificationSaveMode {
+    COPY,
+    OVERWRITE
+}
+
+@Serializable
 data class GeneratedWorkoutDay(
     @SerialName("day_name")
     val dayName: String,

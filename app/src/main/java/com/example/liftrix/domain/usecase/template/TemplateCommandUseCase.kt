@@ -1,6 +1,7 @@
 package com.example.liftrix.domain.usecase.template
 
 import com.example.liftrix.domain.model.Equipment
+import com.example.liftrix.domain.model.ExerciseId
 import com.example.liftrix.domain.model.FolderId
 import com.example.liftrix.domain.model.Reps
 import com.example.liftrix.domain.model.TemplateExercise
@@ -9,6 +10,8 @@ import com.example.liftrix.domain.model.Weight
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.model.WorkoutTemplateId
+import com.example.liftrix.domain.model.ai.GeneratedPrescriptionType
+import com.example.liftrix.domain.model.ai.GeneratedWorkoutProgram
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -483,6 +486,33 @@ class TemplateCommandUseCase @Inject constructor(
         }
     }
 
+    suspend fun updateTemplateFromAiModification(
+        userId: String,
+        templateId: String,
+        program: GeneratedWorkoutProgram
+    ): LiftrixResult<WorkoutTemplate> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "AI_TEMPLATE_UPDATE_FAILED",
+                errorMessage = throwable.message ?: "Failed to update template from AI modification",
+                analyticsContext = mapOf("templateId" to templateId, "userId" to userId)
+            )
+        }
+    ) {
+        require(userId.isNotBlank()) { "User ID cannot be blank" }
+        require(templateId.isNotBlank()) { "Template ID cannot be blank" }
+        val existingTemplate = templateRepository.getTemplateById(WorkoutTemplateId(templateId), userId).getOrThrow()
+            ?: throw IllegalArgumentException("Template not found")
+        val updatedTemplate = existingTemplate.copy(
+            name = program.workoutName.take(WorkoutTemplate.MAX_NAME_LENGTH).ifBlank { existingTemplate.name },
+            exercises = program.toTemplateExercises(),
+            estimatedDurationMinutes = program.days.sumOf { it.estimatedDurationMinutes }
+                .coerceIn(WorkoutTemplate.MIN_DURATION_MINUTES, WorkoutTemplate.MAX_DURATION_MINUTES),
+            updatedAt = Instant.now()
+        )
+        templateRepository.updateTemplate(updatedTemplate).getOrThrow()
+    }
+
     suspend fun shareTemplateToBuddy(
         templateId: String,
         buddyId: String
@@ -682,4 +712,24 @@ class TemplateCommandUseCase @Inject constructor(
             baseName.take(WorkoutTemplate.MAX_NAME_LENGTH - timestamp.length - 1) + " " + timestamp
         }
     }
+
+    private fun GeneratedWorkoutProgram.toTemplateExercises(): List<TemplateExercise> =
+        days.flatMap { it.exercises }.take(WorkoutTemplate.MAX_EXERCISES).mapIndexed { index, exercise ->
+            TemplateExercise(
+                exerciseId = ExerciseId.fromString(exercise.exerciseId),
+                name = exercise.exerciseName,
+                primaryMuscle = exercise.primaryMuscle,
+                equipment = exercise.equipment,
+                targetSets = exercise.sets,
+                targetReps = when (exercise.type) {
+                    GeneratedPrescriptionType.REPS -> Reps(exercise.repsMax ?: exercise.repsMin ?: 1)
+                    GeneratedPrescriptionType.TIME -> null
+                },
+                targetWeight = null,
+                restTimeSeconds = exercise.restSeconds,
+                notes = exercise.notes,
+                orderIndex = index,
+                instanceId = exercise.exerciseId
+            )
+        }
 }

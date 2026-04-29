@@ -36,6 +36,15 @@ class WorkoutGenerationCache @Inject constructor() {
         catalogHash: String
     ): String = sha256("$userId|$normalizedPrompt|$constraints|$language|$catalogHash")
 
+    fun keyForOperation(
+        userId: String,
+        operation: String,
+        normalizedPrompt: String,
+        sourceId: String,
+        contextHash: String,
+        catalogHash: String
+    ): String = sha256("$userId|$operation|$normalizedPrompt|$sourceId|$contextHash|$catalogHash")
+
     private fun sha256(value: String): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
         return digest.joinToString("") { "%02x".format(it) }

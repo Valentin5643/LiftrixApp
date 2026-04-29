@@ -3,12 +3,17 @@ package com.example.liftrix.domain.usecase.ai
 import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.model.ai.GeneratedWorkoutProgram
+import com.example.liftrix.domain.model.ai.WorkoutAiContextSnapshot
 import com.example.liftrix.domain.model.ai.WorkoutGenerationCatalogExercise
 import com.example.liftrix.domain.model.ai.WorkoutGenerationInputPayload
 import com.example.liftrix.domain.model.ai.WorkoutGenerationPrompt
 import com.example.liftrix.domain.model.ai.WorkoutGenerationRequest
+import com.example.liftrix.domain.model.ai.WorkoutProgramAiTask
+import com.example.liftrix.domain.model.ai.WorkoutProgramSourceReference
 import java.security.MessageDigest
 import javax.inject.Inject
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -38,6 +43,65 @@ class WorkoutGenerationPromptBuilder @Inject constructor() {
             systemPrompt = SYSTEM_PROMPT,
             inputPayload = json.encodeToString(payload),
             catalogHash = sha256(rankedCatalog.joinToString("|") { it.exerciseId })
+        )
+    }
+
+    fun buildModification(
+        userPrompt: String,
+        sourceReference: WorkoutProgramSourceReference,
+        sourceProgram: GeneratedWorkoutProgram,
+        contextSnapshot: WorkoutAiContextSnapshot
+    ): WorkoutGenerationPrompt = buildTaskPrompt(
+        task = WorkoutProgramAiTask.MODIFY_WORKOUT_PROGRAM,
+        userPrompt = userPrompt,
+        sourceReference = sourceReference,
+        sourceProgram = sourceProgram,
+        contextSnapshot = contextSnapshot
+    )
+
+    fun buildProgressionUpdate(
+        userPrompt: String,
+        sourceReference: WorkoutProgramSourceReference,
+        sourceProgram: GeneratedWorkoutProgram,
+        contextSnapshot: WorkoutAiContextSnapshot
+    ): WorkoutGenerationPrompt = buildTaskPrompt(
+        task = WorkoutProgramAiTask.UPDATE_PLAN_FROM_PROGRESS,
+        userPrompt = userPrompt,
+        sourceReference = sourceReference,
+        sourceProgram = sourceProgram,
+        contextSnapshot = contextSnapshot
+    )
+
+    private fun buildTaskPrompt(
+        task: WorkoutProgramAiTask,
+        userPrompt: String,
+        sourceReference: WorkoutProgramSourceReference,
+        sourceProgram: GeneratedWorkoutProgram,
+        contextSnapshot: WorkoutAiContextSnapshot
+    ): WorkoutGenerationPrompt {
+        val cappedContext = contextSnapshot.copy(
+            exerciseCatalog = contextSnapshot.exerciseCatalog.take(MAX_CATALOG_EXERCISES)
+        )
+        val payload = WorkoutModificationPromptPayload(
+            task = task,
+            userPrompt = userPrompt.trim(),
+            sourceReference = sourceReference,
+            sourceProgram = sourceProgram,
+            contextSnapshot = cappedContext
+        )
+        val catalogHash = sha256(
+            listOf(
+                task.name,
+                sourceReference.sourceType.name,
+                sourceReference.sourceId,
+                cappedContext.exerciseCatalog.joinToString("|") { it.exerciseId }
+            ).joinToString("|")
+        )
+
+        return WorkoutGenerationPrompt(
+            systemPrompt = "$SYSTEM_PROMPT\n\n$MODIFICATION_SYSTEM_PROMPT",
+            inputPayload = json.encodeToString(payload),
+            catalogHash = catalogHash
         )
     }
 
@@ -104,5 +168,31 @@ class WorkoutGenerationPromptBuilder @Inject constructor() {
             Represent exercise prescription with explicit fields: reps_min, reps_max, duration_seconds, and is_unilateral. Use reps_min/reps_max for rep-based exercises and duration_seconds for timed exercises. Never encode "each side" or seconds inside a reps string.
             Do not include medical claims, diagnosis, rehab prescriptions, or unsafe intensity instructions.
         """.trimIndent()
+
+        private val MODIFICATION_SYSTEM_PROMPT = """
+            For modify_workout_program and update_plan_from_progress tasks, preserve the provided source_reference and return ModifiedWorkoutProgramResponse JSON.
+            The response must include source, program, changes, significance, confirmation_required, and optional_question.
+            Each change summary must include type, before, after, and a brief reason.
+            Treat source_program as editable plan context only; do not resolve or modify completed workout sessions.
+            Use context_snapshot only as bounded personalization context. Do not infer private profile details that are not present in the payload.
+            Keep exercise substitutions within context_snapshot.exercise_catalog and preserve valid exercise_id values.
+        """.trimIndent()
     }
 }
+
+@Serializable
+private data class WorkoutModificationPromptPayload(
+    val task: WorkoutProgramAiTask,
+    @SerialName("schema_version")
+    val schemaVersion: String = GeneratedWorkoutProgram.SCHEMA_VERSION,
+    @SerialName("user_prompt")
+    val userPrompt: String,
+    @SerialName("source_reference")
+    val sourceReference: WorkoutProgramSourceReference,
+    @SerialName("source_program")
+    val sourceProgram: GeneratedWorkoutProgram,
+    @SerialName("context_snapshot")
+    val contextSnapshot: WorkoutAiContextSnapshot,
+    @SerialName("output_contract")
+    val outputContract: String = "Return ModifiedWorkoutProgramResponse JSON with source, program, changes including brief reason fields, significance, confirmation_required, and optional_question."
+)

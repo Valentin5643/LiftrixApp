@@ -254,7 +254,8 @@ dependencies {
     // Custom Lint rules for architectural enforcement
     lintChecks(project(":lint-rules"))
     implementation(project(":user-scoping-annotations"))
-    ksp(project(":user-scoping-processor"))
+    add("kspDebug", project(":user-scoping-processor"))
+    add("kspRelease", project(":user-scoping-processor"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -310,7 +311,8 @@ dependencies {
     implementation("androidx.room:room-paging:2.5.2")
     implementation(libs.firebase.storage)
     // KSP for better compatibility with SDK 35 and faster compilation
-    ksp(libs.room.compiler)
+    add("kspDebug", libs.room.compiler)
+    add("kspRelease", libs.room.compiler)
     
     // Database encryption with SQLCipher (Modern version)
     implementation("net.zetetic:sqlcipher-android:4.6.0@aar")
@@ -335,8 +337,10 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.hilt.work)
     implementation(libs.hilt.navigation.compose)
-    ksp(libs.hilt.compiler)
-    ksp(libs.androidx.hilt.compiler)
+    add("kspDebug", libs.hilt.compiler)
+    add("kspRelease", libs.hilt.compiler)
+    add("kspDebug", libs.androidx.hilt.compiler)
+    add("kspRelease", libs.androidx.hilt.compiler)
     
     // WorkManager
     implementation(libs.work.runtime.ktx)

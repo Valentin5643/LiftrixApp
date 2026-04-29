@@ -20,6 +20,14 @@ interface WorkoutProgramGenerationService {
         repairInstruction: String,
         language: Language = Language.ENGLISH
     ): LiftrixResult<WorkoutProgramJsonResponse>
+
+    suspend fun modifyProgramJson(
+        userId: String,
+        userPrompt: String,
+        systemPrompt: String,
+        inputPayload: String,
+        language: Language = Language.ENGLISH
+    ): LiftrixResult<WorkoutProgramJsonResponse>
 }
 
 data class WorkoutProgramJsonResponse(

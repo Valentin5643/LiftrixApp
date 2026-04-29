@@ -32,6 +32,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import timber.log.Timber
 
 class GenerateWorkoutProgramUseCase @Inject constructor(
@@ -45,8 +46,9 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
 ) {
 
     private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
+        ignoreUnknownKeys = false
+        isLenient = false
+        coerceInputValues = false
         explicitNulls = false
     }
 
@@ -429,16 +431,14 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
                     )
                 )
             } else {
-                val response = json.decodeFromString<AiWorkoutResponseDto>(normalizedJson)
-                val programDto = response.program ?: json.decodeFromString<AiWorkoutProgramDto>(normalizedJson)
-                val program = programDto.toGeneratedProgram(
-                    schemaVersion = response.schemaVersion ?: GeneratedWorkoutProgram.SCHEMA_VERSION,
-                    catalog = catalog
-                )
-                if (response.program != null) {
-                    Timber.i("GenerateWorkoutProgramUseCase: wrapped AI program DTO parsed successfully")
+                val root = json.parseToJsonElement(normalizedJson).jsonObject
+                val program = if ("program" in root) {
+                    val response = json.decodeFromString<com.example.liftrix.domain.model.ai.GeneratedWorkoutProgramResponse>(normalizedJson)
+                    Timber.i("GenerateWorkoutProgramUseCase: wrapped AI program parsed successfully")
+                    response.program
                 } else {
-                    Timber.i("GenerateWorkoutProgramUseCase: direct AI program DTO parsed successfully")
+                    Timber.i("GenerateWorkoutProgramUseCase: direct AI program parsed successfully")
+                    json.decodeFromString<GeneratedWorkoutProgram>(normalizedJson)
                 }
                 Result.success(program)
             }

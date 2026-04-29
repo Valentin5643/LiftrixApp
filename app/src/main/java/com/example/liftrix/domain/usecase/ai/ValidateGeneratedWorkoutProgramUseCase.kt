@@ -6,6 +6,8 @@ import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.model.ai.GeneratedPrescriptionType
 import com.example.liftrix.domain.model.ai.GeneratedWorkoutExercise
 import com.example.liftrix.domain.model.ai.GeneratedWorkoutProgram
+import com.example.liftrix.domain.model.ai.ModifiedWorkoutProgramResponse
+import com.example.liftrix.domain.model.ai.WorkoutModificationSignificance
 import com.example.liftrix.domain.model.ai.WorkoutGenerationRequest
 import com.example.liftrix.domain.model.ai.WorkoutGenerationValidationResult
 import com.example.liftrix.domain.model.ai.WorkoutProgramLevel
@@ -53,6 +55,72 @@ class ValidateGeneratedWorkoutProgramUseCase @Inject constructor() {
                     violations = violations,
                     errorMessage = violations.joinToString("; "),
                     analyticsContext = mapOf("operation" to "VALIDATE_GENERATED_WORKOUT_PROGRAM")
+                )
+            )
+        }
+    }
+
+    fun validateModification(
+        response: ModifiedWorkoutProgramResponse,
+        sourceProgram: GeneratedWorkoutProgram,
+        sourceId: String,
+        request: WorkoutGenerationRequest,
+        exerciseCatalog: List<ExerciseLibrary>
+    ): LiftrixResult<WorkoutGenerationValidationResult> {
+        val violations = mutableListOf<String>()
+        val warnings = mutableListOf<String>()
+
+        if (response.source.sourceId != sourceId) {
+            violations.add("source.source_id must preserve the resolved source")
+        }
+        if (response.source.sourceName.isBlank()) {
+            violations.add("source.source_name is required")
+        }
+        if (response.changes.isEmpty()) {
+            violations.add("changes must include at least one change summary")
+        }
+        response.changes.forEachIndexed { index, change ->
+            if (change.before.isBlank()) violations.add("changes[$index].before is required")
+            if (change.after.isBlank()) violations.add("changes[$index].after is required")
+            if (change.reason.isBlank() || change.reason.length > MAX_CHANGE_REASON_LENGTH) {
+                violations.add("changes[$index].reason must be 1-$MAX_CHANGE_REASON_LENGTH characters")
+            }
+        }
+        response.optionalQuestion?.let { question ->
+            if (question.length > MAX_OPTIONAL_QUESTION_LENGTH) {
+                violations.add("optional_question must be $MAX_OPTIONAL_QUESTION_LENGTH characters or fewer")
+            }
+            if (UNSAFE_TERMS.containsMatchIn(question)) {
+                violations.add("optional_question contains unsafe programming")
+            }
+        }
+        if (response.significance == WorkoutModificationSignificance.SIGNIFICANT && !response.confirmationRequired) {
+            violations.add("significant modifications require confirmation")
+        }
+
+        val baseValidation = invoke(response.program, request, exerciseCatalog)
+        baseValidation.fold(
+            onSuccess = { warnings.addAll(it.warnings) },
+            onFailure = { error ->
+                if (error is LiftrixError.ValidationError) {
+                    violations.add(error.errorMessage.ifBlank { error.violations.joinToString("; ") })
+                } else {
+                    violations.add(error.message ?: "Modified program failed validation")
+                }
+            }
+        )
+
+        validateSafeProgression(sourceProgram, response.program, request.normalizedConstraints.level, violations, warnings)
+
+        return if (violations.isEmpty()) {
+            Result.success(WorkoutGenerationValidationResult(response.program, warnings))
+        } else {
+            liftrixFailure(
+                LiftrixError.ValidationError(
+                    field = "modified_workout_program",
+                    violations = violations,
+                    errorMessage = violations.joinToString("; "),
+                    analyticsContext = mapOf("operation" to "VALIDATE_MODIFIED_WORKOUT_PROGRAM")
                 )
             )
         }
@@ -170,6 +238,43 @@ class ValidateGeneratedWorkoutProgramUseCase @Inject constructor() {
         }
     }
 
+    private fun validateSafeProgression(
+        sourceProgram: GeneratedWorkoutProgram,
+        modifiedProgram: GeneratedWorkoutProgram,
+        level: WorkoutProgramLevel,
+        violations: MutableList<String>,
+        warnings: MutableList<String>
+    ) {
+        val sourceExercises = sourceProgram.days.flatMap { it.exercises }
+        val modifiedExercises = modifiedProgram.days.flatMap { it.exercises }
+        if (sourceExercises.isEmpty() || modifiedExercises.isEmpty()) return
+
+        val sourceSets = sourceExercises.sumOf { it.sets }
+        val modifiedSets = modifiedExercises.sumOf { it.sets }
+        val sourceVolume = sourceExercises.sumOf { it.sets * (it.repsMax ?: it.repsMin ?: 1) }
+        val modifiedVolume = modifiedExercises.sumOf { it.sets * (it.repsMax ?: it.repsMin ?: 1) }
+        val maxSetIncrease = when (level) {
+            WorkoutProgramLevel.BEGINNER -> 2
+            WorkoutProgramLevel.INTERMEDIATE -> 4
+            WorkoutProgramLevel.ADVANCED -> 6
+        }
+        val maxVolumeRatio = when (level) {
+            WorkoutProgramLevel.BEGINNER -> 1.20
+            WorkoutProgramLevel.INTERMEDIATE -> 1.30
+            WorkoutProgramLevel.ADVANCED -> 1.40
+        }
+
+        if (modifiedSets - sourceSets > maxSetIncrease) {
+            violations.add("modified weekly sets increase too aggressively for $level")
+        }
+        if (sourceVolume > 0 && modifiedVolume > sourceVolume * maxVolumeRatio) {
+            violations.add("modified weekly volume increase is unsafe for $level")
+        }
+        if (modifiedExercises.size < sourceExercises.size / 2) {
+            warnings.add("modified program removes more than half of source exercises")
+        }
+    }
+
     private fun normalizeMuscleGroup(category: ExerciseCategory): ExerciseCategory = when (category) {
         ExerciseCategory.BICEPS, ExerciseCategory.TRICEPS -> ExerciseCategory.ARMS
         ExerciseCategory.QUADRICEPS, ExerciseCategory.HAMSTRINGS, ExerciseCategory.GLUTES, ExerciseCategory.CALVES -> ExerciseCategory.LEGS
@@ -188,6 +293,8 @@ class ValidateGeneratedWorkoutProgramUseCase @Inject constructor() {
         private const val MIN_EXERCISES_PER_DAY = 1
         private const val MAX_EXERCISES_PER_DAY = 8
         private const val MAX_MUSCLE_DOMINANCE_RATIO = 0.65
+        private const val MAX_CHANGE_REASON_LENGTH = 240
+        private const val MAX_OPTIONAL_QUESTION_LENGTH = 240
         private val UNSAFE_TERMS = Regex("\\b(max out|one rep max|through pain|ignore pain|rehab|diagnose)\\b")
     }
 }

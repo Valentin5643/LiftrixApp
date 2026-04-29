@@ -51,6 +51,44 @@ data class WorkoutGenerationPersonalization(
 )
 
 @Serializable
+data class WorkoutAiContextSnapshot(
+    @SerialName("user_id")
+    val userId: String,
+    @SerialName("available_equipment")
+    val availableEquipment: Set<Equipment> = setOf(Equipment.BODYWEIGHT_ONLY),
+    @SerialName("other_equipment_summary")
+    val otherEquipmentSummary: String? = null,
+    @SerialName("fitness_goals")
+    val fitnessGoals: List<FitnessGoal> = emptyList(),
+    @SerialName("goal_priority")
+    val goalPriority: Map<FitnessGoal, Int> = emptyMap(),
+    @SerialName("age_band")
+    val ageBand: String = "adult",
+    @SerialName("profile_completion_percent")
+    val profileCompletionPercent: Int = 0,
+    @SerialName("weight_unit")
+    val weightUnit: String = "system",
+    @SerialName("experience_level")
+    val experienceLevel: WorkoutProgramLevel = WorkoutProgramLevel.BEGINNER,
+    @SerialName("recent_history")
+    val recentHistory: WorkoutAiHistorySummary = WorkoutAiHistorySummary(),
+    @SerialName("exercise_catalog")
+    val exerciseCatalog: List<WorkoutGenerationCatalogExercise> = emptyList()
+)
+
+@Serializable
+data class WorkoutAiHistorySummary(
+    @SerialName("total_workouts")
+    val totalWorkouts: Int = 0,
+    @SerialName("current_streak")
+    val currentStreak: Int = 0,
+    @SerialName("completed_history_count")
+    val completedHistoryCount: Int = 0,
+    @SerialName("recent_exercise_count")
+    val recentExerciseCount: Int = 0
+)
+
+@Serializable
 data class WorkoutGenerationPrompt(
     @SerialName("system_prompt")
     val systemPrompt: String,

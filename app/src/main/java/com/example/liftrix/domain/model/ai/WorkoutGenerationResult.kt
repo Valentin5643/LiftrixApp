@@ -10,7 +10,14 @@ data class WorkoutGenerationResult(
     val repairAttempts: Int = 0,
     val tokensUsed: Int = 0,
     val processingTimeMs: Long = 0L,
-    val modelVersion: String? = null
+    val modelVersion: String? = null,
+    val sourceReference: WorkoutProgramSourceReference? = null,
+    val changeSummaries: List<WorkoutProgramChangeSummary> = emptyList(),
+    val significance: WorkoutModificationSignificance = WorkoutModificationSignificance.MINOR,
+    val requiresConfirmation: Boolean = false,
+    val defaultSaveMode: WorkoutModificationSaveMode = WorkoutModificationSaveMode.COPY,
+    val optionalQuestion: String? = null,
+    val saveTargetTemplateId: String? = null
 ) {
     val savedTemplateIds: List<String>
         get() = savedTemplates.map { it.id.value }
