@@ -1,5 +1,6 @@
 package com.example.liftrix.data.service
 
+import com.example.liftrix.BuildConfig
 import com.example.liftrix.data.remote.config.RemoteConfigManager
 import com.example.liftrix.domain.model.chat.ChatMessage
 import com.example.liftrix.domain.model.chat.MessageType
@@ -18,8 +19,8 @@ import com.example.liftrix.domain.service.PromptValidation
 import com.example.liftrix.domain.service.RateLimitStatus
 import com.example.liftrix.domain.service.AnalyticsTracker
 import com.google.firebase.Firebase
+import com.google.firebase.FirebaseException
 import com.google.firebase.ai.ai
-import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.appCheck
 import com.example.liftrix.LiftrixApp
 import kotlinx.coroutines.flow.first
@@ -29,7 +30,6 @@ import com.google.firebase.ai.type.Content
 import com.google.firebase.ai.type.GenerationConfig
 import com.google.firebase.ai.type.content
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import javax.inject.Inject
@@ -81,6 +81,11 @@ class AIChatServiceImpl @Inject constructor(
                 is ValidationException -> LiftrixError.ValidationError(
                     field = "message",
                     violations = listOf(throwable.message ?: "Invalid message"),
+                    analyticsContext = mapOf("user_id" to userId)
+                )
+                is DebugAppCheckTokenNotRegisteredException -> LiftrixError.BusinessLogicError(
+                    code = "APP_CHECK_DEBUG_TOKEN_NOT_REGISTERED",
+                    errorMessage = throwable.message ?: "Debug App Check token is not registered.",
                     analyticsContext = mapOf("user_id" to userId)
                 )
                 else -> LiftrixError.NetworkError(
@@ -161,8 +166,10 @@ class AIChatServiceImpl @Inject constructor(
             val appCheckToken = obtainAppCheckTokenWithRetry()
             
             if (appCheckToken == null) {
-                Timber.e("AIChatService: Failed to obtain App Check token after retries - cannot proceed")
-                throw Exception("AI service requires valid security tokens. Please restart the app and ensure proper network connectivity.")
+                val message = "Failed to obtain App Check token after retries. " +
+                    "Debug builds require a registered App Check debug token; release builds require Play Integrity, package, and SHA setup."
+                Timber.e("AIChatService: $message")
+                throw IllegalStateException(message)
             } else {
                 Timber.d("AIChatService: App Check token obtained successfully (${if (appCheckToken.fromCache) "cached" else "refreshed"}): ${appCheckToken.token.take(10)}...")
             }
@@ -224,9 +231,10 @@ class AIChatServiceImpl @Inject constructor(
                     Timber.e("Network error calling Firebase AI: ${e.message}")
                     throw Exception("Network connectivity issue. Please check your connection and try again.")
                 }
+                is DebugAppCheckTokenNotRegisteredException -> throw e
                 is SecurityException -> {
                     Timber.e("Firebase AI permissions error: ${e.message}")
-                    throw Exception("AI service configuration error. Please contact support.")
+                    throw Exception("AI service security configuration error. Verify Firebase App Check provider, package name, and SHA fingerprints.")
                 }
                 is IllegalStateException -> {
                     Timber.e("Firebase AI state error: ${e.message}")
@@ -241,7 +249,7 @@ class AIChatServiceImpl @Inject constructor(
                         errorMessage.contains("app check token is invalid") ||
                         errorMessage.contains("appcheck") -> {
                             Timber.e("App Check token validation failed - this indicates Firebase App Check is not properly configured")
-                            throw Exception("AI service security validation failed. Please restart the app and try again.")
+                            throw Exception("AI service security validation failed. Register the debug token for debug builds or verify Play Integrity/SHA setup for release.")
                         }
                         e.javaClass.name.contains("firebase") || 
                         errorMessage.contains("firebase") -> {
@@ -442,7 +450,7 @@ class AIChatServiceImpl @Inject constructor(
      * @return AppCheckToken if successful, null if all retries failed
      */
     private suspend fun obtainAppCheckTokenWithRetry(): AppCheckToken? {
-        val maxRetries = 3 // Reduced to avoid excessive attempts
+        val maxRetries = 1 // Do not retry App Check 403s; debug tokens must be registered manually.
         var currentDelay = 1000L // Start with 1 second
         
         repeat(maxRetries) { attempt ->
@@ -464,7 +472,16 @@ class AIChatServiceImpl @Inject constructor(
                             Firebase.appCheck.getAppCheckToken(false).await()
                         } catch (e: Exception) {
                             val errorMsg = e.message ?: ""
-                            Timber.w("AIChatService: Failed to get cached token: $errorMsg")
+                            if (isDebugAppCheckTokenMissing(e)) {
+                                logDebugAppCheckTokenInstructions(e)
+                                throw DebugAppCheckTokenNotRegisteredException(e)
+                            }
+                            Timber.w(
+                                e,
+                                "AIChatService: Failed to get cached App Check token. type=%s, message=%s",
+                                e.javaClass.name,
+                                errorMsg
+                            )
                             
                             // Log specific guidance for common App Check issues
                             when {
@@ -495,7 +512,12 @@ class AIChatServiceImpl @Inject constructor(
                             Firebase.appCheck.getAppCheckToken(true).await()
                         } catch (e: Exception) {
                             val errorMsg = e.message ?: ""
-                            Timber.w("AIChatService: Failed to refresh token: $errorMsg")
+                            Timber.w(
+                                e,
+                                "AIChatService: Failed to refresh App Check token. type=%s, message=%s",
+                                e.javaClass.name,
+                                errorMsg
+                            )
                             
                             // Adjust delay for rate limiting
                             if (errorMsg.contains("too many attempts", ignoreCase = true)) {
@@ -541,6 +563,23 @@ class AIChatServiceImpl @Inject constructor(
         Timber.e("AIChatService: Failed to obtain App Check token after $maxRetries attempts")
         return null
     }
+
+    private fun isDebugAppCheckTokenMissing(error: Throwable): Boolean {
+        val message = error.message.orEmpty()
+        return BuildConfig.DEBUG &&
+            error is FirebaseException &&
+            message.contains("403", ignoreCase = true) &&
+            message.contains("app attestation failed", ignoreCase = true)
+    }
+
+    private fun logDebugAppCheckTokenInstructions(error: Throwable) {
+        Timber.e(error, "Debug App Check token is not registered in Firebase Console for this Firebase app/project.")
+        Timber.e("Find the generated token in Logcat by searching for:")
+        Timber.e("Enter this debug secret into the allow list in the Firebase Console")
+        Timber.e("Register it at Firebase Console > App Check > com.example.liftrix > Manage debug tokens.")
+        Timber.e("Expected project: liftrix-390cf; package: com.example.liftrix; appId: 1:734273269747:android:39d5352dabb68d74202c86")
+        Timber.e("After adding the token, uninstall/reinstall the debug app or clear app data and run again.")
+    }
     
     /**
      * Data class to hold App Check token information.
@@ -555,3 +594,10 @@ class AIChatServiceImpl @Inject constructor(
 // Custom exceptions
 class QuotaExceededException(message: String) : Exception(message)
 class ValidationException(message: String) : Exception(message)
+class DebugAppCheckTokenNotRegisteredException(
+    cause: Throwable
+) : Exception(
+    "Debug App Check token is not registered in Firebase Console for com.example.liftrix in project liftrix-390cf. " +
+        "Search Logcat for 'Enter this debug secret into the allow list in the Firebase Console', add that token under App Check > com.example.liftrix > Manage debug tokens, then clear app data or reinstall.",
+    cause
+)

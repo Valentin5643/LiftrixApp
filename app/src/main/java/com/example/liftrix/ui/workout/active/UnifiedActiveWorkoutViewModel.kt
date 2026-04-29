@@ -273,6 +273,8 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
     fun discardWorkout() {
         viewModelScope.launch {
             try {
+                val currentSession = sessionManager.currentSession.value
+                Timber.d("[WORKOUT-DEBUG] discardWorkout requested sessionId=${currentSession?.id?.value} userId=${currentSession?.userId} status=${currentSession?.sessionStatus}")
                 sessionManager.discardSession()
                 Timber.i("Workout discarded")
             } catch (e: Exception) {

@@ -100,7 +100,11 @@ class SessionRepositoryImpl @Inject constructor(
                 isSynced = false
             ) // Note: isActive property might not exist in WorkoutEntity
             
+            val beforeCount = workoutDao.getWorkoutCountForUser(userId)
             val insertedId = workoutDao.insertWorkout(workoutEntity)
+            Timber.tag("WorkoutSyncDebug").d(
+                "[DATABASE-DEBUG] operation=SESSION_START_INSERT source=Room userId=$userId workoutId=${workoutEntity.id} timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount afterCount=${workoutDao.getWorkoutCountForUser(userId)} result=$insertedId isDirty=${workoutEntity.isDirty} isSynced=${workoutEntity.isSynced} lastModified=${workoutEntity.lastModified}"
+            )
             if (insertedId > 0) {
                 session.copy(id = WorkoutSessionId(insertedId.toString()))
             } else {
@@ -141,7 +145,11 @@ class SessionRepositoryImpl @Inject constructor(
                 isSynced = false
             ) // Note: isActive property might not exist in WorkoutEntity
             
+            val beforeCount = workoutDao.getWorkoutCountForUser(userId)
             val insertedId = workoutDao.insertWorkout(workoutEntity)
+            Timber.tag("WorkoutSyncDebug").d(
+                "[DATABASE-DEBUG] operation=SESSION_START_BLANK_INSERT source=Room userId=$userId workoutId=${workoutEntity.id} timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount afterCount=${workoutDao.getWorkoutCountForUser(userId)} result=$insertedId isDirty=${workoutEntity.isDirty} isSynced=${workoutEntity.isSynced} lastModified=${workoutEntity.lastModified}"
+            )
             if (insertedId > 0) {
                 session.copy(id = WorkoutSessionId(insertedId.toString()))
             } else {
@@ -217,7 +225,12 @@ class SessionRepositoryImpl @Inject constructor(
                 isSynced = false
             ) // Note: isActive property might not exist in WorkoutEntity
             
+            val sessionUserId = session.userId
+            val beforeUpdateCount = workoutDao.getWorkoutCountForUser(sessionUserId)
             val updatedRows = workoutDao.updateWorkout(workoutEntity)
+            Timber.tag("WorkoutSyncDebug").d(
+                "[DATABASE-DEBUG] operation=SESSION_UPDATE source=Room userId=$sessionUserId workoutId=${workoutEntity.id} timestamp=${System.currentTimeMillis()} beforeCount=$beforeUpdateCount afterCount=${workoutDao.getWorkoutCountForUser(sessionUserId)} updatedRows=$updatedRows status=${workoutEntity.status} endTimePresent=${workoutEntity.endTime != null} isDirty=${workoutEntity.isDirty} isSynced=${workoutEntity.isSynced} lastModified=${workoutEntity.lastModified}"
+            )
             if (updatedRows > 0) {
                 updatedSession
             } else {
@@ -411,7 +424,11 @@ class SessionRepositoryImpl @Inject constructor(
             
             Timber.d("🔥 COMPLETE-SESSION-DEBUG: Entity status before update: ${workoutEntity.status}")
             
+            val beforeCompleteCount = workoutDao.getWorkoutCountForUser(userId)
             val updatedRows = workoutDao.updateWorkout(workoutEntity)
+            Timber.tag("WorkoutSyncDebug").d(
+                "[DATABASE-DEBUG] operation=SESSION_COMPLETE_UPDATE source=Room userId=$userId workoutId=${workoutEntity.id} timestamp=${System.currentTimeMillis()} beforeCount=$beforeCompleteCount afterCount=${workoutDao.getWorkoutCountForUser(userId)} updatedRows=$updatedRows status=${workoutEntity.status} endTimePresent=${workoutEntity.endTime != null} isDirty=${workoutEntity.isDirty} isSynced=${workoutEntity.isSynced} lastModified=${workoutEntity.lastModified}"
+            )
             if (updatedRows == 0) {
                 throw RuntimeException("Failed to complete session - update affected 0 rows")
             }
@@ -444,7 +461,11 @@ class SessionRepositoryImpl @Inject constructor(
                 ?: throw IllegalStateException("No active session found to cancel for user: $userId")
             
             // Delete the active session completely (no save)
+            val beforeCount = workoutDao.getWorkoutCountForUser(userId)
             val deletedRows = workoutDao.deleteWorkoutByIdForUser(activeSession.id.value, userId)
+            Timber.tag("WorkoutSyncDebug").w(
+                "[DATABASE-DEBUG] operation=SESSION_CANCEL_DELETE source=Room userId=$userId workoutId=${activeSession.id.value} timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount afterCount=${workoutDao.getWorkoutCountForUser(userId)} deletedRows=$deletedRows"
+            )
             if (deletedRows == 0) {
                 throw RuntimeException("Failed to cancel session - delete affected 0 rows")
             }

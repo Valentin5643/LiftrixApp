@@ -25,7 +25,6 @@ import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.WorkoutScreenData
 import com.example.liftrix.ui.common.state.WorkoutUiState
-import com.example.liftrix.ui.common.state.dataOrNull
 import com.example.liftrix.sync.SyncManager
 import com.example.liftrix.sync.SyncStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -41,6 +40,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -69,6 +69,10 @@ class WorkoutViewModel @Inject constructor(
 
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
+    private var workoutObservationJob: Job? = null
+    private var templateObservationJob: Job? = null
+    private var syncStatusObservationJob: Job? = null
+    private var latestScreenData: WorkoutScreenData = WorkoutScreenData()
 
     init {
         observeAuthState()
@@ -102,7 +106,31 @@ class WorkoutViewModel @Inject constructor(
         }
     }
 
+    private fun WorkoutUiState.workoutDataOrNull(): WorkoutScreenData? = when (this) {
+        is WorkoutUiState.Success -> data
+        is WorkoutUiState.Error -> previousData
+        WorkoutUiState.Loading -> null
+        else -> null
+    }
 
+    private fun currentWorkoutData(): WorkoutScreenData =
+        _uiState.value.workoutDataOrNull() ?: latestScreenData
+
+    private fun setWorkoutData(data: WorkoutScreenData) {
+        latestScreenData = data
+        setState(WorkoutUiState.Success(data))
+    }
+
+    private fun updateWorkoutData(transform: (WorkoutScreenData) -> WorkoutScreenData) {
+        var updatedData: WorkoutScreenData? = null
+        updateState { currentState ->
+            val baseData = currentState.workoutDataOrNull() ?: latestScreenData
+            val newData = transform(baseData)
+            updatedData = newData
+            WorkoutUiState.Success(newData)
+        }
+        updatedData?.let { latestScreenData = it }
+    }
 
 
     private fun observeAuthState() {
@@ -110,27 +138,37 @@ class WorkoutViewModel @Inject constructor(
             authRepository.currentUser.collect { user ->
                 _currentUser.value = user
                 if (user != null) {
-                    Timber.d("User authenticated in WorkoutViewModel: ${user.uid}")
+                    Timber.d("[WORKOUT-DEBUG] Auth user available in WorkoutViewModel: userId=${user.uid}")
                     analyticsService.setUserProperties(user)
                         .onFailure { exception ->
                             Timber.e(exception, "Failed to set user properties for analytics")
                         }
                 } else {
-                    Timber.d("User not authenticated in WorkoutViewModel")
-                    // Clear workout data when user logs out
-                    setState(WorkoutUiState.Success(data = WorkoutScreenData()))
-                    // Clear analytics user properties
-                    analyticsService.clearUserProperties()
-                        .onFailure { exception ->
-                            Timber.e(exception, "Failed to clear user properties for analytics")
-                        }
+                    Timber.w("[WORKOUT-DEBUG] Auth emitted null in WorkoutViewModel; delaying state clear to avoid transient data wipe")
+                    delay(500)
+                    val confirmedCurrentUser = authRepository.getCurrentUser()
+                    if (confirmedCurrentUser == null) {
+                        Timber.w("[WORKOUT-DEBUG] Auth null confirmed; clearing workout screen state for logout")
+                        setWorkoutData(WorkoutScreenData())
+                        analyticsService.clearUserProperties()
+                            .onFailure { exception ->
+                                Timber.e(exception, "Failed to clear user properties for analytics")
+                            }
+                    } else {
+                        Timber.d("[WORKOUT-DEBUG] Auth null was transient; preserving workout screen state for userId=${confirmedCurrentUser.uid}")
+                        _currentUser.value = confirmedCurrentUser
+                    }
                 }
             }
         }
     }
 
     private fun observeWorkouts() {
-        viewModelScope.launch {
+        workoutObservationJob?.let {
+            Timber.d("[WORKOUT-DEBUG] Cancelling existing workout observation before restart")
+            it.cancel()
+        }
+        workoutObservationJob = viewModelScope.launch {
             // 🔥 FIX: Only restart workout observation when userId actually changes
             // This prevents workouts from "disappearing" after profile updates that recreate User objects
             var previousUserId: String? = null
@@ -141,23 +179,27 @@ class WorkoutViewModel @Inject constructor(
                     // Only restart flow if userId actually changed
                     if (user.uid != previousUserId) {
                         previousUserId = user.uid
-                        Timber.d("🔥 WORKOUT-ASSOCIATION-DEBUG: Starting workout observation for userId: ${user.uid}")
+                        Timber.d("[WORKOUT-DEBUG] Starting workout observation for userId=${user.uid}")
                         
                         combine(
                             workoutRepository.getAllWorkoutsForUser(user.uid),
                             syncManager.getSyncStatus()
                         ) { workouts, syncStatus ->
-                            Timber.d("🔥 WORKOUT-ASSOCIATION-DEBUG: Workout observation emitted ${workouts.size} workouts for userId: ${user.uid}")
-                            val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
-                            setState(WorkoutUiState.Success(
+                            Timber.d("[WORKOUT-DEBUG] Workout read emitted count=${workouts.size} userId=${user.uid} syncStatus=${syncStatus::class.simpleName}")
+                            val statusCounts = workouts.groupingBy { it.status }.eachCount()
+                            val completedWithoutEndTime = workouts.count { it.status.name == "COMPLETED" && it.endTime == null }
+                            Timber.tag("WorkoutSyncDebug").d(
+                                "[DATABASE-DEBUG] operation=WORKOUT_VIEWMODEL_DISPLAY_INPUT source=Room userId=${user.uid} timestamp=${System.currentTimeMillis()} count=${workouts.size} statusCounts=$statusCounts completedWithoutEndTime=$completedWithoutEndTime syncStatus=${syncStatus::class.simpleName}"
+                            )
+                            updateWorkoutData { currentData ->
                                 currentData.copy(
                                     workouts = workouts,
                                     syncStatus = syncStatus
                                 )
-                            ))
+                            }
                         }.collect { /* Updates handled in combine block */ }
                     } else {
-                        Timber.d("🔥 WORKOUT-ASSOCIATION-DEBUG: Skipping workout observation restart - userId unchanged: ${user.uid}")
+                        Timber.d("[WORKOUT-DEBUG] Skipping workout observation restart; userId unchanged=${user.uid}")
                     }
                 }
         }
@@ -172,7 +214,11 @@ class WorkoutViewModel @Inject constructor(
      * Using flatMapLatest to ensure the flow continues observing even after session changes
      */
     private fun observeTemplates() {
-        viewModelScope.launch {
+        templateObservationJob?.let {
+            Timber.d("[WORKOUT-DEBUG] Cancelling existing template/folder observation before restart")
+            it.cancel()
+        }
+        templateObservationJob = viewModelScope.launch {
             // 🔥 FIX: Only restart template observation when userId actually changes
             // This prevents templates from "disappearing" after profile updates that recreate User objects
             var previousUserId: String? = null
@@ -183,7 +229,7 @@ class WorkoutViewModel @Inject constructor(
                     // Only restart flow if userId actually changed
                     if (user.uid != previousUserId) {
                         previousUserId = user.uid
-                        Timber.d("🔥 TEMPLATE-ASSOCIATION-DEBUG: Starting template observation for userId: ${user.uid}")
+                        Timber.d("[WORKOUT-DEBUG] Starting template/folder observation for userId=${user.uid}")
                         
                         // Ensure default folder exists for the user
                         folderRepository.getOrCreateDefaultFolder(user.uid)
@@ -197,53 +243,51 @@ class WorkoutViewModel @Inject constructor(
                             templateQueryUseCase(user.uid).map { Result.success(it) }
                         ) { foldersResult, templatesResult ->
                             // Process both results together
-                            val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
-
                             when {
                                 foldersResult.isSuccess && templatesResult.isSuccess -> {
                                     val folders = foldersResult.getOrThrow()
                                     val templates = templatesResult.getOrThrow()
 
-                                    Timber.d("WorkoutViewModel: Loaded ${folders.size} folders and ${templates.size} templates")
+                                    Timber.d("[WORKOUT-DEBUG] Template/folder read emitted folders=${folders.size} templates=${templates.size} userId=${user.uid}")
 
-                                    setState(WorkoutUiState.Success(
+                                    updateWorkoutData { currentData ->
                                         currentData.copy(
                                             folders = folders,
                                             templates = templates,
                                             selectedFolderId = null // Reset folder selection when loading all
                                         )
-                                    ))
+                                    }
                                 }
                                 foldersResult.isFailure -> {
-                                    Timber.e("Failed to load folders: ${foldersResult.exceptionOrNull()?.message}")
+                                    Timber.e("[WORKOUT-DEBUG] Failed to load folders: ${foldersResult.exceptionOrNull()?.message}")
                                     // Try to load templates only if folders fail
                                     if (templatesResult.isSuccess) {
                                         val templates = templatesResult.getOrThrow()
-                                        setState(WorkoutUiState.Success(
+                                        updateWorkoutData { currentData ->
                                             currentData.copy(
                                                 templates = templates,
                                                 folders = emptyList() // Clear folders on failure
                                             )
-                                        ))
+                                        }
                                     }
                                 }
                                 templatesResult.isFailure -> {
-                                    Timber.e("Failed to load templates: ${templatesResult.exceptionOrNull()?.message}")
+                                    Timber.e("[WORKOUT-DEBUG] Failed to load templates: ${templatesResult.exceptionOrNull()?.message}")
                                     // Load folders only if templates fail
                                     if (foldersResult.isSuccess) {
                                         val folders = foldersResult.getOrThrow()
-                                        setState(WorkoutUiState.Success(
+                                        updateWorkoutData { currentData ->
                                             currentData.copy(
                                                 folders = folders,
                                                 templates = emptyList() // Clear templates on failure
                                             )
-                                        ))
+                                        }
                                     }
                                 }
                             }
                         }.collect { /* Updates handled in combine block */ }
                     } else {
-                        Timber.d("🔥 TEMPLATE-ASSOCIATION-DEBUG: Skipping template observation restart - userId unchanged: ${user.uid}")
+                        Timber.d("[WORKOUT-DEBUG] Skipping template/folder observation restart; userId unchanged=${user.uid}")
                     }
                 }
         }
@@ -259,12 +303,23 @@ class WorkoutViewModel @Inject constructor(
     }
 
     private fun observeSyncStatus() {
-        viewModelScope.launch {
+        syncStatusObservationJob?.let {
+            Timber.d("[WORKOUT-DEBUG] Cancelling existing sync status observation before restart")
+            it.cancel()
+        }
+        syncStatusObservationJob = viewModelScope.launch {
             syncManager.getSyncStatus().collect { status ->
-                val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
-                setState(WorkoutUiState.Success(
-                    currentData.copy(syncStatus = status)
-                ))
+                val currentState = _uiState.value
+                val currentData = currentState.workoutDataOrNull()
+                if (currentData == null) {
+                    Timber.d("[WORKOUT-DEBUG] Sync status update skipped because workout data is not loaded yet status=${status::class.simpleName} state=${currentState::class.simpleName}")
+                } else {
+                    Timber.d("[WORKOUT-DEBUG] Sync status state update status=${status::class.simpleName} workouts=${currentData.workouts.size} templates=${currentData.templates.size} folders=${currentData.folders.size}")
+                    if (currentData.workouts.isEmpty() && currentData.templates.isEmpty() && currentData.folders.isEmpty()) {
+                        Timber.w("[WORKOUT-DEBUG] Sync status is updating an already-empty workout screen state status=${status::class.simpleName}")
+                    }
+                    updateWorkoutData { it.copy(syncStatus = status) }
+                }
                 
                 when (status) {
                     is SyncStatus.Success -> {
@@ -293,15 +348,19 @@ class WorkoutViewModel @Inject constructor(
             var previousSession: com.example.liftrix.domain.model.UnifiedWorkoutSession? = null
             
             sessionManager.currentSession.collect { currentSession ->
-                // Detect when session transitions from active/completed to null (cleared after completion)
-                if (previousSession != null && currentSession == null) {
-                    Timber.d("WorkoutViewModel: Session completed and cleared, refreshing folders/templates data")
+                val clearedSession = previousSession
+                if (clearedSession != null && currentSession == null) {
+                    val shouldRefreshAfterClear = clearedSession.sessionStatus == com.example.liftrix.domain.model.UnifiedWorkoutSession.SessionStatus.COMPLETED ||
+                        clearedSession.sessionStatus == com.example.liftrix.domain.model.UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE
+                    Timber.d("[WORKOUT-DEBUG] Session cleared observed previousStatus=${clearedSession.sessionStatus} sessionId=${clearedSession.id.value} shouldRefresh=$shouldRefreshAfterClear")
                     
-                    // Add a small delay to ensure cache invalidation has completed
-                    kotlinx.coroutines.delay(200)
-                    
-                    // Trigger a refresh of folders and templates data
-                    refreshData()
+                    if (shouldRefreshAfterClear) {
+                        // Add a small delay to ensure cache invalidation has completed
+                        kotlinx.coroutines.delay(200)
+                        
+                        // Trigger a refresh of folders and templates data
+                        refreshData()
+                    }
                 }
                 
                 previousSession = currentSession
@@ -326,14 +385,11 @@ class WorkoutViewModel @Inject constructor(
                     }
 
                 Timber.d("Workout saved successfully: ${workout.name}")
-                val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
-                updateState {
-                    WorkoutUiState.Success(currentData)
-                }
+                setWorkoutData(currentWorkoutData())
             }.onFailure { error ->
                 Timber.e(error.toString(), "Failed to save workout")
                 logError(error, "saveWorkout")
-                val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                val currentData = currentWorkoutData()
                 updateState {
                     WorkoutUiState.Error(
                         error as? LiftrixError ?: LiftrixError.UnknownError(
@@ -356,12 +412,11 @@ class WorkoutViewModel @Inject constructor(
 
                 result.onSuccess {
                     Timber.d("Sync started successfully")
-                    val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
-                    updateState { WorkoutUiState.Success(currentData) }
+                    setWorkoutData(currentWorkoutData())
                 }.onFailure { error ->
                     Timber.e("Failed to start sync: ${error.message}")
                     logError(error, "syncNow")
-                    val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                    val currentData = currentWorkoutData()
                     updateState {
                         WorkoutUiState.Error(
                             error as? LiftrixError ?: LiftrixError.UnknownError(
@@ -374,7 +429,7 @@ class WorkoutViewModel @Inject constructor(
             }.onFailure { error ->
                 Timber.e("Failed to get user ID: ${error.message}")
                 logError(error, "syncNow")
-                val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                val currentData = currentWorkoutData()
                 updateState {
                     WorkoutUiState.Error(
                         error as? LiftrixError ?: LiftrixError.UnknownError(
@@ -396,12 +451,7 @@ class WorkoutViewModel @Inject constructor(
                 val result = workoutRepository.getUnsyncedCountForUser(userId.value)
 
                 result.onSuccess { count ->
-                    val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
-                    updateState {
-                        WorkoutUiState.Success(
-                            currentData.copy(unsyncedCount = count)
-                        )
-                    }
+                    updateWorkoutData { it.copy(unsyncedCount = count) }
                 }.onFailure { error ->
                     Timber.e("Failed to get unsynced count: ${error.message}")
                     logError(error, "getUnsyncedCount")
@@ -446,15 +496,15 @@ class WorkoutViewModel @Inject constructor(
     }
     
     private fun clearError() {
-        updateState { currentState ->
-            when (currentState) {
-                is WorkoutUiState.Error -> WorkoutUiState.Success(currentState.previousData ?: WorkoutScreenData())
-                else -> currentState
-            }
+        val currentState = _uiState.value
+        if (currentState is WorkoutUiState.Error) {
+            setWorkoutData(currentState.previousData ?: latestScreenData)
         }
     }
 
     private fun refreshData() {
+        val currentData = _uiState.value.workoutDataOrNull() ?: latestScreenData
+        Timber.d("[WORKOUT-DEBUG] refreshData requested currentWorkouts=${currentData.workouts.size} currentTemplates=${currentData.templates.size} currentFolders=${currentData.folders.size}")
         // Refresh all data by re-observing
         observeWorkouts()
         observeTemplates() // This now triggers combined folders + templates loading
@@ -493,24 +543,21 @@ class WorkoutViewModel @Inject constructor(
                 workoutTemplateRepository.getTemplatesByFolder(userId, selectedFolderId ?: "").collect { result ->
                     result.fold(
                         onSuccess = { templates ->
-                            val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
-
-                            setState(WorkoutUiState.Success(
+                            updateWorkoutData { currentData ->
                                 currentData.copy(
                                     templates = templates,
                                     selectedFolderId = selectedFolderId
                                 )
-                            ))
+                            }
                         },
                         onFailure = { exception ->
                             Timber.e(exception, "Failed to load filtered templates for user $userId, folder: $selectedFolderId")
-                            val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
-                            setState(WorkoutUiState.Success(
+                            updateWorkoutData { currentData ->
                                 currentData.copy(
                                     templates = emptyList(),
                                     selectedFolderId = selectedFolderId
                                 )
-                            ))
+                            }
                         }
                     )
                 }
@@ -538,10 +585,7 @@ class WorkoutViewModel @Inject constructor(
                 folderRepository.getAllFoldersForUser(userId)
                     .first() // Get just the first emission
                     .let { folders ->
-                        val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
-                        setState(WorkoutUiState.Success(
-                            currentData.copy(folders = folders)
-                        ))
+                        updateWorkoutData { it.copy(folders = folders) }
                     }
             } catch (e: Exception) {
                 Timber.e(e, "Exception in refreshFolderState")
@@ -560,7 +604,7 @@ class WorkoutViewModel @Inject constructor(
                         errorMessage = "User not authenticated - cannot create folder"
                     )
                     logError(error, "createFolder")
-                    val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                    val currentData = currentWorkoutData()
                     updateState { WorkoutUiState.Error(error, currentData) }
                     return@launch
                 }
@@ -576,7 +620,7 @@ class WorkoutViewModel @Inject constructor(
                 }.onFailure { error ->
                     Timber.e("Failed to create folder: ${error.message}")
                     logError(error, "createFolder")
-                    val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                    val currentData = currentWorkoutData()
                     updateState {
                         WorkoutUiState.Error(
                             error as? LiftrixError ?: LiftrixError.UnknownError(
@@ -589,7 +633,7 @@ class WorkoutViewModel @Inject constructor(
             }.onFailure { error ->
                 Timber.e("Failed to get user ID: ${error.message}")
                 logError(error, "createFolder")
-                val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                val currentData = currentWorkoutData()
                 updateState {
                     WorkoutUiState.Error(
                         error as? LiftrixError ?: LiftrixError.UnknownError(
@@ -616,7 +660,7 @@ class WorkoutViewModel @Inject constructor(
             }.onFailure { error ->
                 Timber.e("Failed to move workout to folder: ${error.message}")
                 logError(error, "moveWorkoutToFolder")
-                val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                val currentData = currentWorkoutData()
                 updateState {
                     WorkoutUiState.Error(
                         error as? LiftrixError ?: LiftrixError.UnknownError(
@@ -640,7 +684,7 @@ class WorkoutViewModel @Inject constructor(
                         errorMessage = "User not authenticated - cannot delete folder"
                     )
                     logError(error, "deleteFolder")
-                    val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                    val currentData = currentWorkoutData()
                     updateState { WorkoutUiState.Error(error, currentData) }
                     return@launch
                 }
@@ -655,7 +699,7 @@ class WorkoutViewModel @Inject constructor(
                 }.onFailure { error ->
                     Timber.e("Failed to delete folder '${folder.name}': ${error.message}")
                     logError(error, "deleteFolder")
-                    val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                    val currentData = currentWorkoutData()
                     updateState {
                         WorkoutUiState.Error(
                             error as? LiftrixError ?: LiftrixError.UnknownError(
@@ -668,7 +712,7 @@ class WorkoutViewModel @Inject constructor(
             }.onFailure { error ->
                 Timber.e("Failed to get user ID: ${error.message}")
                 logError(error, "deleteFolder")
-                val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                val currentData = currentWorkoutData()
                 updateState {
                     WorkoutUiState.Error(
                         error as? LiftrixError ?: LiftrixError.UnknownError(
@@ -692,7 +736,7 @@ class WorkoutViewModel @Inject constructor(
                         errorMessage = "User not authenticated - cannot rename folder"
                     )
                     logError(error, "renameFolder")
-                    val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                    val currentData = currentWorkoutData()
                     updateState { WorkoutUiState.Error(error, currentData) }
                     return@launch
                 }
@@ -712,7 +756,7 @@ class WorkoutViewModel @Inject constructor(
                 }.onFailure { error ->
                     Timber.e("Failed to rename folder '${folder.name}' to '$newName': ${error.message}")
                     logError(error, "renameFolder")
-                    val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                    val currentData = currentWorkoutData()
                     updateState {
                         WorkoutUiState.Error(
                             error as? LiftrixError ?: LiftrixError.UnknownError(
@@ -725,7 +769,7 @@ class WorkoutViewModel @Inject constructor(
             }.onFailure { error ->
                 Timber.e("Failed to get user ID: ${error.message}")
                 logError(error, "renameFolder")
-                val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                val currentData = currentWorkoutData()
                 updateState {
                     WorkoutUiState.Error(
                         error as? LiftrixError ?: LiftrixError.UnknownError(
@@ -817,8 +861,7 @@ class WorkoutViewModel @Inject constructor(
 
                 result.onSuccess { reorderedFolders ->
                     // ✅ RACE CONDITION FIX: Use cached state instead of re-checking UI state
-                    val updatedData = confirmedSuccessState.data.copy(folders = reorderedFolders)
-                    updateState { WorkoutUiState.Success(data = updatedData) }
+                    updateWorkoutData { it.copy(folders = reorderedFolders) }
                 }.onFailure { error ->
                     Timber.e("Failed to reorder folders: ${error.message}")
                     logError(error, "reorderFoldersWithState")

@@ -87,6 +87,12 @@ abstract class FeatureModule {
     @Singleton
     abstract fun bindAIChatService(impl: AIChatServiceImpl): AIChatService
 
+    @Binds
+    @Singleton
+    abstract fun bindWorkoutProgramGenerationService(
+        impl: WorkoutProgramGenerationServiceImpl
+    ): WorkoutProgramGenerationService
+
     // ========================================
     // WIDGET SYNC & REAL-TIME
     // ========================================

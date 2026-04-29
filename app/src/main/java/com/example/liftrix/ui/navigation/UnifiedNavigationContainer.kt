@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Icon
@@ -67,6 +68,8 @@ import com.example.liftrix.domain.model.ProgressPhoto
 import com.example.liftrix.domain.model.BodyPart
 import com.example.liftrix.domain.model.PhotoType
 import com.example.liftrix.ui.home.HomeScreen
+import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.usecase.admin.CheckAdminPermissionsUseCase
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.ui.settings.sync.SyncSettingsViewModel
 import com.example.liftrix.ui.share.ShareWorkoutViewModel
@@ -766,17 +769,25 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.AIChatbot> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.AIChatbot>()
-                    ChatbotScreen(
-                        conversationId = route.conversationId,
-                        initialWorkoutContext = route.workoutContext,
+                    AdminOnlyRoute(
                         onNavigateBack = { navController.popBackStackSafely() }
-                    )
+                    ) {
+                        ChatbotScreen(
+                            conversationId = route.conversationId,
+                            initialWorkoutContext = route.workoutContext,
+                            onNavigateBack = { navController.popBackStackSafely() }
+                        )
+                    }
                 }
                 
                 composable<LiftrixRoute.AIChatSettings> {
-                    AIChatSettingsScreen(
+                    AdminOnlyRoute(
                         onNavigateBack = { navController.popBackStackSafely() }
-                    )
+                    ) {
+                        AIChatSettingsScreen(
+                            onNavigateBack = { navController.popBackStackSafely() }
+                        )
+                    }
                 }
                 
                 composable<LiftrixRoute.AnomalyDashboard> {
@@ -1381,14 +1392,23 @@ private fun StopWorkoutDialog(
 @Composable
 private fun BottomNavigationBar(
     navController: NavHostController,
-    currentDestination: androidx.navigation.NavDestination?
+    currentDestination: androidx.navigation.NavDestination?,
+    guardViewModel: AdminRouteGuardViewModel = hiltViewModel()
 ) {
-    val items = listOf(
-        BottomNavItem(LiftrixRoute.Home, "Home", Icons.Default.Home),
-        BottomNavItem(LiftrixRoute.Workout, "Workout", Icons.Default.FitnessCenter),
-        BottomNavItem(LiftrixRoute.Progress, "Progress", Icons.Default.TrendingUp)
-        // Temporarily hidden: BottomNavItem(LiftrixRoute.Coach, "Coach", Icons.Default.Psychology)
-    )
+    val adminState by guardViewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        guardViewModel.checkAdminAccess()
+    }
+
+    val items = buildList {
+        add(BottomNavItem(LiftrixRoute.Home, "Home", Icons.Default.Home))
+        add(BottomNavItem(LiftrixRoute.Workout, "Workout", Icons.Default.FitnessCenter))
+        add(BottomNavItem(LiftrixRoute.Progress, "Progress", Icons.Default.TrendingUp))
+        if (adminState.isAdmin) {
+            add(BottomNavItem(LiftrixRoute.AIChatbot(), "AI", Icons.Default.Psychology))
+        }
+    }
     
     NavigationBar {
         items.forEach { item ->
@@ -1864,3 +1884,118 @@ private fun ProgressComparisonContainer(
         }
     )
 }
+
+@Composable
+private fun AdminOnlyRoute(
+    onNavigateBack: () -> Unit,
+    guardViewModel: AdminRouteGuardViewModel = hiltViewModel(),
+    content: @Composable () -> Unit
+) {
+    val uiState by guardViewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        guardViewModel.checkAdminAccess()
+    }
+
+    when {
+        uiState.isLoading -> {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+
+        uiState.isAdmin -> content()
+
+        else -> {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Admin access required",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        text = "This AI feature is only available to admins.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Button(onClick = onNavigateBack) {
+                        Text("Back")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@HiltViewModel
+class AdminRouteGuardViewModel @Inject constructor(
+    private val authQueryUseCase: AuthQueryUseCase,
+    private val checkAdminPermissionsUseCase: CheckAdminPermissionsUseCase
+) : ViewModel() {
+
+    private val _uiState = kotlinx.coroutines.flow.MutableStateFlow(AdminRouteGuardUiState())
+    val uiState: kotlinx.coroutines.flow.StateFlow<AdminRouteGuardUiState> = _uiState
+
+    fun checkAdminAccess() {
+        if (!_uiState.value.isLoading && _uiState.value.hasChecked) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+
+            val userId = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it?.value },
+                onFailure = { null }
+            )
+
+            if (userId == null) {
+                _uiState.value = AdminRouteGuardUiState(
+                    isLoading = false,
+                    hasChecked = true,
+                    error = LiftrixError.AuthenticationError(
+                        errorMessage = "Authentication required"
+                    )
+                )
+                return@launch
+            }
+
+            checkAdminPermissionsUseCase(userId).fold(
+                onSuccess = { isAdmin ->
+                    _uiState.value = AdminRouteGuardUiState(
+                        isLoading = false,
+                        isAdmin = isAdmin,
+                        hasChecked = true,
+                        error = if (isAdmin) null else LiftrixError.BusinessLogicError(
+                            code = "ADMIN_ACCESS_DENIED",
+                            errorMessage = "Admin permissions are required to access this feature"
+                        )
+                    )
+                },
+                onFailure = { error ->
+                    _uiState.value = AdminRouteGuardUiState(
+                        isLoading = false,
+                        hasChecked = true,
+                        error = error as? LiftrixError ?: LiftrixError.BusinessLogicError(
+                            code = "CHECK_ADMIN_PERMISSIONS_FAILED",
+                            errorMessage = error.message ?: "Failed to check admin permissions"
+                        )
+                    )
+                }
+            )
+        }
+    }
+}
+
+data class AdminRouteGuardUiState(
+    val isLoading: Boolean = true,
+    val isAdmin: Boolean = false,
+    val hasChecked: Boolean = false,
+    val error: LiftrixError? = null
+)

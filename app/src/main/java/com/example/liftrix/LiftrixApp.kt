@@ -16,12 +16,6 @@ import com.example.liftrix.service.CacheWarmingService
 import com.example.liftrix.sync.SyncCoordinator
 import com.example.liftrix.domain.usecase.settings.InitializeUserThemeUseCase
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.Firebase
-import com.google.firebase.appcheck.appCheck
-import com.google.firebase.appcheck.AppCheckProviderFactory
-import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
-// Debug import handled conditionally in code
-import com.google.firebase.initialize
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,9 +24,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -71,7 +63,7 @@ class LiftrixApp : Application() {
         
         @Volatile
         private var INSTANCE: LiftrixApp? = null
-        
+
         fun getInstance(): LiftrixApp {
             return INSTANCE ?: throw IllegalStateException("LiftrixApp instance not available")
         }
@@ -144,76 +136,45 @@ class LiftrixApp : Application() {
      */
     private fun initializeFirebaseAppCheck() {
         try {
-            // Check if Firebase is already initialized to prevent duplicate initialization
-            val existingApp = try {
-                com.google.firebase.FirebaseApp.getInstance()
-            } catch (e: IllegalStateException) {
-                null
-            }
-            
-            if (existingApp != null) {
-                Timber.w("Firebase already initialized, skipping re-initialization")
-                _isAppCheckInitialized.value = true
-                return
-            }
-            
-            // CRITICAL: Initialize Firebase synchronously first
-            Timber.d("Initializing Firebase synchronously...")
-            Firebase.initialize(this@LiftrixApp)
-            Timber.d("Firebase initialized successfully")
-            
-            // Configure App Check with Play Integrity provider for all builds
-            Firebase.appCheck.installAppCheckProviderFactory(
-                PlayIntegrityAppCheckProviderFactory.getInstance()
+            val firebaseApp = AppCheckInitializer.initialize(this@LiftrixApp)
+            Timber.d(
+                "Firebase initialized for App Check. appName=%s, package=%s, projectId=%s",
+                firebaseApp.name,
+                packageName,
+                firebaseApp.options.projectId
             )
-            Timber.d("App Check provider factory installed")
-            
-            // Now launch async task to verify token generation with better retry logic
+
+            _isAppCheckInitialized.value = true
+
+            // Trigger exactly one debug-provider token exchange so Firebase prints the debug secret.
+            // A 403 here is configuration, not a retryable startup failure.
             applicationScope.launch {
-                
-                var retryCount = 0
-                val maxRetries = 3
-                var backoffDelay = 1000L // Start with 1 second
-                
-                while (retryCount < maxRetries && !_isAppCheckInitialized.value) {
-                    try {
-                        Timber.d("Attempting to verify App Check token (attempt ${retryCount + 1}/$maxRetries)")
-                        
-                        // Try to get a token (cached or fresh)
-                        val token = if (retryCount == 0) {
-                            // First attempt: try cached token
-                            Firebase.appCheck.getAppCheckToken(false).await()
-                        } else {
-                            // Subsequent attempts: force refresh
-                            Firebase.appCheck.getAppCheckToken(true).await()
-                        }
-                        
-                        Timber.d("App Check token obtained successfully: ${token.token.take(10)}...")
-                        _isAppCheckInitialized.value = true
-                        Timber.i("Firebase App Check initialized successfully with Play Integrity provider after ${retryCount + 1} attempt(s)")
-                        break
-                        
-                    } catch (e: Exception) {
-                        retryCount++
-                        Timber.w(e, "App Check token verification failed (attempt $retryCount/$maxRetries)")
-                        
-                        if (retryCount < maxRetries) {
-                            Timber.d("Waiting ${backoffDelay}ms before retry...")
-                            delay(backoffDelay)
-                            backoffDelay *= 2 // Exponential backoff
-                        } else {
-                            Timber.e("Failed to verify App Check token after $maxRetries attempts - AI services may be degraded")
-                            // Set to true anyway to allow app to function (token will be retried later)
-                            _isAppCheckInitialized.value = true
-                        }
+                AppCheckInitializer.verifyTokenOnce()
+                    .onSuccess {
+                        Timber.i("Firebase App Check token verified with ${FirebaseAppCheckProviderInstaller.providerName}")
+                    }
+                    .onFailure { error ->
+                        Timber.e(
+                            error,
+                            "Firebase App Check token verification failed with ${FirebaseAppCheckProviderInstaller.providerName}"
+                        )
+                        logAppCheckConfigurationGuidance()
                     }
                 }
-            }
             
         } catch (e: Exception) {
             Timber.e(e, "Critical error during Firebase/App Check initialization")
-            // Still set initialized to true to prevent app from hanging
-            _isAppCheckInitialized.value = true
+        }
+    }
+
+    private fun logAppCheckConfigurationGuidance() {
+        if (BuildConfig.DEBUG) {
+            Timber.e("Debug App Check token is not registered in Firebase Console for this Firebase app/project.")
+            Timber.e("Search Logcat for: Enter this debug secret into the allow list in the Firebase Console")
+            Timber.e("Firebase Console path: App Check > Apps > com.example.liftrix > Manage debug tokens.")
+            Timber.e("Project must be liftrix-390cf and package must be com.example.liftrix.")
+        } else {
+            Timber.e("Release App Check uses Play Integrity. Verify SHA-1/SHA-256 fingerprints and Play Integrity provider setup.")
         }
     }
     

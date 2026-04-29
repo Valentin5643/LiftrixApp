@@ -138,6 +138,11 @@ class UserWorkoutsViewModel @Inject constructor(
                         result.fold(
                             onSuccess = { workouts ->
                                 Timber.d("[WORKOUTS-DEBUG] Successfully loaded ${workouts.size} workouts")
+                                val statusCounts = workouts.groupingBy { it.status }.eachCount()
+                                val completedWithoutEndTime = workouts.count { it.status.name == "COMPLETED" && it.endTime == null }
+                                Timber.tag("WorkoutSyncDebug").d(
+                                    "[DATABASE-DEBUG] operation=USER_WORKOUTS_DISPLAY_INPUT source=Room userId=${userId.value} timestamp=${System.currentTimeMillis()} count=${workouts.size} statusCounts=$statusCounts completedWithoutEndTime=$completedWithoutEndTime"
+                                )
                                 workouts.forEachIndexed { index, workout ->
                                     Timber.d("[WORKOUTS-DEBUG]   [$index] ${workout.name} - ${workout.date} - Status: ${workout.status}")
                                 }
@@ -193,6 +198,9 @@ class UserWorkoutsViewModel @Inject constructor(
                                         )
                                     )
                                 }
+                                Timber.tag("WorkoutSyncDebug").d(
+                                    "[DATABASE-DEBUG] operation=USER_WORKOUTS_TRANSFORM_RESULT source=UiTransform userId=${userId.value} timestamp=${System.currentTimeMillis()} inputCount=${workouts.size} outputCount=${workoutPosts.size} removedByTransform=${workouts.size - workoutPosts.size}"
+                                )
                                 
                                 _uiState.update { 
                                     it.copy(

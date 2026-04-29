@@ -203,6 +203,19 @@ interface AnalyticsTracker {
         hasWorkoutContext: Boolean = false,
         additionalProperties: Map<String, Any> = emptyMap()
     )
+
+    /**
+     * Track structured AI workout generation response events.
+     */
+    fun trackAIWorkoutGenerationResponse(
+        userId: String,
+        tokensUsed: Int,
+        processingTimeMs: Long,
+        modelVersion: String,
+        language: String,
+        stage: String,
+        additionalProperties: Map<String, Any> = emptyMap()
+    )
     
     /**
      * Track AI chat usage patterns

@@ -6,6 +6,7 @@ import com.example.liftrix.domain.model.Reps
 import com.example.liftrix.domain.model.TemplateExercise
 import com.example.liftrix.domain.model.UnifiedWorkoutSession
 import com.example.liftrix.domain.model.Weight
+import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.model.WorkoutTemplateId
 import com.example.liftrix.domain.model.common.LiftrixResult
@@ -410,6 +411,75 @@ class TemplateCommandUseCase @Inject constructor(
             Timber.d("Successfully moved workout to folder '$targetFolderId'")
 
             updatedWorkout
+        }
+    }
+
+    suspend fun updateFromEditedWorkout(workout: Workout): LiftrixResult<Workout> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.BusinessLogicError(
+                    code = "TEMPLATE_UPDATE_FAILED",
+                    errorMessage = throwable.message ?: "Failed to update workout template",
+                    analyticsContext = mapOf(
+                        "templateId" to workout.id.value,
+                        "userId" to workout.userId
+                    )
+                )
+            }
+        ) {
+            val existingTemplate = templateRepository
+                .getTemplateById(WorkoutTemplateId(workout.id.value), workout.userId)
+                .getOrThrow()
+                ?: throw IllegalArgumentException("Template not found: ${workout.id.value}")
+
+            val updatedTemplate = existingTemplate.copy(
+                name = workout.name,
+                description = workout.notes?.takeIf { it.isNotBlank() },
+                exercises = workout.exercises.mapIndexed { index, exercise ->
+                    val previousExercise = existingTemplate.exercises.getOrNull(index)
+                    TemplateExercise(
+                        exerciseId = previousExercise?.exerciseId ?: exercise.id,
+                        name = exercise.libraryExercise.name,
+                        primaryMuscle = exercise.libraryExercise.primaryMuscleGroup,
+                        equipment = exercise.libraryExercise.equipment,
+                        targetSets = exercise.sets.size.takeIf { it > 0 } ?: exercise.targetSets,
+                        targetReps = exercise.sets.firstOrNull()?.reps
+                            ?.takeIf { it.count > 0 }
+                            ?: exercise.targetReps?.takeIf { it > 0 }?.let { Reps(it) }
+                            ?: Reps(1),
+                        targetWeight = exercise.sets.firstOrNull()?.weight ?: exercise.targetWeight,
+                        restTimeSeconds = previousExercise?.restTimeSeconds,
+                        notes = exercise.notes,
+                        orderIndex = index,
+                        isCustomExercise = previousExercise?.isCustomExercise ?: false,
+                        customExerciseId = previousExercise?.customExerciseId,
+                        instanceId = previousExercise?.instanceId ?: exercise.id.value
+                    )
+                },
+                updatedAt = Instant.now()
+            )
+
+            Timber.d(
+                "EDIT-WORKOUT-DEBUG: TemplateCommandUseCase.updateFromEditedWorkout templateId=${workout.id.value} " +
+                    "exerciseCount=${updatedTemplate.exercises.size} targetSets=${updatedTemplate.exercises.map { it.targetSets }}"
+            )
+
+            val savedTemplate = templateRepository.updateTemplate(updatedTemplate).getOrThrow()
+
+            workout.copy(
+                name = savedTemplate.name,
+                notes = savedTemplate.description,
+                exercises = workout.exercises.mapIndexed { index, exercise ->
+                    val savedTemplateExercise = savedTemplate.exercises.getOrNull(index)
+                    exercise.copy(
+                        orderIndex = index,
+                        targetSets = savedTemplateExercise?.targetSets,
+                        targetReps = savedTemplateExercise?.targetReps?.count,
+                        targetWeight = savedTemplateExercise?.targetWeight
+                    )
+                },
+                updatedAt = savedTemplate.updatedAt
+            )
         }
     }
 

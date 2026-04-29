@@ -113,7 +113,7 @@ class TemplateQueryUseCase @Inject constructor(
             val workoutTemplate = workoutTemplateMapper.toDomain(templateEntity)
 
             // Debug: Check template exercises
-            Timber.d("TemplateQueryUseCase: Template has ${workoutTemplate.exercises.size} exercises")
+            Timber.d("EDIT-WORKOUT-DEBUG: TemplateQueryUseCase.getById templateId=$templateId has ${workoutTemplate.exercises.size} exercises")
 
             // Now convert template to workout using proper domain model conversion
             val workout = Workout(
@@ -432,13 +432,24 @@ class TemplateQueryUseCase @Inject constructor(
             // Create default sets based on targetSets or default to 3 sets
             val numberOfSets = templateExercise.targetSets ?: 3
             val defaultSets = (1..numberOfSets).map { setNumber ->
+                val safeReps = templateExercise.targetReps
+                    ?.takeIf { it.count > 0 }
+                    ?: com.example.liftrix.domain.model.Reps(1)
+                val isValid = safeReps.count > 0
+                Timber.d(
+                    "EDIT-WORKOUT-DEBUG: TemplateQueryUseCase.convertTemplateExercisesToExercises " +
+                        "templateId=${workoutId.value} exerciseIndex=$index exerciseName='${templateExercise.name}' " +
+                        "setIndex=${setNumber - 1} reps=${templateExercise.targetReps?.count} time=null distance=null " +
+                        "isValidBeforeNormalization=${templateExercise.targetReps?.count?.let { it > 0 } == true} normalizedReps=${safeReps.count} " +
+                        "willConstructValidSet=$isValid validator=ExerciseSet.hasAtLeastOneMetric"
+                )
                 com.example.liftrix.domain.model.ExerciseSet(
                     id = com.example.liftrix.domain.model.ExerciseSetId(
                         "${workoutId.value}-${index}-set-${setNumber}"
                     ),
                     setNumber = setNumber,
                     // Initialize with target values from template if available
-                    reps = templateExercise.targetReps,
+                    reps = safeReps,
                     weight = templateExercise.targetWeight,
                     time = null, // Template doesn't have target time
                     distance = null, // Template doesn't have target distance

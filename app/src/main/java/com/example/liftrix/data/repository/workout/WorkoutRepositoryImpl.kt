@@ -103,6 +103,12 @@ class WorkoutRepositoryImpl @Inject constructor(
         get() = WorkManagerProvider.getInstance(context)
 
     override suspend fun createWorkout(workout: Workout): LiftrixResult<Workout> {
+        Timber.d("[WORKOUT-DEBUG] createWorkout requested id=${workout.id.value} userId=${workout.userId} name='${workout.name}' status=${workout.status} exercises=${workout.exercises.size}")
+        val operationTimestamp = System.currentTimeMillis()
+        val beforeCount = runCatching { workoutDao.getWorkoutCountForUser(workout.userId) }.getOrDefault(-1)
+        Timber.tag("WorkoutSyncDebug").d(
+            "[DATABASE-DEBUG] operation=REPOSITORY_CREATE_REQUEST source=Room userId=${workout.userId} workoutId=${workout.id.value} timestamp=$operationTimestamp beforeCount=$beforeCount status=${workout.status} exerciseCount=${workout.exercises.size}"
+        )
         // Validate user ID
         if (workout.userId.isBlank()) {
             return LiftrixResult.failure(
@@ -173,6 +179,11 @@ class WorkoutRepositoryImpl @Inject constructor(
             } catch (e: Exception) {
                 throw e
             }
+            Timber.d("[WORKOUT-DEBUG] createWorkout storage write result=$insertResult id=${entity.id} userId=${entity.userId} isDirty=${entity.isDirty} isSynced=${entity.isSynced}")
+            val afterCount = workoutDao.getWorkoutCountForUser(workout.userId)
+            Timber.tag("WorkoutSyncDebug").d(
+                "[DATABASE-DEBUG] operation=REPOSITORY_CREATE_WRITTEN source=Room userId=${workout.userId} workoutId=${workout.id.value} timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount afterCount=$afterCount result=$insertResult isDirty=true isSynced=false"
+            )
             
             if (insertResult > 0) {
                 // Create ExerciseEntity and ExerciseSetEntity records for analytics queries
@@ -215,6 +226,9 @@ class WorkoutRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getWorkoutById(id: WorkoutId, userId: String): LiftrixResult<Workout?> {
+        Timber.tag("WorkoutSyncDebug").d(
+            "[DATABASE-DEBUG] operation=REPOSITORY_READ_BY_ID_REQUEST source=Room userId=$userId workoutId=${id.value} timestamp=${System.currentTimeMillis()}"
+        )
         Timber.d("🔥 EDIT-WORKOUT-DEBUG: WorkoutRepository.getWorkoutById starting - workoutId: ${id.value}, userId: $userId")
         
         // Validate user ID
@@ -247,11 +261,17 @@ class WorkoutRepositoryImpl @Inject constructor(
             val entity = workoutDao.getWorkoutByIdForUser(id.value, userId)
             
             if (entity != null) {
+                Timber.tag("WorkoutSyncDebug").d(
+                    "[DATABASE-DEBUG] operation=REPOSITORY_READ_BY_ID_RESULT source=Room userId=$userId workoutId=${id.value} timestamp=${System.currentTimeMillis()} found=true status=${entity.status} isDirty=${entity.isDirty} isSynced=${entity.isSynced} lastModified=${entity.lastModified} endTimePresent=${entity.endTime != null}"
+                )
                 Timber.d("🔥 EDIT-WORKOUT-DEBUG: Entity found - id: ${entity.id}, name: ${entity.name}, userId: ${entity.userId}, status: ${entity.status}")
                 val domainWorkout = workoutMapper.toDomain(entity)
                 Timber.d("🔥 EDIT-WORKOUT-DEBUG: Mapped to domain - id: ${domainWorkout.id.value}, name: ${domainWorkout.name}, userId: ${domainWorkout.userId}")
                 domainWorkout
             } else {
+                Timber.tag("WorkoutSyncDebug").w(
+                    "[DATABASE-DEBUG] operation=REPOSITORY_READ_BY_ID_RESULT source=Room userId=$userId workoutId=${id.value} timestamp=${System.currentTimeMillis()} found=false"
+                )
                 Timber.w("🔥 EDIT-WORKOUT-DEBUG: Entity not found in database - workoutId: ${id.value}, userId: $userId")
                 null
             }
@@ -262,6 +282,12 @@ class WorkoutRepositoryImpl @Inject constructor(
         return workoutDao.getAllWorkoutsForUser(userId)
             .map { entities ->
                 try {
+                    val statusCounts = entities.groupingBy { it.status }.eachCount()
+                    val completedWithoutEndTime = entities.count { it.status.name == "COMPLETED" && it.endTime == null }
+                    Timber.tag("WorkoutSyncDebug").d(
+                        "[DATABASE-DEBUG] operation=REPOSITORY_READ_ALL_EMIT source=Room userId=$userId timestamp=${System.currentTimeMillis()} count=${entities.size} statusCounts=$statusCounts completedWithoutEndTime=$completedWithoutEndTime dirtyCount=${entities.count { it.isDirty }} unsyncedCount=${entities.count { !it.isSynced }}"
+                    )
+                    Timber.d("[WORKOUT-DEBUG] getWorkoutsByUser storage read entities=${entities.size} userId=$userId")
                     val workouts = entities.map { workoutMapper.toDomain(it) }
                     LiftrixResult.success(workouts)
                 } catch (throwable: Throwable) {
@@ -331,6 +357,12 @@ class WorkoutRepositoryImpl @Inject constructor(
     }
 
     override suspend fun updateWorkout(workout: Workout): LiftrixResult<Workout> {
+        Timber.d("[WORKOUT-DEBUG] updateWorkout requested id=${workout.id.value} userId=${workout.userId} name='${workout.name}' status=${workout.status} exercises=${workout.exercises.size}")
+        val operationTimestamp = System.currentTimeMillis()
+        val beforeCount = runCatching { workoutDao.getWorkoutCountForUser(workout.userId) }.getOrDefault(-1)
+        Timber.tag("WorkoutSyncDebug").d(
+            "[DATABASE-DEBUG] operation=REPOSITORY_UPDATE_REQUEST source=Room userId=${workout.userId} workoutId=${workout.id.value} timestamp=$operationTimestamp beforeCount=$beforeCount status=${workout.status} endTimePresent=${workout.endTime != null} exerciseCount=${workout.exercises.size}"
+        )
         // 🔥 SETS-DEBUG: Enhanced debug logging for workout update
         if (BuildConfig.DEBUG) {
             Timber.d("[SETS-DEBUG-UPDATE] Updating workout '${workout.name}' with ${workout.exercises.size} exercises")
@@ -376,6 +408,11 @@ class WorkoutRepositoryImpl @Inject constructor(
             // 🔥 DEBUG: Log after database update
             Timber.d("[WORKOUT-DB-UPDATE] ✅ Database update completed at ${System.currentTimeMillis()}, result: $insertedId")
             
+            Timber.d("[WORKOUT-DEBUG] updateWorkout storage write result=$insertedId id=${entity.id} userId=${entity.userId} isDirty=${entity.isDirty} isSynced=${entity.isSynced}")
+            val afterCount = workoutDao.getWorkoutCountForUser(workout.userId)
+            Timber.tag("WorkoutSyncDebug").d(
+                "[DATABASE-DEBUG] operation=REPOSITORY_UPDATE_WRITTEN source=Room userId=${workout.userId} workoutId=${workout.id.value} timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount afterCount=$afterCount result=$insertedId isDirty=true isSynced=false"
+            )
             if (insertedId > 0) {
                 Timber.i("🔥 UPDATE-WORKOUT-DEBUG: Successfully updated workout - ID: ${workout.id.value}, Insert result: $insertedId")
                 
@@ -427,6 +464,11 @@ class WorkoutRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteWorkout(workoutId: WorkoutId, userId: String): LiftrixResult<Unit> {
+        Timber.w("[WORKOUT-DEBUG] deleteWorkout requested id=${workoutId.value} userId=$userId")
+        val beforeCount = runCatching { workoutDao.getWorkoutCountForUser(userId) }.getOrDefault(-1)
+        Timber.tag("WorkoutSyncDebug").w(
+            "[DATABASE-DEBUG] operation=REPOSITORY_DELETE_REQUEST source=Room userId=$userId workoutId=${workoutId.value} timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount"
+        )
         return liftrixCatching(
             errorMapper = { throwable ->
                 LiftrixError.DatabaseError(
@@ -441,6 +483,11 @@ class WorkoutRepositoryImpl @Inject constructor(
             }
         ) {
             val deletedRows = workoutDao.deleteWorkoutByIdForUser(workoutId.value, userId)
+            Timber.w("[WORKOUT-DEBUG] deleteWorkout storage delete rows=$deletedRows id=${workoutId.value} userId=$userId")
+            val afterCount = workoutDao.getWorkoutCountForUser(userId)
+            Timber.tag("WorkoutSyncDebug").w(
+                "[DATABASE-DEBUG] operation=REPOSITORY_DELETE_WRITTEN source=Room userId=$userId workoutId=${workoutId.value} timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount afterCount=$afterCount deletedRows=$deletedRows"
+            )
             
             if (deletedRows == 0) {
                 throw RuntimeException("No workout found to delete with ID: ${workoutId.value} for user: $userId")
@@ -570,6 +617,11 @@ class WorkoutRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteAllWorkouts(userId: String): LiftrixResult<Unit> {
+        Timber.w("[WORKOUT-DEBUG] deleteAllWorkouts requested userId=$userId")
+        val beforeCount = runCatching { workoutDao.getWorkoutCountForUser(userId) }.getOrDefault(-1)
+        Timber.tag("WorkoutSyncDebug").w(
+            "[DATABASE-DEBUG] operation=REPOSITORY_DELETE_ALL_REQUEST source=Room userId=$userId timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount"
+        )
         return liftrixCatching(
             errorMapper = { throwable ->
                 LiftrixError.DatabaseError(
@@ -581,6 +633,11 @@ class WorkoutRepositoryImpl @Inject constructor(
             }
         ) {
             val deletedRows = workoutDao.deleteAllWorkoutsForUser(userId)
+            Timber.w("[WORKOUT-DEBUG] deleteAllWorkouts storage delete rows=$deletedRows userId=$userId")
+            val afterCount = workoutDao.getWorkoutCountForUser(userId)
+            Timber.tag("WorkoutSyncDebug").w(
+                "[DATABASE-DEBUG] operation=REPOSITORY_DELETE_ALL_WRITTEN source=Room userId=$userId timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount afterCount=$afterCount deletedRows=$deletedRows"
+            )
             Timber.i("Deleted $deletedRows workouts for user: $userId")
         }
     }
@@ -864,6 +921,9 @@ class WorkoutRepositoryImpl @Inject constructor(
                     emit(emptyList())
                 }
                 .first() // Get current value from Flow
+            Timber.tag("WorkoutSyncDebug").d(
+                "[DATABASE-DEBUG] operation=FEED_WORKOUTS_QUERY_RESULT source=Room userId=$userId timestamp=${System.currentTimeMillis()} inputLimit=$limit outputCount=${workoutEntities.size} statusCounts=${workoutEntities.groupingBy { it.status }.eachCount()} completedWithoutEndTime=${workoutEntities.count { it.status.name == "COMPLETED" && it.endTime == null }}"
+            )
             
             
             // Map entities to FeedWorkout domain models
@@ -881,6 +941,9 @@ class WorkoutRepositoryImpl @Inject constructor(
         return workoutDao.getRecentCompletedWorkouts(userId, limit)
             .map { entities ->
                 try {
+                    Timber.tag("WorkoutSyncDebug").d(
+                        "[DATABASE-DEBUG] operation=FEED_WORKOUTS_REACTIVE_RESULT source=Room userId=$userId timestamp=${System.currentTimeMillis()} inputLimit=$limit outputCount=${entities.size} statusCounts=${entities.groupingBy { it.status }.eachCount()} completedWithoutEndTime=${entities.count { it.status.name == "COMPLETED" && it.endTime == null }}"
+                    )
                     
                     // Map entities to FeedWorkout domain models
                     val feedWorkouts = entities.map { entity ->

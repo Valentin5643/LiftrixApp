@@ -213,8 +213,14 @@ class RealtimeSyncService @Inject constructor(
                     ?: (remoteData["version"] as? Number)?.toLong()
                     ?: 0L
                 val userId = remoteData["userId"] as? String ?: currentUserId ?: return
+                val beforeCount = workoutDao.getWorkoutCountForUser(userId)
+                val remoteStatusValue = remoteData["status"]
+                val remoteEndTimePresent = remoteData["endTime"] != null
 
                 Timber.d("RealtimeSyncService: Processing update for workout $workoutId (version: $syncVersion, lastModified: $lastModified)")
+                Timber.tag("WorkoutSyncDebug").d(
+                    "[DATABASE-DEBUG] operation=REALTIME_FIREBASE_LOADED source=Firebase userId=$userId workoutId=$workoutId timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount remoteStatus=$remoteStatusValue remoteLastModified=$lastModified remoteEndTimePresent=$remoteEndTimePresent"
+                )
 
                 // Parse Firestore data to WorkoutEntity
                 val workoutEntity = WorkoutEntity(
@@ -240,6 +246,9 @@ class RealtimeSyncService @Inject constructor(
 
                 // IDEMPOTENT: Only applies if remote is newer (timestamp check in DAO)
                 workoutDao.upsertFromRemote(workoutEntity)
+                Timber.tag("WorkoutSyncDebug").d(
+                    "[DATABASE-DEBUG] operation=REALTIME_FIREBASE_APPLIED source=Firebase userId=$userId workoutId=$workoutId timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount afterCount=${workoutDao.getWorkoutCountForUser(userId)} parsedStatus=${workoutEntity.status} parsedEndTimePresent=${workoutEntity.endTime != null} parsedLastModified=${workoutEntity.lastModified}"
+                )
                 // NO SYNC TRIGGER - already from Firestore
 
                 Timber.d("✅ IDEMPOTENT: Updated workout from real-time listener: $workoutId (Room-first)")

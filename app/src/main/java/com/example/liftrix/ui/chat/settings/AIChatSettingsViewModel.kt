@@ -3,6 +3,7 @@ package com.example.liftrix.ui.chat.settings
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.chat.ChatPreferences
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.usecase.admin.CheckAdminPermissionsUseCase
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.chat.ChatOperationsUseCase
 import com.example.liftrix.domain.usecase.chat.ExportFormat
@@ -24,12 +25,14 @@ class AIChatSettingsViewModel @Inject constructor(
     private val updateChatPreferencesUseCase: UpdateChatPreferencesUseCase,
     private val chatOperationsUseCase: ChatOperationsUseCase,
     private val chatRepository: ChatRepository,
-    private val authQueryUseCase: AuthQueryUseCase
+    private val authQueryUseCase: AuthQueryUseCase,
+    private val checkAdminPermissionsUseCase: CheckAdminPermissionsUseCase
 ) : ModernBaseViewModel<AIChatSettingsUiState>(
     initialState = AIChatSettingsUiState()
 ) {
     
     private var currentUserId: String? = null
+    private var isAdminAuthorized = false
     
     init {
         loadInitialData()
@@ -42,6 +45,20 @@ class AIChatSettingsViewModel @Inject constructor(
                 onFailure = { null }
             )
             currentUserId?.let { userId ->
+                val isAdmin = checkAdminPermissionsUseCase(userId).fold(
+                    onSuccess = { it },
+                    onFailure = { false }
+                )
+
+                isAdminAuthorized = isAdmin
+                if (!isAdmin) {
+                    _uiState.value = _uiState.value.copy(
+                        preferencesState = UiState.Error(adminAccessDeniedError()),
+                        error = adminAccessDeniedError()
+                    )
+                    return@launch
+                }
+
                 // Load current preferences
                 chatRepository.observePreferences(userId).collect { preferences ->
                     _uiState.value = _uiState.value.copy(
@@ -145,6 +162,11 @@ class AIChatSettingsViewModel @Inject constructor(
     }
     
     private fun updatePreference(update: (ChatPreferences) -> ChatPreferences) {
+        if (!isAdminAuthorized) {
+            _uiState.value = _uiState.value.copy(error = adminAccessDeniedError())
+            return
+        }
+
         val currentPreferences = _uiState.value.preferences ?: return
         val updatedPreferences = update(currentPreferences.copy(updatedAt = System.currentTimeMillis()))
         
@@ -172,6 +194,11 @@ class AIChatSettingsViewModel @Inject constructor(
     }
     
     private fun clearAllHistory(confirmationText: String) {
+        if (!isAdminAuthorized) {
+            _uiState.value = _uiState.value.copy(error = adminAccessDeniedError())
+            return
+        }
+
         val currentState = _uiState.value
         
         viewModelScope.launch {
@@ -205,6 +232,11 @@ class AIChatSettingsViewModel @Inject constructor(
     }
     
     private fun exportHistory(format: ExportFormat) {
+        if (!isAdminAuthorized) {
+            _uiState.value = _uiState.value.copy(error = adminAccessDeniedError())
+            return
+        }
+
         val currentState = _uiState.value
         
         viewModelScope.launch {
@@ -264,6 +296,12 @@ class AIChatSettingsViewModel @Inject constructor(
         val language = _uiState.value.preferences?.preferredLanguage ?: "en"
         return chatOperationsUseCase.getRequiredConfirmationText(language)
     }
+
+    private fun adminAccessDeniedError(): LiftrixError.BusinessLogicError =
+        LiftrixError.BusinessLogicError(
+            code = "ADMIN_ACCESS_DENIED",
+            errorMessage = "Admin permissions are required to manage AI chat settings"
+        )
 }
 
 /**

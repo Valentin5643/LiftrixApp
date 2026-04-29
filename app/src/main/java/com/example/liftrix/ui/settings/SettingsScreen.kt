@@ -527,15 +527,17 @@ private fun GeneralSettings(
             }
         )
         
-        SettingsNavigationItem(
-            title = "AI Chat Settings",
-            subtitle = "Configure AI assistant language, behavior, and data management",
-            icon = LiftrixIcons.Workflow.Settings,
-            onClick = { 
-                stableOnEvent(SettingsEvent.NavigateToAIChatSettings)
-                stableOnNavigateToAIChatSettings?.invoke()
-            }
-        )
+        if (uiState.isAdmin && onNavigateToAIChatSettings != null) {
+            SettingsNavigationItem(
+                title = "AI Chat Settings",
+                subtitle = "Configure AI assistant language, behavior, and data management",
+                icon = LiftrixIcons.Workflow.Settings,
+                onClick = {
+                    stableOnEvent(SettingsEvent.NavigateToAIChatSettings)
+                    stableOnNavigateToAIChatSettings?.invoke()
+                }
+            )
+        }
         
         SettingsToggleItem(
             title = "Metric System (kg)",

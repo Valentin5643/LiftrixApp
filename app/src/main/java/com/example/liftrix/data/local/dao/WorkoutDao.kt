@@ -9,6 +9,7 @@ import androidx.room.Update
 import com.example.liftrix.data.local.entity.WorkoutEntity
 import com.example.liftrix.annotations.UserScoped
 import kotlinx.coroutines.flow.Flow
+import timber.log.Timber
 import java.time.Instant
 
 @Dao
@@ -162,11 +163,18 @@ interface WorkoutDao {
      * Sets isDirty=true and lastModified, triggering sync queue.
      */
     suspend fun upsertLocal(workout: WorkoutEntity): Long {
+        val beforeCount = getWorkoutCountForUser(workout.userId)
+        val timestamp = System.currentTimeMillis()
         val entity = workout.copy(
             isDirty = true,
             lastModified = System.currentTimeMillis()
         )
-        return _insert(entity)
+        val result = _insert(entity)
+        val afterCount = getWorkoutCountForUser(workout.userId)
+        Timber.tag("WorkoutSyncDebug").d(
+            "[DATABASE-DEBUG] operation=ROOM_UPSERT_LOCAL source=Room userId=${workout.userId} workoutId=${workout.id} timestamp=$timestamp beforeCount=$beforeCount afterCount=$afterCount result=$result isDirty=${entity.isDirty} isSynced=${entity.isSynced} lastModified=${entity.lastModified}"
+        )
+        return result
     }
 
     /**
@@ -175,6 +183,8 @@ interface WorkoutDao {
      * Does NOT trigger sync queue.
      */
     suspend fun upsertFromRemote(workout: WorkoutEntity) {
+        val beforeCount = getWorkoutCountForUser(workout.userId)
+        val timestamp = System.currentTimeMillis()
         val local = getWorkoutByIdForUser(workout.id, workout.userId)
         if (local == null || workout.lastModified > local.lastModified) {
             val entity = workout.copy(
@@ -183,6 +193,15 @@ interface WorkoutDao {
                 syncVersion = System.currentTimeMillis()
             )
             _insert(entity)
+            val afterCount = getWorkoutCountForUser(workout.userId)
+            Timber.tag("WorkoutSyncDebug").w(
+                "[DATABASE-DEBUG] operation=REMOTE_OVERWRITE_ROOM source=Firebase userId=${workout.userId} workoutId=${workout.id} timestamp=$timestamp beforeCount=$beforeCount afterCount=$afterCount localExists=${local != null} localLastModified=${local?.lastModified ?: 0L} remoteLastModified=${workout.lastModified} localStatus=${local?.status} remoteStatus=${workout.status} localEndTimePresent=${local?.endTime != null} remoteEndTimePresent=${workout.endTime != null}"
+            )
+        } else {
+            val afterCount = getWorkoutCountForUser(workout.userId)
+            Timber.tag("WorkoutSyncDebug").d(
+                "[DATABASE-DEBUG] operation=REMOTE_UPSERT_SKIPPED source=Firebase userId=${workout.userId} workoutId=${workout.id} timestamp=$timestamp beforeCount=$beforeCount afterCount=$afterCount localLastModified=${local.lastModified} remoteLastModified=${workout.lastModified} localStatus=${local.status} remoteStatus=${workout.status}"
+            )
         }
     }
 

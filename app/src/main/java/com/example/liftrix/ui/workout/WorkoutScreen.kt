@@ -112,6 +112,11 @@ fun WorkoutScreen(
             WorkoutLoadingScreen()
         }
         is WorkoutUiState.Success -> {
+            if (currentState.data.workouts.isEmpty() && currentState.data.templates.isEmpty() && currentState.data.folders.isEmpty()) {
+                Timber.w("[WORKOUT-DEBUG] WorkoutScreen rendering Success with empty data; No Workouts card may be shown")
+            } else {
+                Timber.d("[WORKOUT-DEBUG] WorkoutScreen rendering Success workouts=${currentState.data.workouts.size} templates=${currentState.data.templates.size} folders=${currentState.data.folders.size}")
+            }
             WorkoutContent(
                 screenData = currentState.data,
                 onNavigateToActiveWorkout = { templateId ->
@@ -150,6 +155,7 @@ fun WorkoutScreen(
             )
         }
         is WorkoutUiState.Empty -> {
+            Timber.w("[WORKOUT-DEBUG] WorkoutScreen rendering explicit Empty state")
             WorkoutEmptyScreen(
                 onCreateWorkout = { folderId ->
                     // Check for active workout before navigating
@@ -177,6 +183,7 @@ fun WorkoutScreen(
                     onNavigateToActiveWorkout(session.templateId)
                 },
                 onDiscardAndStartNew = {
+                    Timber.d("[WORKOUT-DEBUG] ActiveWorkoutDialog discard/start-new selected")
                     // Discard current workout and proceed with pending navigation
                     sessionManager.discardSession()
                     showActiveWorkoutDialog = false
@@ -184,6 +191,7 @@ fun WorkoutScreen(
                     pendingNavigation = null
                 },
                 onDismiss = {
+                    Timber.d("[WORKOUT-DEBUG] ActiveWorkoutDialog dismissed without clearing session")
                     // Cancel the navigation
                     showActiveWorkoutDialog = false
                     pendingNavigation = null
@@ -227,7 +235,10 @@ private fun WorkoutContent(
         // Quick Actions Section
         item {
             QuickActionsCard(
-                onStartQuickWorkout = { onNavigateToActiveWorkout(null) },
+                onStartQuickWorkout = {
+                    Timber.d("[WORKOUT-DEBUG] Quick workout start clicked templates=${screenData.templates.size} folders=${screenData.folders.size}")
+                    onNavigateToActiveWorkout(null)
+                },
                 onCreateWorkout = { onNavigateToWorkoutCreation(null) }
             )
         }
@@ -249,9 +260,13 @@ private fun WorkoutContent(
             }
             folder.updateTemplateCount(workoutsInFolder.size) to workoutsInFolder
         }
+        Timber.tag("WorkoutSyncDebug").d(
+            "[DATABASE-DEBUG] operation=WORKOUT_SCREEN_FILTER_RESULT source=UiFilter timestamp=${System.currentTimeMillis()} workoutCount=${screenData.workouts.size} templateCount=${screenData.templates.size} folderCount=${screenData.folders.size} foldersWithTemplateBuckets=${foldersWithWorkouts.size} unbucketedTemplateCount=${screenData.templates.count { template -> screenData.folders.none { folder -> template.folderId == folder.id.value } }}"
+        )
         
-        if (foldersWithWorkouts.isEmpty() && screenData.templates.isEmpty()) {
-            // Only show empty state if there are truly no folders AND no templates
+        if (foldersWithWorkouts.isEmpty() && screenData.templates.isEmpty() && screenData.workouts.isEmpty()) {
+            Timber.w("[WORKOUT-DEBUG] EmptyWorkoutsCard condition met foldersWithWorkouts=0 templates=0 workouts=${screenData.workouts.size}")
+            // Only show empty state if there is no workout content at all.
             item {
                 EmptyWorkoutsCard(
                     onCreateWorkout = { onNavigateToWorkoutCreation(null) }
