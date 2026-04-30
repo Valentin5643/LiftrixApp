@@ -45,7 +45,8 @@ class WorkoutSyncWorker @AssistedInject constructor(
     private val auth: FirebaseAuth,
     private val conflictResolver: ConflictResolver,
     private val analyticsService: AnalyticsService,
-    private val notificationHandler: NotificationHandler
+    private val notificationHandler: NotificationHandler,
+    private val startupRestoreGate: StartupRestoreGate
 ) : BaseSyncWorker(context, params) {
 
     init {
@@ -110,6 +111,9 @@ class WorkoutSyncWorker @AssistedInject constructor(
             val isStartupSync = inputData.getBoolean("startupSync", false)
             Timber.d("[SYNC-BIDIRECTIONAL] WorkoutSync started for user $userId at $syncStartTime (startup: $isStartupSync)")
             val preSyncCount = workoutDao.getWorkoutCountForUser(userId)
+            Timber.tag("FreshLoginRestoreDebug").i(
+                "operation=WORKOUT_SYNC_WORKER_START userId=$userId startupSync=$isStartupSync direction=Firebase->Room_then_Room->Firebase roomBeforeCount=$preSyncCount attempt=$runAttemptCount timestamp=$syncStartTime"
+            )
             Timber.tag("WorkoutSyncDebug").d(
                 "[DATABASE-DEBUG] operation=SYNC_START source=Worker userId=$userId timestamp=$syncStartTime beforeCount=$preSyncCount startupSync=$isStartupSync attempt=$runAttemptCount"
             )
@@ -117,6 +121,12 @@ class WorkoutSyncWorker @AssistedInject constructor(
             // Validate authentication before sync operations
             val currentUser = auth.currentUser
             if (currentUser == null || currentUser.uid != userId) {
+                if (isStartupSync) {
+                    startupRestoreGate.transition(userId, StartupRestoreState.RESTORE_FAILED, "workout_auth_failed")
+                }
+                Timber.tag("FreshLoginRestoreDebug").e(
+                    "operation=WORKOUT_SYNC_AUTH_MISMATCH userId=$userId firebaseCurrentUserId=${currentUser?.uid ?: "null"} startupSync=$isStartupSync timestamp=${System.currentTimeMillis()}"
+                )
                 Timber.e("WorkoutSyncWorker: User not authenticated or user ID mismatch. Current: ${currentUser?.uid}, Expected: $userId")
                 return Result.failure(
                     Data.Builder()
@@ -126,6 +136,9 @@ class WorkoutSyncWorker @AssistedInject constructor(
             }
             
             val authDisplayName = currentUser.displayName
+            Timber.tag("FreshLoginRestoreDebug").d(
+                "operation=WORKOUT_SYNC_AUTH_VALIDATED userId=$userId firebaseCurrentUserId=${currentUser.uid} startupSync=$isStartupSync timestamp=${System.currentTimeMillis()}"
+            )
             Timber.d("WorkoutSyncWorker: Authentication validated for user $userId")
             val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
                 OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
@@ -135,8 +148,9 @@ class WorkoutSyncWorker @AssistedInject constructor(
                 // STARTUP SYNC: Use conservative merge strategy to prevent data loss
                 val fetchResult = fetchAndMergeRemoteWorkoutsStartup(userId, useDirtyFlagGating)
                 if (!fetchResult) {
+                    startupRestoreGate.transition(userId, StartupRestoreState.RESTORE_FAILED, "workout_restore_failed")
                     Timber.w("[SYNC-STARTUP] Remote workout fetch failed during startup sync")
-                    // Continue with local sync to preserve existing data
+                    return Result.retry()
                 }
             } else {
                 // REGULAR SYNC: Use normal bidirectional sync
@@ -181,6 +195,9 @@ class WorkoutSyncWorker @AssistedInject constructor(
             
             if (unsyncedWorkouts.isEmpty()) {
                 val syncEndTime = System.currentTimeMillis()
+                Timber.tag("FreshLoginRestoreDebug").i(
+                    "operation=WORKOUT_SYNC_NO_LOCAL_UPLOAD userId=$userId startupSync=$isStartupSync direction=none roomBeforeCount=$preSyncCount roomAfterFetchCount=${workoutDao.getWorkoutCountForUser(userId)} dirtyOrUnsyncedCount=0 firebaseOverwriteByEmptyRoom=false durationMs=${syncEndTime - syncStartTime}"
+                )
                 Timber.d("[SYNC-BIDIRECTIONAL] WorkoutSync completed (no workouts) for user $userId in ${syncEndTime - syncStartTime}ms")
                 Timber.tag("WorkoutSyncDebug").d(
                     "[DATABASE-DEBUG] operation=SYNC_SUCCESS_NO_LOCAL_UPLOAD source=Worker userId=$userId timestamp=$syncEndTime beforeCount=$preSyncCount afterCount=${workoutDao.getWorkoutCountForUser(userId)} dirtyOrUnsyncedCount=0 durationMs=${syncEndTime - syncStartTime}"
@@ -201,6 +218,9 @@ class WorkoutSyncWorker @AssistedInject constructor(
             }
 
             Timber.d("Found ${unsyncedWorkouts.size} workouts to sync for user $userId (dirty gating: $useDirtyFlagGating)")
+            Timber.tag("FreshLoginRestoreDebug").w(
+                "operation=WORKOUT_SYNC_LOCAL_UPLOAD_CANDIDATES userId=$userId startupSync=$isStartupSync direction=Room->Firebase candidateCount=${unsyncedWorkouts.size} roomCount=${workoutDao.getWorkoutCountForUser(userId)} firebaseOverwriteByEmptyRoom=${workoutDao.getWorkoutCountForUser(userId) == 0 && unsyncedWorkouts.isNotEmpty()} timestamp=${System.currentTimeMillis()}"
+            )
             
             var successCount = 0
             var failureCount = 0
@@ -450,6 +470,9 @@ class WorkoutSyncWorker @AssistedInject constructor(
         return try {
             Timber.d("[SYNC-FETCH] Fetching remote workouts for user $userId")
             val localBeforeCount = workoutDao.getWorkoutCountForUser(userId)
+            Timber.tag("FreshLoginRestoreDebug").d(
+                "operation=WORKOUT_FIREBASE_FETCH_START userId=$userId path=users/$userId/workouts syncType=regular direction=Firebase->Room roomBeforeCount=$localBeforeCount dirtyFlagGating=$useDirtyFlagGating timestamp=${System.currentTimeMillis()}"
+            )
             Timber.tag("WorkoutSyncDebug").d(
                 "[DATABASE-DEBUG] operation=FIREBASE_FETCH_START source=Firebase userId=$userId timestamp=${System.currentTimeMillis()} beforeCount=$localBeforeCount dirtyFlagGating=$useDirtyFlagGating"
             )
@@ -460,6 +483,9 @@ class WorkoutSyncWorker @AssistedInject constructor(
                 .collection("workouts")
                 .get()
                 .await()
+            Timber.tag("FreshLoginRestoreDebug").i(
+                "operation=WORKOUT_FIREBASE_FETCH_RESULT userId=$userId path=users/$userId/workouts syncType=regular remoteCount=${remoteWorkouts.size()} roomBeforeCount=$localBeforeCount isEmpty=${remoteWorkouts.size() == 0} timestamp=${System.currentTimeMillis()}"
+            )
             Timber.tag("WorkoutSyncDebug").d(
                 "[DATABASE-DEBUG] operation=FIREBASE_FETCH_LOADED source=Firebase userId=$userId timestamp=${System.currentTimeMillis()} beforeCount=$localBeforeCount remoteCount=${remoteWorkouts.size()}"
             )
@@ -485,12 +511,19 @@ class WorkoutSyncWorker @AssistedInject constructor(
             }
             
             Timber.d("[SYNC-FETCH] Remote fetch complete - Merged: $mergedCount, Conflicts: $conflictCount")
+            Timber.tag("FreshLoginRestoreDebug").i(
+                "operation=WORKOUT_FIREBASE_FETCH_FINISH userId=$userId syncType=regular remoteCount=${remoteWorkouts.size()} roomBeforeCount=$localBeforeCount roomAfterCount=${workoutDao.getWorkoutCountForUser(userId)} insertedOrMergedCount=$mergedCount conflictCount=$conflictCount timestamp=${System.currentTimeMillis()}"
+            )
             Timber.tag("WorkoutSyncDebug").d(
                 "[DATABASE-DEBUG] operation=FIREBASE_FETCH_FINISH source=Firebase userId=$userId timestamp=${System.currentTimeMillis()} beforeCount=$localBeforeCount afterCount=${workoutDao.getWorkoutCountForUser(userId)} remoteCount=${remoteWorkouts.size()} mergedCount=$mergedCount conflictCount=$conflictCount"
             )
             true
             
         } catch (e: Exception) {
+            Timber.tag("FreshLoginRestoreDebug").e(
+                e,
+                "operation=WORKOUT_FIREBASE_FETCH_ERROR userId=$userId syncType=regular path=users/$userId/workouts timestamp=${System.currentTimeMillis()}"
+            )
             Timber.e(e, "[SYNC-FETCH] Failed to fetch remote workouts for user $userId")
             false
         }
@@ -506,6 +539,9 @@ class WorkoutSyncWorker @AssistedInject constructor(
         useDirtyFlagGating: Boolean
     ): String {
         val remoteId = remoteWorkout.id ?: run {
+            Timber.tag("FreshLoginRestoreDebug").w(
+                "operation=WORKOUT_REMOTE_ITEM_SKIPPED userId=$userId reason=missing_remote_id syncType=regular timestamp=${System.currentTimeMillis()}"
+            )
             Timber.w("[SYNC-MERGE] Remote workout has no ID, skipping merge")
             return "SKIPPED"
         }
@@ -541,6 +577,9 @@ class WorkoutSyncWorker @AssistedInject constructor(
                     syncVersion = System.currentTimeMillis()
                 )
                 workoutDao.upsertFromRemote(localEntity)
+                Timber.tag("FreshLoginRestoreDebug").i(
+                    "operation=WORKOUT_ROOM_INSERT_FROM_FIREBASE userId=$userId workoutId=$remoteId syncType=regular roomBeforeCount=$beforeCount roomAfterCount=${workoutDao.getWorkoutCountForUser(userId)} remoteLastModified=$effectiveRemoteLastModified timestamp=${System.currentTimeMillis()}"
+                )
                 Timber.tag("WorkoutSyncDebug").w(
                     "[DATABASE-DEBUG] operation=FIREBASE_INSERTS_ROOM source=Firebase userId=$userId workoutId=$remoteId timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount afterCount=${workoutDao.getWorkoutCountForUser(userId)} remoteStatus=${remoteWorkout.status} remoteEndTimePresent=${remoteWorkout.endTime != null} remoteLastModified=$effectiveRemoteLastModified"
                 )
@@ -549,7 +588,6 @@ class WorkoutSyncWorker @AssistedInject constructor(
                 Timber.d("[SYNC-MERGE]   - Remote created: ${formatTimestamp(remoteWorkout.createdAt)}")
                 Timber.d("[SYNC-MERGE]   - Remote updated: ${formatTimestamp(remoteWorkout.updatedAt)}")
                 Timber.d("[SYNC-MERGE]   - Exercise count: ${remoteWorkout.exercises?.size ?: 0}")
-                
                 "MERGED"
             } catch (e: Exception) {
                 Timber.e(e, "[SYNC-MERGE] ❌ Failed to insert remote workout: $remoteId")
@@ -688,6 +726,9 @@ class WorkoutSyncWorker @AssistedInject constructor(
             }
             
             Timber.d("[SYNC-STARTUP] Local state: $localWorkoutCount total, $localUnsyncedCount unsynced")
+            Timber.tag("FreshLoginRestoreDebug").d(
+                "operation=WORKOUT_FIREBASE_FETCH_START userId=$userId path=users/$userId/workouts syncType=startup direction=Firebase->Room roomBeforeCount=$localWorkoutCount dirtyOrUnsyncedBeforeCount=$localUnsyncedCount dirtyFlagGating=$useDirtyFlagGating timestamp=${System.currentTimeMillis()}"
+            )
             
             val remoteWorkouts = firestore
                 .collection("users")
@@ -698,9 +739,15 @@ class WorkoutSyncWorker @AssistedInject constructor(
             
             val remoteWorkoutCount = remoteWorkouts.size()
             Timber.d("[SYNC-STARTUP] Remote state: $remoteWorkoutCount workouts found")
+            Timber.tag("FreshLoginRestoreDebug").i(
+                "operation=WORKOUT_FIREBASE_FETCH_RESULT userId=$userId path=users/$userId/workouts syncType=startup remoteCount=$remoteWorkoutCount roomBeforeCount=$localWorkoutCount isEmpty=${remoteWorkoutCount == 0} timestamp=${System.currentTimeMillis()}"
+            )
             
             // 🛡️ CRITICAL SAFETY CHECK: If remote is empty but local has data, don't replace
             if (remoteWorkoutCount == 0 && localWorkoutCount > 0) {
+                Timber.tag("FreshLoginRestoreDebug").w(
+                    "operation=WORKOUT_RESTORE_EMPTY_REMOTE_WITH_LOCAL_DATA userId=$userId syncType=startup remoteCount=0 roomBeforeCount=$localWorkoutCount action=preserve_room_and_mark_dirty firebaseOverwriteByEmptyRoom=false timestamp=${System.currentTimeMillis()}"
+                )
                 Timber.w("[SYNC-STARTUP] 🛡️ SAFETY TRIGGERED: Remote is empty but local has $localWorkoutCount workouts")
                 Timber.w("[SYNC-STARTUP] 🛡️ Keeping local data to prevent accidental deletion")
                 
@@ -747,6 +794,9 @@ class WorkoutSyncWorker @AssistedInject constructor(
             }
             
             val finalLocalCount = workoutDao.getWorkoutCountForUser(userId)
+            Timber.tag("FreshLoginRestoreDebug").i(
+                "operation=WORKOUT_FIREBASE_FETCH_FINISH userId=$userId syncType=startup remoteCount=$remoteWorkoutCount roomBeforeCount=$localWorkoutCount roomAfterCount=$finalLocalCount insertedOrMergedCount=$mergedCount conflictCount=$conflictCount preservedLocalCount=$preservedLocalCount timestamp=${System.currentTimeMillis()}"
+            )
             
             Timber.i("[SYNC-STARTUP] 🛡️ Safe startup sync complete:")
             Timber.i("[SYNC-STARTUP]   - Local workouts before: $localWorkoutCount")
@@ -760,6 +810,10 @@ class WorkoutSyncWorker @AssistedInject constructor(
             finalLocalCount >= localWorkoutCount
             
         } catch (e: Exception) {
+            Timber.tag("FreshLoginRestoreDebug").e(
+                e,
+                "operation=WORKOUT_FIREBASE_FETCH_ERROR userId=$userId syncType=startup path=users/$userId/workouts timestamp=${System.currentTimeMillis()}"
+            )
             Timber.e(e, "[SYNC-STARTUP] 🛡️ Safe startup sync failed for user $userId")
             false
         }
@@ -774,6 +828,9 @@ class WorkoutSyncWorker @AssistedInject constructor(
         useDirtyFlagGating: Boolean
     ): String {
         val remoteId = remoteWorkout.id ?: run {
+            Timber.tag("FreshLoginRestoreDebug").w(
+                "operation=WORKOUT_REMOTE_ITEM_SKIPPED userId=$userId reason=missing_remote_id syncType=startup timestamp=${System.currentTimeMillis()}"
+            )
             Timber.w("[SYNC-STARTUP] Remote workout has no ID, skipping")
             return "SKIPPED"
         }
@@ -800,6 +857,7 @@ class WorkoutSyncWorker @AssistedInject constructor(
         return if (localWorkout == null) {
             // Remote workout doesn't exist locally - safe to insert
             try {
+                val beforeCount = workoutDao.getWorkoutCountForUser(userId)
                 val domainWorkout = workoutMapper.fromFirestoreDto(remoteWorkout)
                 val localEntity = workoutMapper.toEntity(domainWorkout, isSynced = true).copy(
                     isDirty = false,

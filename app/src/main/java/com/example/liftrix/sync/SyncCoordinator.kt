@@ -25,6 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
@@ -59,7 +60,8 @@ class SyncCoordinator @Inject constructor(
     @ApplicationContext private val context: Context,
     private val realtimeSyncService: RealtimeSyncService,
     private val syncStatusRepository: SyncStatusRepository,
-    private val profileCleanupService: ProfileCleanupService
+    private val profileCleanupService: ProfileCleanupService,
+    private val startupRestoreGate: StartupRestoreGate
 ) {
     // Use standard WorkManager instance (initialized manually in Application.onCreate)
     private val workManager: WorkManager
@@ -70,6 +72,8 @@ class SyncCoordinator @Inject constructor(
         }
     
     private val coordinatorScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val startupSyncGuard = Any()
+    private val startupSyncInFlightUsers = mutableSetOf<String>()
     
     companion object {
         private const val PERIODIC_SYNC_WORK_NAME = "liftrix_periodic_sync"
@@ -209,6 +213,15 @@ class SyncCoordinator @Inject constructor(
      */
     suspend fun triggerImmediateSync(userId: String): LiftrixResult<Unit> {
         return try {
+            if (!startupRestoreGate.isRestoreComplete(userId)) {
+                Timber.tag("StartupRestoreFix").w(
+                    "operation=IMMEDIATE_SYNC_BLOCKED userId=$userId gateState=${startupRestoreGate.currentState(userId)} reason=restore_not_complete timestamp=${System.currentTimeMillis()}"
+                )
+                return liftrixSuccess(Unit)
+            }
+            Timber.tag("FreshLoginRestoreDebug").d(
+                "operation=SYNC_COORDINATOR_IMMEDIATE_START userId=$userId direction=Firebase->Room_then_Room->Firebase unified=$USE_UNIFIED_SYNC timestamp=${System.currentTimeMillis()}"
+            )
             Timber.d("SyncCoordinator: Triggering immediate sync for user $userId (unified: $USE_UNIFIED_SYNC)")
             
             // Update sync status to indicate sync in progress
@@ -248,6 +261,9 @@ class SyncCoordinator @Inject constructor(
             ExistingWorkPolicy.REPLACE,
             immediateSync
         )
+        Timber.tag("FreshLoginRestoreDebug").i(
+            "operation=SYNC_COORDINATOR_IMMEDIATE_ENQUEUED userId=$userId uniqueWork=${UNIFIED_SYNC_WORK_NAME}_immediate_$userId policy=REPLACE mode=unified timestamp=${System.currentTimeMillis()}"
+        )
         
         startWorkMonitoring(operation, "${UNIFIED_SYNC_WORK_NAME}_immediate_$userId", userId)
         
@@ -278,6 +294,9 @@ class SyncCoordinator @Inject constructor(
             .then(followRelationshipSync)
             .then(listOf(workoutSync, templateSync, achievementSync, workoutPostSync))
             .enqueue()
+        Timber.tag("FreshLoginRestoreDebug").i(
+            "operation=SYNC_COORDINATOR_IMMEDIATE_ENQUEUED userId=$userId uniqueWork=${IMMEDIATE_SYNC_WORK_NAME}_$userId policy=REPLACE mode=legacy workers=profile,user_public,follow,workout,template,achievement,workout_post timestamp=${System.currentTimeMillis()}"
+        )
         
         startWorkMonitoring(operation, "${IMMEDIATE_SYNC_WORK_NAME}_$userId", userId)
         
@@ -510,8 +529,81 @@ class SyncCoordinator @Inject constructor(
      * @param userId The user ID to perform startup sync for
      * @return LiftrixResult indicating success or failure
      */
-    suspend fun triggerStartupSync(userId: String): LiftrixResult<Unit> {
+    suspend fun triggerStartupSync(
+        userId: String,
+        source: String = "unknown",
+        force: Boolean = false
+    ): LiftrixResult<Unit> {
         return try {
+            val workName = "startup_sync_$userId"
+            val gateStateAtRequest = startupRestoreGate.currentState(userId)
+            Timber.tag("StartupRestoreFix").i(
+                "[TEMPLATE-LOAD] operation=STARTUP_SYNC_REQUESTED userId=$userId source=$source force=$force gateState=$gateStateAtRequest timestamp=${System.currentTimeMillis()}"
+            )
+
+            if (!force && gateStateAtRequest == StartupRestoreState.RESTORE_COMPLETE) {
+                Timber.tag("StartupRestoreFix").i(
+                    "[TEMPLATE-LOAD] operation=STARTUP_SYNC_SKIPPED_RESTORE_COMPLETE userId=$userId source=$source gateState=$gateStateAtRequest timestamp=${System.currentTimeMillis()}"
+                )
+                return liftrixSuccess(Unit)
+            }
+
+            if (!force && gateStateAtRequest == StartupRestoreState.RESTORING_FROM_FIREBASE) {
+                Timber.tag("StartupRestoreFix").w(
+                    "[TEMPLATE-LOAD] operation=STARTUP_SYNC_SKIPPED_ALREADY_RUNNING userId=$userId source=$source gateState=$gateStateAtRequest reason=restore_gate_restoring timestamp=${System.currentTimeMillis()}"
+                )
+                Timber.tag("StartupRestoreFix").w(
+                    "[TEMPLATE-LOAD] operation=STARTUP_SYNC_DUPLICATE_SUPPRESSED userId=$userId source=$source reason=restore_gate_restoring timestamp=${System.currentTimeMillis()}"
+                )
+                return liftrixSuccess(Unit)
+            }
+
+            synchronized(startupSyncGuard) {
+                if (!force && userId in startupSyncInFlightUsers) {
+                    Timber.tag("StartupRestoreFix").w(
+                        "[TEMPLATE-LOAD] operation=STARTUP_SYNC_DUPLICATE_SUPPRESSED userId=$userId source=$source reason=in_memory_guard timestamp=${System.currentTimeMillis()}"
+                    )
+                    return liftrixSuccess(Unit)
+                }
+                startupSyncInFlightUsers.add(userId)
+            }
+
+            val existingWorkInfos = withContext(Dispatchers.IO) {
+                workManager.getWorkInfosForUniqueWork(workName).get()
+            }
+            val existingStates = existingWorkInfos.joinToString(separator = "|") { it.state.name }
+            val hasActiveExistingWork = existingWorkInfos.any {
+                it.state == WorkInfo.State.ENQUEUED ||
+                    it.state == WorkInfo.State.RUNNING ||
+                    it.state == WorkInfo.State.BLOCKED
+            }
+            Timber.tag("StartupRestoreFix").i(
+                "[TEMPLATE-LOAD] operation=STARTUP_SYNC_EXISTING_WORK_STATE userId=$userId source=$source workName=$workName states=${existingStates.ifBlank { "none" }} active=$hasActiveExistingWork timestamp=${System.currentTimeMillis()}"
+            )
+            if (!force && hasActiveExistingWork) {
+                synchronized(startupSyncGuard) {
+                    startupSyncInFlightUsers.remove(userId)
+                }
+                Timber.tag("StartupRestoreFix").w(
+                    "[TEMPLATE-LOAD] operation=STARTUP_SYNC_SKIPPED_ALREADY_RUNNING userId=$userId source=$source reason=workmanager_active states=${existingStates.ifBlank { "none" }} timestamp=${System.currentTimeMillis()}"
+                )
+                Timber.tag("StartupRestoreFix").w(
+                    "[TEMPLATE-LOAD] operation=STARTUP_SYNC_DUPLICATE_SUPPRESSED userId=$userId source=$source reason=workmanager_active timestamp=${System.currentTimeMillis()}"
+                )
+                return liftrixSuccess(Unit)
+            }
+
+            startupRestoreGate.transition(
+                userId = userId,
+                state = StartupRestoreState.RESTORING_FROM_FIREBASE,
+                reason = "triggerStartupSync"
+            )
+            Timber.tag("StartupRestoreFix").i(
+                "[TEMPLATE-LOAD] operation=RESTORE_GATE_STATE_AT_ENQUEUE userId=$userId source=$source gateState=${startupRestoreGate.currentState(userId)} timestamp=${System.currentTimeMillis()}"
+            )
+            Timber.tag("FreshLoginRestoreDebug").i(
+                "operation=SYNC_COORDINATOR_STARTUP_START userId=$userId direction=Firebase->Room_then_Room->Firebase timestamp=${System.currentTimeMillis()}"
+            )
             Timber.i("SyncCoordinator: Starting full bidirectional sync for user $userId (startup/login)")
             
             // 🧹 CLEANUP: Add delay to allow onboarding completion before cleanup validation
@@ -548,7 +640,7 @@ class SyncCoordinator @Inject constructor(
             val userPublicSync = UserPublicSyncWorker.createWorkRequest(userId, forceSync = true)
             val followRelationshipSync = FollowRelationshipSyncWorker.createRestoreWorkRequest(userId) // 🔥 FIX: Use restore for startup
             val workoutSync = WorkoutSyncWorker.createWorkRequest(userId) // Already includes bidirectional sync
-            val templateSync = TemplateSyncWorker.createWorkRequest(userId)
+            val templateSync = TemplateSyncWorker.createWorkRequest(userId, startupSync = true)
             val achievementSync = AchievementSyncWorker.createWorkRequest(userId)
             val workoutPostSync = WorkoutPostSyncWorker.createWorkRequest(userId, forceSync = true)
             
@@ -583,15 +675,22 @@ class SyncCoordinator @Inject constructor(
             // Then parallel sync of workouts and workout posts (critical for data recovery)
             // Finally templates and achievements (less critical)
             val operation = workManager.beginUniqueWork(
-                "startup_sync_$userId",
-                ExistingWorkPolicy.REPLACE,
-                profileSync
+                workName,
+                ExistingWorkPolicy.KEEP,
+                startupWorkoutSync
             )
-                .then(userPublicSync)
-                .then(followRelationshipSync) // 🔥 FIX: Add follow relationship restore to startup chain
-                .then(listOf(startupWorkoutSync, startupWorkoutPostSync))
-                .then(listOf(templateSync, achievementSync))
+                .then(templateSync)
+                .then(listOf(profileSync, userPublicSync, followRelationshipSync, startupWorkoutPostSync, achievementSync))
                 .enqueue()
+            Timber.tag("StartupRestoreFix").i(
+                "[TEMPLATE-LOAD] operation=STARTUP_SYNC_ENQUEUE_POLICY userId=$userId source=$source workName=$workName policy=KEEP previousPolicy=REPLACE reason=preserve_running_restore timestamp=${System.currentTimeMillis()}"
+            )
+            Timber.tag("StartupRestoreFix").i(
+                "[TEMPLATE-LOAD] operation=STARTUP_SYNC_ENQUEUED_ONCE userId=$userId source=$source workName=$workName workers=workout_restore,template_restore,profile,user_public,follow_restore,workout_post,achievement timestamp=${System.currentTimeMillis()}"
+            )
+            Timber.tag("FreshLoginRestoreDebug").i(
+                "operation=SYNC_COORDINATOR_STARTUP_ENQUEUED userId=$userId uniqueWork=startup_sync_$userId policy=KEEP workers=workout_restore,template_restore,profile,user_public,follow_restore,workout_post,achievement timestamp=${System.currentTimeMillis()}"
+            )
             
             // 🔥 NEW: Monitor startup sync operation and add watchdog
             startWorkMonitoring(operation, "startup_sync_$userId", userId)
@@ -601,6 +700,14 @@ class SyncCoordinator @Inject constructor(
             liftrixSuccess(Unit)
             
         } catch (e: Exception) {
+            synchronized(startupSyncGuard) {
+                startupSyncInFlightUsers.remove(userId)
+            }
+            startupRestoreGate.transition(
+                userId = userId,
+                state = StartupRestoreState.RESTORE_FAILED,
+                reason = "triggerStartupSync_exception"
+            )
             Timber.e(e, "SyncCoordinator: Failed to trigger startup sync for user $userId")
             
             coordinatorScope.launch {
@@ -736,6 +843,15 @@ class SyncCoordinator @Inject constructor(
             } catch (e: Exception) {
                 Timber.e(e, "SyncCoordinator: Error monitoring work $workName")
                 syncStatusRepository.updateSyncStatus(userId, isInProgress = false, hasError = true, errorMessage = "Monitoring error: ${e.message}")
+            } finally {
+                if (workName == "startup_sync_$userId") {
+                    synchronized(startupSyncGuard) {
+                        startupSyncInFlightUsers.remove(userId)
+                    }
+                    Timber.tag("StartupRestoreFix").d(
+                        "[TEMPLATE-LOAD] operation=STARTUP_SYNC_GUARD_RELEASED userId=$userId workName=$workName timestamp=${System.currentTimeMillis()}"
+                    )
+                }
             }
         }
     }

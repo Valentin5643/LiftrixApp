@@ -7,4 +7,3 @@ data class SharedTemplatePreview(
     val template: WorkoutTemplate?,
     val senderName: String
 )
-

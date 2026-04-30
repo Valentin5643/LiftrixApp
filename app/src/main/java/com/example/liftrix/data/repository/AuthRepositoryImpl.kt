@@ -61,6 +61,9 @@ class AuthRepositoryImpl @Inject constructor(
         val authStateListener = FirebaseAuth.AuthStateListener { auth ->
             try {
                 val firebaseUser = auth.currentUser
+                Timber.tag("FreshLoginRestoreDebug").d(
+                    "operation=AUTH_STATE_CHANGED firebaseUserId=${firebaseUser?.uid ?: "null"} isAnonymous=${firebaseUser?.isAnonymous} timestamp=${System.currentTimeMillis()}"
+                )
                 val user = firebaseUser?.let { fbUser ->
                     // Add validation before creating User object
                     if (!fbUser.isAnonymous && fbUser.email.isNullOrBlank()) {
@@ -106,11 +109,17 @@ class AuthRepositoryImpl @Inject constructor(
         return liftrixCatching(
             errorMapper = { throwable -> FirebaseErrorMapper.handleFirebaseError(throwable) }
         ) {
+            Timber.tag("FreshLoginRestoreDebug").d(
+                "operation=EMAIL_LOGIN_START firebaseCurrentUserId=${firebaseAuth.currentUser?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+            )
             val authResult = firebaseAuth.signInWithEmailAndPassword(email, password).await()
             val firebaseUser = authResult.user
                 ?: throw RuntimeException("Sign in failed: User is null")
             
             val user = UserMapper.fromFirebaseUser(firebaseUser)
+            Timber.tag("FreshLoginRestoreDebug").i(
+                "operation=LOGIN_SUCCESS provider=email userId=${user.uid} firebaseCurrentUserId=${firebaseAuth.currentUser?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+            )
             
             // Check if user profile exists in Firestore
             val profileExists = checkUserProfileExists(user.uid)
@@ -193,6 +202,9 @@ class AuthRepositoryImpl @Inject constructor(
     override suspend fun signInWithGoogle(idToken: String): LiftrixResult<User> {
         // SEAMLESS FIRST-TIME FIX: Separate Firebase Auth from profile operations
         return try {
+            Timber.tag("FreshLoginRestoreDebug").d(
+                "operation=GOOGLE_LOGIN_START firebaseCurrentUserId=${firebaseAuth.currentUser?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+            )
             // ONBOARDING FIX: Clear any potential stale auth state from guest session
             val wasAnonymous = firebaseAuth.currentUser?.isAnonymous == true
             if (wasAnonymous) {
@@ -212,6 +224,9 @@ class AuthRepositoryImpl @Inject constructor(
                 )
 
             val user = UserMapper.fromFirebaseUser(firebaseUser)
+            Timber.tag("FreshLoginRestoreDebug").i(
+                "operation=LOGIN_SUCCESS provider=google userId=${user.uid} firebaseCurrentUserId=${firebaseAuth.currentUser?.uid ?: "null"} isNewUser=${authResult.additionalUserInfo?.isNewUser == true} timestamp=${System.currentTimeMillis()}"
+            )
             Timber.i("[GMAIL-AUTH] ✅ Google authentication successful for user: ${user.uid}")
             Timber.d("[GMAIL-AUTH]   - Email: ${user.email}")
             Timber.d("[GMAIL-AUTH]   - Display Name: ${user.displayName}")
@@ -1099,15 +1114,24 @@ class AuthRepositoryImpl @Inject constructor(
      */
     private fun triggerLoginSync(userId: String) {
         try {
+            Timber.tag("FreshLoginRestoreDebug").d(
+                "operation=LOGIN_SYNC_REQUESTED userId=$userId firebaseCurrentUserId=${firebaseAuth.currentUser?.uid ?: "null"} direction=Firebase->Room_then_Room->Firebase timestamp=${System.currentTimeMillis()}"
+            )
             
             // Use coroutine scope to avoid blocking the login process
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()).launch {
                 try {
+                    Timber.tag("FreshLoginRestoreDebug").d(
+                        "operation=LOGIN_SYNC_STARTED userId=$userId firebaseCurrentUserId=${firebaseAuth.currentUser?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                    )
                     // Schedule periodic sync for this user (if not already scheduled)
                     syncCoordinator.schedulePeriodicSync(userId)
                     
                     // Trigger immediate bidirectional sync to fetch remote data
                     val syncResult = syncCoordinator.triggerImmediateSync(userId)
+                    Timber.tag("FreshLoginRestoreDebug").d(
+                        "operation=LOGIN_SYNC_TRIGGER_RETURNED userId=$userId enqueued=${syncResult.isSuccess} timestamp=${System.currentTimeMillis()}"
+                    )
                     
                     syncResult.fold(
                         onSuccess = {

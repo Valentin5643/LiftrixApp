@@ -15,21 +15,9 @@ fun LoadingIndicator(
     message: String = "Loading...",
     modifier: Modifier = Modifier
 ) {
-    Column(
+    LiftrixLoadingAnimation(
+        message = message,
         modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        CircularProgressIndicator(
-            color = MaterialTheme.colorScheme.primary
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
+        size = 120.dp
+    )
 }

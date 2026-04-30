@@ -8,6 +8,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.template.TemplateRepository
+import com.example.liftrix.sync.SyncCoordinator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -35,7 +36,8 @@ import javax.inject.Singleton
 @Singleton
 class TemplateRepositoryImpl @Inject constructor(
     private val workoutTemplateDao: WorkoutTemplateDao,
-    private val workoutTemplateMapper: WorkoutTemplateMapper
+    private val workoutTemplateMapper: WorkoutTemplateMapper,
+    private val syncCoordinator: SyncCoordinator
 ) : TemplateRepository {
 
     override suspend fun createTemplate(template: WorkoutTemplate): LiftrixResult<WorkoutTemplate> {
@@ -60,12 +62,22 @@ class TemplateRepositoryImpl @Inject constructor(
                 throw IllegalArgumentException("Template name '${template.name}' already exists")
             }
 
-            val entity = workoutTemplateMapper.toEntity(template, isSynced = false)
+            val entity = workoutTemplateMapper.toEntity(template, isSynced = false).copy(
+                isDirty = true,
+                lastModified = System.currentTimeMillis()
+            )
+            Timber.tag("StartupRestoreFix").i(
+                "operation=TEMPLATE_CREATE_BEFORE_INSERT repo=TemplateRepositoryImpl userId=${template.userId} stableTemplateId=${template.id.value} localRowId=not_assigned isDirty=${entity.isDirty} isSynced=${entity.isSynced} timestamp=${System.currentTimeMillis()}"
+            )
             val insertResult = workoutTemplateDao.insertTemplate(entity)
             
             if (insertResult > 0) {
+                Timber.tag("StartupRestoreFix").i(
+                    "operation=TEMPLATE_CREATE_AFTER_INSERT repo=TemplateRepositoryImpl userId=${template.userId} stableTemplateId=${template.id.value} localRowId=$insertResult returnedTemplateId=${template.id.value} isDirty=true isSynced=false timestamp=${System.currentTimeMillis()}"
+                )
                 Timber.d("Created template: ${template.name} for user ${template.userId}")
-                template.copy(id = WorkoutTemplateId(insertResult.toString()))
+                syncCoordinator.triggerEntitySync(template.userId, "template")
+                template
             } else {
                 throw RuntimeException("Template insert operation returned invalid ID: $insertResult")
             }
@@ -96,6 +108,9 @@ class TemplateRepositoryImpl @Inject constructor(
             .map { entities ->
                 try {
                     val templates = entities.map { workoutTemplateMapper.toDomain(it) }
+                    Timber.tag("StartupRestoreFix").d(
+                        "[TEMPLATE-LOAD] operation=TEMPLATE_REPOSITORY_FLOW_EMIT repo=TemplateRepositoryImpl userId=$userId entityCount=${entities.size} templateCount=${templates.size} debounceApplied=false distinctApplied=false cacheApplied=false timestamp=${System.currentTimeMillis()}"
+                    )
                     LiftrixResult.success(templates)
                 } catch (throwable: Throwable) {
                     Timber.e(throwable, "Failed to map template entities to domain models for user: $userId")
@@ -479,8 +494,9 @@ class TemplateRepositoryImpl @Inject constructor(
             
             // Create the duplicate with new name and reset metadata
             val duplicateName = newName ?: "${originalTemplate.name} (Copy)"
+            val duplicateId = WorkoutTemplateId.generate()
             val duplicateTemplate = originalTemplate.copy(
-                id = WorkoutTemplateId(""), // Will be set after insertion
+                id = duplicateId,
                 name = duplicateName,
                 usageCount = 0,
                 lastUsedAt = null,
@@ -489,11 +505,15 @@ class TemplateRepositoryImpl @Inject constructor(
             )
             
             // Insert the duplicate
-            val duplicateEntity = workoutTemplateMapper.toEntity(duplicateTemplate, isSynced = false)
+            val duplicateEntity = workoutTemplateMapper.toEntity(duplicateTemplate, isSynced = false).copy(
+                isDirty = true,
+                lastModified = System.currentTimeMillis()
+            )
             val insertedId = workoutTemplateDao.insertTemplate(duplicateEntity)
             
             if (insertedId > 0) {
-                duplicateTemplate.copy(id = WorkoutTemplateId(insertedId.toString()))
+                syncCoordinator.triggerEntitySync(userId, "template")
+                duplicateTemplate
             } else {
                 throw RuntimeException("Template duplication insert operation returned invalid ID: $insertedId")
             }

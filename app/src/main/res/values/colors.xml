@@ -9,6 +9,10 @@
     <color name="liftrix_secondary">#FF2A3B7D</color>
     <color name="liftrix_accent">#FFFF6B6B</color>
     <color name="liftrix_error">#FFFF4444</color>
+    <color name="liftrix_navy">#FF06172F</color>
+    <color name="liftrix_teal">#FF20C9B7</color>
+    <color name="liftrix_coral">#FFFF6B6B</color>
+    <color name="liftrix_white">#FFFFFAFB</color>
     
     <!-- Light Theme Colors -->
     <color name="liftrix_background_light">#FFF8F9FA</color>
@@ -92,7 +96,4 @@
     <color name="indigo_secondary">@color/liftrix_secondary</color>
     <color name="dark_charcoal">@color/liftrix_background_dark</color>
     
-    <!-- Icon color aliases for drawable resources -->
-    <color name="liftrix_coral">@color/liftrix_accent</color>
-    <color name="liftrix_teal">@color/liftrix_primary</color>
 </resources>

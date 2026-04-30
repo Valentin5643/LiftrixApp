@@ -98,4 +98,3 @@ data class TemplateBuddyShareUiState(
     val directShareComplete: Boolean = false,
     val qrShareReady: Boolean = false
 )
-

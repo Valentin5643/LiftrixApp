@@ -18,7 +18,6 @@ import com.example.liftrix.domain.model.chat.ChatMessage
 import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.chat.UsageLimits
 import com.example.liftrix.domain.service.Language as DomainLanguage
-import com.example.liftrix.domain.usecase.admin.CheckAdminPermissionsUseCase
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.ai.ChatIntent
 import com.example.liftrix.domain.usecase.ai.GenerateWorkoutProgramUseCase
@@ -54,7 +53,6 @@ import timber.log.Timber
 @HiltViewModel
 class ChatbotViewModel @Inject constructor(
     private val authQueryUseCase: AuthQueryUseCase,
-    private val checkAdminPermissionsUseCase: CheckAdminPermissionsUseCase,
     private val chatRepository: ChatRepository,
     private val sendChatMessageUseCase: SendChatMessageUseCase,
     private val checkUsageLimitsUseCase: CheckUsageLimitsUseCase,
@@ -68,7 +66,10 @@ class ChatbotViewModel @Inject constructor(
 
     private var currentConversationId = UUID.randomUUID().toString()
     private var userId: String? = null
-    private var isAdminAuthorized = false
+
+    private companion object {
+        const val MONTHLY_USAGE_TAG = "MonthlyUsageDebug"
+    }
 
     init {
         loadInitialData()
@@ -86,23 +87,9 @@ class ChatbotViewModel @Inject constructor(
                     onSuccess = { userIdResult ->
                         userId = userIdResult?.value
                         if (userId != null) {
-                            checkAdminPermissionsUseCase(userId!!).fold(
-                                onSuccess = { isAdmin ->
-                                    isAdminAuthorized = isAdmin
-                                    _uiState.value = _uiState.value.copy(isAdminAuthorized = isAdmin)
-                                    if (isAdmin) {
-                                        checkUsageLimits()
-                                        setupConversation(userId!!)
-                                    } else {
-                                        handleError(adminAccessDeniedError())
-                                    }
-                                },
-                                onFailure = {
-                                    isAdminAuthorized = false
-                                    _uiState.value = _uiState.value.copy(isAdminAuthorized = false)
-                                    handleError(adminAccessDeniedError())
-                                }
-                            )
+                            _uiState.value = _uiState.value.copy(isAiAccessEnabled = true)
+                            checkUsageLimits()
+                            setupConversation(userId!!)
                         } else {
                             handleError(LiftrixError.AuthenticationError(
                                 errorMessage = "Failed to get current user ID"
@@ -199,10 +186,6 @@ class ChatbotViewModel @Inject constructor(
 
     private fun sendChatMessage(content: String) {
         if (content.isBlank() || userId == null) return
-        if (!isAdminAuthorized) {
-            handleError(adminAccessDeniedError())
-            return
-        }
 
         // Use timestamp + UUID suffix for guaranteed uniqueness in rapid sends
         val timestamp = System.currentTimeMillis()
@@ -288,18 +271,8 @@ class ChatbotViewModel @Inject constructor(
         }
     }
 
-    private fun adminAccessDeniedError(): LiftrixError.BusinessLogicError =
-        LiftrixError.BusinessLogicError(
-            code = "ADMIN_ACCESS_DENIED",
-            errorMessage = "Admin permissions are required to use AI chat"
-        )
-
     private fun generateWorkoutProgram(content: String) {
         if (content.isBlank() || userId == null) return
-        if (!isAdminAuthorized) {
-            handleError(adminAccessDeniedError())
-            return
-        }
 
         val timestamp = System.currentTimeMillis()
         val userMessage = localMessage(
@@ -471,10 +444,6 @@ class ChatbotViewModel @Inject constructor(
     private fun modifyWorkoutProgram(content: String, updateFromProgress: Boolean) {
         val id = userId ?: return
         if (content.isBlank()) return
-        if (!isAdminAuthorized) {
-            handleError(adminAccessDeniedError())
-            return
-        }
 
         val timestamp = System.currentTimeMillis()
         val userMessage = localMessage(
@@ -794,6 +763,22 @@ class ChatbotViewModel @Inject constructor(
             viewModelScope.launch {
                 checkUsageLimitsUseCase.getUserUsageLimits(id).fold(
                     onSuccess = { limits ->
+                        Timber.tag(MONTHLY_USAGE_TAG).d(
+                            "UI usage state update userId=%s dailyRemaining=%d monthlyRemaining=%d isNearDaily=%s isNearMonthly=%s showWarning=%s source=CheckUsageLimitsUseCase",
+                            id,
+                            limits.dailyMessagesRemaining,
+                            limits.monthlyTokensRemaining,
+                            limits.isNearDailyLimit,
+                            limits.isNearMonthlyLimit,
+                            limits.isNearDailyLimit || limits.isNearMonthlyLimit
+                        )
+                        if (limits.monthlyTokensRemaining <= 0) {
+                            Timber.tag(MONTHLY_USAGE_TAG).w(
+                                "UI monthly maximum state triggered userId=%s monthlyRemaining=%d source=UsageLimits",
+                                id,
+                                limits.monthlyTokensRemaining
+                            )
+                        }
                         updateState { currentState ->
                             currentState.copy(
                                 usageLimits = limits,
@@ -802,7 +787,7 @@ class ChatbotViewModel @Inject constructor(
                         }
                     },
                     onFailure = { error ->
-                        Timber.w("Failed to check usage limits: $error")
+                        Timber.tag(MONTHLY_USAGE_TAG).w("UI usage state update failed userId=%s error=%s", id, error)
                         // Don't show error for usage limit checks, just log
                     }
                 )
@@ -824,7 +809,7 @@ data class ChatbotUiState(
     val showUsageWarning: Boolean = false,
     val currentLanguage: Language = Language.ENGLISH,
     val autoDetectLanguage: Boolean = true,
-    val isAdminAuthorized: Boolean = false,
+    val isAiAccessEnabled: Boolean = false,
     val error: LiftrixError? = null,
     val pendingGeneratedProgram: WorkoutGenerationResult? = null,
     val isGeneratingProgram: Boolean = false,

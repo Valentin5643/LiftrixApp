@@ -11,19 +11,19 @@ import com.example.liftrix.ui.social.FriendsScreen
 
 /**
  * DEPRECATED: Legacy Home Navigation Graph
- * 
+ *
  * This file is maintained for backward compatibility during the migration to
  * type-safe navigation with LiftrixRoute sealed classes. All navigation is now
  * handled centrally in UnifiedNavigationContainer.kt.
- * 
+ *
  * @deprecated Use UnifiedNavigationContainer with LiftrixRoute sealed classes instead
- * 
+ *
  * Migration Notes:
  * - HomeRoutes.HOME_MAIN → LiftrixRoute.Home
  * - HomeRoutes.FRIENDS → LiftrixRoute.Friends
  * - All string-based routes replaced with type-safe LiftrixRoute variants
  * - Deep linking now handled through kotlinx.serialization in LiftrixRoute
- * 
+ *
  * This file can be removed once all consumers are migrated to the unified navigation system.
  */
 @Deprecated(
@@ -37,7 +37,7 @@ fun NavGraphBuilder.homeGraph(
 ) {
     // This function is deprecated and should not be used in new code
     // All navigation is now handled by UnifiedNavigationContainer with type-safe routes
-    
+
     navigation(
         startDestination = HomeRoutes.HOME_MAIN,
         route = MainNavigationItem.HOME.route
@@ -59,12 +59,12 @@ fun NavGraphBuilder.homeGraph(
                 }
             )
         }
-        
+
         // Friends screen with deep link support
         composable(
             route = HomeRoutes.FRIENDS,
             deepLinks = listOf(
-                navDeepLink { 
+                navDeepLink {
                     uriPattern = "liftrix://friends/{requestId?}"
                 }
             )
@@ -97,7 +97,7 @@ fun NavGraphBuilder.homeGraph(
                 }
             )
         }
-        
+
         // My Workouts screen - functionality moved to Progress dashboard
         composable(HomeRoutes.MY_WORKOUTS) {
             // Redirect to progress screen which now handles workout history
@@ -108,11 +108,11 @@ fun NavGraphBuilder.homeGraph(
 
 /**
  * DEPRECATED: Legacy Route definitions for the Home navigation graph.
- * 
+ *
  * @deprecated Use LiftrixRoute sealed classes instead
  */
 @Deprecated(
-    message = "Use LiftrixRoute sealed classes instead", 
+    message = "Use LiftrixRoute sealed classes instead",
     replaceWith = ReplaceWith("LiftrixRoute", "com.example.liftrix.ui.navigation.LiftrixRoute")
 )
 object HomeRoutes {
@@ -125,5 +125,3 @@ object HomeRoutes {
     const val GYM_BUDDY = "home/gym_buddy"
     const val QR_SCANNER = "home/qr_scanner"
 }
-
- 

@@ -137,6 +137,10 @@ liftrix-release.keystore
 *.tar.gz
 *.7z
 *.rar
+*.pptx
+*.docx
+declaratie_resurse.txt
+/.idea/deploymentTargetSelector.xml
 
 # Build generated files
 **/generated/

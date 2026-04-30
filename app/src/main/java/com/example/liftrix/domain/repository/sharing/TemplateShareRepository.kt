@@ -22,4 +22,3 @@ interface TemplateShareRepository {
         acceptedAt: Long = System.currentTimeMillis()
     ): LiftrixResult<Unit>
 }
-

@@ -258,6 +258,7 @@ dependencies {
     add("kspRelease", project(":user-scoping-processor"))
 
     implementation(libs.androidx.core.ktx)
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.livedata.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -359,6 +360,7 @@ dependencies {
     // Image processing dependencies
     implementation(libs.coil.compose)
     implementation(libs.androidx.exifinterface)
+    implementation("com.airbnb.android:lottie-compose:6.6.2")
     
     // Photo Picker support for reliable image selection
     implementation("androidx.activity:activity-ktx:1.9.0")

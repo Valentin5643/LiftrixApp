@@ -42,7 +42,7 @@ import timber.log.Timber
 
 /**
  * Screen for displaying and managing post comments.
- * 
+ *
  * Features:
  * - Paginated comment loading
  * - Real-time comment posting
@@ -65,15 +65,15 @@ fun PostCommentsScreen(
     val currentUserId by viewModel.currentUserId.collectAsState()
     val reportingComment by viewModel.reportingComment.collectAsState()
     val isSubmittingReport by viewModel.isSubmittingReport.collectAsState()
-    
+
     val comments = viewModel.comments.collectAsLazyPagingItems()
     val keyboardController = LocalSoftwareKeyboardController.current
-    
+
     // Initialize ViewModel with postId
     LaunchedEffect(postId) {
         viewModel.handleEvent(PostCommentsEvent.Initialize(postId))
     }
-    
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -103,7 +103,7 @@ fun PostCommentsScreen(
                 titleContentColor = LiftrixColorsV2.onSurface
             )
         )
-        
+
         // Content
         Box(
             modifier = Modifier.weight(1f)
@@ -117,7 +117,7 @@ fun PostCommentsScreen(
                         LoadingIndicator()
                     }
                 }
-                
+
                 is PostCommentsUiState.Error -> {
                     val errorState = uiState as PostCommentsUiState.Error
                     ErrorDisplay(
@@ -128,7 +128,7 @@ fun PostCommentsScreen(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
-                
+
                 is PostCommentsUiState.Success -> {
                     CommentsContent(
                         comments = comments,
@@ -147,7 +147,7 @@ fun PostCommentsScreen(
                 }
             }
         }
-        
+
         // Reply indicator
         replyingTo?.let { replyComment ->
             Surface(
@@ -168,9 +168,9 @@ fun PostCommentsScreen(
                         tint = LiftrixColorsV2.onPrimaryContainer,
                         modifier = Modifier.size(16.dp)
                     )
-                    
+
                     Spacer(modifier = Modifier.width(LiftrixSpacing.small))
-                    
+
                     Text(
                         text = "Replying to ${replyComment.authorDisplayName}",
                         style = MaterialTheme.typography.bodySmall,
@@ -179,7 +179,7 @@ fun PostCommentsScreen(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    
+
                     IconButton(
                         onClick = {
                             viewModel.handleEvent(PostCommentsEvent.CancelReply)
@@ -196,7 +196,7 @@ fun PostCommentsScreen(
                 }
             }
         }
-        
+
         // Comment input
         CommentInput(
             text = commentText,
@@ -257,7 +257,7 @@ private fun CommentsContent(
                 LoadingIndicator()
             }
         }
-        
+
         is LoadState.Error -> {
             val error = comments.loadState.refresh as LoadState.Error
             EmptyState(
@@ -265,7 +265,7 @@ private fun CommentsContent(
                 modifier = modifier
             )
         }
-        
+
         else -> {
             if (comments.itemCount == 0) {
                 EmptyCommentsState(modifier = modifier)
@@ -291,7 +291,7 @@ private fun CommentsContent(
                             )
                         }
                     }
-                    
+
                     // Loading indicator for pagination
                     when (comments.loadState.append) {
                         is LoadState.Loading -> {
@@ -354,9 +354,9 @@ private fun CommentItem(
                 .background(LiftrixColorsV2.surfaceVariant),
             contentScale = ContentScale.Crop
         )
-        
+
         Spacer(modifier = Modifier.width(LiftrixSpacing.small))
-        
+
         Column(modifier = Modifier.weight(1f)) {
             // Comment bubble
             Surface(
@@ -373,9 +373,9 @@ private fun CommentItem(
                         fontWeight = FontWeight.SemiBold,
                         color = LiftrixColorsV2.onSurfaceVariant
                     )
-                    
+
                     Spacer(modifier = Modifier.height(4.dp))
-                    
+
                     // Comment content
                     Text(
                         text = comment.content,
@@ -384,9 +384,9 @@ private fun CommentItem(
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(4.dp))
-            
+
             // Comment actions
             Row(
                 horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.medium),
@@ -398,7 +398,7 @@ private fun CommentItem(
                     style = MaterialTheme.typography.labelSmall,
                     color = LiftrixColorsV2.onSurfaceVariant
                 )
-                
+
                 // Like button
                 Text(
                     text = if (comment.isLikedByViewer) "Unlike" else "Like",
@@ -407,7 +407,7 @@ private fun CommentItem(
                     fontWeight = if (comment.isLikedByViewer) FontWeight.SemiBold else FontWeight.Normal,
                     modifier = Modifier.clickable { onLikeClick() }
                 )
-                
+
                 // Reply button
                 Text(
                     text = "Reply",
@@ -485,9 +485,9 @@ private fun CommentInput(
                 maxLines = 4,
                 enabled = !isPosting
             )
-            
+
             Spacer(modifier = Modifier.width(LiftrixSpacing.small))
-            
+
             // Send button
             IconButton(
                 onClick = onSubmit,
@@ -517,7 +517,7 @@ private fun CommentInput(
 private fun formatCommentTimestamp(timestamp: Long): String {
     val now = System.currentTimeMillis()
     val diff = now - timestamp
-    
+
     return when {
         diff < 60_000 -> "now"
         diff < 3_600_000 -> "${diff / 60_000}m"
@@ -529,4 +529,3 @@ private fun formatCommentTimestamp(timestamp: Long): String {
         }
     }
 }
-

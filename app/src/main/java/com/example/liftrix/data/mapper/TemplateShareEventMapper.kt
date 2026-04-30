@@ -35,4 +35,3 @@ fun TemplateShareEventEntity.toDomain(): TemplateShareEvent {
         acceptedAt = acceptedAt
     )
 }
-

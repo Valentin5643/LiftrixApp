@@ -20,33 +20,11 @@ fun EmptyState(
     onActionClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier.padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            Icons.Default.Info,
-            contentDescription = "Empty state",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(48.dp)
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = message,
-            style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        
-        if (actionText != null && onActionClick != null) {
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Button(onClick = onActionClick) {
-                Text(actionText)
-            }
-        }
-    }
+    LiftrixEmptyState(
+        title = message,
+        message = "",
+        actionText = actionText,
+        onActionClick = onActionClick,
+        modifier = modifier
+    )
 }

@@ -225,7 +225,7 @@ import com.example.liftrix.data.local.entity.TemplateShareEventEntity
         ModerationActionEntity::class,
         TemplateShareEventEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 @TypeConverters(
@@ -356,6 +356,16 @@ abstract class LiftrixDatabase : RoomDatabase() {
                 database.execSQL(
                     "CREATE INDEX IF NOT EXISTS idx_template_share_receiver_status " +
                         "ON template_share_events(receiver_id, status)"
+                )
+            }
+        }
+
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("DROP INDEX IF EXISTS index_workout_templates_name_user_id")
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_workout_templates_name_user_id " +
+                        "ON workout_templates(name, user_id)"
                 )
             }
         }

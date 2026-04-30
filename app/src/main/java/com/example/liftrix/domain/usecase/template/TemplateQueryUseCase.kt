@@ -70,7 +70,11 @@ class TemplateQueryUseCase @Inject constructor(
     operator fun invoke(userId: String): Flow<List<WorkoutTemplate>> {
         require(userId.isNotBlank()) { "User ID cannot be blank" }
         return templateRepository.getAllTemplatesForUser(userId).map { result ->
-            result.getOrElse { emptyList() }
+            val templates = result.getOrElse { emptyList() }
+            Timber.tag("StartupRestoreFix").d(
+                "[TEMPLATE-LOAD] operation=TEMPLATE_REPOSITORY_FLOW_EMIT layer=TemplateQueryUseCase userId=$userId count=${templates.size} resultSuccess=${result.isSuccess} debounceApplied=false distinctApplied=false cacheApplied=false timestamp=${System.currentTimeMillis()}"
+            )
+            templates
         }
     }
 

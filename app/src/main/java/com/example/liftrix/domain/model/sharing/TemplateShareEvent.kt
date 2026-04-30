@@ -33,4 +33,3 @@ enum class TemplateShareStatus {
     EXPIRED,
     CANCELLED
 }
-

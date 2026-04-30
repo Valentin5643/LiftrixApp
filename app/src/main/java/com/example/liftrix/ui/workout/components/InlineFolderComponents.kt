@@ -96,6 +96,7 @@ fun LazyItemScope.InlineFolderSection(
     onStartWorkout: (WorkoutTemplate) -> Unit,
     onEditWorkout: (WorkoutTemplate) -> Unit,
     onShareWorkout: (WorkoutTemplate) -> Unit = {},
+    onDeleteWorkout: (WorkoutTemplate) -> Unit = {},
     onMoveWorkout: ((WorkoutTemplate, Offset) -> Unit)? = null,
     onFolderPositionChanged: ((String, androidx.compose.ui.geometry.Rect) -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -146,6 +147,7 @@ fun LazyItemScope.InlineFolderSection(
                             onStartWorkout = { onStartWorkout(workout) },
                             onEditWorkout = { onEditWorkout(workout) },
                             onShareWorkout = { onShareWorkout(workout) },
+                            onDeleteWorkout = { onDeleteWorkout(workout) },
                             onMoveWorkout = onMoveWorkout
                         )
                     }
@@ -293,6 +295,7 @@ private fun FolderWorkoutCard(
     onStartWorkout: () -> Unit,
     onEditWorkout: () -> Unit,
     onShareWorkout: () -> Unit,
+    onDeleteWorkout: () -> Unit,
     onMoveWorkout: ((WorkoutTemplate, Offset) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -301,6 +304,8 @@ private fun FolderWorkoutCard(
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     var totalDragDistance by remember { mutableStateOf(0f) }
     var cardPosition by remember { mutableStateOf(Offset.Zero) }
+    var showWorkoutActions by remember { mutableStateOf(false) }
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
     
     // Minimum drag distance to trigger move (in dp)
     val minDragDistancePx = with(androidx.compose.ui.platform.LocalDensity.current) { 50.dp.toPx() }
@@ -423,29 +428,58 @@ private fun FolderWorkoutCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Edit button
-                IconButton(
-                    onClick = onEditWorkout,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "Edit workout",
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                Box {
+                    IconButton(
+                        onClick = { showWorkoutActions = true },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Workout actions",
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
-                IconButton(
-                    onClick = onShareWorkout,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = "Share with gym buddy",
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    DropdownMenu(
+                        expanded = showWorkoutActions,
+                        onDismissRequest = { showWorkoutActions = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Edit Workout") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Edit, contentDescription = "Edit workout")
+                            },
+                            onClick = {
+                                showWorkoutActions = false
+                                onEditWorkout()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Share Workout") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Share, contentDescription = "Share workout")
+                            },
+                            onClick = {
+                                showWorkoutActions = false
+                                onShareWorkout()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Delete Workout") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete workout")
+                            },
+                            colors = MenuDefaults.itemColors(
+                                textColor = MaterialTheme.colorScheme.error,
+                                leadingIconColor = MaterialTheme.colorScheme.error
+                            ),
+                            onClick = {
+                                showWorkoutActions = false
+                                showDeleteConfirmation = true
+                            }
+                        )
+                    }
                 }
                 
                 // Play button - prominent
@@ -465,6 +499,32 @@ private fun FolderWorkoutCard(
                 }
             }
         }
+    }
+
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = { Text("Delete workout?") },
+            text = { Text("This will permanently delete \"${workout.name}\".") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirmation = false
+                        onDeleteWorkout()
+                    }
+                ) {
+                    Text(
+                        text = "Delete",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

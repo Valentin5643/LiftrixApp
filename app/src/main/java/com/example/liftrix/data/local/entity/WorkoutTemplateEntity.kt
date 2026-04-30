@@ -22,7 +22,7 @@ import java.time.Instant
     ],
     indices = [
         Index(value = ["user_id"], name = "index_workout_templates_user_id"),
-        Index(value = ["name", "user_id"], unique = true, name = "index_workout_templates_name_user_id"),
+        Index(value = ["name", "user_id"], name = "index_workout_templates_name_user_id"),
         Index(value = ["created_at"], name = "index_workout_templates_created_at"),
         Index(value = ["folder_id"], name = "index_workout_templates_folder_id")
     ]

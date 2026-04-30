@@ -3,7 +3,6 @@ package com.example.liftrix.service
 import com.example.liftrix.core.cache.EnhancedCacheManager
 import com.example.liftrix.core.cache.getOrComputeTyped
 import com.example.liftrix.core.cache.CacheKeyGenerator
-import com.example.liftrix.core.cache.AnalyticsCacheKeys
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.analytics.VolumeCalendarData
 import com.example.liftrix.domain.model.common.LiftrixResult
@@ -18,7 +17,6 @@ import com.example.liftrix.domain.repository.ProgressSummary
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -82,12 +80,7 @@ class ProgressDataServiceImpl @Inject constructor(
             
             // Use enhanced cache manager with automatic fallback
             val data = cacheManager.getOrComputeTyped<List<VolumeDataPoint>>(cacheKey, ttl) {
-                val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
-                    (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
-                )
-                val endDate = kotlinx.datetime.LocalDate.fromEpochDays(
-                    (timeRange.endDate.time / (24 * 60 * 60 * 1000)).toInt()
-                )
+                val (startDate, endDate) = timeRange.toLocalDateRange()
                 
                 Timber.d("🔍 VOLUME-SERVICE-DEBUG: TimeRange for volume data - startDate=$startDate, endDate=$endDate")
                 Timber.d("🔍 VOLUME-SERVICE-DEBUG: TimeRange milliseconds - start=${timeRange.startDate.time}, end=${timeRange.endDate.time}")
@@ -137,12 +130,7 @@ class ProgressDataServiceImpl @Inject constructor(
             
             // Use enhanced cache manager
             val data = cacheManager.getOrComputeTyped<List<DurationDataPoint>>(cacheKey, ttl) {
-                val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
-                    (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
-                )
-                val endDate = kotlinx.datetime.LocalDate.fromEpochDays(
-                    (timeRange.endDate.time / (24 * 60 * 60 * 1000)).toInt()
-                )
+                val (startDate, endDate) = timeRange.toLocalDateRange()
                 
                 kotlinx.coroutines.withTimeout(8000) {
                     progressStatsRepository.getWorkoutDurationData(userId, startDate, endDate).first()
@@ -179,12 +167,7 @@ class ProgressDataServiceImpl @Inject constructor(
             
             // Use enhanced cache manager
             val data = cacheManager.getOrComputeTyped<List<FrequencyDataPoint>>(cacheKey, ttl) {
-                val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
-                    (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
-                )
-                val endDate = kotlinx.datetime.LocalDate.fromEpochDays(
-                    (timeRange.endDate.time / (24 * 60 * 60 * 1000)).toInt()
-                )
+                val (startDate, endDate) = timeRange.toLocalDateRange()
                 
                 kotlinx.coroutines.withTimeout(8000) {
                     progressStatsRepository.getWorkoutFrequencyData(userId, startDate, endDate).first()
@@ -216,23 +199,21 @@ class ProgressDataServiceImpl @Inject constructor(
             }
         ) {
             // Generate dashboard summary cache key
-            val (cacheKey, ttl) = AnalyticsCacheKeys.dashboardSummary(userId)
+            val cacheKey = com.example.liftrix.core.cache.CacheKey.ProgressData.Summary(userId, timeRange)
+            val ttl = 30.minutes
             
             // Use enhanced cache manager
             val data = cacheManager.getOrComputeTyped<ProgressSummary>(cacheKey, ttl) {
-                val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
-                    (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
-                )
-                val endDate = kotlinx.datetime.LocalDate.fromEpochDays(
-                    (timeRange.endDate.time / (24 * 60 * 60 * 1000)).toInt()
-                )
+                val (startDate, endDate) = timeRange.toLocalDateRange()
                 
                 Timber.d("🔍 PROGRESS-SERVICE-DEBUG: TimeRange for progress summary - startDate=$startDate, endDate=$endDate")
                 Timber.d("🔍 PROGRESS-SERVICE-DEBUG: TimeRange milliseconds - start=${timeRange.startDate.time}, end=${timeRange.endDate.time}")
                 
                 // Convert the problematic workout timestamp for comparison
                 val workoutTimestamp = 1758316901826L
-                val workoutDate = kotlinx.datetime.LocalDate.fromEpochDays((workoutTimestamp / (24 * 60 * 60 * 1000)).toInt())
+                val workoutDate = kotlinx.datetime.Instant.fromEpochMilliseconds(workoutTimestamp)
+                    .toLocalDateTime(TimeZone.currentSystemDefault())
+                    .date
                 Timber.d("🔍 PROGRESS-SERVICE-DEBUG: Workout with 600kg volume created at timestamp=$workoutTimestamp, which is date=$workoutDate")
                 Timber.d("🔍 PROGRESS-SERVICE-DEBUG: Is workout date in range? ${workoutDate >= startDate && workoutDate <= endDate}")
                 
@@ -319,8 +300,18 @@ class ProgressDataServiceImpl @Inject constructor(
      * Converts java.util.Date to kotlinx.datetime.LocalDate for repository compatibility
      */
     private fun java.util.Date.toKotlinLocalDate(): kotlinx.datetime.LocalDate {
-        return kotlinx.datetime.LocalDate.fromEpochDays(
-            (this.time / (24 * 60 * 60 * 1000)).toInt()
-        )
+        return kotlinx.datetime.Instant.fromEpochMilliseconds(time)
+            .toLocalDateTime(TimeZone.currentSystemDefault())
+            .date
+    }
+
+    private fun TimeRange.toLocalDateRange(): Pair<LocalDate, LocalDate> {
+        val startLocalDate = startDate.toKotlinLocalDate()
+        val endLocalDate = endDate.toKotlinLocalDate()
+        return if (startLocalDate <= endLocalDate) {
+            startLocalDate to endLocalDate
+        } else {
+            endLocalDate to startLocalDate
+        }
     }
 }

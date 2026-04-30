@@ -297,6 +297,9 @@ private fun WorkoutContent(
                         onShareWorkout = { workout ->
                             onNavigateToTemplateBuddyShare(workout.id.value)
                         },
+                        onDeleteWorkout = { workout ->
+                            viewModel.handleEvent(WorkoutEvent.DeleteWorkout(workout))
+                        },
                         onCreateWorkout = { folderId ->
                             onNavigateToWorkoutCreation(folderId)
                         },

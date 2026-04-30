@@ -14,6 +14,7 @@ import com.example.liftrix.BuildConfig
 import com.example.liftrix.domain.repository.WidgetPreferencesRepository
 import com.example.liftrix.service.CacheWarmingService
 import com.example.liftrix.sync.SyncCoordinator
+import com.example.liftrix.sync.StartupRestoreGate
 import com.example.liftrix.domain.usecase.settings.InitializeUserThemeUseCase
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,6 +52,9 @@ class LiftrixApp : Application() {
 
     @Inject
     lateinit var offlineQueueManager: com.example.liftrix.data.sync.OfflineQueueManager
+
+    @Inject
+    lateinit var startupRestoreGate: StartupRestoreGate
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -319,7 +323,16 @@ class LiftrixApp : Application() {
                 
                 // Check if user is already authenticated
                 val currentUser = firebaseAuth.currentUser
+                Timber.tag("StartupRestoreFix").i(
+                    "[TEMPLATE-LOAD] operation=APP_STARTUP_AUTH_CHECK firebaseCurrentUserId=${currentUser?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                )
+                Timber.tag("FreshLoginRestoreDebug").d(
+                    "operation=APP_SYNC_INIT_CHECK firebaseCurrentUserId=${currentUser?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                )
                 if (currentUser != null) {
+                    Timber.tag("FreshLoginRestoreDebug").i(
+                        "operation=APP_START_AUTHENTICATED userId=${currentUser.uid} syncType=startup direction=Firebase->Room_then_Room->Firebase timestamp=${System.currentTimeMillis()}"
+                    )
                     Timber.d("User already authenticated, initializing theme and triggering startup sync: ${currentUser.uid}")
                     
                     // Initialize theme immediately
@@ -335,7 +348,19 @@ class LiftrixApp : Application() {
                     // 🔥 NEW: Trigger full startup sync to ensure all workouts are synchronized
                     applicationScope.launch {
                         try {
-                            val syncResult = syncCoordinator.triggerStartupSync(currentUser.uid)
+                            Timber.tag("StartupRestoreFix").d(
+                                "[TEMPLATE-LOAD] operation=STARTUP_SYNC_REQUESTED userId=${currentUser.uid} source=app_start_current_user firebaseCurrentUserId=${firebaseAuth.currentUser?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                            )
+                            Timber.tag("FreshLoginRestoreDebug").d(
+                                "operation=APP_STARTUP_SYNC_REQUESTED userId=${currentUser.uid} firebaseCurrentUserId=${firebaseAuth.currentUser?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                            )
+                            val syncResult = syncCoordinator.triggerStartupSync(
+                                userId = currentUser.uid,
+                                source = "app_start_current_user"
+                            )
+                            Timber.tag("FreshLoginRestoreDebug").d(
+                                "operation=APP_STARTUP_SYNC_TRIGGER_RETURNED userId=${currentUser.uid} enqueued=${syncResult.isSuccess} timestamp=${System.currentTimeMillis()}"
+                            )
                             if (syncResult.isSuccess) {
                                 Timber.i("Startup sync initiated successfully for user: ${currentUser.uid}")
                             } else {
@@ -349,13 +374,23 @@ class LiftrixApp : Application() {
                     // Also schedule periodic sync for ongoing synchronization
                     syncCoordinator.schedulePeriodicSync(currentUser.uid)
                 } else {
+                    startupRestoreGate.resetForAuthPending("app_startup_no_current_user")
                     Timber.d("No authenticated user found, sync will be initialized after authentication")
                 }
                 
                 // Listen for auth state changes to setup/teardown sync and theme
                 firebaseAuth.addAuthStateListener { auth ->
                     val user = auth.currentUser
+                    Timber.tag("StartupRestoreFix").i(
+                        "[TEMPLATE-LOAD] operation=APP_AUTH_STATE firebaseCurrentUserId=${user?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                    )
+                    Timber.tag("FreshLoginRestoreDebug").d(
+                        "operation=APP_AUTH_LISTENER_EVENT firebaseCurrentUserId=${user?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                    )
                     if (user != null) {
+                        Timber.tag("FreshLoginRestoreDebug").i(
+                            "operation=APP_LOGIN_INITIALIZATION_START userId=${user.uid} syncType=startup direction=Firebase->Room_then_Room->Firebase timestamp=${System.currentTimeMillis()}"
+                        )
                         Timber.d("User authenticated, initializing theme and triggering login sync: ${user.uid}")
                         applicationScope.launch {
                             // Initialize theme first (no delay needed)
@@ -368,7 +403,19 @@ class LiftrixApp : Application() {
                             
                             // 🔥 NEW: Trigger startup sync on login to ensure all workouts are synchronized
                             try {
-                                val syncResult = syncCoordinator.triggerStartupSync(user.uid)
+                                Timber.tag("StartupRestoreFix").d(
+                                    "[TEMPLATE-LOAD] operation=STARTUP_SYNC_REQUESTED userId=${user.uid} source=firebase_auth_state_listener firebaseCurrentUserId=${firebaseAuth.currentUser?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                                )
+                                Timber.tag("FreshLoginRestoreDebug").d(
+                                    "operation=APP_LOGIN_STARTUP_SYNC_REQUESTED userId=${user.uid} firebaseCurrentUserId=${firebaseAuth.currentUser?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                                )
+                                val syncResult = syncCoordinator.triggerStartupSync(
+                                    userId = user.uid,
+                                    source = "firebase_auth_state_listener"
+                                )
+                                Timber.tag("FreshLoginRestoreDebug").d(
+                                    "operation=APP_LOGIN_STARTUP_SYNC_TRIGGER_RETURNED userId=${user.uid} enqueued=${syncResult.isSuccess} timestamp=${System.currentTimeMillis()}"
+                                )
                                 if (syncResult.isSuccess) {
                                     Timber.i("Login sync initiated successfully for user: ${user.uid}")
                                 } else {
@@ -382,6 +429,7 @@ class LiftrixApp : Application() {
                             syncCoordinator.schedulePeriodicSync(user.uid)
                         }
                     } else {
+                        startupRestoreGate.resetForAuthPending("auth_listener_signed_out")
                         Timber.d("User signed out, canceling sync operations")
                         // 🔥 ENHANCED: Cancel all sync operations for previous user
                         // Note: We don't have the userId here, so we rely on WorkManager tagging

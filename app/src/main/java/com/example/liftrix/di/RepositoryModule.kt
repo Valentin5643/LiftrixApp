@@ -100,7 +100,7 @@ abstract class RepositoryModule {
     ): FolderRepository
 
     // Legacy compatibility bindings for gradual migration
-    
+
     @Binds
     @Singleton
     abstract fun bindWorkoutTemplateRepository(
@@ -221,4 +221,4 @@ abstract class RepositoryModule {
         workoutRepositoryImpl: WorkoutRepositoryImpl
     ): WorkoutRepository
 
-} 
+}

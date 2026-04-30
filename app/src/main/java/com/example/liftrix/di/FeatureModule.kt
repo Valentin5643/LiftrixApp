@@ -367,12 +367,14 @@ abstract class FeatureModule {
         fun provideRateLimitingService(
             chatRepository: ChatRepository,
             chatHistoryDao: ChatHistoryDao,
+            subscriptionRepository: com.example.liftrix.domain.repository.SubscriptionRepository,
             remoteConfig: com.example.liftrix.data.remote.config.RemoteConfigManager,
             analyticsTracker: AnalyticsTracker
         ): com.example.liftrix.data.service.RateLimitingService =
             com.example.liftrix.data.service.RateLimitingService(
                 chatRepository = chatRepository,
                 chatHistoryDao = chatHistoryDao,
+                subscriptionRepository = subscriptionRepository,
                 remoteConfig = remoteConfig,
                 analyticsTracker = analyticsTracker
             )

@@ -9,6 +9,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.sync.SyncCoordinator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
@@ -23,7 +24,8 @@ import javax.inject.Singleton
 @Singleton
 class WorkoutTemplateRepositoryImpl @Inject constructor(
     private val workoutTemplateDao: WorkoutTemplateDao,
-    private val workoutTemplateMapper: WorkoutTemplateMapper
+    private val workoutTemplateMapper: WorkoutTemplateMapper,
+    private val syncCoordinator: SyncCoordinator
 ) : WorkoutTemplateRepository {
 
     override fun getAllTemplatesForUser(userId: String): Flow<LiftrixResult<List<WorkoutTemplate>>> {
@@ -60,6 +62,9 @@ class WorkoutTemplateRepositoryImpl @Inject constructor(
                             }
                             
                             val templates = workoutTemplateMapper.toDomainList(entities)
+                            Timber.tag("StartupRestoreFix").d(
+                                "[TEMPLATE-LOAD] operation=TEMPLATE_REPOSITORY_FLOW_EMIT repo=WorkoutTemplateRepositoryImpl userId=$userId entityCount=${entities.size} templateCount=${templates.size} debounceApplied=false distinctApplied=false cacheApplied=false timestamp=${System.currentTimeMillis()}"
+                            )
                             Timber.d("🔥 REPO-ALL-TEMPLATES: Mapped to ${templates.size} domain templates")
                             emit(LiftrixResult.success(templates))
                         } catch (mappingThrowable: Throwable) {
@@ -407,7 +412,13 @@ class WorkoutTemplateRepositoryImpl @Inject constructor(
             Timber.d("🔥 REPO-CREATE: Template name is unique, proceeding")
 
             Timber.d("🔥 REPO-CREATE: Converting template to entity")
-            val entity = workoutTemplateMapper.toEntity(template, isSynced = false)
+            val entity = workoutTemplateMapper.toEntity(template, isSynced = false).copy(
+                isDirty = true,
+                lastModified = System.currentTimeMillis()
+            )
+            Timber.tag("StartupRestoreFix").i(
+                "operation=TEMPLATE_CREATE_BEFORE_INSERT userId=${template.userId} stableTemplateId=${template.id.value} localRowId=not_assigned isDirty=${entity.isDirty} isSynced=${entity.isSynced} timestamp=${System.currentTimeMillis()}"
+            )
             Timber.d("🔥 REPO-CREATE: Entity created, calling DAO insertTemplate")
             
             val insertResult = workoutTemplateDao.insertTemplate(entity)
@@ -416,9 +427,12 @@ class WorkoutTemplateRepositoryImpl @Inject constructor(
             if (insertResult > 0) {
                 Timber.d("🔥 REPO-CREATE: Template inserted successfully with ID: $insertResult")
                 Timber.d("🔥 REPO-CREATE: Created template: ${template.name} for user ${template.userId}")
-                val finalTemplate = template.copy(id = WorkoutTemplateId(insertResult.toString()))
-                Timber.d("🔥 REPO-CREATE: Returning final template with ID: ${finalTemplate.id.value}")
-                finalTemplate
+                Timber.tag("StartupRestoreFix").i(
+                    "operation=TEMPLATE_CREATE_AFTER_INSERT userId=${template.userId} stableTemplateId=${template.id.value} localRowId=$insertResult returnedTemplateId=${template.id.value} isDirty=true isSynced=false timestamp=${System.currentTimeMillis()}"
+                )
+                syncCoordinator.triggerEntitySync(template.userId, "template")
+                Timber.d("🔥 REPO-CREATE: Returning final template with ID: ${template.id.value}")
+                template
             } else {
                 Timber.e("🔥 REPO-CREATE: Insert operation returned invalid ID: $insertResult")
                 throw RuntimeException("Template insert operation returned invalid ID: $insertResult")

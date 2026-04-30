@@ -91,7 +91,7 @@ fun ChatbotScreen(
                 text = uiState.currentInput,
                 onTextChange = { viewModel.handleEvent(ChatbotEvent.UpdateInput(it)) },
                 onSend = { viewModel.handleEvent(ChatbotEvent.SendMessage(it)) },
-                enabled = uiState.isAdminAuthorized &&
+                enabled = uiState.isAiAccessEnabled &&
                     !uiState.isTyping &&
                     uiState.usageLimits?.canSendMessage() != false,
                 currentLanguage = uiState.currentLanguage

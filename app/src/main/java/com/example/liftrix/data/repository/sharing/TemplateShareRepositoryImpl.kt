@@ -206,4 +206,3 @@ class TemplateShareRepositoryImpl @Inject constructor(
         const val COLLECTION = "template_share_events"
     }
 }
-

@@ -22,6 +22,7 @@ import kotlinx.serialization.json.Json
 import timber.log.Timber
 import java.util.UUID
 import java.util.Calendar
+import java.util.Date
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -35,6 +36,9 @@ class ChatRepositoryImpl @Inject constructor(
     private val chatHistoryDao: ChatHistoryDao,
     private val syncCoordinator: SyncCoordinator
 ) : ChatRepository {
+    private companion object {
+        const val MONTHLY_USAGE_TAG = "MonthlyUsageDebug"
+    }
     
     override suspend fun saveMessage(
         userId: String,
@@ -73,9 +77,24 @@ class ChatRepositoryImpl @Inject constructor(
         )
         
         chatHistoryDao.insertMessage(entity)
+        Timber.tag(MONTHLY_USAGE_TAG).d(
+            "Usage row saved userId=%s messageId=%s conversationId=%s messageType=%s tokenCount=%s createdAt=%s source=Room.chat_history increment=%s",
+            userId,
+            entity.id,
+            conversationId,
+            type.name,
+            tokenCount?.toString() ?: "null",
+            Date(entity.createdAt).toString(),
+            if (tokenCount != null && tokenCount > 0) "monthly_tokens" else "none"
+        )
         
         // Trigger sync for chat history
         syncCoordinator.triggerImmediateSync(userId)
+        Timber.tag(MONTHLY_USAGE_TAG).d(
+            "Usage sync requested userId=%s messageId=%s source=Room.chat_history target=Firebase.chat_history",
+            userId,
+            entity.id
+        )
         
         entity.toDomainModel()
     }
@@ -135,6 +154,22 @@ class ChatRepositoryImpl @Inject constructor(
         
         val todayCount = chatHistoryDao.getTodayMessageCount(userId, todayStart)
         val monthTokens = chatHistoryDao.getMonthlyTokenUsage(userId, monthStart) ?: 0
+        Timber.tag(MONTHLY_USAGE_TAG).d(
+            "Display usage limits read userId=%s todayCount=%d monthTokens=%d dailyLimit=%d monthlyLimit=%d dailyRemaining=%d monthlyRemaining=%d month=%d year=%d monthStart=%s source=Room.chat_history+Room.chat_preferences prefsSynced=%s prefsDirty=%s prefsLastModified=%s",
+            userId,
+            todayCount,
+            monthTokens,
+            prefs.maxMessagesPerDay,
+            prefs.maxTokensPerMonth,
+            maxOf(0, prefs.maxMessagesPerDay - todayCount),
+            maxOf(0, prefs.maxTokensPerMonth - monthTokens),
+            Calendar.getInstance().get(Calendar.MONTH) + 1,
+            Calendar.getInstance().get(Calendar.YEAR),
+            Date(monthStart).toString(),
+            prefs.isSynced,
+            prefs.isDirty,
+            Date(prefs.lastModified).toString()
+        )
         
         UsageLimits(
             dailyMessagesRemaining = maxOf(0, prefs.maxMessagesPerDay - todayCount),

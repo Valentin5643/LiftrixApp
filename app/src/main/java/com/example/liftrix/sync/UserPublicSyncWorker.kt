@@ -50,7 +50,8 @@ class UserPublicSyncWorker @AssistedInject constructor(
     private val workoutDao: WorkoutDao,
     private val firestore: FirebaseFirestore,
     private val auth: FirebaseAuth,
-    private val gson: Gson
+    private val gson: Gson,
+    private val startupRestoreGate: StartupRestoreGate
 ) : CoroutineWorker(context, params) {
 
     companion object {
@@ -93,6 +94,15 @@ class UserPublicSyncWorker @AssistedInject constructor(
             val forceSync = inputData.getBoolean("forceSync", false)
             val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
                 OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
+            if (!startupRestoreGate.isRestoreComplete(userId)) {
+                Timber.tag("StartupRestoreFix").w(
+                    "operation=USER_PUBLIC_SYNC_BLOCKED userId=$userId gateState=${startupRestoreGate.currentState(userId)} reason=restore_not_complete timestamp=${System.currentTimeMillis()}"
+                )
+                return@withContext Result.retry()
+            }
+            Timber.tag("StartupRestoreFix").d(
+                "operation=USER_PUBLIC_SYNC_ALLOWED userId=$userId gateState=${startupRestoreGate.currentState(userId)} timestamp=${System.currentTimeMillis()}"
+            )
 
             // AUTHENTICATION FIX: Verify auth state and user context
             Timber.d("[USER-PUBLIC-SYNC] 🔐 Verifying authentication for user: $userId")

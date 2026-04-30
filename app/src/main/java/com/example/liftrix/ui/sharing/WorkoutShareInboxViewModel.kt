@@ -50,4 +50,3 @@ data class WorkoutShareInboxUiState(
     val shares: List<TemplateShareEvent> = emptyList(),
     val error: String? = null
 )
-

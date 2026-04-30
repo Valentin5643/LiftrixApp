@@ -375,6 +375,9 @@ class ProfileCleanupService @Inject constructor(
                 val workoutsDeleted = try {
                     val beforeCount = workoutDao.getWorkoutCountForUser(userId)
                     workoutDao.deleteAllWorkoutsForUser(userId).also { deletedRows ->
+                        Timber.tag("FreshLoginRestoreDebug").w(
+                            "operation=ROOM_CLEAR_WORKOUTS userId=$userId source=ProfileCleanup roomBeforeCount=$beforeCount roomAfterCount=${workoutDao.getWorkoutCountForUser(userId)} deletedRows=$deletedRows timestamp=${System.currentTimeMillis()}"
+                        )
                         Timber.tag("WorkoutSyncDebug").w(
                             "[DATABASE-DEBUG] operation=PROFILE_CLEANUP_DELETE_ALL_WORKOUTS source=Cleanup userId=$userId timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount afterCount=${workoutDao.getWorkoutCountForUser(userId)} deletedRows=$deletedRows"
                         )

@@ -174,7 +174,9 @@ class WorkoutTemplateMapper @Inject constructor() {
             lastUsedAt = updatedDomain.lastUsedAt,
             updatedAt = updatedDomain.updatedAt,
             isSynced = false, // Mark as unsynced when updated
-            syncVersion = existingEntity.syncVersion + 1
+            syncVersion = existingEntity.syncVersion + 1,
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
         )
     }
 

@@ -279,11 +279,17 @@ class WorkoutRepositoryImpl @Inject constructor(
     }
 
     override fun getWorkoutsByUser(userId: String): Flow<LiftrixResult<List<Workout>>> {
+        Timber.tag("FreshLoginRestoreDebug").d(
+            "operation=ROOM_OBSERVE_WORKOUTS_REGISTERED layer=repository userId=$userId timestamp=${System.currentTimeMillis()}"
+        )
         return workoutDao.getAllWorkoutsForUser(userId)
             .map { entities ->
                 try {
                     val statusCounts = entities.groupingBy { it.status }.eachCount()
                     val completedWithoutEndTime = entities.count { it.status.name == "COMPLETED" && it.endTime == null }
+                    Timber.tag("FreshLoginRestoreDebug").d(
+                        "operation=ROOM_OBSERVE_WORKOUTS_EMIT layer=repository userId=$userId emittedCount=${entities.size} statusCounts=$statusCounts completedWithoutEndTime=$completedWithoutEndTime dirtyCount=${entities.count { it.isDirty }} unsyncedCount=${entities.count { !it.isSynced }} timestamp=${System.currentTimeMillis()}"
+                    )
                     Timber.tag("WorkoutSyncDebug").d(
                         "[DATABASE-DEBUG] operation=REPOSITORY_READ_ALL_EMIT source=Room userId=$userId timestamp=${System.currentTimeMillis()} count=${entities.size} statusCounts=$statusCounts completedWithoutEndTime=$completedWithoutEndTime dirtyCount=${entities.count { it.isDirty }} unsyncedCount=${entities.count { !it.isSynced }}"
                     )

@@ -194,11 +194,17 @@ interface WorkoutDao {
             )
             _insert(entity)
             val afterCount = getWorkoutCountForUser(workout.userId)
+            Timber.tag("FreshLoginRestoreDebug").i(
+                "operation=ROOM_UPSERT_FROM_FIREBASE_APPLIED userId=${workout.userId} workoutId=${workout.id} roomBeforeCount=$beforeCount roomAfterCount=$afterCount localExists=${local != null} localLastModified=${local?.lastModified ?: 0L} remoteLastModified=${workout.lastModified} timestamp=$timestamp"
+            )
             Timber.tag("WorkoutSyncDebug").w(
                 "[DATABASE-DEBUG] operation=REMOTE_OVERWRITE_ROOM source=Firebase userId=${workout.userId} workoutId=${workout.id} timestamp=$timestamp beforeCount=$beforeCount afterCount=$afterCount localExists=${local != null} localLastModified=${local?.lastModified ?: 0L} remoteLastModified=${workout.lastModified} localStatus=${local?.status} remoteStatus=${workout.status} localEndTimePresent=${local?.endTime != null} remoteEndTimePresent=${workout.endTime != null}"
             )
         } else {
             val afterCount = getWorkoutCountForUser(workout.userId)
+            Timber.tag("FreshLoginRestoreDebug").d(
+                "operation=ROOM_UPSERT_FROM_FIREBASE_SKIPPED userId=${workout.userId} workoutId=${workout.id} roomBeforeCount=$beforeCount roomAfterCount=$afterCount reason=local_newer_or_equal localLastModified=${local.lastModified} remoteLastModified=${workout.lastModified} timestamp=$timestamp"
+            )
             Timber.tag("WorkoutSyncDebug").d(
                 "[DATABASE-DEBUG] operation=REMOTE_UPSERT_SKIPPED source=Firebase userId=${workout.userId} workoutId=${workout.id} timestamp=$timestamp beforeCount=$beforeCount afterCount=$afterCount localLastModified=${local.lastModified} remoteLastModified=${workout.lastModified} localStatus=${local.status} remoteStatus=${workout.status}"
             )

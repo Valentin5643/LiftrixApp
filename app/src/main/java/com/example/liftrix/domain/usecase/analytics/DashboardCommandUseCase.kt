@@ -358,4 +358,3 @@ data class DashboardUpdateRequest(
     val configuration: DashboardConfiguration,
     val timeRanges: List<TimeRange> = listOf(TimeRange.lastMonth(), TimeRange.lastSixMonths())
 )
-

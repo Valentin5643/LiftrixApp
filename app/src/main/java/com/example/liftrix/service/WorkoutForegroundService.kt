@@ -180,7 +180,7 @@ class WorkoutForegroundService : Service() {
             .setContentTitle(session.name)
             .setContentText(contentText)
             .setSubText(statusText)
-            .setSmallIcon(R.drawable.ic_fitness_center)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(openPendingIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)

@@ -56,6 +56,7 @@ import com.example.liftrix.ui.auth.components.ConsentData
 import com.example.liftrix.ui.auth.components.ConsentDialog
 import com.example.liftrix.ui.auth.components.SignInForm
 import com.example.liftrix.ui.auth.components.SignUpForm
+import com.example.liftrix.ui.common.components.LiftrixBrandHeader
 import com.example.liftrix.ui.workout.components.PrimaryActionButton
 import com.example.liftrix.ui.workout.components.SecondaryActionButton
 import com.example.liftrix.ui.workout.components.TertiaryActionButton
@@ -75,11 +76,11 @@ fun AuthScreen(
     val authState by viewModel.authState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
-    
+
     // FIXED: Use ThemeManager to respect user's explicit theme preference instead of system theme
     val themeManager = remember { com.example.liftrix.ui.theme.ThemeManager.getInstance(context) }
     val isDarkTheme = themeManager.getEffectiveThemeState(isSystemInDarkTheme())
-    
+
     var isSignUpMode by remember { mutableStateOf(initialSignUpMode) }
     var showConsentDialog by remember { mutableStateOf(false) }
     var pendingSignUpData by remember { mutableStateOf<Triple<String, String, String>?>(null) }
@@ -102,7 +103,7 @@ fun AuthScreen(
             null
         }
     }
-    
+
     // Google Sign-In launcher - properly registered at composable level
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -143,14 +144,14 @@ fun AuthScreen(
 
     // Track the previous auth state to detect actual successful authentication
     var previousAuthState by remember { mutableStateOf<AuthState?>(null) }
-    
+
     // Handle auth state changes
     LaunchedEffect(authState) {
         when (val currentState = authState) {
             is AuthState.Authenticated -> {
                 // Only navigate if we're transitioning from a non-authenticated state
                 // This prevents navigation when the state observer briefly shows authenticated
-                if (previousAuthState is AuthState.Loading || 
+                if (previousAuthState is AuthState.Loading ||
                     previousAuthState is AuthState.Unauthenticated ||
                     previousAuthState is AuthState.Initial) {
                     onAuthSuccess()
@@ -178,6 +179,14 @@ fun AuthScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceEvenly
             ) {
+                Spacer(modifier = Modifier.height(24.dp))
+
+                LiftrixBrandHeader(
+                    subtitle = if (isSignUpMode) "Create your AI fitness profile" else "Welcome back",
+                    logoWidth = 132.dp,
+                    isDarkTheme = isDarkTheme
+                )
+
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Auth form section
@@ -211,18 +220,18 @@ fun AuthScreen(
                             }
                         )
                     }
-                    
+
                     Spacer(modifier = Modifier.height(24.dp))
-                    
+
                     // Alternative sign-in options
                     Text(
                         text = "or",
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (isDarkTheme) LiftrixColorsV2.Dark.TextTertiary else LiftrixColorsV2.Light.TextTertiary
                     )
-                    
+
                     Spacer(modifier = Modifier.height(20.dp))
-                    
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -274,7 +283,7 @@ fun AuthScreen(
                                 Text("Google", color = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary)
                             }
                         }
-                        
+
                         // Guest Sign-In
                         TextButton(
                             onClick = {
@@ -289,9 +298,9 @@ fun AuthScreen(
                             )
                         }
                     }
-                    
+
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     // Toggle between sign in and sign up - moved below Google/Guest
                     TextButton(
                         onClick = { isSignUpMode = !isSignUpMode },
@@ -307,10 +316,10 @@ fun AuthScreen(
                         )
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(40.dp))
             }
-            
+
             // Loading overlay
             if (authState is AuthState.Loading) {
                 Box(
@@ -342,7 +351,7 @@ fun AuthScreen(
                     }
                 }
             }
-            
+
             // Snackbar host
             SnackbarHost(
                 hostState = snackbarHostState,
@@ -379,4 +388,4 @@ fun AuthScreen(
             )
         }
     }
-} 
+}

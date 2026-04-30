@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -42,6 +43,7 @@ import com.example.liftrix.domain.service.WeightUnitManager
 import com.example.liftrix.data.service.FirebaseStorageUrlResolver
 import com.example.liftrix.ui.common.LocalFirebaseStorageUrlResolver
 import com.example.liftrix.ui.common.LocalProfileImageCache
+import com.example.liftrix.ui.common.components.LiftrixLoadingAnimation
 import com.example.liftrix.service.ProfileImageCache
 import androidx.compose.runtime.CompositionLocalProvider
 import dagger.hilt.android.AndroidEntryPoint
@@ -60,6 +62,7 @@ class MainActivity : ComponentActivity() {
     lateinit var profileImageCache: ProfileImageCache
     
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         
         // Initialize WeightUnitManager
@@ -147,14 +150,9 @@ fun LoadingScreen() {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            CircularProgressIndicator(
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Loading...",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
+            LiftrixLoadingAnimation(
+                message = "Loading Liftrix...",
+                size = 144.dp
             )
         }
     }
@@ -209,4 +207,3 @@ fun AuthenticatedContent(
         UnifiedNavigationContainer()
     }
 }
-

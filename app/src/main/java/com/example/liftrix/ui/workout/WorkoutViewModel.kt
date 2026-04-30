@@ -27,6 +27,8 @@ import com.example.liftrix.ui.common.state.WorkoutScreenData
 import com.example.liftrix.ui.common.state.WorkoutUiState
 import com.example.liftrix.sync.SyncManager
 import com.example.liftrix.sync.SyncStatus
+import com.example.liftrix.sync.StartupRestoreGate
+import com.example.liftrix.sync.TemplateRestoreNotifier
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -62,7 +64,9 @@ class WorkoutViewModel @Inject constructor(
     private val analyticsService: AnalyticsService,
     private val uxMetricsTracker: UxMetricsTracker,
     private val taskCompletionTracker: TaskCompletionTracker,
-    private val sessionManager: com.example.liftrix.service.UnifiedWorkoutSessionManager
+    private val sessionManager: com.example.liftrix.service.UnifiedWorkoutSessionManager,
+    private val startupRestoreGate: StartupRestoreGate,
+    private val templateRestoreNotifier: TemplateRestoreNotifier
 ) : ModernBaseViewModel<WorkoutUiState>(
     initialState = WorkoutUiState.Loading
 ) {
@@ -80,7 +84,8 @@ class WorkoutViewModel @Inject constructor(
         observeTemplates()
         observeFolders()
         observeSyncStatus()
-        
+        observeTemplateRestoreCompletions()
+
         observeSessionCompletion()
     }
 
@@ -101,6 +106,7 @@ class WorkoutViewModel @Inject constructor(
             is WorkoutEvent.ReorderFolders -> safeReorderFolders(event.orderedFolderIds)
             is WorkoutEvent.SelectFolder -> selectFolder(event.folderId)
             is WorkoutEvent.MoveWorkout -> moveWorkoutToFolder(event.workoutTemplate, event.targetFolderId)
+            is WorkoutEvent.DeleteWorkout -> deleteWorkout(event.workoutTemplate)
             WorkoutEvent.ClearError -> clearError()
             WorkoutEvent.RefreshData -> refreshData()
         }
@@ -172,15 +178,18 @@ class WorkoutViewModel @Inject constructor(
             // 🔥 FIX: Only restart workout observation when userId actually changes
             // This prevents workouts from "disappearing" after profile updates that recreate User objects
             var previousUserId: String? = null
-            
+
             authRepository.currentUser
                 .filterNotNull()
                 .collect { user ->
                     // Only restart flow if userId actually changed
                     if (user.uid != previousUserId) {
                         previousUserId = user.uid
+                        Timber.tag("FreshLoginRestoreDebug").d(
+                            "operation=UI_ROOM_OBSERVATION_START screen=WorkoutViewModel userId=${user.uid} timestamp=${System.currentTimeMillis()}"
+                        )
                         Timber.d("[WORKOUT-DEBUG] Starting workout observation for userId=${user.uid}")
-                        
+
                         combine(
                             workoutRepository.getAllWorkoutsForUser(user.uid),
                             syncManager.getSyncStatus()
@@ -188,6 +197,18 @@ class WorkoutViewModel @Inject constructor(
                             Timber.d("[WORKOUT-DEBUG] Workout read emitted count=${workouts.size} userId=${user.uid} syncStatus=${syncStatus::class.simpleName}")
                             val statusCounts = workouts.groupingBy { it.status }.eachCount()
                             val completedWithoutEndTime = workouts.count { it.status.name == "COMPLETED" && it.endTime == null }
+                            if (workouts.isEmpty() && !startupRestoreGate.isRestoreComplete(user.uid)) {
+                                Timber.tag("StartupRestoreFix").d(
+                                    "operation=UI_EMPTY_WORKOUTS_SUPPRESSED screen=WorkoutViewModel userId=${user.uid} gateState=${startupRestoreGate.currentState(user.uid)} finalEmptyState=false timestamp=${System.currentTimeMillis()}"
+                                )
+                                return@combine
+                            }
+                            Timber.tag("FreshLoginRestoreDebug").d(
+                                "operation=UI_WORKOUTS_EMIT screen=WorkoutViewModel userId=${user.uid} emittedCount=${workouts.size} displayedCount=${workouts.size} filteredOutCount=0 statusCounts=$statusCounts completedWithoutEndTime=$completedWithoutEndTime syncStatus=${syncStatus::class.simpleName} timestamp=${System.currentTimeMillis()}"
+                            )
+                            Timber.tag("StartupRestoreFix").d(
+                                "operation=UI_WORKOUT_STATE_SOURCE screen=WorkoutViewModel userId=${user.uid} source=${if (workouts.isEmpty()) "LocalRoomEmptyAwaitingRestoreOrTrulyEmpty" else "LocalRoom"} workouts=${workouts.size} templates=${currentWorkoutData().templates.size} folders=${currentWorkoutData().folders.size} timestamp=${System.currentTimeMillis()}"
+                            )
                             Timber.tag("WorkoutSyncDebug").d(
                                 "[DATABASE-DEBUG] operation=WORKOUT_VIEWMODEL_DISPLAY_INPUT source=Room userId=${user.uid} timestamp=${System.currentTimeMillis()} count=${workouts.size} statusCounts=$statusCounts completedWithoutEndTime=$completedWithoutEndTime syncStatus=${syncStatus::class.simpleName}"
                             )
@@ -209,7 +230,7 @@ class WorkoutViewModel @Inject constructor(
      * 🔥 FIXED: Combined templates and folders observation to prevent race conditions
      * This ensures both templates and folders are loaded together, preventing UI rendering issues
      * where templates can't find their matching folders or vice versa.
-     * 
+     *
      * FIX for disappearing folders/templates after quick workout completion:
      * Using flatMapLatest to ensure the flow continues observing even after session changes
      */
@@ -222,7 +243,7 @@ class WorkoutViewModel @Inject constructor(
             // 🔥 FIX: Only restart template observation when userId actually changes
             // This prevents templates from "disappearing" after profile updates that recreate User objects
             var previousUserId: String? = null
-            
+
             authRepository.currentUser
                 .filterNotNull()
                 .collect { user ->
@@ -230,13 +251,13 @@ class WorkoutViewModel @Inject constructor(
                     if (user.uid != previousUserId) {
                         previousUserId = user.uid
                         Timber.d("[WORKOUT-DEBUG] Starting template/folder observation for userId=${user.uid}")
-                        
+
                         // Ensure default folder exists for the user
                         folderRepository.getOrCreateDefaultFolder(user.uid)
                             .onFailure { exception ->
                                 Timber.e(exception, "Failed to create default folder for user ${user.uid}")
                             }
-                        
+
                         // Start combined observation of folders and templates
                         combine(
                             folderOperationsUseCase.invoke(user.uid),
@@ -248,7 +269,19 @@ class WorkoutViewModel @Inject constructor(
                                     val folders = foldersResult.getOrThrow()
                                     val templates = templatesResult.getOrThrow()
 
+                                    Timber.tag("StartupRestoreFix").d(
+                                        "[TEMPLATE-LOAD] operation=TEMPLATE_VIEWMODEL_FLOW_RECEIVED screen=WorkoutViewModel userId=${user.uid} templates=${templates.size} folders=${folders.size} gateState=${startupRestoreGate.currentState(user.uid)} timestamp=${System.currentTimeMillis()}"
+                                    )
                                     Timber.d("[WORKOUT-DEBUG] Template/folder read emitted folders=${folders.size} templates=${templates.size} userId=${user.uid}")
+                                    if (templates.isEmpty() && !startupRestoreGate.isRestoreComplete(user.uid)) {
+                                        Timber.tag("StartupRestoreFix").d(
+                                            "[TEMPLATE-LOAD] operation=UI_EMPTY_TEMPLATES_SUPPRESSED screen=WorkoutViewModel userId=${user.uid} gateState=${startupRestoreGate.currentState(user.uid)} folders=${folders.size} finalEmptyState=false timestamp=${System.currentTimeMillis()}"
+                                        )
+                                        return@combine
+                                    }
+                                    Timber.tag("StartupRestoreFix").d(
+                                        "[TEMPLATE-LOAD] operation=UI_TEMPLATE_FOLDER_STATE_SOURCE screen=WorkoutViewModel userId=${user.uid} source=${if (templates.isEmpty()) "LocalRoomEmptyAwaitingRestoreOrTrulyEmpty" else "LocalRoom"} templates=${templates.size} folders=${folders.size} workouts=${currentWorkoutData().workouts.size} timestamp=${System.currentTimeMillis()}"
+                                    )
 
                                     updateWorkoutData { currentData ->
                                         currentData.copy(
@@ -257,6 +290,9 @@ class WorkoutViewModel @Inject constructor(
                                             selectedFolderId = null // Reset folder selection when loading all
                                         )
                                     }
+                                    Timber.tag("StartupRestoreFix").d(
+                                        "[TEMPLATE-LOAD] operation=TEMPLATE_UI_STATE_UPDATED screen=WorkoutViewModel userId=${user.uid} templates=${templates.size} folders=${folders.size} source=room_flow timestamp=${System.currentTimeMillis()}"
+                                    )
                                 }
                                 foldersResult.isFailure -> {
                                     Timber.e("[WORKOUT-DEBUG] Failed to load folders: ${foldersResult.exceptionOrNull()?.message}")
@@ -302,6 +338,53 @@ class WorkoutViewModel @Inject constructor(
         // This prevents race conditions where templates load before folders or vice versa
     }
 
+    private fun observeTemplateRestoreCompletions() {
+        viewModelScope.launch {
+            templateRestoreNotifier.events.collect { event ->
+                val currentUser = _currentUser.value
+                if (currentUser?.uid != event.userId) {
+                    Timber.tag("StartupRestoreFix").d(
+                        "[TEMPLATE-LOAD] operation=TEMPLATE_VIEWMODEL_RESTORE_EVENT_IGNORED screen=WorkoutViewModel eventUserId=${event.userId} currentUserId=${currentUser?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                    )
+                    return@collect
+                }
+
+                try {
+                    Timber.tag("StartupRestoreFix").d(
+                        "[TEMPLATE-LOAD] operation=TEMPLATE_VIEWMODEL_RESTORE_EVENT_RECEIVED screen=WorkoutViewModel userId=${event.userId} restoredCount=${event.templateCount} restoreFinishedAt=${event.finishedAtMs} timestamp=${System.currentTimeMillis()}"
+                    )
+                    val templates = templateQueryUseCase(event.userId).first()
+                    val folders = folderOperationsUseCase.invoke(event.userId).first().getOrElse {
+                        Timber.e(it, "Failed to load folders after template restore for user ${event.userId}")
+                        currentWorkoutData().folders
+                    }
+                    Timber.tag("StartupRestoreFix").d(
+                        "[TEMPLATE-LOAD] operation=TEMPLATE_VIEWMODEL_FLOW_RECEIVED screen=WorkoutViewModel userId=${event.userId} templates=${templates.size} folders=${folders.size} source=restore_notifier timestamp=${System.currentTimeMillis()}"
+                    )
+                    updateWorkoutData { currentData ->
+                        currentData.copy(
+                            folders = folders,
+                            templates = templates,
+                            selectedFolderId = null
+                        )
+                    }
+                    val now = System.currentTimeMillis()
+                    Timber.tag("StartupRestoreFix").i(
+                        "[TEMPLATE-LOAD] operation=TEMPLATE_UI_STATE_UPDATED screen=WorkoutViewModel userId=${event.userId} templates=${templates.size} folders=${folders.size} source=restore_notifier timestamp=$now"
+                    )
+                    Timber.tag("StartupRestoreFix").i(
+                        "[TEMPLATE-LOAD] operation=TEMPLATE_RESTORE_TO_UI_LATENCY_MS screen=WorkoutViewModel userId=${event.userId} restoredCount=${event.templateCount} displayedTemplates=${templates.size} latencyMs=${now - event.finishedAtMs} timestamp=$now"
+                    )
+                } catch (exception: Exception) {
+                    Timber.tag("StartupRestoreFix").e(
+                        exception,
+                        "[TEMPLATE-LOAD] operation=TEMPLATE_UI_STATE_UPDATE_FAILED screen=WorkoutViewModel userId=${event.userId} timestamp=${System.currentTimeMillis()}"
+                    )
+                }
+            }
+        }
+    }
+
     private fun observeSyncStatus() {
         syncStatusObservationJob?.let {
             Timber.d("[WORKOUT-DEBUG] Cancelling existing sync status observation before restart")
@@ -320,7 +403,7 @@ class WorkoutViewModel @Inject constructor(
                     }
                     updateWorkoutData { it.copy(syncStatus = status) }
                 }
-                
+
                 when (status) {
                     is SyncStatus.Success -> {
                         Timber.d("Sync completed successfully: ${status.syncedCount} workouts synced")
@@ -337,7 +420,7 @@ class WorkoutViewModel @Inject constructor(
             }
         }
     }
-    
+
     /**
      * 🔥 FIX: Observes session completion to refresh data after workout ends
      * This prevents folders/templates from disappearing after quick workout completion
@@ -346,23 +429,23 @@ class WorkoutViewModel @Inject constructor(
     private fun observeSessionCompletion() {
         viewModelScope.launch {
             var previousSession: com.example.liftrix.domain.model.UnifiedWorkoutSession? = null
-            
+
             sessionManager.currentSession.collect { currentSession ->
                 val clearedSession = previousSession
                 if (clearedSession != null && currentSession == null) {
                     val shouldRefreshAfterClear = clearedSession.sessionStatus == com.example.liftrix.domain.model.UnifiedWorkoutSession.SessionStatus.COMPLETED ||
                         clearedSession.sessionStatus == com.example.liftrix.domain.model.UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE
                     Timber.d("[WORKOUT-DEBUG] Session cleared observed previousStatus=${clearedSession.sessionStatus} sessionId=${clearedSession.id.value} shouldRefresh=$shouldRefreshAfterClear")
-                    
+
                     if (shouldRefreshAfterClear) {
                         // Add a small delay to ensure cache invalidation has completed
                         kotlinx.coroutines.delay(200)
-                        
+
                         // Trigger a refresh of folders and templates data
                         refreshData()
                     }
                 }
-                
+
                 previousSession = currentSession
             }
         }
@@ -468,18 +551,18 @@ class WorkoutViewModel @Inject constructor(
         val workflowId = "workout_start_${workout.id.value}_${System.currentTimeMillis()}"
         uxMetricsTracker.startWorkflowTracking(workflowId)
         uxMetricsTracker.trackInteraction(workflowId, "workout_start_button")
-        
-        // Track task completion for PRD metrics  
+
+        // Track task completion for PRD metrics
         val taskId = "start_task_${workout.id.value}_${System.currentTimeMillis()}"
         taskCompletionTracker.trackTaskStart(taskId, TaskCompletionTracker.TASK_WORKOUT_START)
-        
+
         val startedWorkout = workout.start()
         saveWorkout(startedWorkout)
-        
+
         // Track successful completion
         uxMetricsTracker.completeWorkflowTracking(workflowId, successful = true)
         taskCompletionTracker.trackTaskCompletion(
-            taskId, 
+            taskId,
             TaskCompletionTracker.TASK_WORKOUT_START,
             com.example.liftrix.analytics.TaskCompletionResult(
                 status = com.example.liftrix.analytics.CompletionStatus.SUCCESS,
@@ -489,12 +572,12 @@ class WorkoutViewModel @Inject constructor(
             )
         )
     }
-    
+
     fun completeWorkout(workout: Workout) {
         val completedWorkout = workout.complete()
         saveWorkout(completedWorkout)
     }
-    
+
     private fun clearError() {
         val currentState = _uiState.value
         if (currentState is WorkoutUiState.Error) {
@@ -531,7 +614,7 @@ class WorkoutViewModel @Inject constructor(
             }
         }
     }
-    
+
     /**
      * Load templates with folder filtering - now works with combined loading approach
      * This method is used when users explicitly select a folder to filter templates
@@ -673,6 +756,34 @@ class WorkoutViewModel @Inject constructor(
         }
     }
 
+    fun deleteWorkout(workoutTemplate: com.example.liftrix.domain.model.WorkoutTemplate) {
+        viewModelScope.launch {
+            val currentData = currentWorkoutData()
+            updateState { WorkoutUiState.Loading }
+
+            val result = templateCommandUseCase.delete(workoutTemplate.id)
+
+            result.onSuccess {
+                Timber.d("Workout '${workoutTemplate.name}' deleted successfully")
+                updateWorkoutData { data ->
+                    data.copy(templates = data.templates.filterNot { it.id == workoutTemplate.id })
+                }
+                refreshData()
+            }.onFailure { error ->
+                Timber.e("Failed to delete workout: ${error.message}")
+                logError(error, "deleteWorkout")
+                updateState {
+                    WorkoutUiState.Error(
+                        error as? LiftrixError ?: LiftrixError.UnknownError(
+                            errorMessage = error.message ?: "Failed to delete workout"
+                        ),
+                        currentData
+                    )
+                }
+            }
+        }
+    }
+
     fun deleteFolder(folder: com.example.liftrix.domain.model.Folder) {
         viewModelScope.launch {
             updateState { WorkoutUiState.Loading }
@@ -791,9 +902,9 @@ class WorkoutViewModel @Inject constructor(
             try {
                 // ✅ CRITICAL FIX: Wait for folders to stabilize before reordering
                 waitForFoldersToStabilize()
-                
+
                 val successState = _uiState.value as WorkoutUiState.Success
-                
+
                 reorderFoldersWithState(orderedFolderIds, successState)
             } catch (exception: Exception) {
                 Timber.e("Safe reorder failed: ${exception.message}")
@@ -890,7 +1001,7 @@ class WorkoutViewModel @Inject constructor(
     }
 
 
-    
+
     /**
      * Enhanced UI template preview for workout creation flow
      * Transforms workout data into structured preview format
@@ -907,7 +1018,7 @@ class WorkoutViewModel @Inject constructor(
                         targetMuscleGroups = workout.exercises.map { it.libraryExercise.primaryMuscleGroup.displayName }.distinct(),
                         difficulty = when {
                             workout.exercises.size <= 3 -> "Beginner"
-                            workout.exercises.size <= 6 -> "Intermediate" 
+                            workout.exercises.size <= 6 -> "Intermediate"
                             else -> "Advanced"
                         },
                         lastUsed = null,
@@ -928,7 +1039,7 @@ class WorkoutViewModel @Inject constructor(
 
 /**
  * Events that can be triggered from the workout screen UI
- * 
+ *
  * Follows the MVI pattern for reactive state management.
  */
 sealed class WorkoutEvent : ViewModelEvent {
@@ -942,6 +1053,7 @@ sealed class WorkoutEvent : ViewModelEvent {
     data class ReorderFolders(val orderedFolderIds: List<com.example.liftrix.domain.model.FolderId>) : WorkoutEvent()
     data class SelectFolder(val folderId: String?) : WorkoutEvent()
     data class MoveWorkout(val workoutTemplate: com.example.liftrix.domain.model.WorkoutTemplate, val targetFolderId: String) : WorkoutEvent()
+    data class DeleteWorkout(val workoutTemplate: com.example.liftrix.domain.model.WorkoutTemplate) : WorkoutEvent()
     object ClearError : WorkoutEvent()
     object RefreshData : WorkoutEvent()
 }

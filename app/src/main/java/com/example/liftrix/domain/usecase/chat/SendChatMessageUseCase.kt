@@ -26,6 +26,9 @@ class SendChatMessageUseCase @Inject constructor(
     private val rateLimitingService: RateLimitingService,
     private val abusePreventionService: AbusePreventionService
 ) {
+    private companion object {
+        const val MONTHLY_USAGE_TAG = "MonthlyUsageDebug"
+    }
     
     /**
      * Sends a user message and gets an AI response.
@@ -84,7 +87,22 @@ class SendChatMessageUseCase @Inject constructor(
         
         // 1. Check rate limits
         val rateLimitStatus = rateLimitingService.checkLimits(userId)
+        Timber.tag(MONTHLY_USAGE_TAG).d(
+            "Send message rate limit result userId=%s isLimited=%s reason=%s dailyRemaining=%s monthlyRemaining=%s source=RateLimitingService",
+            userId,
+            rateLimitStatus.isLimited,
+            rateLimitStatus.reason ?: "none",
+            rateLimitStatus.messagesRemaining?.toString() ?: "unknown",
+            rateLimitStatus.tokensRemaining?.toString() ?: "unknown"
+        )
         if (rateLimitStatus.isLimited) {
+            if (rateLimitStatus.tokensRemaining == 0) {
+                Timber.tag(MONTHLY_USAGE_TAG).w(
+                    "Send message blocked by monthly limit userId=%s reason=%s source=RateLimitingService",
+                    userId,
+                    rateLimitStatus.reason ?: "unknown"
+                )
+            }
             throw IllegalStateException(
                 rateLimitStatus.reason ?: "Rate limit exceeded. Please try again later."
             )

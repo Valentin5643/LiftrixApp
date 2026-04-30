@@ -61,4 +61,3 @@ interface TemplateShareEventDao {
     )
     suspend fun markAccepted(shareId: String, receiverId: String, acceptedAt: Long): Int
 }
-

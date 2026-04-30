@@ -326,9 +326,9 @@ class ProgressChartsViewModel @Inject constructor(
     private suspend fun changeTimePeriod(timeRange: TimeRange) {
         _currentTimeRange.value = timeRange
         
-        // Get current user from combined state
-        val currentState = combinedState.value
+        val currentState = (_uiState.value as? UiState.Success)?.data ?: combinedState.value
         if (currentState.hasValidUser()) {
+            _uiState.value = UiState.Success(currentState.copy(currentTimeRange = timeRange))
             loadAllCharts(currentState.userId!!, timeRange)
         }
     }

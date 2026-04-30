@@ -50,6 +50,7 @@ class AIChatServiceImpl @Inject constructor(
 ) : AIChatService {
     
     companion object {
+        private const val MONTHLY_USAGE_TAG = "MonthlyUsageDebug"
         private const val MODEL_NAME = "gemini-2.5-flash-lite"
         private const val MAX_OUTPUT_TOKENS = 500
         private const val TEMPERATURE = 0.7
@@ -137,7 +138,22 @@ class AIChatServiceImpl @Inject constructor(
         
         // 4. Check rate limits
         val rateLimit = checkRateLimit(userId)
+        Timber.tag(MONTHLY_USAGE_TAG).d(
+            "AI chat service rate limit result userId=%s isLimited=%s reason=%s dailyRemaining=%s monthlyRemaining=%s source=RateLimitingService",
+            userId,
+            rateLimit.isLimited,
+            rateLimit.reason ?: "none",
+            rateLimit.messagesRemaining?.toString() ?: "unknown",
+            rateLimit.tokensRemaining?.toString() ?: "unknown"
+        )
         if (rateLimit.isLimited) {
+            if (rateLimit.tokensRemaining == 0) {
+                Timber.tag(MONTHLY_USAGE_TAG).w(
+                    "AI chat service blocked by monthly limit userId=%s reason=%s source=RateLimitingService",
+                    userId,
+                    rateLimit.reason ?: "unknown"
+                )
+            }
             throw QuotaExceededException("Rate limit exceeded: ${rateLimit.reason}")
         }
         

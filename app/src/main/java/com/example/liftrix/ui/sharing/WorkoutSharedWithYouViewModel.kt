@@ -71,4 +71,3 @@ data class WorkoutSharedWithYouUiState(
     val error: String? = null,
     val saveComplete: Boolean = false
 )
-

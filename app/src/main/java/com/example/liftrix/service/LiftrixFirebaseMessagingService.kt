@@ -134,7 +134,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
         }
         
         val notification = NotificationCompat.Builder(this, CHANNEL_GYM_BUDDY)
-            .setSmallIcon(R.drawable.ic_fitness_center)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -155,7 +155,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
         val body = message.data["body"] ?: "Your gym buddy just finished a workout"
 
         val notification = NotificationCompat.Builder(this, CHANNEL_GYM_BUDDY)
-            .setSmallIcon(R.drawable.ic_fitness_center)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -174,7 +174,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
         val fromUserPhoto = message.data["fromUserPhoto"]
         
         val notification = NotificationCompat.Builder(this, CHANNEL_SOCIAL)
-            .setSmallIcon(android.R.drawable.ic_menu_add)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("New Follow Request")
             .setContentText("$fromUserName wants to follow you")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -205,7 +205,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
         }
         
         val notification = NotificationCompat.Builder(this, CHANNEL_SOCIAL)
-            .setSmallIcon(android.R.drawable.btn_star_big_on)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -229,7 +229,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
         }
         
         val notification = NotificationCompat.Builder(this, CHANNEL_WORKOUT)
-            .setSmallIcon(R.drawable.ic_fitness_center)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -248,7 +248,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
         val achievementIcon = message.data["achievementIcon"]
         
         val notification = NotificationCompat.Builder(this, CHANNEL_ACHIEVEMENT)
-            .setSmallIcon(android.R.drawable.btn_star_big_on)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("🏆 Achievement Unlocked!")
             .setContentText("$achievementName - $achievementDescription")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -270,7 +270,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
         val mentionContext = message.data["mentionContext"] ?: "mentioned you in a post"
         
         val notification = NotificationCompat.Builder(this, CHANNEL_SOCIAL)
-            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("📢 You were mentioned")
             .setContentText("$fromUserName $mentionContext")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -287,7 +287,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
         val body = message.notification?.body ?: message.data["body"] ?: "New notification"
         
         val notification = NotificationCompat.Builder(this, CHANNEL_GENERAL)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)

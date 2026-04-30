@@ -647,6 +647,12 @@ if (limits.dailyMessagesRemaining <= 0) throw QuotaExceededException()
 if (limits.monthlyTokensRemaining <= 0) throw QuotaExceededException()
 if (estimatedHourlyCost > 1.0) throw CostThresholdException()
 
+// Durable usage accounting for every paid model response
+// Any Firebase AI/Gemini call must record token usage in the same quota source
+// used by RateLimitingService, including repair attempts and responses that fail
+// downstream parsing, validation, or UI persistence.
+recordAiUsage(userId, tokensUsed)
+
 // Fitness context reduces jailbreak score by 50%
 if (containsFitnessKeywords(message)) score *= 0.5f
 

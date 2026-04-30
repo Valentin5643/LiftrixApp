@@ -29,7 +29,6 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
     private val abusePreventionService: AbusePreventionService,
     private val rateLimitingService: RateLimitingService
 ) : WorkoutProgramGenerationService {
-
     private val generationConfig = GenerationConfig.Builder()
         .setTemperature(TEMPERATURE)
         .setTopK(TOP_K)
@@ -204,7 +203,22 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
         }
 
         val limits = rateLimitingService.checkLimits(userId)
+        Timber.tag(MONTHLY_USAGE_TAG).d(
+            "Workout generation rate limit result userId=%s isLimited=%s reason=%s dailyRemaining=%s monthlyRemaining=%s source=RateLimitingService",
+            userId,
+            limits.isLimited,
+            limits.reason ?: "none",
+            limits.messagesRemaining?.toString() ?: "unknown",
+            limits.tokensRemaining?.toString() ?: "unknown"
+        )
         if (limits.isLimited) {
+            if (limits.tokensRemaining == 0) {
+                Timber.tag(MONTHLY_USAGE_TAG).w(
+                    "Workout generation blocked by monthly limit userId=%s reason=%s source=RateLimitingService",
+                    userId,
+                    limits.reason ?: "unknown"
+                )
+            }
             throw QuotaExceededException("Rate limit exceeded: ${limits.reason}")
         }
 
@@ -318,6 +332,7 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
     )
 
     companion object {
+        private const val MONTHLY_USAGE_TAG = "MonthlyUsageDebug"
         private const val MODEL_NAME = "gemini-2.5-flash-lite"
         private const val MAX_OUTPUT_TOKENS = 4096
         private const val TEMPERATURE = 0.25f

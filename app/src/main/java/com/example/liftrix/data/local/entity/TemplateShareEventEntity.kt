@@ -40,4 +40,3 @@ data class TemplateShareEventEntity(
     @ColumnInfo(name = "last_modified", defaultValue = "0")
     val lastModified: Long = System.currentTimeMillis()
 )
-

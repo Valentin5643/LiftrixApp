@@ -707,6 +707,10 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         scope.launch {
             try {
                 val serializedSession = sharedPrefs.getString(KEY_CURRENT_SESSION, null)
+                val firebaseUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                Timber.tag("StartupRestoreFix").d(
+                    "operation=CUSTOM_SESSION_RECOVERY_START firebaseCurrentUserId=${firebaseUid ?: "null"} persistedSessionPresent=${serializedSession != null} timestamp=${System.currentTimeMillis()}"
+                )
                 if (serializedSession != null) {
                     val lastUpdated = sharedPrefs.getLong(KEY_LAST_UPDATED, 0)
                     val currentTime = System.currentTimeMillis()
@@ -714,6 +718,9 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                     // Check if session is not too old (7 days)
                     val sevenDaysAgo = currentTime - (7 * 24 * 60 * 60 * 1000)
                     if (lastUpdated < sevenDaysAgo) {
+                        Timber.tag("StartupRestoreFix").w(
+                            "operation=CUSTOM_SESSION_CLEAR userId=${firebaseUid ?: "unknown"} reason=session_too_old firebaseCurrentUserId=${firebaseUid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                        )
                         Timber.w("Session too old, discarding")
                         clearSession()
                         return@launch
@@ -739,13 +746,24 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                         }
                     } else {
                         // Session was completed, clear it
+                        Timber.tag("StartupRestoreFix").d(
+                            "operation=CUSTOM_SESSION_CLEAR userId=${session.userId} reason=completed_session firebaseCurrentUserId=${firebaseUid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                        )
                         clearSession()
                         Timber.d("Completed session cleared on startup")
                     }
                 } else {
+                    Timber.tag("StartupRestoreFix").d(
+                        "operation=CUSTOM_SESSION_EMPTY firebaseCurrentUserId=${firebaseUid ?: "null"} action=no_room_clear timestamp=${System.currentTimeMillis()}"
+                    )
                     Timber.d("No persisted session found on startup")
                 }
             } catch (e: Exception) {
+                val firebaseUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                Timber.tag("StartupRestoreFix").e(
+                    e,
+                    "operation=CUSTOM_SESSION_CLEAR userId=${firebaseUid ?: "unknown"} reason=recovery_exception firebaseCurrentUserId=${firebaseUid ?: "null"} action=clear_session_only_no_room_clear timestamp=${System.currentTimeMillis()}"
+                )
                 Timber.e(e, "Failed to recover session on startup")
                 
                 // Show recovery error to user

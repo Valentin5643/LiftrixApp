@@ -93,7 +93,7 @@ class NotificationHandlerImpl @Inject constructor(
         )
         
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(getNotificationPriority(type))
@@ -159,7 +159,7 @@ class NotificationHandlerImpl @Inject constructor(
         )
         
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(getNotificationPriority(type))
@@ -186,7 +186,7 @@ class NotificationHandlerImpl @Inject constructor(
         notifications: List<NotificationHandler.NotificationInfo>
     ) {
         val groupBuilder = NotificationCompat.Builder(context, NotificationChannelManager.CHANNEL_DEFAULT)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(summaryTitle)
             .setContentText(summaryText)
             .setGroup(groupKey)
@@ -361,7 +361,7 @@ class NotificationHandlerImpl @Inject constructor(
     private suspend fun createGroupSummaryIfNeeded() {
         if (activeNotifications.size > 1) {
             val summaryBuilder = NotificationCompat.Builder(context, NotificationChannelManager.CHANNEL_DEFAULT)
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle("Liftrix")
                 .setContentText("You have ${activeNotifications.size} notifications")
                 .setGroup(NOTIFICATION_GROUP_KEY)
