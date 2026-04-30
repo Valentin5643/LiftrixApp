@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -27,6 +28,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.MainActivity
 import com.example.liftrix.domain.model.AuthEvent
 import com.example.liftrix.domain.model.AuthState
+import com.example.liftrix.ui.common.components.LiftrixLoadingAnimation
 import com.example.liftrix.ui.theme.LiftrixTheme
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
@@ -37,6 +39,7 @@ import timber.log.Timber
 class AuthActivity : ComponentActivity() {
     
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         
         // Check Google Play Services availability
@@ -169,14 +172,9 @@ private fun LoadingScreen(message: String = "Loading...") {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            CircularProgressIndicator(
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
+            LiftrixLoadingAnimation(
+                message = message,
+                size = 144.dp
             )
         }
     }
@@ -226,4 +224,4 @@ private fun AuthFlowScreen(
             )
         }
     }
-} 
+}

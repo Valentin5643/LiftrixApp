@@ -6,21 +6,25 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.plus
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
 
 import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.state.UiState
+import com.example.liftrix.domain.model.ai.WorkoutGenerationResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.chat.ChatMessage
 import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.chat.UsageLimits
-import com.example.liftrix.domain.model.chat.ChatPreferences
+import com.example.liftrix.domain.service.Language as DomainLanguage
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
+import com.example.liftrix.domain.usecase.ai.ChatIntent
+import com.example.liftrix.domain.usecase.ai.GenerateWorkoutProgramUseCase
+import com.example.liftrix.domain.usecase.ai.ModifyWorkoutProgramRequest
+import com.example.liftrix.domain.usecase.ai.ModifyWorkoutProgramUseCase
+import com.example.liftrix.domain.usecase.ai.WorkoutGenerationIntentClassifier
+import com.example.liftrix.domain.model.ai.WorkoutModificationSaveMode
 import com.example.liftrix.domain.usecase.chat.SendChatMessageUseCase
 import com.example.liftrix.domain.usecase.chat.CheckUsageLimitsUseCase
 import com.example.liftrix.domain.repository.ChatRepository
@@ -52,6 +56,9 @@ class ChatbotViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val sendChatMessageUseCase: SendChatMessageUseCase,
     private val checkUsageLimitsUseCase: CheckUsageLimitsUseCase,
+    private val workoutGenerationIntentClassifier: WorkoutGenerationIntentClassifier,
+    private val generateWorkoutProgramUseCase: GenerateWorkoutProgramUseCase,
+    private val modifyWorkoutProgramUseCase: ModifyWorkoutProgramUseCase,
     private val firebaseFunctions: FirebaseFunctions
 ) : ModernBaseViewModel<ChatbotUiState>(
     initialState = ChatbotUiState()
@@ -59,6 +66,10 @@ class ChatbotViewModel @Inject constructor(
 
     private var currentConversationId = UUID.randomUUID().toString()
     private var userId: String? = null
+
+    private companion object {
+        const val MONTHLY_USAGE_TAG = "MonthlyUsageDebug"
+    }
 
     init {
         loadInitialData()
@@ -76,8 +87,9 @@ class ChatbotViewModel @Inject constructor(
                     onSuccess = { userIdResult ->
                         userId = userIdResult?.value
                         if (userId != null) {
-                            setupConversation(userId!!)
+                            _uiState.value = _uiState.value.copy(isAiAccessEnabled = true)
                             checkUsageLimits()
+                            setupConversation(userId!!)
                         } else {
                             handleError(LiftrixError.AuthenticationError(
                                 errorMessage = "Failed to get current user ID"
@@ -140,6 +152,9 @@ class ChatbotViewModel @Inject constructor(
             is ChatbotEvent.UpdateInput -> updateInput(event.text)
             is ChatbotEvent.ToggleLanguage -> toggleLanguage(event.language)
             is ChatbotEvent.ReportAIMessage -> reportAIMessage(event.messageId, event.messageContent, event.reason, event.notes)
+            ChatbotEvent.SaveGeneratedProgram -> saveGeneratedProgram()
+            ChatbotEvent.OverwriteGeneratedProgram -> saveModification(WorkoutModificationSaveMode.OVERWRITE)
+            ChatbotEvent.DismissGeneratedProgram -> dismissGeneratedProgram()
             ChatbotEvent.ToggleAutoDetect -> toggleAutoDetect()
             ChatbotEvent.RetryLastMessage -> retryLastMessage()
             ChatbotEvent.ClearConversation -> clearConversation()
@@ -157,6 +172,19 @@ class ChatbotViewModel @Inject constructor(
      * Sends a user message with optimistic UI update and triggers AI response.
      */
     private fun sendMessage(content: String) {
+        val trimmedContent = content.trim()
+        if (trimmedContent.isBlank()) return
+
+        when (workoutGenerationIntentClassifier.classify(trimmedContent)) {
+            ChatIntent.GenerateWorkout -> generateWorkoutProgram(trimmedContent)
+            ChatIntent.ModifyWorkout -> modifyWorkoutProgram(trimmedContent, updateFromProgress = false)
+            ChatIntent.UpdatePlanFromProgress -> modifyWorkoutProgram(trimmedContent, updateFromProgress = true)
+            ChatIntent.NeedsClarification -> showWorkoutGenerationClarification(trimmedContent)
+            ChatIntent.GeneralChat -> sendChatMessage(trimmedContent)
+        }
+    }
+
+    private fun sendChatMessage(content: String) {
         if (content.isBlank() || userId == null) return
 
         // Use timestamp + UUID suffix for guaranteed uniqueness in rapid sends
@@ -240,6 +268,384 @@ class ChatbotViewModel @Inject constructor(
                     )
                 )
             }
+        }
+    }
+
+    private fun generateWorkoutProgram(content: String) {
+        if (content.isBlank() || userId == null) return
+
+        val timestamp = System.currentTimeMillis()
+        val userMessage = localMessage(
+            prefix = "workout_request",
+            type = MessageType.USER,
+            content = content,
+            createdAt = timestamp
+        )
+
+        viewModelScope.launch {
+            try {
+                Timber.i("ChatbotViewModel: workout generation UI flow started promptChars=${content.length}")
+                _uiState.value = _uiState.value.copy(
+                    messages = _uiState.value.messages + userMessage,
+                    currentInput = "",
+                    isTyping = true,
+                    isGeneratingProgram = true,
+                    generatedProgramSaved = false,
+                    pendingGeneratedProgram = null,
+                    error = null
+                )
+
+                val savedUserMessage = chatRepository.saveMessage(
+                    userId = userId!!,
+                    message = content,
+                    type = MessageType.USER,
+                    conversationId = currentConversationId,
+                    language = _uiState.value.currentLanguage.code
+                ).getOrElse { error ->
+                    Timber.e(error, "ChatbotViewModel: failed to save workout request message")
+                    _uiState.value = _uiState.value.copy(
+                        messages = _uiState.value.messages.filterNot { it.id == userMessage.id },
+                        isTyping = false,
+                        isGeneratingProgram = false,
+                        error = error.toLiftrixError("Failed to save workout request"),
+                        lastFailedMessage = content
+                    )
+                    return@launch
+                }
+
+                Timber.i("ChatbotViewModel: calling GenerateWorkoutProgramUseCase")
+                generateWorkoutProgramUseCase(
+                    userId = userId!!,
+                    prompt = content,
+                    language = _uiState.value.currentLanguage.toDomainLanguage()
+                ).fold(
+                    onSuccess = { result ->
+                        Timber.i("ChatbotViewModel: workout generation succeeded days=${result.program.days.size}")
+                        val previewMessage = localMessage(
+                            prefix = "workout_preview",
+                            type = MessageType.AI_RESPONSE,
+                            content = buildGeneratedProgramMessage(result),
+                            createdAt = System.currentTimeMillis()
+                        )
+                        val savedPreviewMessage = chatRepository.saveMessage(
+                            userId = userId!!,
+                            message = previewMessage.content,
+                            type = MessageType.AI_RESPONSE,
+                            conversationId = currentConversationId,
+                            language = _uiState.value.currentLanguage.code,
+                            tokenCount = result.tokensUsed,
+                            processingTimeMs = result.processingTimeMs
+                        ).getOrElse { error ->
+                            Timber.e(error, "ChatbotViewModel: failed to save workout preview message")
+                            _uiState.value = _uiState.value.copy(
+                                messages = _uiState.value.messages.filterNot { it.id == userMessage.id },
+                                isTyping = false,
+                                isGeneratingProgram = false,
+                                error = error.toLiftrixError("Generated workout, but failed to save the preview"),
+                                lastFailedMessage = content
+                            )
+                            return@fold
+                        }
+                        _uiState.value = _uiState.value.copy(
+                            messages = (_uiState.value.messages
+                                .filterNot { it.id == userMessage.id }
+                                + savedUserMessage
+                                + savedPreviewMessage)
+                                .distinctBy { it.id }
+                                .sortedBy { it.createdAt },
+                            pendingGeneratedProgram = result,
+                            isTyping = false,
+                            isGeneratingProgram = false
+                        )
+                        Timber.i("ChatbotViewModel: workout generation preview state emitted")
+                        checkUsageLimits()
+                    },
+                    onFailure = { error ->
+                        Timber.e(error, "ChatbotViewModel: workout generation failed")
+                        _uiState.value = _uiState.value.copy(
+                            messages = _uiState.value.messages.filterNot { it.id == userMessage.id },
+                            isTyping = false,
+                            isGeneratingProgram = false,
+                            error = error.toLiftrixError("Failed to generate workout program"),
+                            lastFailedMessage = content
+                        )
+                    }
+                )
+            } catch (exception: Exception) {
+                Timber.e(exception, "ChatbotViewModel: uncaught workout generation exception")
+                _uiState.value = _uiState.value.copy(
+                    messages = _uiState.value.messages.filterNot { it.id == userMessage.id },
+                    isTyping = false,
+                    isGeneratingProgram = false,
+                    error = exception.toLiftrixError("Failed to generate workout program"),
+                    lastFailedMessage = content
+                )
+            }
+        }
+    }
+
+    private fun Throwable.toLiftrixError(fallbackMessage: String): LiftrixError =
+        this as? LiftrixError ?: LiftrixError.UnknownError(
+            errorMessage = "$fallbackMessage: ${message ?: javaClass.simpleName}"
+        )
+
+    private fun saveGeneratedProgram() {
+        val pending = _uiState.value.pendingGeneratedProgram ?: return
+        val id = userId ?: return
+        if (_uiState.value.isSavingGeneratedProgram || _uiState.value.generatedProgramSaved) return
+        if (pending.sourceReference != null) {
+            saveModification(WorkoutModificationSaveMode.COPY)
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                Timber.i("ChatbotViewModel: saving generated program days=${pending.program.days.size}")
+                _uiState.value = _uiState.value.copy(isSavingGeneratedProgram = true, error = null)
+                generateWorkoutProgramUseCase.saveGeneratedProgram(
+                    userId = id,
+                    program = pending.program
+                ).fold(
+                    onSuccess = { result ->
+                        Timber.i("ChatbotViewModel: generated program save succeeded templates=${result.savedTemplates.size}")
+                        val savedMessage = localMessage(
+                            prefix = "workout_saved",
+                            type = MessageType.AI_RESPONSE,
+                            content = "Program saved as ${result.savedTemplates.size} workout templates.",
+                            createdAt = System.currentTimeMillis()
+                        )
+                        _uiState.value = _uiState.value.copy(
+                            pendingGeneratedProgram = result,
+                            generatedProgramSaved = true,
+                            isSavingGeneratedProgram = false,
+                            messages = (_uiState.value.messages + savedMessage)
+                                .distinctBy { it.id }
+                                .sortedBy { it.createdAt }
+                        )
+                    },
+                    onFailure = { error ->
+                        Timber.e(error, "ChatbotViewModel: generated program save failed")
+                        _uiState.value = _uiState.value.copy(
+                            isSavingGeneratedProgram = false,
+                            error = error.toLiftrixError("Failed to save generated workout")
+                        )
+                    }
+                )
+            } catch (exception: Exception) {
+                Timber.e(exception, "ChatbotViewModel: uncaught generated program save exception")
+                _uiState.value = _uiState.value.copy(
+                    isSavingGeneratedProgram = false,
+                    error = exception.toLiftrixError("Failed to save generated workout")
+                )
+            }
+        }
+    }
+
+    private fun modifyWorkoutProgram(content: String, updateFromProgress: Boolean) {
+        val id = userId ?: return
+        if (content.isBlank()) return
+
+        val timestamp = System.currentTimeMillis()
+        val userMessage = localMessage(
+            prefix = "workout_modify_request",
+            type = MessageType.USER,
+            content = content,
+            createdAt = timestamp
+        )
+
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(
+                    messages = _uiState.value.messages + userMessage,
+                    currentInput = "",
+                    isTyping = true,
+                    isGeneratingProgram = true,
+                    generatedProgramSaved = false,
+                    error = null
+                )
+                val savedUserMessage = chatRepository.saveMessage(
+                    userId = id,
+                    message = content,
+                    type = MessageType.USER,
+                    conversationId = currentConversationId,
+                    language = _uiState.value.currentLanguage.code
+                ).getOrElse { error ->
+                    _uiState.value = _uiState.value.copy(
+                        messages = _uiState.value.messages.filterNot { it.id == userMessage.id },
+                        isTyping = false,
+                        isGeneratingProgram = false,
+                        error = error.toLiftrixError("Failed to save workout edit request"),
+                        lastFailedMessage = content
+                    )
+                    return@launch
+                }
+
+                modifyWorkoutProgramUseCase.preview(
+                    ModifyWorkoutProgramRequest(
+                        userId = id,
+                        message = content,
+                        language = _uiState.value.currentLanguage.toDomainLanguage(),
+                        pendingGeneratedProgram = _uiState.value.pendingGeneratedProgram,
+                        updateFromProgress = updateFromProgress
+                    )
+                ).fold(
+                    onSuccess = { result ->
+                        val previewMessage = localMessage(
+                            prefix = "workout_modification_preview",
+                            type = MessageType.AI_RESPONSE,
+                            content = buildGeneratedProgramMessage(result),
+                            createdAt = System.currentTimeMillis()
+                        )
+                        val savedPreviewMessage = chatRepository.saveMessage(
+                            userId = id,
+                            message = previewMessage.content,
+                            type = MessageType.AI_RESPONSE,
+                            conversationId = currentConversationId,
+                            language = _uiState.value.currentLanguage.code,
+                            tokenCount = result.tokensUsed,
+                            processingTimeMs = result.processingTimeMs
+                        ).getOrElse { error ->
+                            _uiState.value = _uiState.value.copy(
+                                messages = _uiState.value.messages.filterNot { it.id == userMessage.id },
+                                isTyping = false,
+                                isGeneratingProgram = false,
+                                error = error.toLiftrixError("Modified workout, but failed to save the preview"),
+                                lastFailedMessage = content
+                            )
+                            return@fold
+                        }
+                        _uiState.value = _uiState.value.copy(
+                            messages = (_uiState.value.messages
+                                .filterNot { it.id == userMessage.id }
+                                + savedUserMessage
+                                + savedPreviewMessage)
+                                .distinctBy { it.id }
+                                .sortedBy { it.createdAt },
+                            pendingGeneratedProgram = result,
+                            isTyping = false,
+                            isGeneratingProgram = false
+                        )
+                        checkUsageLimits()
+                    },
+                    onFailure = { error ->
+                        _uiState.value = _uiState.value.copy(
+                            messages = _uiState.value.messages.filterNot { it.id == userMessage.id },
+                            isTyping = false,
+                            isGeneratingProgram = false,
+                            error = error.toLiftrixError("Failed to modify workout"),
+                            lastFailedMessage = content
+                        )
+                    }
+                )
+            } catch (exception: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    messages = _uiState.value.messages.filterNot { it.id == userMessage.id },
+                    isTyping = false,
+                    isGeneratingProgram = false,
+                    error = exception.toLiftrixError("Failed to modify workout"),
+                    lastFailedMessage = content
+                )
+            }
+        }
+    }
+
+    private fun saveModification(saveMode: WorkoutModificationSaveMode) {
+        val pending = _uiState.value.pendingGeneratedProgram ?: return
+        val id = userId ?: return
+        if (_uiState.value.isSavingGeneratedProgram || _uiState.value.generatedProgramSaved) return
+
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(isSavingGeneratedProgram = true, error = null)
+                modifyWorkoutProgramUseCase.saveConfirmedModification(
+                    userId = id,
+                    result = pending,
+                    saveMode = saveMode
+                ).fold(
+                    onSuccess = { result ->
+                        val savedMessage = localMessage(
+                            prefix = "workout_modification_saved",
+                            type = MessageType.AI_RESPONSE,
+                            content = if (saveMode == WorkoutModificationSaveMode.OVERWRITE) {
+                                "Workout template updated."
+                            } else {
+                                "Modified workout saved as a new template."
+                            },
+                            createdAt = System.currentTimeMillis()
+                        )
+                        _uiState.value = _uiState.value.copy(
+                            pendingGeneratedProgram = result,
+                            generatedProgramSaved = true,
+                            isSavingGeneratedProgram = false,
+                            messages = (_uiState.value.messages + savedMessage)
+                                .distinctBy { it.id }
+                                .sortedBy { it.createdAt }
+                        )
+                    },
+                    onFailure = { error ->
+                        _uiState.value = _uiState.value.copy(
+                            isSavingGeneratedProgram = false,
+                            error = error.toLiftrixError("Failed to save modified workout")
+                        )
+                    }
+                )
+            } catch (exception: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isSavingGeneratedProgram = false,
+                    error = exception.toLiftrixError("Failed to save modified workout")
+                )
+            }
+        }
+    }
+
+    private fun showWorkoutGenerationClarification(content: String) {
+        if (content.isBlank() || userId == null) return
+        val timestamp = System.currentTimeMillis()
+        val clarification = if (_uiState.value.currentLanguage == Language.ROMANIAN) {
+            "Do you want me to generate a complete workout program, or answer a general workout question?"
+        } else {
+            "Do you want me to generate a complete workout program, or answer a general workout question?"
+        }
+        _uiState.value = _uiState.value.copy(
+            messages = _uiState.value.messages + listOf(
+                localMessage("clarify_user", MessageType.USER, content, timestamp),
+                localMessage("clarify_ai", MessageType.AI_RESPONSE, clarification, timestamp + 1)
+            ),
+            currentInput = "",
+            error = null
+        )
+    }
+
+    private fun dismissGeneratedProgram() {
+        _uiState.value = _uiState.value.copy(
+            pendingGeneratedProgram = null,
+            generatedProgramSaved = false,
+            isSavingGeneratedProgram = false
+        )
+    }
+
+    private fun localMessage(
+        prefix: String,
+        type: MessageType,
+        content: String,
+        createdAt: Long
+    ): ChatMessage = ChatMessage(
+        id = "${prefix}_${createdAt}_${UUID.randomUUID().toString().takeLast(8)}",
+        userId = userId.orEmpty(),
+        conversationId = currentConversationId,
+        type = type,
+        language = _uiState.value.currentLanguage.code,
+        content = content,
+        createdAt = createdAt
+    )
+
+    private fun buildGeneratedProgramMessage(result: WorkoutGenerationResult): String {
+        val program = result.program
+        val cacheHint = if (result.cacheHit) " Cached result." else ""
+        return if (result.sourceReference != null) {
+            "Modified ${program.workoutName} from ${result.sourceReference.sourceName} with ${result.changeSummaries.size} changes.$cacheHint Review the preview below before saving."
+        } else {
+            "Generated ${program.workoutName} with ${program.days.size} days.$cacheHint Review the preview below, then save it as workout templates."
         }
     }
 
@@ -357,6 +763,22 @@ class ChatbotViewModel @Inject constructor(
             viewModelScope.launch {
                 checkUsageLimitsUseCase.getUserUsageLimits(id).fold(
                     onSuccess = { limits ->
+                        Timber.tag(MONTHLY_USAGE_TAG).d(
+                            "UI usage state update userId=%s dailyRemaining=%d monthlyRemaining=%d isNearDaily=%s isNearMonthly=%s showWarning=%s source=CheckUsageLimitsUseCase",
+                            id,
+                            limits.dailyMessagesRemaining,
+                            limits.monthlyTokensRemaining,
+                            limits.isNearDailyLimit,
+                            limits.isNearMonthlyLimit,
+                            limits.isNearDailyLimit || limits.isNearMonthlyLimit
+                        )
+                        if (limits.monthlyTokensRemaining <= 0) {
+                            Timber.tag(MONTHLY_USAGE_TAG).w(
+                                "UI monthly maximum state triggered userId=%s monthlyRemaining=%d source=UsageLimits",
+                                id,
+                                limits.monthlyTokensRemaining
+                            )
+                        }
                         updateState { currentState ->
                             currentState.copy(
                                 usageLimits = limits,
@@ -365,7 +787,7 @@ class ChatbotViewModel @Inject constructor(
                         }
                     },
                     onFailure = { error ->
-                        Timber.w("Failed to check usage limits: $error")
+                        Timber.tag(MONTHLY_USAGE_TAG).w("UI usage state update failed userId=%s error=%s", id, error)
                         // Don't show error for usage limit checks, just log
                     }
                 )
@@ -387,7 +809,12 @@ data class ChatbotUiState(
     val showUsageWarning: Boolean = false,
     val currentLanguage: Language = Language.ENGLISH,
     val autoDetectLanguage: Boolean = true,
+    val isAiAccessEnabled: Boolean = false,
     val error: LiftrixError? = null,
+    val pendingGeneratedProgram: WorkoutGenerationResult? = null,
+    val isGeneratingProgram: Boolean = false,
+    val isSavingGeneratedProgram: Boolean = false,
+    val generatedProgramSaved: Boolean = false,
     val lastFailedMessage: String? = null // Store last failed message for retry
 )
 
@@ -404,6 +831,9 @@ sealed class ChatbotEvent {
         val reason: com.example.liftrix.ui.chat.components.AIReportReason,
         val notes: String?
     ) : ChatbotEvent()
+    object SaveGeneratedProgram : ChatbotEvent()
+    object OverwriteGeneratedProgram : ChatbotEvent()
+    object DismissGeneratedProgram : ChatbotEvent()
     object ToggleAutoDetect : ChatbotEvent()
     object RetryLastMessage : ChatbotEvent()
     object ClearConversation : ChatbotEvent()
@@ -416,6 +846,11 @@ sealed class ChatbotEvent {
 enum class Language(val code: String, val displayName: String) {
     ENGLISH("en", "English"),
     ROMANIAN("ro", "Română")
+}
+
+private fun Language.toDomainLanguage(): DomainLanguage = when (this) {
+    Language.ENGLISH -> DomainLanguage.ENGLISH
+    Language.ROMANIAN -> DomainLanguage.ROMANIAN
 }
 
 /**

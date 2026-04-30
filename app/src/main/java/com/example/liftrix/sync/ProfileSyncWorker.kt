@@ -42,7 +42,8 @@ class ProfileSyncWorker @AssistedInject constructor(
     private val auth: FirebaseAuth,
     private val gson: Gson,
     private val followRepository: FollowRepositoryImpl,
-    private val profileCleanupService: ProfileCleanupService
+    private val profileCleanupService: ProfileCleanupService,
+    private val startupRestoreGate: StartupRestoreGate
 ) : BaseSyncWorker(context, params) {
 
     init {
@@ -88,6 +89,15 @@ class ProfileSyncWorker @AssistedInject constructor(
             val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
                 OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
             val forceSync = inputData.getBoolean("forceSync", false)
+            if (!startupRestoreGate.isRestoreComplete(userId)) {
+                Timber.tag("StartupRestoreFix").w(
+                    "operation=PROFILE_SYNC_BLOCKED userId=$userId gateState=${startupRestoreGate.currentState(userId)} reason=restore_not_complete timestamp=${System.currentTimeMillis()}"
+                )
+                return Result.retry()
+            }
+            Timber.tag("StartupRestoreFix").d(
+                "operation=PROFILE_SYNC_ALLOWED userId=$userId gateState=${startupRestoreGate.currentState(userId)} timestamp=${System.currentTimeMillis()}"
+            )
             
             // 🔍 FORENSIC LOGGING - Pre-sync data integrity verification
             val preWorkoutCount = try {

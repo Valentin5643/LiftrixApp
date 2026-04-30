@@ -41,6 +41,9 @@ import com.example.liftrix.ui.chat.components.AIChatDisclaimerBanner
 import com.example.liftrix.ui.chat.components.TypingIndicator
 import com.example.liftrix.ui.chat.components.AIMessageReportDialog
 import com.example.liftrix.ui.chat.components.AIReportReason
+import com.example.liftrix.domain.model.ai.GeneratedPrescriptionType
+import com.example.liftrix.domain.model.ai.GeneratedWorkoutExercise
+import com.example.liftrix.domain.model.ai.WorkoutGenerationResult
 import com.example.liftrix.domain.model.chat.ChatMessage
 import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.chat.UsageLimits
@@ -88,7 +91,9 @@ fun ChatbotScreen(
                 text = uiState.currentInput,
                 onTextChange = { viewModel.handleEvent(ChatbotEvent.UpdateInput(it)) },
                 onSend = { viewModel.handleEvent(ChatbotEvent.SendMessage(it)) },
-                enabled = !uiState.isTyping && uiState.usageLimits?.canSendMessage() == true,
+                enabled = uiState.isAiAccessEnabled &&
+                    !uiState.isTyping &&
+                    uiState.usageLimits?.canSendMessage() != false,
                 currentLanguage = uiState.currentLanguage
             )
         }
@@ -101,6 +106,19 @@ fun ChatbotScreen(
             MessageList(
                 messages = uiState.messages,
                 isTyping = uiState.isTyping,
+                generatedProgram = uiState.pendingGeneratedProgram,
+                isSavingGeneratedProgram = uiState.isSavingGeneratedProgram,
+                generatedProgramSaved = uiState.generatedProgramSaved,
+                currentLanguage = uiState.currentLanguage,
+                onSaveGeneratedProgram = {
+                    viewModel.handleEvent(ChatbotEvent.SaveGeneratedProgram)
+                },
+                onOverwriteGeneratedProgram = {
+                    viewModel.handleEvent(ChatbotEvent.OverwriteGeneratedProgram)
+                },
+                onDismissGeneratedProgram = {
+                    viewModel.handleEvent(ChatbotEvent.DismissGeneratedProgram)
+                },
                 onReportMessage = { messageId, messageContent, reason, notes ->
                     viewModel.handleEvent(ChatbotEvent.ReportAIMessage(messageId, messageContent, reason, notes))
                 },
@@ -217,15 +235,23 @@ private fun ChatbotTopBar(
 private fun MessageList(
     messages: List<ChatMessage>,
     isTyping: Boolean,
+    generatedProgram: WorkoutGenerationResult?,
+    isSavingGeneratedProgram: Boolean,
+    generatedProgramSaved: Boolean,
+    currentLanguage: Language,
+    onSaveGeneratedProgram: () -> Unit,
+    onOverwriteGeneratedProgram: () -> Unit,
+    onDismissGeneratedProgram: () -> Unit,
     onReportMessage: (messageId: String, messageContent: String, reason: AIReportReason, notes: String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
 
     // Auto-scroll to bottom when new message arrives
-    LaunchedEffect(messages.size) {
+    LaunchedEffect(messages.size, generatedProgram, isTyping) {
         if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+            val targetIndex = if (generatedProgram != null || isTyping) messages.size else messages.size - 1
+            listState.animateScrollToItem(targetIndex)
         }
     }
 
@@ -248,6 +274,21 @@ private fun MessageList(
             )
         }
 
+        generatedProgram?.let { result ->
+            item(key = "generated_program_preview") {
+                GeneratedProgramPreviewCard(
+                    result = result,
+                    isSaving = isSavingGeneratedProgram,
+                    isSaved = generatedProgramSaved,
+                    currentLanguage = currentLanguage,
+                    onSave = onSaveGeneratedProgram,
+                    onOverwrite = onOverwriteGeneratedProgram,
+                    onDismiss = onDismissGeneratedProgram,
+                    modifier = Modifier.animateItem()
+                )
+            }
+        }
+
         // Typing indicator
         if (isTyping) {
             item {
@@ -259,6 +300,149 @@ private fun MessageList(
             }
         }
     }
+}
+
+@Composable
+private fun GeneratedProgramPreviewCard(
+    result: WorkoutGenerationResult,
+    isSaving: Boolean,
+    isSaved: Boolean,
+    currentLanguage: Language,
+    onSave: () -> Unit,
+    onOverwrite: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = LiftrixColorsV2.surfaceVariant),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(LiftrixSpacing.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.small)
+        ) {
+            Text(
+                text = result.program.workoutName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = LiftrixColorsV2.onSurfaceVariant
+            )
+            Text(
+                text = if (currentLanguage == Language.ROMANIAN) {
+                    if (result.sourceReference != null) {
+                        "${result.program.days.size} zile modificate"
+                    } else {
+                        "${result.program.days.size} zile generate"
+                    }
+                } else {
+                    if (result.sourceReference != null) {
+                        "${result.program.days.size} modified days"
+                    } else {
+                        "${result.program.days.size} generated days"
+                    }
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.75f)
+            )
+
+            result.sourceReference?.let { source ->
+                Text(
+                    text = "Source: ${source.sourceName}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LiftrixColorsV2.onSurfaceVariant
+                )
+            }
+
+            if (result.changeSummaries.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    result.changeSummaries.take(4).forEach { change ->
+                        Text(
+                            text = "${change.type.name.lowercase().replace('_', ' ')}: ${change.before} -> ${change.after}. ${change.reason}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = LiftrixColorsV2.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            result.program.days.forEach { day ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "${day.dayName} - ${day.estimatedDurationMinutes} min",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = LiftrixColorsV2.onSurfaceVariant
+                    )
+                    day.exercises.forEach { exercise ->
+                        GeneratedExerciseRow(exercise = exercise)
+                    }
+                }
+            }
+
+            if (result.validationWarnings.isNotEmpty()) {
+                Text(
+                    text = result.validationWarnings.joinToString(separator = "\n"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
+
+            result.optionalQuestion?.let { question ->
+                Text(
+                    text = question,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.small),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = onSave,
+                    enabled = !isSaving && !isSaved
+                ) {
+                    Text(
+                        text = when {
+                            isSaved -> if (currentLanguage == Language.ROMANIAN) "Salvat" else "Saved"
+                            isSaving -> if (currentLanguage == Language.ROMANIAN) "Se salveaza" else "Saving"
+                            result.sourceReference != null -> if (currentLanguage == Language.ROMANIAN) "Copiaza" else "Save Copy"
+                            else -> if (currentLanguage == Language.ROMANIAN) "Salveaza" else "Save"
+                        }
+                    )
+                }
+                if (result.saveTargetTemplateId != null) {
+                    OutlinedButton(
+                        onClick = onOverwrite,
+                        enabled = !isSaving && !isSaved
+                    ) {
+                        Text(text = if (currentLanguage == Language.ROMANIAN) "Suprascrie" else "Overwrite")
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(text = if (currentLanguage == Language.ROMANIAN) "Inchide" else "Dismiss")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GeneratedExerciseRow(exercise: GeneratedWorkoutExercise) {
+    Text(
+        text = "${exercise.exerciseName}: ${exercise.sets} x ${exercise.prescriptionText()}, ${exercise.restSeconds}s rest",
+        style = MaterialTheme.typography.bodySmall,
+        color = LiftrixColorsV2.onSurfaceVariant
+    )
+}
+
+private fun GeneratedWorkoutExercise.prescriptionText(): String {
+    val base = when (type) {
+        GeneratedPrescriptionType.REPS -> "${repsMin}-${repsMax} reps"
+        GeneratedPrescriptionType.TIME -> "${durationSeconds}s"
+    }
+    return if (isUnilateral) "$base each side" else base
 }
 
 @Composable

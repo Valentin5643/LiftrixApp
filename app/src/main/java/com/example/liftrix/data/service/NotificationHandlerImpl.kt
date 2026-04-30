@@ -93,7 +93,7 @@ class NotificationHandlerImpl @Inject constructor(
         )
         
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(getNotificationPriority(type))
@@ -159,7 +159,7 @@ class NotificationHandlerImpl @Inject constructor(
         )
         
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(getNotificationPriority(type))
@@ -186,7 +186,7 @@ class NotificationHandlerImpl @Inject constructor(
         notifications: List<NotificationHandler.NotificationInfo>
     ) {
         val groupBuilder = NotificationCompat.Builder(context, NotificationChannelManager.CHANNEL_DEFAULT)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(summaryTitle)
             .setContentText(summaryText)
             .setGroup(groupKey)
@@ -285,7 +285,7 @@ class NotificationHandlerImpl @Inject constructor(
             "follow_request", "social_request" -> NotificationChannelManager.CHANNEL_SOCIAL_REQUESTS
             "like", "comment", "share", "social_engagement" -> NotificationChannelManager.CHANNEL_SOCIAL_ENGAGEMENT
             "mention" -> NotificationChannelManager.CHANNEL_MENTIONS
-            "gym_buddy", "buddy_request" -> NotificationChannelManager.CHANNEL_GYM_BUDDY
+            "gym_buddy", "buddy_request", "gym_buddy_workout_completed", "GYM_BUDDY_WORKOUT_COMPLETED" -> NotificationChannelManager.CHANNEL_GYM_BUDDY
             "achievement", "personal_record" -> NotificationChannelManager.CHANNEL_ACHIEVEMENT
             "reminder", "workout_reminder" -> NotificationChannelManager.CHANNEL_REMINDER
             "workout_complete" -> NotificationChannelManager.CHANNEL_WORKOUT_COMPLETE
@@ -297,7 +297,7 @@ class NotificationHandlerImpl @Inject constructor(
 
     private fun getNotificationPriority(type: String): Int {
         return when (type) {
-            "follow_request", "social_request", "gym_buddy", "mention", "achievement" -> NotificationCompat.PRIORITY_HIGH
+            "follow_request", "social_request", "gym_buddy", "gym_buddy_workout_completed", "GYM_BUDDY_WORKOUT_COMPLETED", "mention", "achievement" -> NotificationCompat.PRIORITY_HIGH
             "like", "comment", "share", "workout_complete" -> NotificationCompat.PRIORITY_DEFAULT
             "reminder", "sync" -> NotificationCompat.PRIORITY_LOW
             "error" -> NotificationCompat.PRIORITY_MAX
@@ -361,7 +361,7 @@ class NotificationHandlerImpl @Inject constructor(
     private suspend fun createGroupSummaryIfNeeded() {
         if (activeNotifications.size > 1) {
             val summaryBuilder = NotificationCompat.Builder(context, NotificationChannelManager.CHANNEL_DEFAULT)
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle("Liftrix")
                 .setContentText("You have ${activeNotifications.size} notifications")
                 .setGroup(NOTIFICATION_GROUP_KEY)

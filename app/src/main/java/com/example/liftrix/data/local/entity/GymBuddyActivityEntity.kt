@@ -2,7 +2,6 @@ package com.example.liftrix.data.local.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
-import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
@@ -12,20 +11,6 @@ import androidx.room.PrimaryKey
  */
 @Entity(
     tableName = "gym_buddy_activities",
-    foreignKeys = [
-        ForeignKey(
-            entity = GymBuddyEntity::class,
-            parentColumns = ["user_id"],
-            childColumns = ["user_id"],
-            onDelete = ForeignKey.CASCADE
-        ),
-        ForeignKey(
-            entity = GymBuddyEntity::class,
-            parentColumns = ["buddy_id"],
-            childColumns = ["buddy_id"],
-            onDelete = ForeignKey.CASCADE
-        )
-    ],
     indices = [
         Index(value = ["user_id", "buddy_id"], unique = true),
         Index(value = ["user_id"]),

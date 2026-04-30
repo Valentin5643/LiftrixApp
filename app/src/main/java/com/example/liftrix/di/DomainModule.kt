@@ -431,14 +431,16 @@ abstract class DomainModule {
             workoutRepository: com.example.liftrix.domain.repository.workout.WorkoutRepository,
             feedRepository: com.example.liftrix.domain.repository.social.FeedRepository,
             cacheManager: com.example.liftrix.core.cache.CacheManager,
-            cacheInvalidationService: com.example.liftrix.service.CacheInvalidationService
+            cacheInvalidationService: com.example.liftrix.service.CacheInvalidationService,
+            gymBuddyWorkoutCompletionNotifier: com.example.liftrix.service.GymBuddyWorkoutCompletionNotifier
         ): com.example.liftrix.service.UnifiedWorkoutSessionManager {
             return com.example.liftrix.service.UnifiedWorkoutSessionManager(
                 context = context,
                 workoutRepository = workoutRepository,
                 feedRepository = feedRepository,
                 cacheManager = cacheManager,
-                cacheInvalidationService = cacheInvalidationService
+                cacheInvalidationService = cacheInvalidationService,
+                gymBuddyWorkoutCompletionNotifier = gymBuddyWorkoutCompletionNotifier
             )
         }
 

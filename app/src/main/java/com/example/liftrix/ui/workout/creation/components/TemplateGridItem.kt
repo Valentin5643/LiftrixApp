@@ -57,6 +57,7 @@ fun TemplateGridItem(
     onStartWorkout: () -> Unit = {},
     onEditTemplate: () -> Unit = {},
     onDuplicateTemplate: () -> Unit = {},
+    onShareWithGymBuddy: () -> Unit = {},
     onDeleteTemplate: () -> Unit = {},
     onToggleFavorite: () -> Unit = {},
     onTemplateClick: () -> Unit = {},
@@ -166,6 +167,13 @@ fun TemplateGridItem(
                                 onClick = {
                                     showDropdownMenu = false
                                     onDuplicateTemplate()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Share with Gym Buddy") },
+                                onClick = {
+                                    showDropdownMenu = false
+                                    onShareWithGymBuddy()
                                 }
                             )
                             DropdownMenuItem(

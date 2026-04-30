@@ -19,7 +19,7 @@ abstract class ModernBaseViewModel<S : Any>(
     initialState: S
 ) : ViewModel() {
 
-    protected val _uiState = MutableStateFlow(initialState)
+    protected open val _uiState = MutableStateFlow(initialState)
     val uiState: StateFlow<S> = _uiState.asStateFlow()
 
     protected fun updateState(transform: (S) -> S) {

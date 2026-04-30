@@ -50,6 +50,7 @@ import com.example.liftrix.domain.model.AuthState
 import com.example.liftrix.ui.auth.components.ConsentDialog
 import com.example.liftrix.ui.auth.components.SignInForm
 import com.example.liftrix.ui.auth.components.SignUpForm
+import com.example.liftrix.ui.common.components.LiftrixBrandHeader
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
@@ -175,6 +176,14 @@ fun AuthScreen(
                 verticalArrangement = Arrangement.Top
             ) {
                 Spacer(modifier = Modifier.height(8.dp))
+
+                LiftrixBrandHeader(
+                    subtitle = if (isSignUpMode) "Create your AI fitness profile" else "Welcome back",
+                    logoWidth = 132.dp,
+                    isDarkTheme = isDarkTheme
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
 
                 // Auth form section
                 Column(

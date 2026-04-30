@@ -10,6 +10,14 @@
         <item name="android:textColorSecondary">@color/on_surface</item>
     </style>
 
+    <style name="Theme.Liftrix.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/liftrix_teal</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_transparent</item>
+        <item name="windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+        <item name="windowSplashScreenAnimationDuration">0</item>
+        <item name="postSplashScreenTheme">@style/Theme.Liftrix</item>
+    </style>
+
     <!-- Custom text appearances -->
     <style name="TextAppearance.Liftrix.HeadlineLarge" parent="TextAppearance.AppCompat.Headline">
         <item name="android:fontFamily">sans-serif-black</item>

@@ -11,6 +11,7 @@ import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
 import com.example.liftrix.domain.usecase.workout.WorkoutCommandUseCase
+import com.example.liftrix.domain.usecase.template.TemplateCommandUseCase
 import com.example.liftrix.domain.usecase.template.TemplateQueryUseCase
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.ui.common.event.ViewModelEvent
@@ -65,6 +66,7 @@ private fun EditWorkoutUiState.dataOrNull(): EditWorkoutData? = when (this) {
 class EditWorkoutViewModel @Inject constructor(
     private val workoutQueryUseCase: WorkoutQueryUseCase,
     private val templateQueryUseCase: TemplateQueryUseCase,
+    private val templateCommandUseCase: TemplateCommandUseCase,
     private val workoutCommandUseCase: WorkoutCommandUseCase,
     private val workoutRepository: WorkoutRepository,
     private val authQueryUseCase: AuthQueryUseCase
@@ -699,6 +701,7 @@ class EditWorkoutViewModel @Inject constructor(
         val currentData = uiState.value.dataOrNull()
         if (currentData != null && currentData.hasChanges) {
             val originalWorkout = this.originalWorkout ?: return
+            val isTemplate = originalWorkout.id.value.startsWith("template-")
 
             // Validate changes before saving
             val validationErrors = validateWorkoutChanges(currentData)
@@ -718,13 +721,82 @@ class EditWorkoutViewModel @Inject constructor(
             viewModelScope.launch {
                 updateState { EditWorkoutUiState.Loading }
 
-                Timber.d("Saving workout changes for ${updatedWorkout.id.value}, userId: ${updatedWorkout.userId}")
-                Timber.d("Original workout ID: ${originalWorkout.id.value}, userId: ${originalWorkout.userId}")
+                Timber.d(
+                    "EDIT-WORKOUT-DEBUG: saveChanges requested id=${updatedWorkout.id.value} " +
+                        "isTemplate=$isTemplate selectedPath=${if (isTemplate) "TemplateCommandUseCase.updateFromEditedWorkout" else "WorkoutRepository.updateWorkout"} " +
+                        "exerciseCount=${updatedWorkout.exercises.size} setCounts=${exerciseSetCounts(updatedWorkout)}"
+                )
+                Timber.d(
+                    "EDIT-WORKOUT-DEBUG: original workout id=${originalWorkout.id.value} " +
+                        "exerciseCount=${originalWorkout.exercises.size} setCounts=${exerciseSetCounts(originalWorkout)}"
+                )
+                Timber.d(
+                    "EDIT-WORKOUT-DEBUG: edited state exerciseCount=${currentData.editedExercises.size} " +
+                        "setCounts=${currentData.editedExercises.map { it.sets.size }}"
+                )
 
-                val result = workoutRepository.updateWorkout(updatedWorkout)
+                val result = if (isTemplate) {
+                    templateCommandUseCase.updateFromEditedWorkout(updatedWorkout)
+                } else {
+                    workoutRepository.updateWorkout(updatedWorkout)
+                }
 
-                result.onSuccess { savedWorkout ->
-                    Timber.i("Successfully saved workout changes: ${savedWorkout.name}")
+                result.onSuccess saveResult@ { savedWorkout ->
+                    Timber.i(
+                        "EDIT-WORKOUT-DEBUG: Save succeeded id=${savedWorkout.id.value} " +
+                            "isTemplate=$isTemplate exerciseCount=${savedWorkout.exercises.size} setCounts=${exerciseSetCounts(savedWorkout)}"
+                    )
+
+                    val readBackResult = if (isTemplate) {
+                        templateQueryUseCase.getById(savedWorkout.id.value, savedWorkout.userId)
+                    } else {
+                        workoutQueryUseCase.getById(savedWorkout.id, savedWorkout.userId)
+                    }
+
+                    readBackResult.onSuccess { reloadedWorkout ->
+                        val reloadedSetCounts = reloadedWorkout?.exercises?.map { it.sets.size }.orEmpty()
+                        val savedSetCounts = updatedWorkout.exercises.map { it.sets.size }
+                        Timber.i(
+                            "EDIT-WORKOUT-DEBUG: Read-back after save id=${savedWorkout.id.value} " +
+                                "isTemplate=$isTemplate source=${if (isTemplate) "TemplateQueryUseCase.getById" else "WorkoutQueryUseCase.getById"} " +
+                                "exerciseCount=${reloadedWorkout?.exercises?.size ?: 0} setCounts=$reloadedSetCounts"
+                        )
+
+                        if (reloadedWorkout == null || reloadedSetCounts != savedSetCounts) {
+                            val error = LiftrixError.BusinessLogicError(
+                                code = "EDIT_SAVE_VERIFICATION_FAILED",
+                                errorMessage = "Saved workout did not match persisted read-back",
+                                analyticsContext = mapOf(
+                                    "workoutId" to savedWorkout.id.value,
+                                    "isTemplate" to isTemplate.toString(),
+                                    "expectedSetCounts" to savedSetCounts.toString(),
+                                    "actualSetCounts" to reloadedSetCounts.toString()
+                                )
+                            )
+                            Timber.e(
+                                "EDIT-WORKOUT-DEBUG: Save verification failed id=${savedWorkout.id.value} " +
+                                    "expectedSetCounts=$savedSetCounts actualSetCounts=$reloadedSetCounts"
+                            )
+                            handleSaveError(error)
+                            updateState { EditWorkoutUiState.Error(error, currentData) }
+                            return@saveResult
+                        }
+
+                        Timber.i(
+                            "EDIT-WORKOUT-DEBUG: Save verified id=${savedWorkout.id.value} " +
+                                "isTemplate=$isTemplate removed sets persisted"
+                        )
+                    }.onFailure { error ->
+                        Timber.e(error, "EDIT-WORKOUT-DEBUG: Read-back after save failed id=${savedWorkout.id.value} isTemplate=$isTemplate")
+                        val liftrixError = error as? LiftrixError ?: LiftrixError.DataRetrievalError(
+                            errorMessage = error.message ?: "Failed to verify saved workout",
+                            operation = "VERIFY_EDIT_WORKOUT_SAVE"
+                        )
+                        handleSaveError(liftrixError)
+                        updateState { EditWorkoutUiState.Error(liftrixError, currentData) }
+                        return@saveResult
+                    }
+
                     // Update original workout reference for future change tracking
                     this@EditWorkoutViewModel.originalWorkout = savedWorkout
                     updateState {
@@ -758,6 +830,9 @@ class EditWorkoutViewModel @Inject constructor(
         }
     }
     
+    private fun exerciseSetCounts(workout: Workout): List<Int> =
+        workout.exercises.map { it.sets.size }
+
     /**
      * Validates workout changes before saving
      */
@@ -901,4 +976,3 @@ sealed class EditWorkoutEvent : ViewModelEvent {
     data class NavigateToPostCreation(val workoutId: String) : EditWorkoutEvent()
     data class ShowError(val message: String) : EditWorkoutEvent()
 }
-

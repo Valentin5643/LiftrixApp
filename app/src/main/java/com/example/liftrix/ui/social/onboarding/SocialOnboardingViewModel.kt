@@ -8,6 +8,9 @@ import com.example.liftrix.domain.model.social.WorkoutVisibility
 import com.example.liftrix.ui.social.onboarding.SocialOnboardingStep
 import com.example.liftrix.domain.usecase.social.SocialProfileQueryUseCase
 import com.example.liftrix.domain.usecase.social.SocialProfileCommandUseCase
+import com.example.liftrix.domain.usecase.social.CheckUsernameAvailabilityUseCase
+import com.example.liftrix.domain.usecase.social.CreateSocialProfileUseCase
+import com.example.liftrix.domain.usecase.social.UpdateSocialPrivacySettingsUseCase
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -35,8 +38,8 @@ import javax.inject.Inject
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class SocialOnboardingViewModel @Inject constructor(
-    private val socialProfileCommandUseCase: SocialProfileCommandUseCase,
-    private val socialProfileQueryUseCase: SocialProfileQueryUseCase
+    private val socialProfileCommandUseCase: SocialProfileCommandUseCase?,
+    private val socialProfileQueryUseCase: SocialProfileQueryUseCase?
 ) : ModernBaseViewModel<SocialOnboardingUiState>(
     initialState = SocialOnboardingUiState(
         currentStep = SocialOnboardingStep.PRIVACY_INTRO,
@@ -54,6 +57,23 @@ class SocialOnboardingViewModel @Inject constructor(
         canCreateProfile = false
     )
 ) {
+    private var legacyCreateSocialProfileUseCase: CreateSocialProfileUseCase? = null
+    private var legacyCheckUsernameAvailabilityUseCase: CheckUsernameAvailabilityUseCase? = null
+    private var legacyUpdateSocialPrivacySettingsUseCase: UpdateSocialPrivacySettingsUseCase? = null
+
+    constructor(
+        createSocialProfileUseCase: CreateSocialProfileUseCase,
+        checkUsernameAvailabilityUseCase: CheckUsernameAvailabilityUseCase,
+        updateSocialPrivacySettingsUseCase: UpdateSocialPrivacySettingsUseCase,
+        @Suppress("UNUSED_PARAMETER") errorHandler: com.example.liftrix.domain.usecase.common.ErrorHandler
+    ) : this(
+        socialProfileCommandUseCase = null,
+        socialProfileQueryUseCase = null
+    ) {
+        legacyCreateSocialProfileUseCase = createSocialProfileUseCase
+        legacyCheckUsernameAvailabilityUseCase = checkUsernameAvailabilityUseCase
+        legacyUpdateSocialPrivacySettingsUseCase = updateSocialPrivacySettingsUseCase
+    }
 
     init {
         // Debounced username availability checking
@@ -166,7 +186,8 @@ class SocialOnboardingViewModel @Inject constructor(
 
     private fun checkUsernameAvailability(username: String) {
         viewModelScope.launch {
-            val result = socialProfileQueryUseCase.checkUsernameAvailability(username)
+            val result = legacyCheckUsernameAvailabilityUseCase?.invoke(username)
+                ?: socialProfileQueryUseCase!!.checkUsernameAvailability(username)
             result.fold(
                 onSuccess = { isAvailable ->
                     val error = if (!isAvailable) {
@@ -202,7 +223,11 @@ class SocialOnboardingViewModel @Inject constructor(
         viewModelScope.launch {
             updateState { it.copy(isLoading = true) }
 
-            val result = socialProfileCommandUseCase.create(
+            val result = legacyCreateSocialProfileUseCase?.invoke(
+                username = state.username,
+                displayName = state.displayName,
+                bio = state.bio.takeIf { it.isNotBlank() }
+            ) ?: socialProfileCommandUseCase!!.create(
                 username = state.username,
                 displayName = state.displayName,
                 bio = state.bio.takeIf { it.isNotBlank() }
@@ -212,7 +237,7 @@ class SocialOnboardingViewModel @Inject constructor(
 
             result.fold(
                 onSuccess = { profile ->
-                    Timber.d("Social profile created successfully: ${profile.username}")
+                    Timber.d("Social profile created successfully")
                     navigateNext()
                 },
                 onFailure = { throwable ->
@@ -269,7 +294,8 @@ class SocialOnboardingViewModel @Inject constructor(
         viewModelScope.launch {
             updateState { it.copy(isLoading = true) }
 
-            val result = socialProfileCommandUseCase.updatePrivacySettings(privacySettings)
+            val result = legacyUpdateSocialPrivacySettingsUseCase?.invoke(privacySettings)
+                ?: socialProfileCommandUseCase!!.updatePrivacySettings(privacySettings)
             result.fold(
                 onSuccess = {
                     updateState { it.copy(isLoading = false) }

@@ -134,13 +134,13 @@ class NotificationChannelManager @Inject constructor(
      */
     @RequiresApi(Build.VERSION_CODES.O)
     private fun createSocialChannels() {
-        // Gym Buddy PRs - High priority, custom sound
+        // Gym Buddy activity - High priority, custom sound
         val gymBuddyChannel = NotificationChannel(
             CHANNEL_GYM_BUDDY,
-            "Gym Buddy PRs",
+            "Gym Buddy Activity",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Get notified when your gym buddies hit new personal records"
+            description = "Get notified when your gym buddies finish workouts or hit new personal records"
             group = GROUP_SOCIAL
             enableLights(true)
             lightColor = android.graphics.Color.GREEN

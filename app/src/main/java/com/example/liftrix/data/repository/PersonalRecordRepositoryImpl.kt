@@ -2,6 +2,7 @@ package com.example.liftrix.data.repository
 
 import com.example.liftrix.data.local.dao.PersonalRecordDao
 import com.example.liftrix.data.local.entity.PersonalRecordEntity
+import com.example.liftrix.data.service.GymBuddyPRNotificationPublisher
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -28,7 +29,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class PersonalRecordRepositoryImpl @Inject constructor(
-    private val personalRecordDao: PersonalRecordDao
+    private val personalRecordDao: PersonalRecordDao,
+    private val gymBuddyPRNotificationPublisher: GymBuddyPRNotificationPublisher
 ) : PersonalRecordRepository {
 
     override suspend fun savePR(
@@ -53,6 +55,7 @@ class PersonalRecordRepositoryImpl @Inject constructor(
             
             val entity = PersonalRecordEntity.fromDomain(personalRecord, userId, workoutId)
             val result = personalRecordDao.insertPR(entity)
+            gymBuddyPRNotificationPublisher.publish(listOf(entity))
             
             Timber.d("PR saved successfully with ID: ${entity.id}, row ID: $result")
         }
@@ -83,6 +86,7 @@ class PersonalRecordRepositoryImpl @Inject constructor(
             }
             
             val results = personalRecordDao.insertPRs(entities)
+            gymBuddyPRNotificationPublisher.publish(entities)
             
             Timber.d("${results.size} PRs saved successfully")
         }

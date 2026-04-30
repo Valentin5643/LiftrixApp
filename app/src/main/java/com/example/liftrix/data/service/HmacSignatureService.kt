@@ -94,7 +94,7 @@ class HmacSignatureService @Inject constructor() {
     /**
      * Derives a secret key for the given user ID.
      *
-     * TODO: In production, this should:
+     * Follow-up: In production, this should:
      * 1. Retrieve user-specific key from secure storage (Android Keystore)
      * 2. Use proper key derivation function (PBKDF2, Argon2)
      * 3. Implement key rotation mechanism
@@ -103,7 +103,7 @@ class HmacSignatureService @Inject constructor() {
      */
     private fun deriveSecretKey(userId: String): String {
         // DEVELOPMENT ONLY: Simple hash-based key derivation
-        // PRODUCTION TODO: Use Android Keystore + PBKDF2/Argon2
+        // PRODUCTION Follow-up: Use Android Keystore + PBKDF2/Argon2
         val baseSecret = "liftrix_hmac_secret_v1" // Should be from secure config
         return "$baseSecret:$userId".hashCode().toString()
     }

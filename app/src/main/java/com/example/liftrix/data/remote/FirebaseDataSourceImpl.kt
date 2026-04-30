@@ -193,9 +193,21 @@ class FirebaseDataSourceImpl @Inject constructor(
     override suspend fun fetchAll(userId: String, entityType: String): ProcessResult {
         return try {
             Timber.d("FirebaseDataSource: Fetching all $entityType for user $userId")
+            val firestorePath = when (entityType) {
+                "WORKOUT" -> "users/$userId/workouts"
+                "TEMPLATE" -> "users/$userId/templates"
+                "ACHIEVEMENT" -> "users/$userId/achievements"
+                else -> "unsupported/$entityType"
+            }
+            Timber.tag("FreshLoginRestoreDebug").d(
+                "operation=FIREBASE_FETCH_ALL_START userId=$userId entityType=$entityType path=$firestorePath direction=Firebase->Room timestamp=${System.currentTimeMillis()}"
+            )
             
             // Validate authentication
             if (!isUserAuthenticated(userId)) {
+                Timber.tag("FreshLoginRestoreDebug").w(
+                    "operation=FIREBASE_FETCH_ALL_AUTH_REJECTED userId=$userId entityType=$entityType path=$firestorePath firebaseCurrentUserId=${auth.currentUser?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                )
                 return ProcessResult.Failure(Exception("User not authenticated or ID mismatch"))
             }
             
@@ -210,11 +222,22 @@ class FirebaseDataSourceImpl @Inject constructor(
             }
             
             Timber.d("FirebaseDataSource: Successfully fetched ${documents.size} $entityType documents")
+            Timber.tag("FreshLoginRestoreDebug").i(
+                "operation=FIREBASE_FETCH_ALL_RESULT userId=$userId entityType=$entityType path=$firestorePath remoteCount=${documents.size} isEmpty=${documents.isEmpty()} timestamp=${System.currentTimeMillis()}"
+            )
             ProcessResult.DataList(documents)
             
         } catch (e: FirebaseFirestoreException) {
+            Timber.tag("FreshLoginRestoreDebug").e(
+                e,
+                "operation=FIREBASE_FETCH_ALL_FIRESTORE_ERROR userId=$userId entityType=$entityType code=${e.code} timestamp=${System.currentTimeMillis()}"
+            )
             handleFirestoreException(e, "fetchAll", entityType, "all")
         } catch (e: Exception) {
+            Timber.tag("FreshLoginRestoreDebug").e(
+                e,
+                "operation=FIREBASE_FETCH_ALL_ERROR userId=$userId entityType=$entityType timestamp=${System.currentTimeMillis()}"
+            )
             Timber.e(e, "FirebaseDataSource: Error fetching all $entityType")
             ProcessResult.Failure(e)
         }

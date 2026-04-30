@@ -387,7 +387,7 @@ class WorkoutTimerService : Service() {
 
         setContentTitle(getNotificationTitle())
         setContentText(getNotificationText())
-        setSmallIcon(R.drawable.ic_launcher_foreground)
+        setSmallIcon(R.drawable.ic_notification)
         setContentIntent(mainPendingIntent)
         setOngoing(true)
         setSilent(true)
@@ -506,7 +506,7 @@ class WorkoutTimerService : Service() {
         val notification = NotificationCompat.Builder(this, LONG_WORKOUT_CHANNEL_ID).apply {
             setContentTitle("Long Workout Detected")
             setContentText("You've been working out for ${formatTime(elapsedSeconds)}. Are you still active?")
-            setSmallIcon(R.drawable.ic_launcher_foreground)
+            setSmallIcon(R.drawable.ic_notification)
             setContentIntent(mainPendingIntent)
             setAutoCancel(true)
             priority = NotificationCompat.PRIORITY_DEFAULT

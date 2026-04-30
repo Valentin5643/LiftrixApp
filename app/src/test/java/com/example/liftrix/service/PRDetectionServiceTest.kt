@@ -61,6 +61,7 @@ class PRDetectionServiceTest {
     fun setup() {
         exerciseDao = mockk()
         exerciseSetDao = mockk()
+        coEvery { exerciseSetDao.getOneRmDataForExercises(any(), any(), any(), any(), any()) } returns emptyList()
         
         prDetectionService = PRDetectionServiceImpl(
             exerciseDao = exerciseDao,

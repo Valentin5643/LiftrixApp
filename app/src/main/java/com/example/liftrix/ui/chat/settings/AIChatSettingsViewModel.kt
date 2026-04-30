@@ -264,6 +264,7 @@ class AIChatSettingsViewModel @Inject constructor(
         val language = _uiState.value.preferences?.preferredLanguage ?: "en"
         return chatOperationsUseCase.getRequiredConfirmationText(language)
     }
+
 }
 
 /**

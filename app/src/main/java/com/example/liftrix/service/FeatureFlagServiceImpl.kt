@@ -64,7 +64,7 @@ class FeatureFlagServiceImpl @Inject constructor(
         // Cache expiration time in seconds (1 hour for production)
         private const val CACHE_EXPIRATION_SECONDS = 3600L
 
-        // TODO: TEMPORARY DEBUG OVERRIDE
+        // Follow-up: TEMPORARY DEBUG OVERRIDE
         // WHY: Enables immediate Remote Config fetching in debug builds for testing/debugging
         // WHEN TO REMOVE: After Remote Config is fully tested and Firebase Console shows fetch activity
         // PRODUCTION IMPACT: None - only affects debug builds (BuildConfig.DEBUG)

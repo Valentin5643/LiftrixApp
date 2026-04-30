@@ -360,15 +360,15 @@ class ProgressSummaryViewModel @Inject constructor(
     private suspend fun changeTimePeriod(timeRange: TimeRange) {
         _currentTimeRange.value = timeRange
         
-        // Update state with new time range
-        val currentState = combinedState.value
+        // Load from the explicit selected range instead of reading combinedState
+        // immediately, because the combined flow may still hold the previous range.
+        val currentState = (_uiState.value as? UiState.Success)?.data ?: combinedState.value
         val updatedState = currentState.withTimeRange(timeRange)
         _uiState.value = UiState.Success(updatedState)
 
         // Load data for new time range
-        val finalState = combinedState.value
-        if (finalState.hasValidUser()) {
-            loadSummaryDataForState(finalState)
+        if (updatedState.hasValidUser()) {
+            loadSummaryDataForState(updatedState)
         }
     }
 

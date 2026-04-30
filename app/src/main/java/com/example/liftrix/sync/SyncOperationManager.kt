@@ -52,7 +52,8 @@ class SyncOperationManager @Inject constructor(
     private val auth: FirebaseAuth,
     private val conflictResolver: ConflictResolver,
     private val offlineQueueManager: OfflineQueueManager,
-    private val json: Json
+    private val json: Json,
+    private val startupRestoreGate: StartupRestoreGate
 ) {
     
     companion object {
@@ -123,6 +124,15 @@ class SyncOperationManager @Inject constructor(
         }
     ) {
         Timber.d("SyncOperationManager: Processing $operationType operations for user $userId (priority <= $maxPriority)")
+        if (!startupRestoreGate.isRestoreComplete(userId)) {
+            Timber.tag("StartupRestoreFix").w(
+                "operation=SYNC_OPERATION_MANAGER_BLOCKED userId=$userId operationType=$operationType maxPriority=$maxPriority gateState=${startupRestoreGate.currentState(userId)} timestamp=${System.currentTimeMillis()}"
+            )
+            return@liftrixCatching emptyList()
+        }
+        Timber.tag("StartupRestoreFix").d(
+            "operation=SYNC_OPERATION_MANAGER_ALLOWED userId=$userId operationType=$operationType maxPriority=$maxPriority gateState=${startupRestoreGate.currentState(userId)} timestamp=${System.currentTimeMillis()}"
+        )
         
         val results = mutableListOf<SyncOperationResult>()
         

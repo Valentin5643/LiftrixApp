@@ -26,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
+import java.util.Date
 import java.util.concurrent.TimeUnit
 
 /**
@@ -49,6 +50,7 @@ class ChatSyncWorker @AssistedInject constructor(
         const val KEY_ERROR_MESSAGE = "error_message"
         private const val MAX_RETRY_COUNT = 3
         private const val BATCH_SIZE = 20
+        private const val MONTHLY_USAGE_TAG = "MonthlyUsageDebug"
         
         /**
          * Creates a work request for chat sync.
@@ -93,7 +95,12 @@ class ChatSyncWorker @AssistedInject constructor(
             OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
         
         try {
-            Timber.d("Starting chat sync for user: $userId")
+            Timber.tag(MONTHLY_USAGE_TAG).d(
+                "Chat sync started userId=%s source=Room.chat_history+Room.chat_preferences target=Firebase now=%s dirtyFlagGating=%s",
+                userId,
+                Date(System.currentTimeMillis()).toString(),
+                useDirtyFlagGating
+            )
             
             var syncedCount = 0
             
@@ -105,13 +112,18 @@ class ChatSyncWorker @AssistedInject constructor(
             val messagesSynced = syncChatHistory(userId, useDirtyFlagGating)
             syncedCount += messagesSynced
             
-            Timber.d("Chat sync completed for user $userId. Synced $syncedCount items")
+            Timber.tag(MONTHLY_USAGE_TAG).d(
+                "Chat sync completed userId=%s syncedItems=%d source=Room/Firebase now=%s",
+                userId,
+                syncedCount,
+                Date(System.currentTimeMillis()).toString()
+            )
             
             Result.success(
                 workDataOf(KEY_SYNC_COUNT to syncedCount)
             )
         } catch (e: Exception) {
-            Timber.e(e, "Chat sync failed for user: $userId")
+            Timber.tag(MONTHLY_USAGE_TAG).e(e, "Chat sync failed userId=%s attempt=%d", userId, runAttemptCount + 1)
             
             // Check retry count
             if (runAttemptCount < MAX_RETRY_COUNT) {
@@ -137,9 +149,18 @@ class ChatSyncWorker @AssistedInject constructor(
             }
             
             if (preferences == null) {
-                Timber.d("No unsynced preferences for user $userId")
+                Timber.tag(MONTHLY_USAGE_TAG).d("No chat preference sync needed userId=%s source=Room.chat_preferences", userId)
                 return false
             }
+            Timber.tag(MONTHLY_USAGE_TAG).d(
+                "Chat preference sync candidate userId=%s localMonthlyLimit=%d localDailyLimit=%d localLastModified=%s localSynced=%s localDirty=%s source=Room.chat_preferences",
+                userId,
+                preferences.maxTokensPerMonth,
+                preferences.maxMessagesPerDay,
+                Date(preferences.lastModified).toString(),
+                preferences.isSynced,
+                preferences.isDirty
+            )
 
             val docRef = firestore.collection("users")
                 .document(userId)
@@ -152,6 +173,14 @@ class ChatSyncWorker @AssistedInject constructor(
                     is Number -> remoteValue.toLong()
                     else -> 0L
                 }
+                Timber.tag(MONTHLY_USAGE_TAG).d(
+                    "Remote chat preferences read userId=%s remoteMonthlyLimit=%s remoteDailyLimit=%s remoteLastModified=%s localLastModified=%s source=Firebase.chat_preferences",
+                    userId,
+                    remoteDoc.getLong("maxTokensPerMonth")?.toString() ?: "missing",
+                    remoteDoc.getLong("maxMessagesPerDay")?.toString() ?: "missing",
+                    Date(remoteLastModified).toString(),
+                    Date(preferences.lastModified).toString()
+                )
                 if (remoteLastModified > preferences.lastModified) {
                     val remoteEntity = preferences.copy(
                         preferredLanguage = remoteDoc.getString("preferredLanguage")
@@ -180,6 +209,13 @@ class ChatSyncWorker @AssistedInject constructor(
                         lastModified = remoteLastModified
                     )
                     chatPreferencesDao.upsertFromRemote(remoteEntity)
+                    Timber.tag(MONTHLY_USAGE_TAG).w(
+                        "Remote chat preferences overwrote local userId=%s monthlyLimit=%d dailyLimit=%d remoteLastModified=%s source=Firebase.chat_preferences target=Room.chat_preferences",
+                        userId,
+                        remoteEntity.maxTokensPerMonth,
+                        remoteEntity.maxMessagesPerDay,
+                        Date(remoteLastModified).toString()
+                    )
                     return false
                 }
             }
@@ -202,6 +238,13 @@ class ChatSyncWorker @AssistedInject constructor(
             
             // Upload to Firebase
             docRef.set(preferencesData, SetOptions.merge()).await()
+            Timber.tag(MONTHLY_USAGE_TAG).d(
+                "Uploaded chat preferences userId=%s monthlyLimit=%d dailyLimit=%d localLastModified=%s source=Room.chat_preferences target=Firebase.chat_preferences",
+                userId,
+                preferences.maxTokensPerMonth,
+                preferences.maxMessagesPerDay,
+                Date(preferences.lastModified).toString()
+            )
             
             // Mark as synced in local database
             chatPreferencesDao.markAsClean(
@@ -210,11 +253,11 @@ class ChatSyncWorker @AssistedInject constructor(
                 syncVersion = System.currentTimeMillis()
             )
             
-            Timber.d("Synced chat preferences for user $userId")
+            Timber.tag(MONTHLY_USAGE_TAG).d("Marked chat preferences synced userId=%s source=Room.chat_preferences", userId)
             return true
             
         } catch (e: Exception) {
-            Timber.e(e, "Failed to sync preferences for user $userId")
+            Timber.tag(MONTHLY_USAGE_TAG).e(e, "Failed to sync preferences userId=%s source=Room.chat_preferences target=Firebase.chat_preferences", userId)
             throw e
         }
     }
@@ -231,11 +274,16 @@ class ChatSyncWorker @AssistedInject constructor(
             }
             
             if (unsyncedMessages.isEmpty()) {
-                Timber.d("No unsynced messages for user $userId")
+                Timber.tag(MONTHLY_USAGE_TAG).d("No chat history sync needed userId=%s source=Room.chat_history", userId)
                 return 0
             }
             
-            Timber.d("Syncing ${unsyncedMessages.size} messages for user $userId")
+            Timber.tag(MONTHLY_USAGE_TAG).d(
+                "Chat history sync candidates userId=%s count=%d tokenSum=%d source=Room.chat_history",
+                userId,
+                unsyncedMessages.size,
+                unsyncedMessages.sumOf { it.tokenCount ?: 0 }
+            )
             
             var totalSynced = 0
             
@@ -283,6 +331,15 @@ class ChatSyncWorker @AssistedInject constructor(
                                 lastModified = remoteLastModified
                             )
                             chatHistoryDao.upsertFromRemote(remoteEntity)
+                            Timber.tag(MONTHLY_USAGE_TAG).w(
+                                "Remote chat message overwrote local userId=%s messageId=%s messageType=%s tokenCount=%s createdAt=%s remoteLastModified=%s source=Firebase.chat_history target=Room.chat_history",
+                                userId,
+                                message.id,
+                                remoteEntity.messageType,
+                                remoteEntity.tokenCount?.toString() ?: "null",
+                                Date(remoteEntity.createdAt).toString(),
+                                Date(remoteLastModified).toString()
+                            )
                             continue
                         }
                     }
@@ -318,6 +375,12 @@ class ChatSyncWorker @AssistedInject constructor(
                 
                 // Commit the batch
                 firestoreBatch.commit().await()
+                Timber.tag(MONTHLY_USAGE_TAG).d(
+                    "Uploaded chat history batch userId=%s count=%d tokenSum=%d source=Room.chat_history target=Firebase.chat_history",
+                    userId,
+                    messagesToUpload.size,
+                    messagesToUpload.sumOf { it.tokenCount ?: 0 }
+                )
                 
                 // Mark messages as synced in local database
                 val messageIds = messagesToUpload.map { it.id }
@@ -328,13 +391,13 @@ class ChatSyncWorker @AssistedInject constructor(
                 )
                 
                 totalSynced += messagesToUpload.size
-                Timber.d("Synced batch of ${messagesToUpload.size} messages")
+                Timber.tag(MONTHLY_USAGE_TAG).d("Marked chat history batch synced userId=%s count=%d source=Room.chat_history", userId, messagesToUpload.size)
             }
             
             return totalSynced
             
         } catch (e: Exception) {
-            Timber.e(e, "Failed to sync chat history for user $userId")
+            Timber.tag(MONTHLY_USAGE_TAG).e(e, "Failed to sync chat history userId=%s source=Room.chat_history target=Firebase.chat_history", userId)
             throw e
         }
     }
@@ -345,7 +408,7 @@ class ChatSyncWorker @AssistedInject constructor(
      */
     suspend fun downloadChatData(userId: String): Boolean {
         return try {
-            Timber.d("Downloading chat data for user $userId")
+            Timber.tag(MONTHLY_USAGE_TAG).d("Downloading chat data userId=%s source=Firebase target=Room now=%s", userId, Date(System.currentTimeMillis()).toString())
             
             // Download preferences
             val preferencesDoc = firestore.collection("users")
@@ -380,6 +443,13 @@ class ChatSyncWorker @AssistedInject constructor(
                 )
                 
                 chatPreferencesDao.upsertFromRemote(preferences)
+                Timber.tag(MONTHLY_USAGE_TAG).w(
+                    "Downloaded chat preferences userId=%s monthlyLimit=%d dailyLimit=%d remoteLastModified=%s source=Firebase.chat_preferences target=Room.chat_preferences",
+                    userId,
+                    preferences.maxTokensPerMonth,
+                    preferences.maxMessagesPerDay,
+                    Date(remoteLastModified).toString()
+                )
             }
             
             // Download recent chat history (last 100 messages)
@@ -424,12 +494,17 @@ class ChatSyncWorker @AssistedInject constructor(
                 messages.forEach { message ->
                     chatHistoryDao.upsertFromRemote(message)
                 }
-                Timber.d("Downloaded ${messages.size} messages for user $userId")
+                Timber.tag(MONTHLY_USAGE_TAG).w(
+                    "Downloaded chat history userId=%s count=%d tokenSum=%d source=Firebase.chat_history target=Room.chat_history",
+                    userId,
+                    messages.size,
+                    messages.sumOf { it.tokenCount ?: 0 }
+                )
             }
             
             true
         } catch (e: Exception) {
-            Timber.e(e, "Failed to download chat data for user $userId")
+            Timber.tag(MONTHLY_USAGE_TAG).e(e, "Failed to download chat data userId=%s source=Firebase target=Room", userId)
             false
         }
     }

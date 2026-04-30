@@ -48,14 +48,37 @@ sealed class LiftrixError(
      * Authentication and authorization failures.
      * May be recoverable depending on the specific auth issue.
      */
-    data class AuthenticationError(
+    open class AuthenticationError(
         val errorMessage: String = "Authentication failed",
         override val isRecoverable: Boolean = false, // Usually requires user action
         override val retryAfter: Long? = null,
         override val analyticsContext: Map<String, String> = emptyMap(),
         val authProvider: String? = null,
         val errorCode: String? = null
-    ) : LiftrixError(errorMessage, isRecoverable, retryAfter, analyticsContext)
+    ) : LiftrixError(errorMessage, isRecoverable, retryAfter, analyticsContext) {
+        fun copy(
+            errorMessage: String = this.errorMessage,
+            isRecoverable: Boolean = this.isRecoverable,
+            retryAfter: Long? = this.retryAfter,
+            analyticsContext: Map<String, String> = this.analyticsContext,
+            authProvider: String? = this.authProvider,
+            errorCode: String? = this.errorCode
+        ): AuthenticationError = AuthenticationError(
+            errorMessage = errorMessage,
+            isRecoverable = isRecoverable,
+            retryAfter = retryAfter,
+            analyticsContext = analyticsContext,
+            authProvider = authProvider,
+            errorCode = errorCode
+        )
+    }
+
+    class UnauthenticatedError(
+        errorMessage: String = "User must be authenticated",
+        isRecoverable: Boolean = true,
+        retryAfter: Long? = null,
+        analyticsContext: Map<String, String> = emptyMap()
+    ) : AuthenticationError(errorMessage, isRecoverable, retryAfter, analyticsContext)
     
     /**
      * Database operations and persistence errors.

@@ -40,6 +40,10 @@ fun GymBuddyScreen(
     val uiState by viewModel.uiState.collectAsState()
     var showQrSheet by remember { mutableStateOf(false) }
 
+    LaunchedEffect(Unit) {
+        viewModel.handleEvent(GymBuddyEvent.GenerateQrCode)
+    }
+
     Column(
         modifier = modifier.fillMaxSize()
     ) {
@@ -48,11 +52,16 @@ fun GymBuddyScreen(
             buddyCount = uiState.gymBuddies.size,
             maxBuddies = 5,
             canAddMore = uiState.canAddMoreBuddies,
+            qrCode = uiState.qrCode,
+            isGeneratingQr = uiState.isGeneratingQr,
             onShowQr = { 
                 showQrSheet = true
                 viewModel.handleEvent(GymBuddyEvent.GenerateQrCode)
             },
             onScanQr = { onNavigateToQrScanner() },
+            onRegenerateQr = {
+                viewModel.handleEvent(GymBuddyEvent.RegenerateQrCode)
+            },
             modifier = Modifier.padding(16.dp)
         )
 
@@ -81,6 +90,10 @@ fun GymBuddyScreen(
             },
             onRegenerate = {
                 viewModel.handleEvent(GymBuddyEvent.RegenerateQrCode)
+            },
+            onScanQr = {
+                showQrSheet = false
+                onNavigateToQrScanner()
             }
         )
     }
@@ -94,8 +107,11 @@ private fun GymBuddyHeader(
     buddyCount: Int,
     maxBuddies: Int,
     canAddMore: Boolean,
+    qrCode: QRCodeData?,
+    isGeneratingQr: Boolean,
     onShowQr: () -> Unit,
     onScanQr: () -> Unit,
+    onRegenerateQr: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -175,6 +191,17 @@ private fun GymBuddyHeader(
             }
         }
 
+        if (canAddMore) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            InlineQrInviteCard(
+                qrCode = qrCode,
+                isGenerating = isGeneratingQr,
+                onRegenerate = onRegenerateQr,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
         // Limit reached message
         if (!canAddMore) {
             Spacer(modifier = Modifier.height(8.dp))
@@ -185,6 +212,77 @@ private fun GymBuddyHeader(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
+        }
+    }
+}
+
+@Composable
+private fun InlineQrInviteCard(
+    qrCode: QRCodeData?,
+    isGenerating: Boolean,
+    onRegenerate: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(128.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.shapes.medium
+                    )
+                    .padding(8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    isGenerating -> CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                    qrCode?.bitmap != null -> Image(
+                        bitmap = qrCode.bitmap.asImageBitmap(),
+                        contentDescription = "Gym Buddy QR Code",
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    else -> Icon(
+                        imageVector = Icons.Default.QrCode,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "Add Friend",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Have another Liftrix user scan this code to connect immediately.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (qrCode != null) {
+                    CountdownTimer(
+                        expiresAt = qrCode.expiresAt,
+                        onExpired = onRegenerate
+                    )
+                }
+            }
         }
     }
 }
@@ -369,7 +467,8 @@ private fun QRDisplayBottomSheet(
     userProfile: QRUserProfile?,
     isGenerating: Boolean,
     onDismiss: () -> Unit,
-    onRegenerate: () -> Unit
+    onRegenerate: () -> Unit,
+    onScanQr: () -> Unit
 ) {
     val bottomSheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true
@@ -518,6 +617,21 @@ private fun QRDisplayBottomSheet(
             }
 
             Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = onScanQr,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.QrCodeScanner,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Scan Code")
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Instructions
             Text(

@@ -23,7 +23,7 @@ class ExerciseConversionService @Inject constructor(
 
     /**
      * Convert a list of Firebase ExerciseDto objects to domain Exercise objects
-     * This is the main method called by WorkoutMapper to resolve the TODO at line 188
+     * This is the main method called by WorkoutMapper for Firebase exercise conversion.
      */
     suspend fun convertFirebaseExercisesToDomain(
         exerciseDtos: List<ExerciseDto>,

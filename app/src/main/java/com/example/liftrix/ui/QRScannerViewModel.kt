@@ -4,9 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.AuthRepository
+import com.example.liftrix.domain.repository.UserSearchRepository
 import com.example.liftrix.domain.repository.social.GymBuddyRepository
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.domain.service.QRCodeService
+import com.example.liftrix.domain.usecase.template.TemplateQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -26,6 +28,8 @@ class QRScannerViewModel @Inject constructor(
     private val qrCodeService: QRCodeService,
     private val gymBuddyRepository: GymBuddyRepository,
     private val authRepository: AuthRepository,
+    private val userSearchRepository: UserSearchRepository,
+    private val templateQueryUseCase: TemplateQueryUseCase,
     private val analyticsService: AnalyticsService
 ) : ViewModel() {
 
@@ -105,7 +109,7 @@ class QRScannerViewModel @Inject constructor(
      * Processes a scanned QR code
      */
     private fun processScannedCode(qrCode: String) {
-        if (uiState.value.isProcessing) return // Prevent multiple simultaneous processing
+        if (uiState.value.isProcessing || uiState.value.connectionSuccess) return
         
         viewModelScope.launch {
             try {
@@ -124,7 +128,11 @@ class QRScannerViewModel @Inject constructor(
                 }
 
                 // Check if current user is available
-                if (currentUserId == null) {
+                val scannerUserId = currentUserId ?: authRepository.getCurrentUserId()?.value.also {
+                    currentUserId = it
+                }
+
+                if (scannerUserId == null) {
                     updateState { 
                         copy(
                             isProcessing = false,
@@ -136,24 +144,20 @@ class QRScannerViewModel @Inject constructor(
 
                 // Parse QR payload and validate gym buddy data
                 val qrPayload = parseGymBuddyQRPayload(qrCode)
+                val validationError = qrPayload?.let { getGymBuddyValidationError(it) }
                 
-                if (qrPayload != null && validateGymBuddyData(qrPayload)) {
-                    
-                    // Valid gym buddy QR code - set scanned code for processing by parent
-                    updateState { 
-                        copy(
-                            isProcessing = false,
-                            scannedCode = qrCode,
-                            error = null
-                        ) 
-                    }
-                    
-                    trackValidQrCodeScanned(qrCode)
+                if (qrPayload != null && validationError == null) {
+                    connectGymBuddy(
+                        currentUserId = scannerUserId,
+                        buddyUserId = qrPayload.userId,
+                        qrCode = qrCode,
+                        verifyProfile = true
+                    )
                 } else {
                     updateState { 
                         copy(
                             isProcessing = false,
-                            error = "This QR code is not a valid gym buddy invitation. Please scan a gym buddy's QR code."
+                            error = validationError ?: "This QR code is not a valid gym buddy invitation. Please scan a gym buddy's QR code."
                         ) 
                     }
                     trackInvalidQrCode(qrCode)
@@ -180,7 +184,13 @@ class QRScannerViewModel @Inject constructor(
             copy(
                 error = null,
                 isProcessing = false,
-                scannedCode = null
+                scannedCode = null,
+                connectionSuccess = false,
+                connectedBuddyId = null,
+                successMessage = null,
+                pendingTemplateShareId = null,
+                pendingTemplateShareSenderId = null,
+                pendingTemplateShareCount = 0
             ) 
         }
         trackRetryScanning()
@@ -208,20 +218,19 @@ class QRScannerViewModel @Inject constructor(
     private fun updateState(transform: QRScannerUiState.() -> QRScannerUiState) {
         _uiState.value = _uiState.value.transform()
     }
-    
+
     /**
      * Parses QR payload to extract gym buddy data
      */
     private fun parseGymBuddyQRPayload(qrCode: String): GymBuddyQRPayload? {
         return try {
             when {
-                qrCode.startsWith("liftrix://gym-buddy/") -> {
-                    // Parse URL format: liftrix://gym-buddy/{userId}?token={token}&expires={timestamp}
+                qrCode.startsWith("liftrix://gym-buddy?") -> {
                     val uri = android.net.Uri.parse(qrCode)
-                    val userId = uri.pathSegments.getOrNull(1)
+                    val userId = uri.getQueryParameter("userId")
                     val token = uri.getQueryParameter("token")
-                    val expiresAt = uri.getQueryParameter("expires")?.toLongOrNull()
-                    
+                    val expiresAt = uri.getQueryParameter("expiresAt")?.toLongOrNull()
+
                     if (userId != null && token != null && expiresAt != null) {
                         GymBuddyQRPayload(
                             userId = userId,
@@ -230,22 +239,6 @@ class QRScannerViewModel @Inject constructor(
                             format = "URL"
                         )
                     } else null
-                }
-                qrCode.startsWith("eyJ") -> {
-                    // Parse Base64 encoded JSON
-                    val decodedBytes = android.util.Base64.decode(qrCode, android.util.Base64.DEFAULT)
-                    val jsonString = String(decodedBytes, Charsets.UTF_8)
-                    val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-                    json.decodeFromString<GymBuddyQRPayload>(jsonString)
-                }
-                qrCode.matches(Regex("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$")) -> {
-                    // Parse UUID format (legacy)
-                    GymBuddyQRPayload(
-                        userId = qrCode,
-                        token = "legacy",
-                        expiresAt = System.currentTimeMillis() + (5 * 60 * 1000), // 5 minutes
-                        format = "UUID"
-                    )
                 }
                 else -> null
             }
@@ -258,30 +251,156 @@ class QRScannerViewModel @Inject constructor(
     /**
      * Validates gym buddy QR data including expiration and user ID format
      */
-    private fun validateGymBuddyData(payload: GymBuddyQRPayload): Boolean {
-        try {
-            // Check expiration
+    private fun getGymBuddyValidationError(payload: GymBuddyQRPayload): String? {
+        return try {
             if (System.currentTimeMillis() > payload.expiresAt) {
                 Timber.w("QR code expired: ${payload.expiresAt} < ${System.currentTimeMillis()}")
-                return false
+                return "This gym buddy QR code has expired. Ask them to show a new code."
             }
             
-            // Check user ID format
-            if (payload.userId.isBlank() || payload.userId == currentUserId) {
-                Timber.w("Invalid or self user ID: ${payload.userId}")
-                return false
+            if (payload.userId.isBlank()) {
+                Timber.w("Invalid user ID in QR payload")
+                return "This QR code is missing a valid Liftrix user."
             }
             
-            // Check token validity
-            if (payload.token.isBlank()) {
+            if (payload.token.length < MIN_TOKEN_LENGTH) {
                 Timber.w("Invalid token in QR payload")
-                return false
+                return "This gym buddy QR code is invalid. Ask them to show a new code."
             }
             
-            return true
+            null
         } catch (e: Exception) {
             Timber.e(e, "Error validating gym buddy data")
-            return false
+            "This QR code could not be validated. Please try again."
+        }
+    }
+
+    private suspend fun connectGymBuddy(
+        currentUserId: String,
+        buddyUserId: String,
+        qrCode: String,
+        verifyProfile: Boolean
+    ) {
+        val profileExists = if (verifyProfile) {
+            userSearchRepository.profileExists(buddyUserId).fold(
+                onSuccess = { it },
+                onFailure = { throwable ->
+                    Timber.w(throwable, "Could not verify scanned user profile")
+                    false
+                }
+            )
+        } else {
+            true
+        }
+
+        if (!profileExists) {
+            updateState {
+                copy(
+                    isProcessing = false,
+                    error = "This QR code does not match an active Liftrix user."
+                )
+            }
+            trackInvalidQrCode(qrCode)
+            return
+        }
+
+        val alreadyConnectedResult = gymBuddyRepository.areMutualGymBuddies(
+            userId = currentUserId,
+            buddyId = buddyUserId
+        )
+        val alreadyConnected = alreadyConnectedResult.getOrElse { false }
+
+        if (alreadyConnected) {
+            if (resolvePendingTemplateShare(currentUserId, buddyUserId, qrCode)) {
+                return
+            }
+
+            updateState {
+                copy(
+                    isProcessing = false,
+                    scannedCode = qrCode,
+                    connectedBuddyId = buddyUserId,
+                    connectionSuccess = true,
+                    successMessage = "You are already gym buddies."
+                )
+            }
+            trackValidQrCodeScanned(qrCode)
+            return
+        }
+
+        val connectionResult = gymBuddyRepository.createMutualConnection(
+            userId1 = currentUserId,
+            userId2 = buddyUserId,
+            viaQr = true
+        )
+
+        connectionResult.fold(
+            onSuccess = {
+                updateState {
+                    copy(
+                        isProcessing = false,
+                        scannedCode = qrCode,
+                        connectedBuddyId = buddyUserId,
+                        connectionSuccess = true,
+                        successMessage = "Gym buddy connected."
+                    )
+                }
+                trackValidQrCodeScanned(qrCode)
+            },
+            onFailure = { throwable ->
+                Timber.e(throwable, "Failed to create gym buddy connection")
+                updateState {
+                    copy(
+                        isProcessing = false,
+                        error = toUserFacingConnectionError(throwable)
+                    )
+                }
+                trackQrProcessingError(qrCode, throwable)
+            }
+        )
+    }
+
+    private suspend fun resolvePendingTemplateShare(
+        currentUserId: String,
+        buddyUserId: String,
+        qrCode: String
+    ): Boolean {
+        val shares = templateQueryUseCase.getPendingSharesFromBuddy(
+            senderId = buddyUserId,
+            receiverId = currentUserId
+        ).getOrElse { throwable ->
+            Timber.w(throwable, "No pending template shares resolved after gym buddy scan")
+            emptyList()
+        }
+
+        if (shares.isEmpty()) return false
+
+        updateState {
+            copy(
+                isProcessing = false,
+                scannedCode = qrCode,
+                connectedBuddyId = buddyUserId,
+                connectionSuccess = false,
+                successMessage = "Workout shared with you.",
+                pendingTemplateShareId = if (shares.size == 1) shares.first().id else null,
+                pendingTemplateShareSenderId = buddyUserId,
+                pendingTemplateShareCount = shares.size
+            )
+        }
+        trackValidQrCodeScanned(qrCode)
+        return true
+    }
+
+    private fun toUserFacingConnectionError(throwable: Throwable): String {
+        val message = throwable.message.orEmpty()
+        return when {
+            message.contains("ALREADY_CONNECTED", ignoreCase = true) ||
+                message.contains("already gym buddies", ignoreCase = true) ->
+                "You are already gym buddies."
+            message.contains("BUDDY_LIMIT_EXCEEDED", ignoreCase = true) ||
+                message.contains("maximum gym buddies", ignoreCase = true) ->
+                "One of you has reached the 5 gym buddy limit."
+            else -> "Could not connect gym buddies. Please try again."
         }
     }
 
@@ -386,9 +505,7 @@ class QRScannerViewModel @Inject constructor(
                         eventType = "qr_code_scanned_success",
                         additionalData = mapOf<String, Any>(
                             "qr_format" to when {
-                                qrCode.contains("liftrix://gym-buddy/") -> "gym_buddy_url"
-                                qrCode.startsWith("eyJ") -> "encrypted_json"
-                                qrCode.matches(Regex("^[a-fA-F0-9-]{36}$")) -> "uuid"
+                                qrCode.startsWith("liftrix://gym-buddy?") -> "gym_buddy_url"
                                 else -> "other"
                             },
                             "qr_length" to qrCode.length,
@@ -469,6 +586,10 @@ class QRScannerViewModel @Inject constructor(
             }
         }
     }
+
+    companion object {
+        private const val MIN_TOKEN_LENGTH = 16
+    }
 }
 
 /**
@@ -480,6 +601,12 @@ data class QRScannerUiState(
     val hasCameraPermission: Boolean = false,
     val isProcessing: Boolean = false,
     val scannedCode: String? = null,
+    val connectedBuddyId: String? = null,
+    val connectionSuccess: Boolean = false,
+    val successMessage: String? = null,
+    val pendingTemplateShareId: String? = null,
+    val pendingTemplateShareSenderId: String? = null,
+    val pendingTemplateShareCount: Int = 0,
     val error: String? = null
 )
 

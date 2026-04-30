@@ -402,6 +402,11 @@ private fun AnalyticsWidget.getPreviewIcon(): ImageVector {
         AnalyticsWidget.MuscleGroupDistribution -> Icons.Default.DonutLarge
         AnalyticsWidget.RecoveryMetrics -> Icons.Default.SelfImprovement
         AnalyticsWidget.MonthlySummary -> Icons.Default.CalendarMonth
+        AnalyticsWidget.ExerciseRanking -> Icons.Default.EmojiEvents
+        AnalyticsWidget.WorkoutDuration -> Icons.Default.Timer
+        AnalyticsWidget.RecentAchievements -> Icons.Default.EmojiEvents
+        AnalyticsWidget.ConsistencyScore -> Icons.Default.CheckCircle
+        AnalyticsWidget.ProgressiveOverload -> Icons.Default.ShowChart
         
         // Hidden/deprecated widgets
         AnalyticsWidget.WorkoutFrequency -> Icons.Default.Timeline
@@ -433,6 +438,11 @@ private fun generatePreviewData(widget: AnalyticsWidget): String {
         AnalyticsWidget.MuscleGroupDistribution -> "Balanced"
         AnalyticsWidget.RecoveryMetrics -> "Good"
         AnalyticsWidget.MonthlySummary -> "Jan 2025"
+        AnalyticsWidget.ExerciseRanking -> "Top lifts"
+        AnalyticsWidget.WorkoutDuration -> "42 min"
+        AnalyticsWidget.RecentAchievements -> "3 new PRs"
+        AnalyticsWidget.ConsistencyScore -> "86%"
+        AnalyticsWidget.ProgressiveOverload -> "+8.2%"
         
         // Hidden/deprecated widgets
         AnalyticsWidget.WorkoutFrequency -> "4.2/week"

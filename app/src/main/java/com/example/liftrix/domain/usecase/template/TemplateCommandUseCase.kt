@@ -1,19 +1,27 @@
 package com.example.liftrix.domain.usecase.template
 
 import com.example.liftrix.domain.model.Equipment
+import com.example.liftrix.domain.model.ExerciseId
 import com.example.liftrix.domain.model.FolderId
 import com.example.liftrix.domain.model.Reps
 import com.example.liftrix.domain.model.TemplateExercise
 import com.example.liftrix.domain.model.UnifiedWorkoutSession
 import com.example.liftrix.domain.model.Weight
+import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.model.WorkoutTemplateId
+import com.example.liftrix.domain.model.ai.GeneratedPrescriptionType
+import com.example.liftrix.domain.model.ai.GeneratedWorkoutProgram
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.model.sharing.TemplateShareDeliveryMode
+import com.example.liftrix.domain.model.sharing.TemplateShareEvent
+import com.example.liftrix.domain.repository.sharing.TemplateShareRepository
+import com.example.liftrix.domain.repository.social.GymBuddyRepository
 import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
 import kotlinx.coroutines.flow.first
 import java.time.Duration
@@ -50,7 +58,9 @@ class TemplateCommandUseCase @Inject constructor(
     private val templateRepository: WorkoutTemplateRepository,
     private val folderRepository: FolderRepository,
     private val authRepository: AuthRepository,
-    private val workoutQueryUseCase: WorkoutQueryUseCase
+    private val workoutQueryUseCase: WorkoutQueryUseCase,
+    private val gymBuddyRepository: GymBuddyRepository,
+    private val templateShareRepository: TemplateShareRepository
 ) {
 
     // ========== CREATE OPERATIONS ==========
@@ -407,6 +417,204 @@ class TemplateCommandUseCase @Inject constructor(
         }
     }
 
+    suspend fun updateFromEditedWorkout(workout: Workout): LiftrixResult<Workout> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.BusinessLogicError(
+                    code = "TEMPLATE_UPDATE_FAILED",
+                    errorMessage = throwable.message ?: "Failed to update workout template",
+                    analyticsContext = mapOf(
+                        "templateId" to workout.id.value,
+                        "userId" to workout.userId
+                    )
+                )
+            }
+        ) {
+            val existingTemplate = templateRepository
+                .getTemplateById(WorkoutTemplateId(workout.id.value), workout.userId)
+                .getOrThrow()
+                ?: throw IllegalArgumentException("Template not found: ${workout.id.value}")
+
+            val updatedTemplate = existingTemplate.copy(
+                name = workout.name,
+                description = workout.notes?.takeIf { it.isNotBlank() },
+                exercises = workout.exercises.mapIndexed { index, exercise ->
+                    val previousExercise = existingTemplate.exercises.getOrNull(index)
+                    TemplateExercise(
+                        exerciseId = previousExercise?.exerciseId ?: exercise.id,
+                        name = exercise.libraryExercise.name,
+                        primaryMuscle = exercise.libraryExercise.primaryMuscleGroup,
+                        equipment = exercise.libraryExercise.equipment,
+                        targetSets = exercise.sets.size.takeIf { it > 0 } ?: exercise.targetSets,
+                        targetReps = exercise.sets.firstOrNull()?.reps
+                            ?.takeIf { it.count > 0 }
+                            ?: exercise.targetReps?.takeIf { it > 0 }?.let { Reps(it) }
+                            ?: Reps(1),
+                        targetWeight = exercise.sets.firstOrNull()?.weight ?: exercise.targetWeight,
+                        restTimeSeconds = previousExercise?.restTimeSeconds,
+                        notes = exercise.notes,
+                        orderIndex = index,
+                        isCustomExercise = previousExercise?.isCustomExercise ?: false,
+                        customExerciseId = previousExercise?.customExerciseId,
+                        instanceId = previousExercise?.instanceId ?: exercise.id.value
+                    )
+                },
+                updatedAt = Instant.now()
+            )
+
+            Timber.d(
+                "EDIT-WORKOUT-DEBUG: TemplateCommandUseCase.updateFromEditedWorkout templateId=${workout.id.value} " +
+                    "exerciseCount=${updatedTemplate.exercises.size} targetSets=${updatedTemplate.exercises.map { it.targetSets }}"
+            )
+
+            val savedTemplate = templateRepository.updateTemplate(updatedTemplate).getOrThrow()
+
+            workout.copy(
+                name = savedTemplate.name,
+                notes = savedTemplate.description,
+                exercises = workout.exercises.mapIndexed { index, exercise ->
+                    val savedTemplateExercise = savedTemplate.exercises.getOrNull(index)
+                    exercise.copy(
+                        orderIndex = index,
+                        targetSets = savedTemplateExercise?.targetSets,
+                        targetReps = savedTemplateExercise?.targetReps?.count,
+                        targetWeight = savedTemplateExercise?.targetWeight
+                    )
+                },
+                updatedAt = savedTemplate.updatedAt
+            )
+        }
+    }
+
+    suspend fun updateTemplateFromAiModification(
+        userId: String,
+        templateId: String,
+        program: GeneratedWorkoutProgram
+    ): LiftrixResult<WorkoutTemplate> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "AI_TEMPLATE_UPDATE_FAILED",
+                errorMessage = throwable.message ?: "Failed to update template from AI modification",
+                analyticsContext = mapOf("templateId" to templateId, "userId" to userId)
+            )
+        }
+    ) {
+        require(userId.isNotBlank()) { "User ID cannot be blank" }
+        require(templateId.isNotBlank()) { "Template ID cannot be blank" }
+        val existingTemplate = templateRepository.getTemplateById(WorkoutTemplateId(templateId), userId).getOrThrow()
+            ?: throw IllegalArgumentException("Template not found")
+        val updatedTemplate = existingTemplate.copy(
+            name = program.workoutName.take(WorkoutTemplate.MAX_NAME_LENGTH).ifBlank { existingTemplate.name },
+            exercises = program.toTemplateExercises(),
+            estimatedDurationMinutes = program.days.sumOf { it.estimatedDurationMinutes }
+                .coerceIn(WorkoutTemplate.MIN_DURATION_MINUTES, WorkoutTemplate.MAX_DURATION_MINUTES),
+            updatedAt = Instant.now()
+        )
+        templateRepository.updateTemplate(updatedTemplate).getOrThrow()
+    }
+
+    suspend fun shareTemplateToBuddy(
+        templateId: String,
+        buddyId: String
+    ): LiftrixResult<TemplateShareEvent> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "TEMPLATE_SHARE_FAILED",
+                errorMessage = throwable.message ?: "Failed to share template with gym buddy",
+                analyticsContext = mapOf("templateId" to templateId, "buddyId" to buddyId)
+            )
+        }
+    ) {
+        val senderId = authRepository.currentUser.first()?.uid
+            ?: throw IllegalStateException("User not authenticated")
+        require(templateId.isNotBlank()) { "Template ID cannot be blank" }
+        require(buddyId.isNotBlank()) { "Buddy ID cannot be blank" }
+        require(senderId != buddyId) { "Cannot share a template with yourself" }
+
+        val areBuddies = gymBuddyRepository.areMutualGymBuddies(senderId, buddyId).getOrThrow()
+        require(areBuddies) { "Template can only be shared with an existing gym buddy" }
+
+        val template = templateRepository.getTemplateById(WorkoutTemplateId(templateId), senderId).getOrThrow()
+            ?: throw IllegalArgumentException("Template not found")
+
+        val event = TemplateShareEvent(
+            senderId = senderId,
+            receiverId = buddyId,
+            templateId = template.id.value,
+            deliveryMode = TemplateShareDeliveryMode.DIRECT
+        )
+        templateShareRepository.createShare(event).getOrThrow()
+    }
+
+    suspend fun createQrTemplateShare(templateId: String): LiftrixResult<TemplateShareEvent> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "QR_TEMPLATE_SHARE_FAILED",
+                errorMessage = throwable.message ?: "Failed to create QR template share",
+                analyticsContext = mapOf("templateId" to templateId)
+            )
+        }
+    ) {
+        val senderId = authRepository.currentUser.first()?.uid
+            ?: throw IllegalStateException("User not authenticated")
+        require(templateId.isNotBlank()) { "Template ID cannot be blank" }
+
+        val template = templateRepository.getTemplateById(WorkoutTemplateId(templateId), senderId).getOrThrow()
+            ?: throw IllegalArgumentException("Template not found")
+
+        val event = TemplateShareEvent(
+            senderId = senderId,
+            receiverId = null,
+            templateId = template.id.value,
+            deliveryMode = TemplateShareDeliveryMode.QR
+        )
+        templateShareRepository.createShare(event).getOrThrow()
+    }
+
+    suspend fun acceptSharedTemplate(shareId: String): LiftrixResult<WorkoutTemplate> = liftrixCatching(
+        errorMapper = { throwable ->
+            when (throwable) {
+                is LiftrixError -> throwable
+                else -> LiftrixError.BusinessLogicError(
+                    code = "ACCEPT_TEMPLATE_SHARE_FAILED",
+                    errorMessage = throwable.message ?: "Failed to save shared template",
+                    analyticsContext = mapOf("shareId" to shareId)
+                )
+            }
+        }
+    ) {
+        val receiverId = authRepository.currentUser.first()?.uid
+            ?: throw IllegalStateException("User not authenticated")
+        require(shareId.isNotBlank()) { "Share ID cannot be blank" }
+
+        val event = templateShareRepository.getPendingShareForReceiver(shareId, receiverId).getOrThrow()
+            ?: throw LiftrixError.NotFoundError(
+                errorMessage = "Shared workout is no longer available",
+                resourceType = "TemplateShareEvent",
+                resourceId = shareId
+            )
+
+        val template = templateRepository.getTemplateById(WorkoutTemplateId(event.templateId), event.senderId).getOrThrow()
+            ?: throw LiftrixError.NotFoundError(
+                errorMessage = "The shared workout was deleted by the sender",
+                resourceType = "WorkoutTemplate",
+                resourceId = event.templateId
+            )
+
+        val copiedTemplate = create(
+            userId = receiverId,
+            name = createUniqueImportedName(receiverId, template.name),
+            folderId = null,
+            description = template.description,
+            exercises = template.exercises,
+            estimatedDurationMinutes = template.estimatedDurationMinutes,
+            difficultyLevel = template.difficultyLevel
+        ).getOrThrow()
+
+        templateShareRepository.markAccepted(shareId, receiverId).getOrThrow()
+        copiedTemplate
+    }
+
     // ========== PRIVATE HELPER METHODS ==========
 
     /**
@@ -483,4 +691,45 @@ class TemplateCommandUseCase @Inject constructor(
             else -> 1  // Beginner
         }
     }
+
+    private suspend fun createUniqueImportedName(userId: String, originalName: String): String {
+        val baseName = "$originalName from Gym Buddy".take(WorkoutTemplate.MAX_NAME_LENGTH)
+        if (!templateRepository.doesTemplateNameExist(userId, baseName).getOrElse { false }) {
+            return baseName
+        }
+
+        for (copyNumber in 2..99) {
+            val suffix = " ($copyNumber)"
+            val candidate = baseName
+                .take(WorkoutTemplate.MAX_NAME_LENGTH - suffix.length)
+                .plus(suffix)
+            if (!templateRepository.doesTemplateNameExist(userId, candidate).getOrElse { false }) {
+                return candidate
+            }
+        }
+
+        return "${System.currentTimeMillis()}".let { timestamp ->
+            baseName.take(WorkoutTemplate.MAX_NAME_LENGTH - timestamp.length - 1) + " " + timestamp
+        }
+    }
+
+    private fun GeneratedWorkoutProgram.toTemplateExercises(): List<TemplateExercise> =
+        days.flatMap { it.exercises }.take(WorkoutTemplate.MAX_EXERCISES).mapIndexed { index, exercise ->
+            TemplateExercise(
+                exerciseId = ExerciseId.fromString(exercise.exerciseId),
+                name = exercise.exerciseName,
+                primaryMuscle = exercise.primaryMuscle,
+                equipment = exercise.equipment,
+                targetSets = exercise.sets,
+                targetReps = when (exercise.type) {
+                    GeneratedPrescriptionType.REPS -> Reps(exercise.repsMax ?: exercise.repsMin ?: 1)
+                    GeneratedPrescriptionType.TIME -> null
+                },
+                targetWeight = null,
+                restTimeSeconds = exercise.restSeconds,
+                notes = exercise.notes,
+                orderIndex = index,
+                instanceId = exercise.exerciseId
+            )
+        }
 }

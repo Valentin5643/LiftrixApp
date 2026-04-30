@@ -61,7 +61,6 @@ class ExportWorkoutsUseCaseTest {
         mockkStatic(File::class)
         val mockFile = mockk<File>()
         every { mockFile.absolutePath } returns "/tmp/test-export.json"
-        every { mockFile.writeText(any()) } returns Unit
         every { mockFile.length() } returns 1024L
         every { mockFile.exists() } returns true
         every { mockFile.canRead() } returns true
@@ -97,7 +96,7 @@ class ExportWorkoutsUseCaseTest {
         val result = exportWorkoutsUseCase.invoke(testUserId, request)
         
         // Assert
-        assertTrue(result.isSuccess)
+        assertTrue(result.isSuccess, "Expected export success but got ${result.exceptionOrNull()}")
         val exportResult = result.getOrNull()!!
         
         assertEquals(ExportFormat.JSON, exportResult.format)
@@ -179,8 +178,7 @@ class ExportWorkoutsUseCaseTest {
             dateRange = null
         )
         
-        every { workoutDao.getAllWorkoutsForUser(testUserId) } returns flowOf(emptyList())
-        coEvery { workoutDao.getWorkoutsInDateRangeForUser(any(), any(), any()) } throws RuntimeException("Database error")
+        every { workoutDao.getAllWorkoutsForUser(testUserId) } throws RuntimeException("Database error")
         
         // Act
         val result = exportWorkoutsUseCase.invoke(testUserId, request)
@@ -196,10 +194,10 @@ class ExportWorkoutsUseCaseTest {
     }
     
     @Test
-    fun `invoke with unsupported format should fail appropriately`() = runTest {
+    fun `invoke with FIT format should export successfully`() = runTest {
         // Arrange
         val request = ExportRequest(
-            format = ExportFormat.FIT, // Not yet implemented
+            format = ExportFormat.FIT,
             dataTypes = setOf(DataType.WORKOUTS),
             dateRange = null
         )
@@ -210,11 +208,11 @@ class ExportWorkoutsUseCaseTest {
         val result = exportWorkoutsUseCase.invoke(testUserId, request)
         
         // Assert
-        assertTrue(result.isFailure)
-        val exception = result.exceptionOrNull()!!
-        assertIs<LiftrixError.BusinessLogicError>(exception)
+        assertTrue(result.isSuccess)
+        assertEquals(ExportFormat.FIT, result.getOrNull()!!.format)
         
-        coVerify { dataExportDao.updateExportStatus(any(), testUserId, "FAILED", any()) }
+        coVerify { dataExportDao.updateExportStatus(any(), testUserId, "IN_PROGRESS") }
+        coVerify { dataExportDao.markExportCompleted(any(), testUserId, any(), any(), any(), any()) }
     }
     
     @Test

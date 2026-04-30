@@ -15,14 +15,14 @@ import javax.inject.Singleton
 
 /**
  * Remote Config Manager for handling Firebase Remote Config operations
- * 
+ *
  * Manages remote configuration for dynamic content including:
  * - Help articles and documentation
  * - Feature flags and experiments
  * - App configuration parameters
  * - Legal document versions
  * - Support content and categories
- * 
+ *
  * Features:
  * - Fetch and activate remote config values
  * - Cache management with TTL
@@ -34,29 +34,29 @@ import javax.inject.Singleton
 class RemoteConfigManager @Inject constructor(
     private val remoteConfig: FirebaseRemoteConfig
 ) {
-    
+
     companion object {
         // Cache configuration
         private const val MINIMUM_FETCH_INTERVAL_SECONDS = 3600L // 1 hour (production)
         private const val FETCH_TIMEOUT_SECONDS = 60L
 
-        // TODO: TEMPORARY DEBUG OVERRIDE
+        // Follow-up: TEMPORARY DEBUG OVERRIDE
         // WHY: Enables immediate Remote Config fetching in debug builds for testing/debugging
         // WHEN TO REMOVE: After Remote Config is fully tested and Firebase Console shows fetch activity
         // PRODUCTION IMPACT: None - only affects debug builds (BuildConfig.DEBUG)
         private const val DEBUG_MINIMUM_FETCH_INTERVAL_SECONDS = 0L // Immediate fetching for debug
-        
+
         // Help content keys
         const val HELP_ARTICLES_JSON = "help_articles_json"
         const val HELP_CATEGORIES_JSON = "help_categories_json"
         const val HELP_CONTENT_VERSION = "help_content_version"
         const val HELP_FEATURED_ARTICLES = "help_featured_articles"
-        
+
         // Support content keys
         const val SUPPORT_CATEGORIES_JSON = "support_categories_json"
         const val SUPPORT_FAQ_JSON = "support_faq_json"
         const val SUPPORT_CONTACT_INFO = "support_contact_info"
-        
+
         // Legal document keys
         const val PRIVACY_POLICY_URL = "privacy_policy_url"
         const val TERMS_OF_SERVICE_URL = "terms_of_service_url"
@@ -70,13 +70,13 @@ class RemoteConfigManager @Inject constructor(
         const val COMMUNITY_GUIDELINES_VERSION = "community_guidelines_version"
         const val CONTENT_MODERATION_VERSION = "content_moderation_version"
         const val REFUND_POLICY_VERSION = "refund_policy_version"
-        
+
         // App configuration keys
         const val HELP_SEARCH_ENABLED = "help_search_enabled"
         const val SUPPORT_ATTACHMENTS_ENABLED = "support_attachments_enabled"
         const val MAX_SUPPORT_ATTACHMENTS = "max_support_attachments"
         const val HELP_FEEDBACK_ENABLED = "help_feedback_enabled"
-        
+
         // AI Chat configuration keys
         const val AI_CHAT_ENABLED = "ai_chat_enabled"
         const val AI_DAILY_MESSAGE_LIMIT = "ai_daily_message_limit"
@@ -92,7 +92,7 @@ class RemoteConfigManager @Inject constructor(
         const val AI_TEMPERATURE = "ai_temperature"
         const val AI_TOP_K = "ai_top_k"
         const val AI_TOP_P = "ai_top_p"
-        
+
         // Default values
         private val DEFAULT_VALUES = mapOf(
             HELP_CONTENT_VERSION to "1.0",
@@ -116,7 +116,7 @@ class RemoteConfigManager @Inject constructor(
             COMMUNITY_GUIDELINES_URL to "",
             CONTENT_MODERATION_POLICY_URL to "",
             REFUND_SUBSCRIPTION_POLICY_URL to "",
-            
+
             // AI Chat defaults
             AI_CHAT_ENABLED to true,
             AI_DAILY_MESSAGE_LIMIT to 50,
@@ -132,7 +132,7 @@ class RemoteConfigManager @Inject constructor(
             AI_TEMPERATURE to 0.7,
             AI_TOP_K to 40,
             AI_TOP_P to 0.95,
-            
+
             // Additional AI rate limiting keys for compatibility
             "ai_max_daily_messages" to 50L,
             "ai_max_monthly_tokens" to 100000L,
@@ -141,9 +141,9 @@ class RemoteConfigManager @Inject constructor(
             "ai_avg_response_time_ms" to 1500L
         )
     }
-    
+
     private var isInitialized = false
-    
+
     /**
      * Initializes Remote Config with default values and settings
      *
@@ -214,7 +214,7 @@ class RemoteConfigManager @Inject constructor(
             }
         }
     }
-    
+
     /**
      * Fetches and activates the latest Remote Config values
      */
@@ -232,7 +232,7 @@ class RemoteConfigManager @Inject constructor(
     ) {
         withContext(Dispatchers.IO) {
             ensureInitialized()
-            
+
             // Override minimum fetch interval if force refresh
             if (forceRefresh) {
                 val configSettings = FirebaseRemoteConfigSettings.Builder()
@@ -241,10 +241,10 @@ class RemoteConfigManager @Inject constructor(
                     .build()
                 remoteConfig.setConfigSettingsAsync(configSettings).await()
             }
-            
+
             // Fetch and activate
             val fetchResult = remoteConfig.fetchAndActivate().await()
-            
+
             // Reset to normal fetch interval if we forced refresh
             if (forceRefresh) {
                 val normalSettings = FirebaseRemoteConfigSettings.Builder()
@@ -253,12 +253,12 @@ class RemoteConfigManager @Inject constructor(
                     .build()
                 remoteConfig.setConfigSettingsAsync(normalSettings).await()
             }
-            
+
             Timber.d("Remote Config fetch and activate result: $fetchResult")
             fetchResult
         }
     }
-    
+
     /**
      * Gets a string value from Remote Config
      */
@@ -281,7 +281,7 @@ class RemoteConfigManager @Inject constructor(
             value
         }
     }
-    
+
     /**
      * Gets a boolean value from Remote Config
      */
@@ -304,7 +304,7 @@ class RemoteConfigManager @Inject constructor(
             value
         }
     }
-    
+
     /**
      * Gets a long value from Remote Config
      */
@@ -327,7 +327,7 @@ class RemoteConfigManager @Inject constructor(
             value
         }
     }
-    
+
     /**
      * Gets a double value from Remote Config
      */
@@ -350,42 +350,42 @@ class RemoteConfigManager @Inject constructor(
             value
         }
     }
-    
+
     /**
      * Gets help articles JSON from Remote Config
      */
     suspend fun getHelpArticlesJson(): LiftrixResult<String> = getString(HELP_ARTICLES_JSON)
-    
+
     /**
      * Gets help categories JSON from Remote Config
      */
     suspend fun getHelpCategoriesJson(): LiftrixResult<String> = getString(HELP_CATEGORIES_JSON)
-    
+
     /**
      * Gets help content version from Remote Config
      */
     suspend fun getHelpContentVersion(): LiftrixResult<String> = getString(HELP_CONTENT_VERSION)
-    
+
     /**
      * Gets featured articles list from Remote Config
      */
     suspend fun getFeaturedArticlesJson(): LiftrixResult<String> = getString(HELP_FEATURED_ARTICLES)
-    
+
     /**
      * Gets support categories JSON from Remote Config
      */
     suspend fun getSupportCategoriesJson(): LiftrixResult<String> = getString(SUPPORT_CATEGORIES_JSON)
-    
+
     /**
      * Gets support FAQ JSON from Remote Config
      */
     suspend fun getSupportFaqJson(): LiftrixResult<String> = getString(SUPPORT_FAQ_JSON)
-    
+
     /**
      * Gets privacy policy URL from Remote Config
      */
     suspend fun getPrivacyPolicyUrl(): LiftrixResult<String> = getString(PRIVACY_POLICY_URL)
-    
+
     /**
      * Gets terms of service URL from Remote Config
      */
@@ -415,7 +415,7 @@ class RemoteConfigManager @Inject constructor(
      * Gets privacy policy version from Remote Config
      */
     suspend fun getPrivacyPolicyVersion(): LiftrixResult<String> = getString(PRIVACY_POLICY_VERSION)
-    
+
     /**
      * Gets terms version from Remote Config
      */
@@ -445,94 +445,94 @@ class RemoteConfigManager @Inject constructor(
      * Checks if help search is enabled
      */
     suspend fun isHelpSearchEnabled(): LiftrixResult<Boolean> = getBoolean(HELP_SEARCH_ENABLED)
-    
+
     /**
      * Checks if support attachments are enabled
      */
     suspend fun isSupportAttachmentsEnabled(): LiftrixResult<Boolean> = getBoolean(SUPPORT_ATTACHMENTS_ENABLED)
-    
+
     /**
      * Gets maximum number of support attachments allowed
      */
     suspend fun getMaxSupportAttachments(): LiftrixResult<Long> = getLong(MAX_SUPPORT_ATTACHMENTS)
-    
+
     /**
      * Checks if help feedback is enabled
      */
     suspend fun isHelpFeedbackEnabled(): LiftrixResult<Boolean> = getBoolean(HELP_FEEDBACK_ENABLED)
-    
+
     // AI Chat configuration methods
-    
+
     /**
      * Checks if AI chat is enabled
      */
     suspend fun isAiChatEnabled(): LiftrixResult<Boolean> = getBoolean(AI_CHAT_ENABLED)
-    
+
     /**
      * Gets daily message limit for AI chat
      */
     suspend fun getAiDailyMessageLimit(): LiftrixResult<Long> = getLong(AI_DAILY_MESSAGE_LIMIT)
-    
+
     /**
      * Gets monthly token limit for AI chat
      */
     suspend fun getAiMonthlyTokenLimit(): LiftrixResult<Long> = getLong(AI_MONTHLY_TOKEN_LIMIT)
-    
+
     /**
      * Gets cost threshold per hour for AI chat
      */
     suspend fun getAiCostThresholdPerHour(): LiftrixResult<Double> = getDouble(AI_COST_THRESHOLD_PER_HOUR)
-    
+
     /**
      * Gets jailbreak detection threshold
      */
     suspend fun getAiJailbreakThreshold(): LiftrixResult<Double> = getDouble(AI_JAILBREAK_THRESHOLD)
-    
+
     /**
      * Gets fitness context weight for abuse detection
      */
     suspend fun getAiFitnessContextWeight(): LiftrixResult<Double> = getDouble(AI_FITNESS_CONTEXT_WEIGHT)
-    
+
     /**
      * Gets rate limit multiplier for anomaly detection
      */
     suspend fun getAiRateLimitMultiplier(): LiftrixResult<Long> = getLong(AI_RATE_LIMIT_MULTIPLIER)
-    
+
     /**
      * Checks if abuse logging is enabled
      */
     suspend fun isAiAbuseLoggingEnabled(): LiftrixResult<Boolean> = getBoolean(AI_ENABLE_ABUSE_LOGGING)
-    
+
     /**
      * Checks if review queue is enabled
      */
     suspend fun isAiReviewQueueEnabled(): LiftrixResult<Boolean> = getBoolean(AI_REVIEW_QUEUE_ENABLED)
-    
+
     /**
      * Gets AI model name
      */
     suspend fun getAiModelName(): LiftrixResult<String> = getString(AI_MODEL_NAME)
-    
+
     /**
      * Gets maximum output tokens for AI responses
      */
     suspend fun getAiMaxOutputTokens(): LiftrixResult<Long> = getLong(AI_MAX_OUTPUT_TOKENS)
-    
+
     /**
      * Gets AI temperature setting
      */
     suspend fun getAiTemperature(): LiftrixResult<Double> = getDouble(AI_TEMPERATURE)
-    
+
     /**
      * Gets AI top-k setting
      */
     suspend fun getAiTopK(): LiftrixResult<Long> = getLong(AI_TOP_K)
-    
+
     /**
      * Gets AI top-p setting
      */
     suspend fun getAiTopP(): LiftrixResult<Double> = getDouble(AI_TOP_P)
-    
+
     /**
      * Gets all Remote Config values as a map
      */
@@ -554,7 +554,7 @@ class RemoteConfigManager @Inject constructor(
             allValues
         }
     }
-    
+
     /**
      * Gets Remote Config info for debugging
      */
@@ -582,7 +582,7 @@ class RemoteConfigManager @Inject constructor(
             )
         }
     }
-    
+
     /**
      * Ensures Remote Config is initialized before use
      */

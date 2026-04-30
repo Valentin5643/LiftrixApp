@@ -27,7 +27,7 @@ class AuthViewModel @Inject constructor(
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Initial)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
-    
+
     // Track if we're in the middle of an authentication operation
     private var isAuthOperationInProgress = false
 
@@ -45,7 +45,7 @@ class AuthViewModel @Inject constructor(
                     Timber.d("Auth state observer: Ignoring update during active operation (user=${user?.uid})")
                     return@collect
                 }
-                
+
                 // Only update state if we're not in an error or loading state
                 // This prevents overriding error messages that should be shown to user
                 if (_authState.value !is AuthState.Error && _authState.value !is AuthState.Loading) {
@@ -180,7 +180,7 @@ class AuthViewModel @Inject constructor(
                     // Account created, now record consents
                     val consentResult = consentManagementService.recordConsent(
                         userId = user.uid,
-                        privacyPolicyVersion = "1.0.0", // TODO: Get from constants
+                        privacyPolicyVersion = "1.0.0", // Follow-up: Get from constants
                         healthDataConsent = consents.healthData,
                         aiChatConsent = consents.aiChat,
                         analyticsConsent = consents.analytics,
@@ -321,7 +321,7 @@ class AuthViewModel @Inject constructor(
                 _authState.value = AuthState.Unauthenticated
                 Timber.d("Error cleared, returning to unauthenticated state")
             }
-            else -> { 
+            else -> {
                 Timber.d("ClearError called but current state is not Error: $currentState")
             }
         }
@@ -339,4 +339,4 @@ class AuthViewModel @Inject constructor(
             else -> exception.message ?: "Authentication failed. Please try again"
         }
     }
-} 
+}

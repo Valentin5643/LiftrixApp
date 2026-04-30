@@ -2,14 +2,16 @@ package com.example.liftrix.data.service
 
 import com.example.liftrix.data.local.dao.ChatHistoryDao
 import com.example.liftrix.data.remote.config.RemoteConfigManager
-import com.example.liftrix.domain.model.chat.UsageLimits
 import com.example.liftrix.domain.repository.ChatRepository
+import com.example.liftrix.domain.repository.SubscriptionRepository
 import com.example.liftrix.domain.service.AnalyticsTracker
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.service.RateLimitStatus
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import timber.log.Timber
 import java.util.Calendar
+import java.util.Date
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,6 +23,7 @@ import javax.inject.Singleton
 class RateLimitingService @Inject constructor(
     private val chatRepository: ChatRepository,
     private val chatHistoryDao: ChatHistoryDao,
+    private val subscriptionRepository: SubscriptionRepository,
     private val remoteConfig: RemoteConfigManager,
     private val analyticsTracker: AnalyticsTracker
 ) {
@@ -37,6 +40,7 @@ class RateLimitingService @Inject constructor(
         
         // Warning thresholds
         private const val WARNING_THRESHOLD_PERCENTAGE = 0.8 // 80%
+        private const val MONTHLY_USAGE_TAG = "MonthlyUsageDebug"
     }
     
     /**
@@ -47,31 +51,44 @@ class RateLimitingService @Inject constructor(
      */
     suspend fun checkLimits(userId: String): RateLimitStatus {
         try {
-            // Get user's usage limits
-            val limitsResult = chatRepository.checkUsageLimits(userId)
-            val limits = limitsResult.fold(
-                onSuccess = { usageLimits -> usageLimits },
-                onFailure = { error ->
-                    Timber.e("Failed to fetch usage limits for user $userId: $error")
-                    // Use default limits as fallback
-                    UsageLimits(
-                        dailyMessagesRemaining = DEFAULT_DAILY_MESSAGES,
-                        monthlyTokensRemaining = DEFAULT_MONTHLY_TOKENS,
-                        isNearDailyLimit = false,
-                        isNearMonthlyLimit = false
-                    )
-                }
-            )
-            
             // Get configurable thresholds from Remote Config
             val maxDailyMessages = remoteConfig.getLong("ai_max_daily_messages").getOrDefault(DEFAULT_DAILY_MESSAGES.toLong()).toInt()
             val maxMonthlyTokens = remoteConfig.getLong("ai_max_monthly_tokens").getOrDefault(DEFAULT_MONTHLY_TOKENS.toLong()).toInt()
             val costThreshold = remoteConfig.getDouble("ai_cost_threshold_per_hour").getOrDefault(DEFAULT_COST_THRESHOLD_PER_HOUR)
             val rateLimitEnabled = remoteConfig.getBoolean("ai_rate_limit_enabled").getOrDefault(true)
+            val todayUsage = getTodayMessageUsage(userId)
+            val monthlyUsage = getMonthlyTokenUsage(userId)
+            val todayMessagesUsed = todayUsage.count
+            val monthlyTokensUsed = monthlyUsage.count
+            val dailyMessagesRemaining = (maxDailyMessages - todayMessagesUsed).coerceAtLeast(0)
+            val monthlyTokensRemaining = (maxMonthlyTokens - monthlyTokensUsed).coerceAtLeast(0)
+            val isNearDailyLimit = todayMessagesUsed >= (maxDailyMessages * WARNING_THRESHOLD_PERCENTAGE).toInt()
+            val isNearMonthlyLimit = monthlyTokensUsed >= (maxMonthlyTokens * WARNING_THRESHOLD_PERCENTAGE).toInt()
+            val subscriptionSnapshot = getSubscriptionSnapshot(userId)
+            logMonthlyUsageState(
+                userId = userId,
+                operation = "checkLimits",
+                source = monthlyUsage.source,
+                currentMonthlyUsage = monthlyTokensUsed,
+                monthlyLimit = maxMonthlyTokens,
+                monthlyRemaining = monthlyTokensRemaining,
+                monthStart = monthlyUsage.windowStart,
+                nextReset = getNextMonthStart(),
+                subscriptionSnapshot = subscriptionSnapshot,
+                rateLimitEnabled = rateLimitEnabled,
+                localPreferenceLimit = getLocalPreferenceMonthlyLimit(userId, monthlyTokensUsed)
+            )
             
             // If rate limiting is disabled (for testing/emergency), allow all
             if (!rateLimitEnabled) {
-                Timber.d("Rate limiting disabled for user $userId")
+                Timber.tag(MONTHLY_USAGE_TAG).d(
+                    "Rate limiting disabled userId=%s now=%s monthlyUsage=%d monthlyLimit=%d source=%s",
+                    userId,
+                    formatTimestamp(System.currentTimeMillis()),
+                    monthlyTokensUsed,
+                    maxMonthlyTokens,
+                    monthlyUsage.source
+                )
                 return RateLimitStatus(
                     isLimited = false,
                     messagesRemaining = Int.MAX_VALUE,
@@ -80,12 +97,12 @@ class RateLimitingService @Inject constructor(
             }
             
             // Check daily message limit
-            if (limits.dailyMessagesRemaining <= 0) {
+            if (dailyMessagesRemaining <= 0) {
                 Timber.w("User $userId exceeded daily message limit")
                 analyticsTracker.trackRateLimit(
                     userId = userId,
                     limitType = "DAILY_MESSAGES",
-                    currentUsage = maxDailyMessages,
+                    currentUsage = todayMessagesUsed,
                     limit = maxDailyMessages,
                     timeToReset = getTomorrowMidnight()
                 )
@@ -94,17 +111,28 @@ class RateLimitingService @Inject constructor(
                     reason = "Daily message limit reached ($maxDailyMessages messages)",
                     resetTime = getTomorrowMidnight(),
                     messagesRemaining = 0,
-                    tokensRemaining = limits.monthlyTokensRemaining
+                    tokensRemaining = monthlyTokensRemaining
                 )
             }
             
             // Check monthly token limit
-            if (limits.monthlyTokensRemaining <= 0) {
-                Timber.w("User $userId exceeded monthly token limit")
+            if (monthlyTokensRemaining <= 0) {
+                Timber.tag(MONTHLY_USAGE_TAG).w(
+                    "MONTHLY_LIMIT_TRIGGERED userId=%s now=%s monthlyUsage=%d monthlyLimit=%d monthlyRemaining=%d comparison=remaining<=0 monthStart=%s nextReset=%s source=%s subscription=%s",
+                    userId,
+                    formatTimestamp(System.currentTimeMillis()),
+                    monthlyTokensUsed,
+                    maxMonthlyTokens,
+                    monthlyTokensRemaining,
+                    formatTimestamp(monthlyUsage.windowStart),
+                    formatTimestamp(getNextMonthStart()),
+                    monthlyUsage.source,
+                    subscriptionSnapshot
+                )
                 analyticsTracker.trackRateLimit(
                     userId = userId,
                     limitType = "MONTHLY_TOKENS",
-                    currentUsage = maxMonthlyTokens,
+                    currentUsage = monthlyTokensUsed,
                     limit = maxMonthlyTokens,
                     timeToReset = getNextMonthStart()
                 )
@@ -112,7 +140,7 @@ class RateLimitingService @Inject constructor(
                     isLimited = true,
                     reason = "Monthly token limit reached ($maxMonthlyTokens tokens)",
                     resetTime = getNextMonthStart(),
-                    messagesRemaining = limits.dailyMessagesRemaining,
+                    messagesRemaining = dailyMessagesRemaining,
                     tokensRemaining = 0
                 )
             }
@@ -139,41 +167,41 @@ class RateLimitingService @Inject constructor(
                     isLimited = true,
                     reason = "Hourly cost threshold exceeded ($${String.format("%.2f", costThreshold)}/hour)",
                     resetTime = System.currentTimeMillis() + 3600000, // 1 hour from now
-                    messagesRemaining = limits.dailyMessagesRemaining,
-                    tokensRemaining = limits.monthlyTokensRemaining
+                    messagesRemaining = dailyMessagesRemaining,
+                    tokensRemaining = monthlyTokensRemaining
                 )
             }
             
             // Check if user is approaching limits
-            val isNearLimit = limits.isNearDailyLimit || limits.isNearMonthlyLimit
+            val isNearLimit = isNearDailyLimit || isNearMonthlyLimit
             
             // Track usage patterns for analytics
             analyticsTracker.trackAIChatUsage(
                 userId = userId,
-                dailyMessagesUsed = maxDailyMessages - limits.dailyMessagesRemaining,
-                monthlyTokensUsed = maxMonthlyTokens - limits.monthlyTokensRemaining,
+                dailyMessagesUsed = todayMessagesUsed.coerceAtLeast(0),
+                monthlyTokensUsed = monthlyTokensUsed.coerceAtLeast(0),
                 isNearLimit = isNearLimit
             )
             
             return RateLimitStatus(
                 isLimited = false,
-                messagesRemaining = limits.dailyMessagesRemaining,
-                tokensRemaining = limits.monthlyTokensRemaining,
+                messagesRemaining = dailyMessagesRemaining,
+                tokensRemaining = monthlyTokensRemaining,
                 isNearLimit = isNearLimit,
                 reason = if (isNearLimit) {
                     when {
-                        limits.isNearDailyLimit && limits.isNearMonthlyLimit -> 
+                        isNearDailyLimit && isNearMonthlyLimit ->
                             "Approaching daily message and monthly token limits"
-                        limits.isNearDailyLimit -> 
-                            "Approaching daily message limit (${limits.dailyMessagesRemaining} remaining)"
+                        isNearDailyLimit ->
+                            "Approaching daily message limit ($dailyMessagesRemaining remaining)"
                         else -> 
-                            "Approaching monthly token limit (${limits.monthlyTokensRemaining} remaining)"
+                            "Approaching monthly token limit ($monthlyTokensRemaining remaining)"
                     }
                 } else null
             )
             
         } catch (e: Exception) {
-            Timber.e(e, "Error checking rate limits for user $userId")
+            Timber.tag(MONTHLY_USAGE_TAG).e(e, "checkLimits failed userId=%s now=%s", userId, formatTimestamp(System.currentTimeMillis()))
             // In case of error, be conservative and allow the request
             return RateLimitStatus(
                 isLimited = false,
@@ -211,6 +239,55 @@ class RateLimitingService @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Error calculating hourly cost for user $userId")
             return 0.0
+        }
+    }
+
+    private suspend fun getTodayMessageUsage(userId: String): UsageWindow {
+        return try {
+            val todayStart = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            val count = chatHistoryDao.getTodayMessageCount(userId, todayStart)
+            Timber.tag(MONTHLY_USAGE_TAG).d(
+                "Daily usage read userId=%s count=%d dayStart=%s source=Room.chat_history now=%s",
+                userId,
+                count,
+                formatTimestamp(todayStart),
+                formatTimestamp(System.currentTimeMillis())
+            )
+            UsageWindow(count = count, windowStart = todayStart, source = "Room.chat_history")
+        } catch (e: Exception) {
+            Timber.tag(MONTHLY_USAGE_TAG).e(e, "Daily usage read failed userId=%s source=Room.chat_history", userId)
+            UsageWindow(count = 0, windowStart = 0L, source = "Room.chat_history.error")
+        }
+    }
+
+    private suspend fun getMonthlyTokenUsage(userId: String): UsageWindow {
+        return try {
+            val monthStart = Calendar.getInstance().apply {
+                set(Calendar.DAY_OF_MONTH, 1)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            val count = chatHistoryDao.getMonthlyTokenUsage(userId, monthStart) ?: 0
+            Timber.tag(MONTHLY_USAGE_TAG).d(
+                "Monthly usage read userId=%s count=%d month=%d year=%d monthStart=%s source=Room.chat_history now=%s",
+                userId,
+                count,
+                Calendar.getInstance().get(Calendar.MONTH) + 1,
+                Calendar.getInstance().get(Calendar.YEAR),
+                formatTimestamp(monthStart),
+                formatTimestamp(System.currentTimeMillis())
+            )
+            UsageWindow(count = count, windowStart = monthStart, source = "Room.chat_history")
+        } catch (e: Exception) {
+            Timber.tag(MONTHLY_USAGE_TAG).e(e, "Monthly usage read failed userId=%s source=Room.chat_history", userId)
+            UsageWindow(count = 0, windowStart = 0L, source = "Room.chat_history.error")
         }
     }
     
@@ -292,6 +369,15 @@ class RateLimitingService @Inject constructor(
             
             val estimatedMonthlyCost = (monthTokens / 1000.0) * 
                 ((COST_PER_1K_INPUT_TOKENS + COST_PER_1K_OUTPUT_TOKENS) / 2)
+            Timber.tag(MONTHLY_USAGE_TAG).d(
+                "Usage stats read userId=%s dailyMessages=%d monthlyTokens=%d hourlyTokens=%d monthStart=%s source=Room.chat_history now=%s",
+                userId,
+                todayMessages,
+                monthTokens,
+                hourlyTokens,
+                formatTimestamp(monthStart),
+                formatTimestamp(System.currentTimeMillis())
+            )
             
             return UsageStats(
                 dailyMessages = todayMessages,
@@ -313,5 +399,73 @@ class RateLimitingService @Inject constructor(
         val monthlyTokens: Int = 0,
         val hourlyTokens: Int = 0,
         val estimatedMonthlyCost: Double = 0.0
+    )
+
+    private suspend fun getLocalPreferenceMonthlyLimit(userId: String, monthlyTokensUsed: Int): Int? {
+        return try {
+            val usageLimits = chatRepository.checkUsageLimits(userId).getOrNull() ?: return null
+            monthlyTokensUsed + usageLimits.monthlyTokensRemaining
+        } catch (e: Exception) {
+            Timber.tag(MONTHLY_USAGE_TAG).w(e, "Local preference limit read failed userId=%s source=Room.chat_preferences", userId)
+            null
+        }
+    }
+
+    private suspend fun getSubscriptionSnapshot(userId: String): String {
+        return try {
+            val subscription = subscriptionRepository.getSubscriptionStatus(userId).firstOrNull()
+            if (subscription == null) {
+                "tier=FREE,status=none,isActive=false,isTrial=false,source=Room.subscriptions"
+            } else {
+                "tier=${subscription.tier},status=${subscription.status},isActive=${subscription.isActive},isTrial=${subscription.isInTrial},source=Room.subscriptions"
+            }
+        } catch (e: Exception) {
+            Timber.tag(MONTHLY_USAGE_TAG).w(e, "Subscription status read failed userId=%s source=Room.subscriptions", userId)
+            "unknown,source=Room.subscriptions.error"
+        }
+    }
+
+    private fun logMonthlyUsageState(
+        userId: String,
+        operation: String,
+        source: String,
+        currentMonthlyUsage: Int,
+        monthlyLimit: Int,
+        monthlyRemaining: Int,
+        monthStart: Long,
+        nextReset: Long,
+        subscriptionSnapshot: String,
+        rateLimitEnabled: Boolean,
+        localPreferenceLimit: Int?
+    ) {
+        Timber.tag(MONTHLY_USAGE_TAG).d(
+            "Monthly usage state operation=%s userId=%s now=%s month=%d year=%d monthStart=%s nextReset=%s lastReset=%s monthlyUsage=%d monthlyLimit=%d monthlyRemaining=%d source=%s remoteConfigKey=ai_max_monthly_tokens rateLimitEnabled=%s localPreferenceLimit=%s subscription=%s",
+            operation,
+            userId,
+            formatTimestamp(System.currentTimeMillis()),
+            Calendar.getInstance().get(Calendar.MONTH) + 1,
+            Calendar.getInstance().get(Calendar.YEAR),
+            formatTimestamp(monthStart),
+            formatTimestamp(nextReset),
+            formatTimestamp(monthStart),
+            currentMonthlyUsage,
+            monthlyLimit,
+            monthlyRemaining,
+            source,
+            rateLimitEnabled,
+            localPreferenceLimit?.toString() ?: "unavailable",
+            subscriptionSnapshot
+        )
+    }
+
+    private fun formatTimestamp(timestamp: Long): String {
+        if (timestamp <= 0L) return "unavailable"
+        return Date(timestamp).toString()
+    }
+
+    private data class UsageWindow(
+        val count: Int,
+        val windowStart: Long,
+        val source: String
     )
 }

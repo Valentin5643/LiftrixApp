@@ -1,6 +1,7 @@
 package com.example.liftrix.data.mapper
 
 import com.example.liftrix.data.local.entity.WorkoutTemplateEntity
+import com.example.liftrix.domain.model.Reps
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.model.WorkoutTemplateId
 import com.example.liftrix.domain.model.TemplateExercise
@@ -29,7 +30,11 @@ class WorkoutTemplateMapper @Inject constructor() {
             if (entity.templateExercisesJson.isBlank()) {
                 emptyList()
             } else {
-                json.decodeFromString<List<TemplateExercise>>(entity.templateExercisesJson)
+                normalizeTemplateExercises(
+                    templateId = entity.id,
+                    exercises = json.decodeFromString<List<TemplateExercise>>(entity.templateExercisesJson),
+                    source = "WorkoutTemplateMapper.toDomain"
+                )
             }
         } catch (e: Exception) {
             // Log error and return empty list to prevent app crash
@@ -61,7 +66,13 @@ class WorkoutTemplateMapper @Inject constructor() {
             if (domain.exercises.isEmpty()) {
                 ""
             } else {
-                json.encodeToString(domain.exercises)
+                json.encodeToString(
+                    normalizeTemplateExercises(
+                        templateId = domain.id.value,
+                        exercises = domain.exercises,
+                        source = "WorkoutTemplateMapper.toEntity"
+                    )
+                )
             }
         } catch (e: Exception) {
             // Log error and use empty JSON to prevent data loss
@@ -100,6 +111,33 @@ class WorkoutTemplateMapper @Inject constructor() {
     fun toEntityList(domainList: List<WorkoutTemplate>, isSynced: Boolean = false): List<WorkoutTemplateEntity> {
         return domainList.map { toEntity(it, isSynced) }
     }
+
+    private fun normalizeTemplateExercises(
+        templateId: String,
+        exercises: List<TemplateExercise>,
+        source: String
+    ): List<TemplateExercise> {
+        return exercises.mapIndexed { index, exercise ->
+            val normalizedTargetSets = exercise.targetSets ?: DEFAULT_TEMPLATE_SETS
+            val normalizedTargetReps = exercise.targetReps
+                ?.takeIf { it.count > 0 }
+                ?: DEFAULT_TEMPLATE_REPS
+
+            if (exercise.targetSets == null || exercise.targetReps == null || exercise.targetReps.count <= 0) {
+                timber.log.Timber.w(
+                    "EDIT-WORKOUT-DEBUG: $source normalized templateId=$templateId " +
+                        "exerciseIndex=$index exerciseName='${exercise.name}' " +
+                        "targetSets=${exercise.targetSets} targetReps=${exercise.targetReps?.count} " +
+                        "normalizedTargetSets=$normalizedTargetSets normalizedTargetReps=${normalizedTargetReps.count}"
+                )
+            }
+
+            exercise.copy(
+                targetSets = normalizedTargetSets,
+                targetReps = normalizedTargetReps
+            )
+        }
+    }
     
     /**
      * Updates an entity with new domain data while preserving sync information
@@ -112,7 +150,13 @@ class WorkoutTemplateMapper @Inject constructor() {
             if (updatedDomain.exercises.isEmpty()) {
                 ""
             } else {
-                json.encodeToString(updatedDomain.exercises)
+                json.encodeToString(
+                    normalizeTemplateExercises(
+                        templateId = updatedDomain.id.value,
+                        exercises = updatedDomain.exercises,
+                        source = "WorkoutTemplateMapper.updateEntity"
+                    )
+                )
             }
         } catch (e: Exception) {
             timber.log.Timber.e(e, "Failed to serialize updated template exercises for template ${updatedDomain.id}")
@@ -130,7 +174,14 @@ class WorkoutTemplateMapper @Inject constructor() {
             lastUsedAt = updatedDomain.lastUsedAt,
             updatedAt = updatedDomain.updatedAt,
             isSynced = false, // Mark as unsynced when updated
-            syncVersion = existingEntity.syncVersion + 1
+            syncVersion = existingEntity.syncVersion + 1,
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
         )
+    }
+
+    private companion object {
+        const val DEFAULT_TEMPLATE_SETS = 3
+        val DEFAULT_TEMPLATE_REPS = Reps(1)
     }
 }

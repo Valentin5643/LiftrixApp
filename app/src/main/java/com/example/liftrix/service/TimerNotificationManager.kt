@@ -65,7 +65,7 @@ class TimerNotificationManager @Inject constructor(
 
             setContentTitle(getNotificationTitle(timerState))
             setContentText(getNotificationText(timerState))
-            setSmallIcon(R.drawable.ic_launcher_foreground)
+            setSmallIcon(R.drawable.ic_notification)
             setContentIntent(mainPendingIntent)
             setOngoing(true)
             setSilent(true)

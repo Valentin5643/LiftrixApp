@@ -124,7 +124,7 @@ class StateCleanupManager @Inject constructor() {
 /**
  * Extension function to make StatefulDetailViewModel automatically implement StateCleanupAware
  */
-fun com.example.liftrix.ui.common.viewmodel.StatefulDetailViewModel<*>.registerForStateCleanup(
+fun com.example.liftrix.ui.common.viewmodel.StatefulDetailViewModel<*, *>.registerForStateCleanup(
     cleanupManager: StateCleanupManager
 ) {
     val cleanupAware = object : StateCleanupManager.StateCleanupAware {
@@ -143,7 +143,7 @@ fun com.example.liftrix.ui.common.viewmodel.StatefulDetailViewModel<*>.registerF
 /**
  * Extension function to unregister StatefulDetailViewModel from cleanup
  */
-fun com.example.liftrix.ui.common.viewmodel.StatefulDetailViewModel<*>.unregisterFromStateCleanup(
+fun com.example.liftrix.ui.common.viewmodel.StatefulDetailViewModel<*, *>.unregisterFromStateCleanup(
     cleanupManager: StateCleanupManager
 ) {
     // Note: This requires the ViewModel to track its cleanup aware instance

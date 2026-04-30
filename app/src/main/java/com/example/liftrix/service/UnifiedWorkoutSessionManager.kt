@@ -68,7 +68,8 @@ class UnifiedWorkoutSessionManager @Inject constructor(
     private val workoutRepository: WorkoutRepository,
     private val feedRepository: FeedRepository,
     private val cacheManager: CacheManager,
-    private val cacheInvalidationService: CacheInvalidationService
+    private val cacheInvalidationService: CacheInvalidationService,
+    private val gymBuddyWorkoutCompletionNotifier: GymBuddyWorkoutCompletionNotifier
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val sharedPrefs: SharedPreferences = context.getSharedPreferences(
@@ -109,6 +110,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
     }
 
     fun forceStartSession(session: UnifiedWorkoutSession) {
+        Timber.d("[WORKOUT-DEBUG] forceStartSession requested sessionId=${session.id.value} userId=${session.userId} name='${session.name}' exercises=${session.exercises.size} status=${session.sessionStatus}")
         Timber.d("Force starting session: ${session.name} with ${session.exercises.size} exercises")
         
         // Clear any existing session first
@@ -182,6 +184,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             Timber.w("Cannot complete - no active session")
             return false
         }
+        Timber.d("[WORKOUT-DEBUG] completeSession requested sessionId=${session.id.value} userId=${session.userId} name='${session.name}' exercises=${session.exercises.size} status=${session.sessionStatus}")
         
         if (session.sessionStatus == UnifiedWorkoutSession.SessionStatus.COMPLETED) {
             Timber.w("Session already completed")
@@ -195,6 +198,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             try {
                 // Save completed workout to repository
                 val completedWorkout = completedSession.toCompletedWorkout()
+                Timber.d("[WORKOUT-DEBUG] completeSession saving workout id=${completedWorkout.id.value} userId=${completedWorkout.userId} status=${completedWorkout.status} exercises=${completedWorkout.exercises.size}")
                 
                 // Use synchronous save to ensure database commit before session cleanup
                 val saveResult = if (workoutRepository is com.example.liftrix.data.repository.workout.WorkoutRepositoryImpl) {
@@ -218,6 +222,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                 
                 saveResult.fold(
                     onSuccess = { savedWorkout ->
+                        Timber.d("[WORKOUT-DEBUG] completeSession save success workoutId=${savedWorkout.id.value} userId=${savedWorkout.userId}")
                         // Store the saved workout ID for navigation
                         _savedWorkoutId.value = savedWorkout.id.value
                         
@@ -229,11 +234,15 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                         
                         // Invalidate analytics cache after workout completion using enhanced invalidation service
                         invalidateWorkoutRelatedCache(savedWorkout)
+
+                        // Notify real Gym Buddy recipients only after the completed workout is persisted.
+                        notifyGymBuddiesWorkoutCompleted(savedWorkout)
                         
                         // Only clear session after confirmed database save
                         clearSession()
                     },
                     onFailure = { exception ->
+                        Timber.e("[WORKOUT-DEBUG] completeSession save failed sessionId=${completedSession.id.value} userId=${completedSession.userId} error=${exception.message}")
                         Timber.e("Failed to save completed workout: ${exception.message}")
                         
                         // Check if error is recoverable to decide whether to preserve session
@@ -669,6 +678,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
      */
     private fun clearSession() {
         val currentSession = _currentSession.value
+        Timber.d("[WORKOUT-DEBUG] clearSession requested sessionId=${currentSession?.id?.value} userId=${currentSession?.userId} status=${currentSession?.sessionStatus}")
         
         // Stop foreground service when clearing session
         stopWorkoutForegroundService()
@@ -697,6 +707,10 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         scope.launch {
             try {
                 val serializedSession = sharedPrefs.getString(KEY_CURRENT_SESSION, null)
+                val firebaseUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                Timber.tag("StartupRestoreFix").d(
+                    "operation=CUSTOM_SESSION_RECOVERY_START firebaseCurrentUserId=${firebaseUid ?: "null"} persistedSessionPresent=${serializedSession != null} timestamp=${System.currentTimeMillis()}"
+                )
                 if (serializedSession != null) {
                     val lastUpdated = sharedPrefs.getLong(KEY_LAST_UPDATED, 0)
                     val currentTime = System.currentTimeMillis()
@@ -704,6 +718,9 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                     // Check if session is not too old (7 days)
                     val sevenDaysAgo = currentTime - (7 * 24 * 60 * 60 * 1000)
                     if (lastUpdated < sevenDaysAgo) {
+                        Timber.tag("StartupRestoreFix").w(
+                            "operation=CUSTOM_SESSION_CLEAR userId=${firebaseUid ?: "unknown"} reason=session_too_old firebaseCurrentUserId=${firebaseUid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                        )
                         Timber.w("Session too old, discarding")
                         clearSession()
                         return@launch
@@ -729,13 +746,24 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                         }
                     } else {
                         // Session was completed, clear it
+                        Timber.tag("StartupRestoreFix").d(
+                            "operation=CUSTOM_SESSION_CLEAR userId=${session.userId} reason=completed_session firebaseCurrentUserId=${firebaseUid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                        )
                         clearSession()
                         Timber.d("Completed session cleared on startup")
                     }
                 } else {
+                    Timber.tag("StartupRestoreFix").d(
+                        "operation=CUSTOM_SESSION_EMPTY firebaseCurrentUserId=${firebaseUid ?: "null"} action=no_room_clear timestamp=${System.currentTimeMillis()}"
+                    )
                     Timber.d("No persisted session found on startup")
                 }
             } catch (e: Exception) {
+                val firebaseUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                Timber.tag("StartupRestoreFix").e(
+                    e,
+                    "operation=CUSTOM_SESSION_CLEAR userId=${firebaseUid ?: "unknown"} reason=recovery_exception firebaseCurrentUserId=${firebaseUid ?: "null"} action=clear_session_only_no_room_clear timestamp=${System.currentTimeMillis()}"
+                )
                 Timber.e(e, "Failed to recover session on startup")
                 
                 // Show recovery error to user
@@ -807,6 +835,14 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             // Fallback to basic cache invalidation
             fallbackCacheInvalidation(workout.userId)
             // Don't let cache invalidation failure affect workout completion
+        }
+    }
+
+    private suspend fun notifyGymBuddiesWorkoutCompleted(workout: Workout) {
+        try {
+            gymBuddyWorkoutCompletionNotifier.notifyWorkoutCompleted(workout)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to send Gym Buddy workout-completion notification")
         }
     }
     

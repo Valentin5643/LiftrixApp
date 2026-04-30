@@ -299,6 +299,35 @@ class AnalyticsTrackerImpl @Inject constructor(
             Timber.w(e, "Failed to track AI chat response analytics")
         }
     }
+
+    override fun trackAIWorkoutGenerationResponse(
+        userId: String,
+        tokensUsed: Int,
+        processingTimeMs: Long,
+        modelVersion: String,
+        language: String,
+        stage: String,
+        additionalProperties: Map<String, Any>
+    ) {
+        try {
+            val params = mutableMapOf<String, Any>(
+                "user_id" to userId,
+                "tokens_used" to tokensUsed,
+                "processing_time_ms" to processingTimeMs,
+                "model_version" to modelVersion,
+                "language" to language,
+                "stage" to stage
+            )
+
+            params.putAll(additionalProperties)
+
+            firebaseAnalytics.logEvent("ai_workout_generation_response", params.toBundle())
+
+            Timber.d("Analytics: AI workout generation response tracked - $userId used $tokensUsed tokens in ${processingTimeMs}ms during $stage")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to track AI workout generation response analytics")
+        }
+    }
     
     override fun trackAIChatUsage(
         userId: String,

@@ -404,7 +404,7 @@ private fun ProgressDashboardContent(
                         com.example.liftrix.domain.model.analytics.TimeRangeType.SIX_MONTHS -> com.example.liftrix.domain.model.analytics.TimeRange.lastSixMonths()
                         com.example.liftrix.domain.model.analytics.TimeRangeType.ALL_TIME -> com.example.liftrix.domain.model.analytics.TimeRange.allTime()
                     }
-                    onChartsEvent(ProgressChartsEvent.TimePeriodChanged(newTimeRange))
+                    onCoordinatorEvent(CoordinatorEvent.TimePeriodChanged(newTimeRange))
                 },
                 modifier = Modifier.fillMaxWidth()
             )

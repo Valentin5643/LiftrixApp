@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Icon
@@ -115,7 +116,6 @@ import com.example.liftrix.ui.navigation.navigateToGuestConversion
 import com.example.liftrix.ui.navigation.navigateToAuthSignUp
 import com.example.liftrix.ui.navigation.navigateToAuthSignIn
 import com.example.liftrix.ui.navigation.navigateToPublicProfile
-import com.example.liftrix.ui.navigation.navigateToQRCodeDisplay
 import com.example.liftrix.ui.navigation.navigateToFriends
 import com.example.liftrix.ui.navigation.navigateAndReplace
 import com.example.liftrix.ui.navigation.clearBackStackAndNavigate
@@ -228,6 +228,9 @@ fun UnifiedNavigationContainer(
                         },
                         onNavigateToEditWorkout = { workoutId ->
                             navController.navigateToEditWorkout(workoutId)
+                        },
+                        onNavigateToTemplateBuddyShare = { templateId ->
+                            navController.navigate(LiftrixRoute.TemplateBuddyShare(templateId))
                         }
                     )
                 }
@@ -264,8 +267,8 @@ fun UnifiedNavigationContainer(
                         onNavigateToUserSearch = {
                             navController.navigate(LiftrixRoute.UserSearch)
                         },
-                        onNavigateToQRCode = {
-                            navController.navigateToQRCodeDisplay()
+                        onNavigateToGymBuddy = {
+                            navController.navigate(LiftrixRoute.GymBuddy)
                         },
                         onNavigateToUserProfile = { userId ->
                             navController.navigateToPublicProfile(userId)
@@ -299,37 +302,6 @@ fun UnifiedNavigationContainer(
                             navController.navigate(LiftrixRoute.WorkoutDetails(workoutId))
                         }
                     )
-                }
-                
-                composable<LiftrixRoute.QRCodeDisplay> { backStackEntry ->
-                    val route = backStackEntry.toRoute<LiftrixRoute.QRCodeDisplay>()
-                    val coroutineScope = rememberCoroutineScope()
-                    
-                    // Secure authentication check - redirect to auth if no valid user
-                    LaunchedEffect(route.userId) {
-                        if (route.userId == null) {
-                            coroutineScope.launch {
-                                val currentUserId = viewModel.getCurrentUserId()
-                                if (currentUserId == null) {
-                                    // User not authenticated - redirect to sign in
-                                    navController.navigateAndReplace(LiftrixRoute.AuthSignIn)
-                                    return@launch
-                                }
-                                // If we have a valid user ID, navigate to QR code with the user ID
-                                navController.navigateAndReplace(LiftrixRoute.QRCodeDisplay(currentUserId))
-                            }
-                        }
-                    }
-                    
-                    // Only render screen if we have a valid userId
-                    route.userId?.let { userId ->
-                        com.example.liftrix.ui.social.QRCodeDisplayScreen(
-                            userId = userId,
-                            onNavigateBack = {
-                                navController.popBackStackSafely()
-                            }
-                        )
-                    }
                 }
                 
                 composable<LiftrixRoute.WorkoutDetails> { backStackEntry ->
@@ -1101,7 +1073,59 @@ fun UnifiedNavigationContainer(
                 composable<LiftrixRoute.GymBuddy> {
                     com.example.liftrix.ui.social.gymbuddy.GymBuddyScreen(
                         onNavigateToQrScanner = {
-                            // QR Scanner navigation placeholder
+                            navController.navigate(LiftrixRoute.QRScanner)
+                        }
+                    )
+                }
+
+                composable<LiftrixRoute.QRScanner> {
+                    val coroutineScope = rememberCoroutineScope()
+                    com.example.liftrix.ui.QRScannerScreen(
+                        onQrCodeScanned = {
+                            coroutineScope.launch {
+                                kotlinx.coroutines.delay(900)
+                                navController.popBackStackSafely()
+                            }
+                        },
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onTemplateShareFound = { shareId ->
+                            navController.navigate(LiftrixRoute.WorkoutSharedWithYou(shareId))
+                        },
+                        onMultipleTemplateSharesFound = { senderId ->
+                            navController.navigate(LiftrixRoute.WorkoutShareInbox(senderId))
+                        }
+                    )
+                }
+
+                composable<LiftrixRoute.TemplateBuddyShare> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.TemplateBuddyShare>()
+                    com.example.liftrix.ui.sharing.TemplateBuddyShareScreen(
+                        templateId = route.templateId,
+                        onNavigateBack = { navController.popBackStackSafely() },
+                        onOpenQrShareMode = { navController.navigate(LiftrixRoute.GymBuddy) }
+                    )
+                }
+
+                composable<LiftrixRoute.WorkoutSharedWithYou> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.WorkoutSharedWithYou>()
+                    com.example.liftrix.ui.sharing.WorkoutSharedWithYouScreen(
+                        shareId = route.shareId,
+                        onNavigateBack = { navController.popBackStackSafely() },
+                        onSaved = {
+                            navController.popBackStack(LiftrixRoute.Workout, inclusive = false)
+                        }
+                    )
+                }
+
+                composable<LiftrixRoute.WorkoutShareInbox> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.WorkoutShareInbox>()
+                    com.example.liftrix.ui.sharing.WorkoutShareInboxScreen(
+                        senderId = route.senderId,
+                        onNavigateBack = { navController.popBackStackSafely() },
+                        onOpenShare = { shareId ->
+                            navController.navigate(LiftrixRoute.WorkoutSharedWithYou(shareId))
                         }
                     )
                 }
@@ -1357,12 +1381,12 @@ private fun BottomNavigationBar(
     navController: NavHostController,
     currentDestination: androidx.navigation.NavDestination?
 ) {
-    val items = listOf(
-        BottomNavItem(LiftrixRoute.Home, "Home", Icons.Default.Home),
-        BottomNavItem(LiftrixRoute.Workout, "Workout", Icons.Default.FitnessCenter),
-        BottomNavItem(LiftrixRoute.Progress, "Progress", Icons.Default.TrendingUp)
-        // Temporarily hidden: BottomNavItem(LiftrixRoute.Coach, "Coach", Icons.Default.Psychology)
-    )
+    val items = buildList {
+        add(BottomNavItem(LiftrixRoute.Home, "Home", Icons.Default.Home))
+        add(BottomNavItem(LiftrixRoute.Workout, "Workout", Icons.Default.FitnessCenter))
+        add(BottomNavItem(LiftrixRoute.Progress, "Progress", Icons.Default.TrendingUp))
+        add(BottomNavItem(LiftrixRoute.AIChatbot(), "AI", Icons.Default.Psychology))
+    }
     
     NavigationBar {
         items.forEach { item ->

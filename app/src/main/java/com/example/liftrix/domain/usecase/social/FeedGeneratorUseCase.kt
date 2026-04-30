@@ -38,7 +38,8 @@ class FeedGeneratorUseCase @Inject constructor(
         try {
             // 🚀 PERF-P1-OPT2: Preload relationships for batch privacy validation
             // This reduces feed load time from 1,500ms to ~205ms (86% improvement)
-            privacyService.preloadRelationshipsForViewer(userId)
+            runCatching { privacyService.preloadRelationshipsForViewer(userId) }
+                .onFailure { Timber.w(it, "Failed to preload privacy relationships for user: $userId") }
 
             // Get followed users
             val followingResult = followRepository.getFollowing(userId)
@@ -144,7 +145,8 @@ class FeedGeneratorUseCase @Inject constructor(
     ): Flow<PagingData<WorkoutPost>> = flow {
         try {
             // 🚀 PERF-P1-OPT2: Preload relationships for batch privacy validation
-            privacyService.preloadRelationshipsForViewer(userId)
+            runCatching { privacyService.preloadRelationshipsForViewer(userId) }
+                .onFailure { Timber.w(it, "Failed to preload privacy relationships for user: $userId") }
 
             val cutoffTime = System.currentTimeMillis() - (timeWindowHours * 3600000L)
             

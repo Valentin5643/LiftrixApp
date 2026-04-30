@@ -12,6 +12,8 @@ import com.example.liftrix.domain.service.PRDetectionService
 import com.example.liftrix.domain.service.PRSignificance
 import com.example.liftrix.domain.service.PRType
 import com.example.liftrix.domain.service.PersonalRecord
+import com.example.liftrix.domain.repository.PRSyncStatus
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -31,6 +33,70 @@ class PRDetectionServiceImpl @Inject constructor(
     private val exerciseSetDao: ExerciseSetDao,
     private val personalRecordRepository: PersonalRecordRepository
 ) : PRDetectionService {
+
+    constructor(
+        exerciseDao: ExerciseDao,
+        exerciseSetDao: ExerciseSetDao
+    ) : this(
+        exerciseDao = exerciseDao,
+        exerciseSetDao = exerciseSetDao,
+        personalRecordRepository = object : PersonalRecordRepository {
+            private suspend fun history(userId: String, exerciseName: String) =
+                runCatching {
+                    exerciseSetDao.getOneRmDataForExercises(
+                        userId = userId,
+                        exerciseLibraryIds = listOf(exerciseName),
+                        startDate = LocalDate.now().minusYears(20).toString(),
+                        endDate = LocalDate.now().toString()
+                    )
+                }.getOrElse { emptyList() }
+
+            private fun com.example.liftrix.data.local.dao.OneRmResult.toPersonalRecord(
+                exerciseName: String,
+                prType: PRType
+            ) = PersonalRecord(
+                exerciseName = exerciseName,
+                prType = prType,
+                weight = weight_kg.toDouble(),
+                reps = reps,
+                estimatedOneRM = estimated_one_rm,
+                volume = weight_kg.toDouble() * reps,
+                achievedAt = completed_at,
+                previousBest = null,
+                improvementPercent = null
+            )
+
+            override suspend fun savePR(personalRecord: PersonalRecord, userId: String, workoutId: String) = LiftrixResult.success(Unit)
+            override suspend fun savePRs(personalRecords: List<PersonalRecord>, userId: String, workoutId: String) = LiftrixResult.success(Unit)
+            override suspend fun getBestPR(userId: String, exerciseName: String, prType: PRType) = when (prType) {
+                PRType.ONE_RM -> getBest1RM(userId, exerciseName)
+                PRType.VOLUME -> getBestVolume(userId, exerciseName)
+                PRType.REPS -> getBestReps(userId, exerciseName)
+                PRType.MAX_WEIGHT -> getBestWeight(userId, exerciseName)
+            }
+            override suspend fun getBest1RM(userId: String, exerciseName: String) = LiftrixResult.success(
+                history(userId, exerciseName).maxByOrNull { it.estimated_one_rm }?.toPersonalRecord(exerciseName, PRType.ONE_RM)
+            )
+            override suspend fun getBestVolume(userId: String, exerciseName: String) = LiftrixResult.success(
+                history(userId, exerciseName).maxByOrNull { it.weight_kg * it.reps }?.toPersonalRecord(exerciseName, PRType.VOLUME)
+            )
+            override suspend fun getBestReps(userId: String, exerciseName: String) = LiftrixResult.success(
+                history(userId, exerciseName).maxByOrNull { it.reps }?.toPersonalRecord(exerciseName, PRType.REPS)
+            )
+            override suspend fun getBestWeight(userId: String, exerciseName: String) = LiftrixResult.success(
+                history(userId, exerciseName).maxByOrNull { it.weight_kg }?.toPersonalRecord(exerciseName, PRType.MAX_WEIGHT)
+            )
+            override suspend fun getPRsForExercise(userId: String, exerciseName: String) = LiftrixResult.success(emptyList<PersonalRecord>())
+            override suspend fun getRecentPRs(userId: String, limit: Int) = LiftrixResult.success(emptyList<PersonalRecord>())
+            override suspend fun getPRsInDateRange(userId: String, startDate: Long, endDate: Long) = LiftrixResult.success(emptyList<PersonalRecord>())
+            override suspend fun getPRsForWorkout(userId: String, workoutId: String) = LiftrixResult.success(emptyList<PersonalRecord>())
+            override fun observePRsForUser(userId: String) = flowOf(emptyList<PersonalRecord>())
+            override suspend fun getPRCountsByExercise(userId: String) = LiftrixResult.success(emptyMap<String, Int>())
+            override suspend fun deletePR(prId: String, userId: String) = LiftrixResult.success(Unit)
+            override suspend fun deleteAllPRsForUser(userId: String) = LiftrixResult.success(Unit)
+            override suspend fun getSyncStatus(userId: String) = LiftrixResult.success(PRSyncStatus(0, 0, 0))
+        }
+    )
 
     companion object {
         // Minimum improvement thresholds

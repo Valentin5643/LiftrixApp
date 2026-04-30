@@ -6,11 +6,16 @@ import com.example.liftrix.data.mapper.WorkoutTemplateMapper
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.model.WorkoutTemplate
+import com.example.liftrix.domain.model.WorkoutTemplateId
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.flatMapLiftrix
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.common.liftrixFailure
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.model.sharing.SharedTemplatePreview
+import com.example.liftrix.domain.model.sharing.TemplateShareEvent
+import com.example.liftrix.domain.repository.UserSearchRepository
+import com.example.liftrix.domain.repository.sharing.TemplateShareRepository
 import com.example.liftrix.domain.repository.template.TemplateRepository
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import kotlinx.coroutines.flow.Flow
@@ -44,7 +49,9 @@ class TemplateQueryUseCase @Inject constructor(
     private val workoutTemplateDao: WorkoutTemplateDao,
     private val workoutMapper: WorkoutMapper,
     private val workoutTemplateMapper: WorkoutTemplateMapper,
-    private val errorHandler: ErrorHandler
+    private val errorHandler: ErrorHandler,
+    private val templateShareRepository: TemplateShareRepository,
+    private val userSearchRepository: UserSearchRepository
 ) {
 
     // ========== SIMPLE QUERY OPERATIONS ==========
@@ -63,7 +70,11 @@ class TemplateQueryUseCase @Inject constructor(
     operator fun invoke(userId: String): Flow<List<WorkoutTemplate>> {
         require(userId.isNotBlank()) { "User ID cannot be blank" }
         return templateRepository.getAllTemplatesForUser(userId).map { result ->
-            result.getOrElse { emptyList() }
+            val templates = result.getOrElse { emptyList() }
+            Timber.tag("StartupRestoreFix").d(
+                "[TEMPLATE-LOAD] operation=TEMPLATE_REPOSITORY_FLOW_EMIT layer=TemplateQueryUseCase userId=$userId count=${templates.size} resultSuccess=${result.isSuccess} debounceApplied=false distinctApplied=false cacheApplied=false timestamp=${System.currentTimeMillis()}"
+            )
+            templates
         }
     }
 
@@ -106,7 +117,7 @@ class TemplateQueryUseCase @Inject constructor(
             val workoutTemplate = workoutTemplateMapper.toDomain(templateEntity)
 
             // Debug: Check template exercises
-            Timber.d("TemplateQueryUseCase: Template has ${workoutTemplate.exercises.size} exercises")
+            Timber.d("EDIT-WORKOUT-DEBUG: TemplateQueryUseCase.getById templateId=$templateId has ${workoutTemplate.exercises.size} exercises")
 
             // Now convert template to workout using proper domain model conversion
             val workout = Workout(
@@ -155,6 +166,60 @@ class TemplateQueryUseCase @Inject constructor(
                     )
                 }
             }
+    }
+
+    suspend fun getPendingSharesFromBuddy(
+        senderId: String,
+        receiverId: String
+    ): LiftrixResult<List<TemplateShareEvent>> {
+        if (senderId.isBlank() || receiverId.isBlank()) {
+            return liftrixFailure(
+                LiftrixError.ValidationError(
+                    field = "templateShareLookup",
+                    violations = listOf("Sender and receiver IDs are required")
+                )
+            )
+        }
+
+        return templateShareRepository.getPendingSharesFromBuddy(senderId, receiverId)
+    }
+
+    suspend fun getSharedTemplatePreview(
+        shareId: String,
+        receiverId: String
+    ): LiftrixResult<SharedTemplatePreview> = liftrixCatching(
+        errorMapper = { throwable ->
+            when (throwable) {
+                is LiftrixError -> throwable
+                else -> LiftrixError.DataRetrievalError(
+                    errorMessage = "Failed to load shared workout preview",
+                    operation = "GET_SHARED_TEMPLATE_PREVIEW"
+                )
+            }
+        }
+    ) {
+        val share = templateShareRepository.getPendingShareForReceiver(shareId, receiverId).getOrThrow()
+            ?: throw LiftrixError.NotFoundError(
+                errorMessage = "Shared workout is no longer available",
+                resourceType = "TemplateShareEvent",
+                resourceId = shareId
+            )
+
+        val template = templateRepository.getTemplateById(
+            WorkoutTemplateId(share.templateId),
+            share.senderId
+        ).getOrThrow()
+
+        val senderName = userSearchRepository.getPublicProfile(
+            userId = share.senderId,
+            viewerId = receiverId
+        ).getOrNull()?.displayName ?: "Gym Buddy"
+
+        SharedTemplatePreview(
+            shareEvent = share,
+            template = template,
+            senderName = senderName
+        )
     }
 
     // ========== PRIVATE HELPER METHODS ==========
@@ -371,13 +436,24 @@ class TemplateQueryUseCase @Inject constructor(
             // Create default sets based on targetSets or default to 3 sets
             val numberOfSets = templateExercise.targetSets ?: 3
             val defaultSets = (1..numberOfSets).map { setNumber ->
+                val safeReps = templateExercise.targetReps
+                    ?.takeIf { it.count > 0 }
+                    ?: com.example.liftrix.domain.model.Reps(1)
+                val isValid = safeReps.count > 0
+                Timber.d(
+                    "EDIT-WORKOUT-DEBUG: TemplateQueryUseCase.convertTemplateExercisesToExercises " +
+                        "templateId=${workoutId.value} exerciseIndex=$index exerciseName='${templateExercise.name}' " +
+                        "setIndex=${setNumber - 1} reps=${templateExercise.targetReps?.count} time=null distance=null " +
+                        "isValidBeforeNormalization=${templateExercise.targetReps?.count?.let { it > 0 } == true} normalizedReps=${safeReps.count} " +
+                        "willConstructValidSet=$isValid validator=ExerciseSet.hasAtLeastOneMetric"
+                )
                 com.example.liftrix.domain.model.ExerciseSet(
                     id = com.example.liftrix.domain.model.ExerciseSetId(
                         "${workoutId.value}-${index}-set-${setNumber}"
                     ),
                     setNumber = setNumber,
                     // Initialize with target values from template if available
-                    reps = templateExercise.targetReps,
+                    reps = safeReps,
                     weight = templateExercise.targetWeight,
                     time = null, // Template doesn't have target time
                     distance = null, // Template doesn't have target distance

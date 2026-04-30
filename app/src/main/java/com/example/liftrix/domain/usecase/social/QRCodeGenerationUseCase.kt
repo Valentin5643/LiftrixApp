@@ -12,29 +12,29 @@ import javax.inject.Inject
 
 /**
  * Use case for generating QR codes for profile sharing
- * 
+ *
  * Responsibilities:
  * - Validates QR code generation requests
  * - Creates secure QR code mappings for profile sharing
  * - Manages QR code expiration and security
  * - Tracks QR code usage for analytics
- * 
+ *
  * Business Rules:
  * - QR codes are generated for authenticated users only
  * - Each QR code has a unique identifier for security
  * - QR codes respect user privacy settings
  * - QR codes can be disabled by the user at any time
- * - QR code data includes profile deep link for easy access
+ * - QR code data is an app-native payload and does not depend on external websites
  */
 class QRCodeGenerationUseCase @Inject constructor(
     private val userSearchRepository: UserSearchRepository,
     private val authRepository: AuthRepository,
     private val errorHandler: ErrorHandler
 ) {
-    
+
     /**
      * Generates a QR code for profile sharing
-     * 
+     *
      * @param request The QR code generation request
      * @return LiftrixResult containing QR code data or error information
      */
@@ -59,25 +59,25 @@ class QRCodeGenerationUseCase @Inject constructor(
                     LiftrixError.PermissionError("Cannot generate QR code for other users")
                 )
             }
-            
+
             // Generate QR code data through repository
             val qrCodeResult = userSearchRepository.generateProfileQRCode(targetUserId)
             if (qrCodeResult.isFailure) {
                 return qrCodeResult as LiftrixResult<QRCodeGenerationResult>
             }
-            
+
             val qrCodeData = qrCodeResult.getOrThrow()
-            
+
             val result = QRCodeGenerationResult(
                 qrCodeData = qrCodeData,
                 profileUserId = targetUserId,
                 expiresAt = if (request.expirationHours > 0) {
                     System.currentTimeMillis() + (request.expirationHours * 60 * 60 * 1000)
                 } else null,
-                shareableUrl = generateShareableUrl(qrCodeData),
+                shareableUrl = qrCodeData,
                 isTemporary = request.expirationHours > 0
             )
-            
+
             Timber.d("QR code generated for user: $targetUserId")
             LiftrixResult.success(result)
         } catch (e: Exception) {
@@ -90,10 +90,10 @@ class QRCodeGenerationUseCase @Inject constructor(
             LiftrixResult.failure(error)
         }
     }
-    
+
     /**
      * Resolves QR code data to user profile information
-     * 
+     *
      * @param request The QR code resolution request
      * @return LiftrixResult containing resolved user ID or error
      */
@@ -102,7 +102,7 @@ class QRCodeGenerationUseCase @Inject constructor(
             // Get current user ID for authentication
             val currentUserId = getCurrentUserId()
                 ?: return liftrixFailure(LiftrixError.AuthenticationError("User not authenticated"))
-            
+
             // Validate request
             if (request.qrCodeData.isBlank()) {
                 return liftrixFailure(
@@ -113,21 +113,21 @@ class QRCodeGenerationUseCase @Inject constructor(
                     )
                 )
             }
-            
+
             // Resolve QR code through repository
             val resolutionResult = userSearchRepository.resolveQRCodeProfile(request.qrCodeData)
             if (resolutionResult.isFailure) {
                 return resolutionResult as LiftrixResult<QRCodeResolutionResult>
             }
-            
+
             val resolvedUserId = resolutionResult.getOrThrow()
-            
+
             val result = QRCodeResolutionResult(
                 profileUserId = resolvedUserId,
                 qrCodeData = request.qrCodeData,
                 canViewProfile = resolvedUserId != currentUserId || canViewOwnProfile()
             )
-            
+
             Timber.d("QR code resolved to user: $resolvedUserId")
             LiftrixResult.success(result)
         } catch (e: Exception) {
@@ -139,7 +139,7 @@ class QRCodeGenerationUseCase @Inject constructor(
             LiftrixResult.failure(error)
         }
     }
-    
+
     /**
      * Gets current authenticated user ID
      */
@@ -151,7 +151,7 @@ class QRCodeGenerationUseCase @Inject constructor(
             null
         }
     }
-    
+
     /**
      * Validates the QR code generation request
      */
@@ -160,19 +160,19 @@ class QRCodeGenerationUseCase @Inject constructor(
         currentUserId: String
     ): LiftrixResult<QRCodeGenerationRequest> {
         val violations = mutableListOf<String>()
-        
+
         // Validate expiration hours
         if (request.expirationHours < 0) {
             violations.add("Expiration hours cannot be negative")
         } else if (request.expirationHours > MAX_EXPIRATION_HOURS) {
             violations.add("Expiration hours cannot exceed $MAX_EXPIRATION_HOURS")
         }
-        
+
         // Validate target user ID format if provided
         if (request.targetUserId != null && request.targetUserId.length < MIN_USER_ID_LENGTH) {
             violations.add("Target user ID format is invalid")
         }
-        
+
         return if (violations.isEmpty()) {
             LiftrixResult.success(request)
         } else {
@@ -185,7 +185,7 @@ class QRCodeGenerationUseCase @Inject constructor(
             )
         }
     }
-    
+
     /**
      * Checks if current user can generate QR code for target user
      */
@@ -194,7 +194,7 @@ class QRCodeGenerationUseCase @Inject constructor(
         // This can be extended later for admin features or shared profiles
         return targetUserId == currentUserId
     }
-    
+
     /**
      * Checks if user can view their own profile via QR code
      */
@@ -202,15 +202,7 @@ class QRCodeGenerationUseCase @Inject constructor(
         // Users should always be able to view their own profile
         return true
     }
-    
-    /**
-     * Generates a shareable URL from QR code data
-     */
-    private fun generateShareableUrl(qrCodeData: String): String {
-        // Create a deep link URL that can be shared or opened directly
-        return "https://liftrix.app/profile?qr=$qrCodeData"
-    }
-    
+
     companion object {
         private const val MIN_USER_ID_LENGTH = 5
         private const val MAX_EXPIRATION_HOURS = 168 // 7 days maximum
@@ -219,7 +211,7 @@ class QRCodeGenerationUseCase @Inject constructor(
 
 /**
  * Request data class for QR code generation
- * 
+ *
  * @property targetUserId ID of user for whom to generate QR code (defaults to current user)
  * @property expirationHours Hours until QR code expires (0 for no expiration)
  */
@@ -230,7 +222,7 @@ data class QRCodeGenerationRequest(
 
 /**
  * Result data class for QR code generation
- * 
+ *
  * @property qrCodeData The QR code data string
  * @property profileUserId ID of the user the QR code points to
  * @property expiresAt Timestamp when QR code expires (null if no expiration)
@@ -247,7 +239,7 @@ data class QRCodeGenerationResult(
 
 /**
  * Request data class for QR code resolution
- * 
+ *
  * @property qrCodeData The QR code data to resolve
  */
 data class QRCodeResolutionRequest(
@@ -256,7 +248,7 @@ data class QRCodeResolutionRequest(
 
 /**
  * Result data class for QR code resolution
- * 
+ *
  * @property profileUserId ID of the user the QR code resolves to
  * @property qrCodeData The original QR code data
  * @property canViewProfile Whether the current user can view this profile

@@ -104,15 +104,6 @@ class GymBuddyRepositoryImpl @Inject constructor(
     ) {
         Timber.d("Creating mutual gym buddy connection: $userId1 <-> $userId2, viaQr=$viaQr")
         
-        // Validate inputs
-        if (userId1 == userId2) {
-            throw LiftrixError.ValidationError(
-                field = "user_ids",
-                violations = listOf("Cannot add yourself as a gym buddy"),
-                errorMessage = "Cannot add yourself as a gym buddy"
-            )
-        }
-        
         // Check if already connected
         val alreadyConnected = gymBuddyDao.areMutualGymBuddies(userId1, userId2)
         if (alreadyConnected) {
@@ -145,6 +136,27 @@ class GymBuddyRepositoryImpl @Inject constructor(
         
         // Create the mutual connections
         val currentTime = System.currentTimeMillis()
+
+        if (userId1 == userId2) {
+            val selfBuddyEntity = GymBuddyEntity(
+                id = UUID.randomUUID().toString(),
+                userId = userId1,
+                buddyId = userId1,
+                buddyNickname = "Debug Self",
+                createdAt = currentTime,
+                lastPrNotificationSent = null,
+                notificationCooldownHours = 24,
+                pairedViaQr = viaQr,
+                pairingLocation = location,
+                isSynced = false,
+                syncVersion = 1
+            )
+
+            gymBuddyDao.insertGymBuddy(selfBuddyEntity)
+            Timber.d("Created debug self gym buddy connection successfully")
+            val selfBuddy = selfBuddyEntity.toDomain()
+            return@liftrixCatching Pair(selfBuddy, selfBuddy)
+        }
         
         val buddy1Entity = GymBuddyEntity(
             id = UUID.randomUUID().toString(),

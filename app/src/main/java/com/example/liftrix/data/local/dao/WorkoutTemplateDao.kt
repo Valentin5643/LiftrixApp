@@ -11,6 +11,11 @@ import com.example.liftrix.data.local.entity.WorkoutTemplateEntity
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
 
+data class TemplateFolderCount(
+    val folderId: String?,
+    val count: Int
+)
+
 /**
  * Data Access Object for workout templates with user-scoped operations
  */
@@ -35,6 +40,9 @@ interface WorkoutTemplateDao {
      */
     @Query("SELECT * FROM workout_templates WHERE id = :templateId AND user_id = :userId")
     suspend fun getTemplateById(templateId: String, userId: String): WorkoutTemplateEntity?
+
+    @Query("SELECT * FROM workout_templates WHERE id = :templateId LIMIT 1")
+    suspend fun getTemplateByIdAnyUser(templateId: String): WorkoutTemplateEntity?
     
     /**
      * Search workout templates by name for a specific user
@@ -132,6 +140,36 @@ interface WorkoutTemplateDao {
      */
     @Query("SELECT COUNT(*) FROM workout_templates WHERE user_id = :userId")
     suspend fun getTemplateCount(userId: String): Int
+
+    @Query("SELECT COUNT(*) FROM workout_templates")
+    suspend fun getTotalTemplateCountAllUsers(): Int
+
+    @Query("SELECT COUNT(*) FROM workout_templates WHERE id IN (:templateIds) AND user_id != :userId")
+    suspend fun getTemplateCountForWrongUser(templateIds: List<String>, userId: String): Int
+
+    @Query("""
+        SELECT COUNT(*) FROM workout_templates
+        WHERE user_id = :userId
+        AND folder_id IS NOT NULL
+        AND NOT EXISTS (
+            SELECT 1 FROM folders
+            WHERE folders.id = workout_templates.folder_id
+            AND folders.user_id = :userId
+        )
+    """)
+    suspend fun getTemplateCountWithMissingFolder(userId: String): Int
+
+    @Query("""
+        SELECT folder_id AS folderId, COUNT(*) AS count
+        FROM workout_templates
+        WHERE user_id = :userId
+        GROUP BY folder_id
+        ORDER BY count DESC
+    """)
+    suspend fun getTemplateCountByFolder(userId: String): List<TemplateFolderCount>
+
+    @Query("SELECT id FROM workout_templates WHERE id IN (:templateIds) AND user_id = :userId")
+    suspend fun getRestoredTemplateIds(templateIds: List<String>, userId: String): List<String>
     
     /**
      * Get templates by difficulty level for a specific user
@@ -244,7 +282,7 @@ interface WorkoutTemplateDao {
      * Does NOT trigger sync queue.
      */
     @Transaction
-    suspend fun upsertFromRemote(workoutTemplate: WorkoutTemplateEntity) {
+    suspend fun upsertFromRemote(workoutTemplate: WorkoutTemplateEntity): String {
         val local = getWorkoutTemplateForSync(workoutTemplate.id, workoutTemplate.userId)
         if (local == null || workoutTemplate.lastModified > local.lastModified) {
             val entity = workoutTemplate.copy(
@@ -253,7 +291,9 @@ interface WorkoutTemplateDao {
                 syncVersion = System.currentTimeMillis()
             )
             _insert(entity)
+            return if (local == null) "inserted" else "updated"
         }
+        return "unchanged"
     }
 
     /**
