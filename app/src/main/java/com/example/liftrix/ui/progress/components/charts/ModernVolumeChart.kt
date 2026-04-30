@@ -3,6 +3,7 @@ package com.example.liftrix.ui.progress.components.charts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -32,8 +33,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -56,14 +57,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.liftrix.domain.model.Weight
-import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.ui.common.rememberFrameTimeMonitor
 import com.example.liftrix.ui.common.measureFrameTime
 import com.example.liftrix.ui.theme.LiftrixChartStyle
 import com.example.liftrix.ui.theme.ChartColorsV2
 import com.example.liftrix.ui.theme.LiftrixTheme
-import com.example.liftrix.ui.theme.ModernChartRenderer
 import com.example.liftrix.ui.theme.drawBezierLineChart
 import kotlinx.datetime.LocalDate
 import com.example.liftrix.domain.model.analytics.VolumeDataPoint
@@ -96,7 +95,11 @@ fun ModernVolumeChart(
     showPersonalRecords: Boolean = true,
     animationDuration: Int = 300,
     unit: String = "kg",
-    chartTitle: String = "Volume Progress"
+    chartTitle: String = "Volume Progress",
+    allowPointSelection: Boolean = true,
+    useZeroBaseline: Boolean = false,
+    maxVisiblePoints: Int = 32,
+    fillBrush: Brush? = null
 ) {
     var selectedPoint by remember { mutableStateOf<VolumeDataPoint?>(null) }
     val density = LocalDensity.current
@@ -122,6 +125,14 @@ fun ModernVolumeChart(
             }
         }
     }
+    val displayMetrics = if (data.isEmpty()) ChartMetrics.forZeroData() else chartMetrics
+    val chartScale = remember(displayMetrics, useZeroBaseline) {
+        displayMetrics.scaleFor(useZeroBaseline)
+    }
+    val isDenseData = data.size > maxVisiblePoints
+    val showDataPoints = !isDenseData
+    val allowSelection = allowPointSelection && showDataPoints
+    val resolvedFillBrush = fillBrush ?: ChartColorsV2.Gradients.getPrimaryGradient(isSystemInDarkTheme())
 
     Box(
         modifier = modifier
@@ -156,10 +167,14 @@ fun ModernVolumeChart(
                         .fillMaxSize()
                         .pointerInput(displayData) {
                             // Only detect taps if we have real data
-                            if (data.isNotEmpty()) {
+                            if (allowSelection && data.isNotEmpty()) {
                                 detectTapGestures { offset ->
                                     val tappedPoint = findNearestDataPoint(
-                                        offset, data, androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat()), chartMetrics, density.density
+                                        offset,
+                                        data,
+                                        androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat()),
+                                        chartScale,
+                                        density.density
                                     )
                                     tappedPoint?.let { point ->
                                         selectedPoint = point
@@ -173,10 +188,13 @@ fun ModernVolumeChart(
                     measureFrameTime("ModernVolumeChart.draw") {
                         drawModernVolumeChart(
                             data = displayData,
-                            metrics = if (data.isEmpty()) ChartMetrics.forZeroData() else chartMetrics,
+                            metrics = displayMetrics,
+                            scale = chartScale,
                             animationProgress = animationProgress.value,
                             selectedPoint = selectedPoint,
                             showPersonalRecords = showPersonalRecords && data.isNotEmpty(),
+                            showDataPoints = showDataPoints,
+                            fillBrush = resolvedFillBrush,
                             density = density.density,
                             textMeasurer = textMeasurer
                         )
@@ -208,9 +226,12 @@ fun ModernVolumeChart(
 private fun DrawScope.drawModernVolumeChart(
     data: List<VolumeDataPoint>,
     metrics: ChartMetrics,
+    scale: ChartScale,
     animationProgress: Float,
     selectedPoint: VolumeDataPoint?,
     showPersonalRecords: Boolean,
+    showDataPoints: Boolean,
+    fillBrush: Brush,
     density: Float,
     textMeasurer: TextMeasurer
 ) {
@@ -226,8 +247,9 @@ private fun DrawScope.drawModernVolumeChart(
         strokeWidth = LiftrixChartStyle.ChartDimensions.strokeWidthMedium.value,
         color = ChartColorsV2.getSeriesColor(0),
         useBezierCurves = true,
-        showDataPoints = true,
+        showDataPoints = false,
         showGradientFill = true,
+        gradientBrush = fillBrush,
         showGrid = false,
         animationDuration = LiftrixChartStyle.ChartAnimations.defaultDuration
     )
@@ -238,8 +260,8 @@ private fun DrawScope.drawModernVolumeChart(
         } else {
             size.width * index / (data.size - 1).toFloat()
         }
-        val normalizedValue = if (metrics.range > 0) {
-            (dataPoint.volume.value - metrics.minValue) / metrics.range
+        val normalizedValue = if (scale.range > 0) {
+            (dataPoint.volume.value - scale.minValue) / scale.range
         } else {
             0.5 // For single points or zero range, show at mid-height for visibility
         }
@@ -247,28 +269,11 @@ private fun DrawScope.drawModernVolumeChart(
         x to y.toFloat()
     }
     
-    // Draw gradient fill area
-    if (chartConfig.showGradientFill) {
-        val fillPath = Path().apply {
-            points.forEachIndexed { index, (x, y) ->
-                if (index == 0) moveTo(x, y) else lineTo(x, y)
-            }
-            lineTo(points.last().first, size.height)
-            lineTo(points.first().first, size.height)
-            close()
-        }
-        
-        drawPath(
-            path = fillPath,
-            brush = ChartColorsV2.Gradients.getPrimaryGradient(true)
-        )
-    }
-    
     // Draw bezier curve line
     drawBezierLineChart(points, chartConfig)
     
     // Draw interactive data points
-    drawInteractiveDataPoints(points, selectedPoint, animationProgress)
+    drawInteractiveDataPoints(points, selectedPoint, animationProgress, showDataPoints)
     
     // Draw personal record markers
     if (showPersonalRecords && metrics.personalRecords.isNotEmpty()) {
@@ -351,8 +356,11 @@ private fun DrawScope.drawAxes() {
 private fun DrawScope.drawInteractiveDataPoints(
     points: List<Pair<Float, Float>>,
     selectedPoint: VolumeDataPoint?,
-    animationProgress: Float
+    animationProgress: Float,
+    showDataPoints: Boolean
 ) {
+    if (!showDataPoints) return
+
     points.forEach { (x, y) ->
         val baseRadius = 4.dp.toPx()
         val animatedRadius = baseRadius * animationProgress
@@ -456,7 +464,7 @@ private fun findNearestDataPoint(
     tapOffset: Offset,
     data: List<VolumeDataPoint>,
     canvasSize: androidx.compose.ui.geometry.Size,
-    metrics: ChartMetrics,
+    scale: ChartScale,
     density: Float
 ): VolumeDataPoint? {
     if (data.isEmpty()) return null
@@ -466,7 +474,7 @@ private fun findNearestDataPoint(
     
     data.forEachIndexed { index, dataPoint ->
         val x = canvasSize.width * index / (data.size - 1).coerceAtLeast(1)
-        val normalizedValue = (dataPoint.volume.value - metrics.minValue) / metrics.range
+        val normalizedValue = (dataPoint.volume.value - scale.minValue) / scale.range
         val y = canvasSize.height * (1f - normalizedValue)
         
         val distance = kotlin.math.sqrt(
@@ -640,6 +648,11 @@ private fun ZeroDataOverlay() {
 /**
  * Chart metrics calculation
  */
+private data class ChartScale(
+    val minValue: Double,
+    val range: Double
+)
+
 private data class ChartMetrics(
     val minValue: Double,
     val maxValue: Double,
@@ -648,6 +661,12 @@ private data class ChartMetrics(
     val personalRecords: List<VolumeDataPoint>,
     val isValid: Boolean
 ) {
+    fun scaleFor(useZeroBaseline: Boolean): ChartScale {
+        val scaleMin = if (useZeroBaseline) 0.0 else minValue
+        val scaleRange = (maxValue - scaleMin).coerceAtLeast(1.0)
+        return ChartScale(scaleMin, scaleRange)
+    }
+
     companion object {
         fun empty() = ChartMetrics(0.0, 0.0, 0.0, 0.0, emptyList(), false)
         

@@ -1,17 +1,26 @@
-pluginManagement { 
-    repositories { 
-        google() 
-        mavenCentral() 
-        gradlePluginPortal() 
-    } 
-} 
-dependencyResolutionManagement { 
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS) 
-    repositories { 
-        google() 
-        mavenCentral() 
-    } 
-} 
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+// Build cache configuration for faster builds
+buildCache {
+    local {
+        directory = File(rootDir, "build-cache")
+        removeUnusedEntriesAfterDays = 30
+    }
+}
+
 rootProject.name = "Liftrix"
 include(":app")
 include(":lint-rules")

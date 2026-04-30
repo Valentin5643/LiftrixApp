@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -23,6 +24,7 @@ import com.example.liftrix.ui.common.components.EmptyState
 import com.example.liftrix.ui.progress.detail.components.AnalyticsDetailScreen
 import com.example.liftrix.ui.progress.components.GlobalTimeRangeSelector
 import com.example.liftrix.ui.progress.components.charts.ModernVolumeChart
+import com.example.liftrix.ui.theme.LiftrixColorsV2
 import timber.log.Timber
 
 /**
@@ -191,6 +193,15 @@ private fun WorkoutFrequencyContent(
                         showPersonalRecords = false,
                         unit = " workouts",
                         chartTitle = "Workout Frequency",
+                        allowPointSelection = timeRange != TimeRangeType.ALL_TIME,
+                        useZeroBaseline = true,
+                        maxVisiblePoints = if (timeRange == TimeRangeType.ALL_TIME) 0 else 32,
+                        fillBrush = Brush.verticalGradient(
+                            colors = listOf(
+                                LiftrixColorsV2.Teal.copy(alpha = 0.35f),
+                                LiftrixColorsV2.Teal.copy(alpha = 0.12f)
+                            )
+                        ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(200.dp)

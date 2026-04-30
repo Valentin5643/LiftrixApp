@@ -193,6 +193,7 @@ object LiftrixChartStyle {
         val useBezierCurves: Boolean = true,
         val showDataPoints: Boolean = true,
         val showGradientFill: Boolean = true,
+        val gradientBrush: Brush? = null,
         val showGrid: Boolean = false,
         val animationDuration: Int = ChartAnimations.defaultDuration
     )
@@ -606,7 +607,7 @@ object ModernChartRenderer {
             
             drawPath(
                 path = fillPath,
-                brush = LiftrixChartStyle.ChartGradients.primaryGradient
+                brush = config.gradientBrush ?: LiftrixChartStyle.ChartGradients.primaryGradient
             )
         }
         

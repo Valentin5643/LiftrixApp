@@ -49,8 +49,8 @@
 -keep class com.example.liftrix.LiftrixApp { *; }
 -keep class com.example.liftrix.MainActivity { *; }
 
-# Keep ALL ViewModels (Hilt injects these)
--keep class com.example.liftrix.ui.**.*ViewModel { *; }
+# Keep ViewModels - optimized to allow obfuscation while preserving structure
+-keep,allowobfuscation class * extends androidx.lifecycle.ViewModel
 -keep class com.example.liftrix.ui.**.*ViewModel$* { *; }
 
 # Keep all Hilt modules and injected classes
@@ -60,8 +60,8 @@
 -keep @javax.inject.Inject class * { *; }
 -keep @dagger.hilt.android.lifecycle.HiltViewModel class * { *; }
 
-# Keep data models
--keep class com.example.liftrix.domain.model.** { *; }
+# Keep data models - optimized for serialization only
+-keep @kotlinx.serialization.Serializable class com.example.liftrix.domain.model.** { *; }
 -keep class com.example.liftrix.data.local.entity.** { *; }
 -keep class com.example.liftrix.data.local.dao.** { *; }
 
@@ -95,12 +95,13 @@
     <init>(...);
 }
 
-# Keep repositories and use cases (Hilt injects these)
--keep class com.example.liftrix.data.repository.** { *; }
--keep class com.example.liftrix.domain.repository.** { *; }
--keep class com.example.liftrix.domain.usecase.** { *; }
--keep class com.example.liftrix.domain.service.** { *; }
--keep class com.example.liftrix.data.service.** { *; }
+# Keep repositories and use cases - optimized to allow obfuscation
+# Hilt can handle obfuscated class names as long as structure is preserved
+-keep,allowobfuscation class com.example.liftrix.data.repository.** { *; }
+-keep,allowobfuscation interface com.example.liftrix.domain.repository.** { *; }
+-keep,allowobfuscation class com.example.liftrix.domain.usecase.** { *; }
+-keep,allowobfuscation class com.example.liftrix.domain.service.** { *; }
+-keep,allowobfuscation class com.example.liftrix.data.service.** { *; }
 
 # Vico chart library
 -keep class com.patrykandpatrick.vico.** { *; }

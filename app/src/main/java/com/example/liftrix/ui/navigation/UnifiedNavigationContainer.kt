@@ -1011,26 +1011,23 @@ fun UnifiedNavigationContainer(
                 // Profile Management Routes
                 composable<LiftrixRoute.Profile> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.Profile>()
-                    com.example.liftrix.ui.profile.ProfileScreen(
-                        onNavigateToEdit = { 
-                            navController.navigateToProfileEdit() 
+                    com.example.liftrix.ui.profile.ProfileEditScreenRedesigned(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
                         },
-                        onNavigateToImageCrop = { uri -> 
-                            navController.navigateToImageCrop(uri) 
-                        },
-                        onNavigateToSettings = { 
-                            navController.navigateToSettings() 
+                        onNavigateToImageCrop = { uri ->
+                            navController.navigateToImageCrop(uri)
                         }
                     )
                 }
 
                 composable<LiftrixRoute.ProfileEdit> {
-                    com.example.liftrix.ui.profile.ProfileEditScreen(
-                        onNavigateBack = { 
-                            navController.popBackStackSafely() 
+                    com.example.liftrix.ui.profile.ProfileEditScreenRedesigned(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
                         },
-                        onNavigateToImageCrop = { uri -> 
-                            navController.navigateToImageCrop(uri) 
+                        onNavigateToImageCrop = { uri ->
+                            navController.navigateToImageCrop(uri)
                         }
                     )
                 }

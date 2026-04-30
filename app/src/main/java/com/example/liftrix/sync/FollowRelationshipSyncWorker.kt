@@ -453,10 +453,9 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                 val insertedCount = safeFollowDao.insertFollowRelationshipsWithUserValidation(restoredRelationships)
                 Timber.i("🔥 FOLLOW-SYNC-FIX: Successfully restored $insertedCount/${restoredRelationships.size} follow relationships from Firebase with user validation")
 
-                restoredRelationships.forEach { relationship ->
-                    followDao.upsertFromRemote(relationship)
-                }
-                
+                // ✅ DUPLICATE-PREVENTION-FIX: Removed redundant upsertFromRemote() loop
+                // The insertFollowRelationshipsWithUserValidation() call above already handles insertion
+
                 // 🔥 FIX: Actively fetch and cache missing user profiles for restored relationships
                 val allUserIds = restoredRelationships.flatMap { listOf(it.followerId, it.followingId) }.distinct()
                 val missingUserIds = mutableListOf<String>()

@@ -11,6 +11,7 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.usecase.analytics.AnalyticsQueryUseCase
 import com.example.liftrix.domain.usecase.analytics.AnalyticsExportUseCase
 import com.example.liftrix.domain.usecase.analytics.ExportWorkoutFrequencyDataRequest
+import com.example.liftrix.domain.usecase.analytics.FrequencyPoint
 import com.example.liftrix.domain.usecase.analytics.WorkoutFrequencyDataPoint
 import com.example.liftrix.domain.usecase.analytics.WorkoutFrequencyData as UseCaseWorkoutFrequencyData
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
@@ -147,7 +148,7 @@ class WorkoutFrequencyDetailViewModel @Inject constructor(
                         }
 
                         // Convert use case data to UI data
-                        val uiData = mapUseCaseDataToUiData(useCaseData)
+                        val uiData = mapUseCaseDataToUiData(useCaseData, _timeRange.value)
                         _uiState.value = UiState.Success(uiData)
 
                         // Update consistency score
@@ -177,18 +178,12 @@ class WorkoutFrequencyDetailViewModel @Inject constructor(
     /**
      * Maps use case data to UI data model
      */
-    private fun mapUseCaseDataToUiData(useCaseData: com.example.liftrix.domain.usecase.analytics.WorkoutFrequencyData): WorkoutFrequencyData {
+    private fun mapUseCaseDataToUiData(
+        useCaseData: com.example.liftrix.domain.usecase.analytics.WorkoutFrequencyData,
+        timeRange: TimeRangeType
+    ): WorkoutFrequencyData {
         return WorkoutFrequencyData(
-            frequencyData = useCaseData.frequencyPoints.map { frequencyPoint ->
-                // Convert WorkoutFrequencyDataPoint to VolumeDataPoint for chart compatibility
-                VolumeDataPoint.fromKgDouble(
-                    date = frequencyPoint.date,
-                    volumeKg = frequencyPoint.workoutCount.toDouble(), // Using workout count as volume
-                    workoutCount = frequencyPoint.workoutCount,
-                    exerciseCount = 0, // Not available in frequency data
-                    label = frequencyPoint.dayOfWeek
-                )
-            },
+            frequencyData = mapFrequencyPointsToChart(useCaseData.frequencyPoints, timeRange),
             totalWorkouts = useCaseData.totalWorkoutDays,
             averageWorkoutsPerWeek = useCaseData.dailyAverage * 7,
             currentStreak = useCaseData.currentStreak,
@@ -203,6 +198,92 @@ class WorkoutFrequencyDetailViewModel @Inject constructor(
             eveningWorkouts = 30,
             restDayRecommendation = "Optimal rest pattern detected"
         )
+    }
+
+    private fun mapFrequencyPointsToChart(
+        points: List<FrequencyPoint>,
+        timeRange: TimeRangeType
+    ): List<VolumeDataPoint> {
+        if (points.isEmpty()) return emptyList()
+
+        val sortedPoints = points.sortedBy { it.date }
+        val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+
+        return when (timeRange) {
+            TimeRangeType.MONTH -> buildWeeklySeries(sortedPoints, today.minus(DatePeriod(days = 29)), today)
+            TimeRangeType.SIX_MONTHS -> buildMonthlySeries(sortedPoints, today.minus(DatePeriod(days = 179)), today, monthStep = 1)
+            TimeRangeType.ALL_TIME -> buildMonthlySeries(sortedPoints, sortedPoints.first().date, today, monthStep = 3)
+        }
+    }
+
+    private fun buildWeeklySeries(
+        points: List<FrequencyPoint>,
+        startDate: LocalDate,
+        endDate: LocalDate
+    ): List<VolumeDataPoint> {
+        val countsByWeek = points.groupBy { weekStart(it.date) }
+            .mapValues { (_, values) -> values.sumOf { it.workoutCount } }
+        val series = mutableListOf<VolumeDataPoint>()
+
+        var cursor = weekStart(startDate)
+        val endWeek = weekStart(endDate)
+        while (cursor <= endWeek) {
+            val totalWorkouts = countsByWeek[cursor] ?: 0
+            series.add(
+                VolumeDataPoint.fromKgDouble(
+                    date = cursor,
+                    volumeKg = totalWorkouts.toDouble(),
+                    workoutCount = totalWorkouts,
+                    exerciseCount = 0,
+                    label = cursor.toString()
+                )
+            )
+            cursor = cursor.plus(DatePeriod(days = 7))
+        }
+        return series
+    }
+
+    private fun buildMonthlySeries(
+        points: List<FrequencyPoint>,
+        startDate: LocalDate,
+        endDate: LocalDate,
+        monthStep: Int
+    ): List<VolumeDataPoint> {
+        val grouped = points.groupBy { it.date.year to it.date.monthNumber }
+            .mapValues { (_, values) -> values.sumOf { it.workoutCount } }
+        var cursor = LocalDate(startDate.year, startDate.monthNumber, 1)
+        val endMonth = LocalDate(endDate.year, endDate.monthNumber, 1)
+        val series = mutableListOf<VolumeDataPoint>()
+
+        while (cursor <= endMonth) {
+            val totalWorkouts = grouped[cursor.year to cursor.monthNumber] ?: 0
+            series.add(
+                VolumeDataPoint.fromKgDouble(
+                    date = cursor,
+                    volumeKg = totalWorkouts.toDouble(),
+                    workoutCount = totalWorkouts,
+                    exerciseCount = 0,
+                    label = formatMonthLabel(cursor, monthStep)
+                )
+            )
+            cursor = cursor.plus(DatePeriod(months = monthStep))
+        }
+        return series
+    }
+
+    private fun weekStart(date: LocalDate): LocalDate {
+        val offset = date.dayOfWeek.isoDayNumber - 1
+        return date.minus(DatePeriod(days = offset))
+    }
+
+    private fun formatMonthLabel(date: LocalDate, monthStep: Int): String {
+        return if (monthStep >= 3) {
+            val quarter = ((date.monthNumber - 1) / 3) + 1
+            "Q$quarter ${date.year}"
+        } else {
+            val monthName = date.month.name.lowercase().replaceFirstChar { it.uppercase() }
+            "${monthName.take(3)} ${date.year}"
+        }
     }
 
     /**
@@ -395,9 +476,10 @@ class WorkoutFrequencyDetailViewModel @Inject constructor(
             TimeRangeType.SIX_MONTHS -> 180
             TimeRangeType.ALL_TIME -> 365 * 2 // 2 years for all-time data
         }
+        val stepDays = if (timeRange == TimeRangeType.ALL_TIME) 30 else 7
 
         // Generate frequency data points (workout counts per day/week)
-        val frequencyData = (0 until daysBack step 7).map { daysAgo ->
+        val frequencyData = (0 until daysBack step stepDays).map { daysAgo ->
             val date = now.minus(daysAgo.days).toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
             val workoutCount = when {
                 Random.nextFloat() < 0.7f -> Random.nextInt(1, 4) // 70% chance of 1-3 workouts

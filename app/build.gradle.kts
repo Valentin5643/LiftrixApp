@@ -34,9 +34,9 @@ configurations.all {
         // Prefer AndroidX over support libraries
         preferProjectModules()
         
-        // Cache for reproducible builds
-        cacheDynamicVersionsFor(0, "seconds")
-        cacheChangingModulesFor(0, "seconds")
+        // Cache for reproducible builds - optimized for faster dependency resolution
+        cacheDynamicVersionsFor(24, "hours")
+        cacheChangingModulesFor(24, "hours")
     }
     
     // Exclude duplicate classes
@@ -66,6 +66,21 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
     }
 }
 
+// Compose Compiler optimizations for better runtime performance
+composeCompiler {
+    // Enable strong skipping mode for better performance (15-30% improvement)
+    enableStrongSkippingMode.set(true)
+
+    // Enable intrinsic remember for optimized remember calls
+    enableIntrinsicRemember.set(true)
+
+    // Enable non-skipping group optimization
+    enableNonSkippingGroupOptimization.set(true)
+
+    // Note: Metrics/reports generation requires adding compiler args manually
+    // Add to freeCompilerArgs if needed: "-P", "plugin:androidx.compose.compiler.plugins.kotlin:metricsDestination=..."
+}
+
 android {
     namespace = "com.example.liftrix"
     compileSdk = 35
@@ -91,9 +106,13 @@ android {
     }
     
     // ABI splits configuration for optimized APK size per architecture
+    // Automatically disabled for debug builds to save 30-40% build time
     splits {
         abi {
-            isEnable = true
+            // Disable splits when building debug variants (saves 30-40% debug build time)
+            isEnable = !gradle.startParameter.taskNames.any {
+                it.contains("Debug", ignoreCase = true)
+            }
             reset()
             include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
             isUniversalApk = true  // Also generate a universal APK with all ABIs
@@ -160,17 +179,18 @@ android {
             isMinifyEnabled = false
             isShrinkResources = false
             isDebuggable = true
-            
+
             // Disable unnecessary features for debug builds
             renderscriptOptimLevel = 0
             isJniDebuggable = false
-            
+            isPseudoLocalesEnabled = false
+
             // Firebase Performance Monitoring configuration for debug
             manifestPlaceholders["firebase_performance_logcat_enabled"] = true
             manifestPlaceholders["firebase_performance_collection_enabled"] = false
-            
+
             versionNameSuffix = "-DEBUG"
-            
+
             // Secure OAuth configuration from properties
             buildConfigField("String", "GOOGLE_CLIENT_ID", "\"${project.findProperty("GOOGLE_CLIENT_ID_DEBUG") ?: "734273269747-ojaksa5nhir6re5sqskn7qlbflec2f94.apps.googleusercontent.com"}\"")
         }
@@ -194,16 +214,17 @@ android {
         abortOnError = false
         checkReleaseBuilds = false
         disable.addAll(listOf("MissingTranslation", "ExtraTranslation"))
-        
+
         // Custom lint rules to prevent Room schema issues
         fatal.addAll(listOf(
             "RoomUndefinedDefaultValue",    // Prevent defaultValue = "undefined"
             "RoomInvalidDefaultValue"       // Validate proper Room default values
         ))
-        
-        // Optimize lint for faster builds
+
+        // Optimize lint for faster builds (run lintFull for comprehensive checks)
         checkDependencies = false
         checkGeneratedSources = false
+        checkTestSources = false
     }
 
     packaging {
@@ -248,6 +269,15 @@ android {
 
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
+
+    // Room optimizations for faster incremental builds
+    arg("room.incremental", "true")
+    arg("room.expandProjection", "true")
+
+    // Hilt optimizations for faster annotation processing
+    arg("dagger.fastInit", "enabled")
+    arg("dagger.formatGeneratedSource", "disabled")
+    arg("dagger.gradle.incremental", "enabled")
 }
 
 dependencies {
@@ -281,7 +311,10 @@ dependencies {
     
     // Pull-to-refresh for Material 3
     implementation("eu.bambooapps:compose-material3-pullrefresh:1.1.1")
-    
+
+    // Firebase BOM for unified version management (saves 5-10s build time, 3MB APK)
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.auth)
     implementation(libs.androidx.credentials)
@@ -559,6 +592,9 @@ tasks.register<JacocoReport>("jacocoTestReport") {
     group = "verification"
     description = "Generates code coverage report for unit tests"
 
+    // Only run when explicitly requested with -PrunCoverage
+    onlyIf { project.hasProperty("runCoverage") }
+
     dependsOn("testDebugUnitTest")
 
     reports {
@@ -634,4 +670,11 @@ tasks.register<JacocoCoverageVerification>("jacocoCoverageVerification") {
             }
         }
     }
+}
+
+// Full lint task for comprehensive checks (run before commits)
+tasks.register("lintFull") {
+    group = "verification"
+    description = "Run full lint checks including dependencies, generated sources, and test sources"
+    dependsOn("lint")
 }

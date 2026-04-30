@@ -2,8 +2,10 @@
 
 const {initializeApp} = require("firebase-admin/app");
 const {getAuth} = require("firebase-admin/auth");
-const {getFirestore} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {onDocumentWritten} = require("firebase-functions/v2/firestore");
+const {onDocumentCreated} = require("firebase-functions/v2/firestore");
+const {onDocumentDeleted} = require("firebase-functions/v2/firestore");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {onCall} = require("firebase-functions/v2/https");
 const {logger} = require("firebase-functions");
@@ -14,6 +16,143 @@ initializeApp();
 
 const auth = getAuth();
 const db = getFirestore();
+
+const FOLLOW_COUNTER_EVENTS_COLLECTION = "follow_relationship_counter_events";
+const SOCIAL_PROFILES_COLLECTION = "social_profiles";
+
+async function updateFollowCounters(event, data, delta, eventType) {
+  if (!data) {
+    logger.warn("PROFILE_FOLLOW_COUNTER_SKIP reason=missing_data");
+    return null;
+  }
+
+  const followerId = data.followerId;
+  const followingId = data.followingId;
+  const status = data.status;
+
+  if (!followerId || !followingId) {
+    logger.warn(
+        "PROFILE_FOLLOW_COUNTER_SKIP reason=missing_fields",
+        {followerId, followingId},
+    );
+    return null;
+  }
+
+  if (followerId === followingId) {
+    logger.warn(
+        "PROFILE_FOLLOW_COUNTER_SKIP reason=self_follow",
+        {followerId},
+    );
+    return null;
+  }
+
+  if (status !== "ACCEPTED") {
+    logger.info(
+        "PROFILE_FOLLOW_COUNTER_SKIP reason=status_not_accepted",
+        {status, followerId, followingId},
+    );
+    return null;
+  }
+
+  const eventId = event.id || `${eventType}_${data.id || "unknown"}`;
+  const eventRef = db.collection(FOLLOW_COUNTER_EVENTS_COLLECTION).doc(eventId);
+  const followerRef = db.collection(SOCIAL_PROFILES_COLLECTION).doc(followerId);
+  const followingRef = db.collection(SOCIAL_PROFILES_COLLECTION).doc(followingId);
+
+  await db.runTransaction(async (tx) => {
+    const eventSnap = await tx.get(eventRef);
+    if (eventSnap.exists) {
+      logger.info("PROFILE_FOLLOW_COUNTER_SKIP reason=already_processed", {
+        eventId,
+        eventType,
+      });
+      return;
+    }
+
+    const followerSnap = await tx.get(followerRef);
+    if (followerSnap.exists) {
+      tx.update(followerRef, {
+        followingCount: FieldValue.increment(delta),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    } else {
+      logger.warn("PROFILE_FOLLOW_COUNTER_MISSING profile=follower", {
+        followerId,
+      });
+    }
+
+    const followingSnap = await tx.get(followingRef);
+    if (followingSnap.exists) {
+      tx.update(followingRef, {
+        followerCount: FieldValue.increment(delta),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    } else {
+      logger.warn("PROFILE_FOLLOW_COUNTER_MISSING profile=following", {
+        followingId,
+      });
+    }
+
+    tx.set(eventRef, {
+      eventType,
+      followerId,
+      followingId,
+      delta,
+      processedAt: FieldValue.serverTimestamp(),
+    });
+  });
+
+  logger.info("PROFILE_FOLLOW_COUNTER_APPLIED", {
+    eventType,
+    followerId,
+    followingId,
+    delta,
+  });
+
+  return null;
+}
+
+async function handleFollowRelationshipCreated(event) {
+  const data = event.data ? event.data.data() : null;
+  return updateFollowCounters(event, data, 1, "follow_create");
+}
+
+async function handleFollowRelationshipDeleted(event) {
+  const data = event.data ? event.data.data() : null;
+  return updateFollowCounters(event, data, -1, "follow_delete");
+}
+
+async function handleFollowRelationshipUpdated(event) {
+  const before = event.data ? event.data.before.data() : null;
+  const after = event.data ? event.data.after.data() : null;
+  if (!before || !after) {
+    logger.warn("PROFILE_FOLLOW_COUNTER_SKIP reason=missing_update_data");
+    return null;
+  }
+
+  const beforeStatus = before.status;
+  const afterStatus = after.status;
+  if (beforeStatus === afterStatus) {
+    return null;
+  }
+
+  if (beforeStatus !== "ACCEPTED" && afterStatus === "ACCEPTED") {
+    return updateFollowCounters(event, after, 1, "follow_status_accepted");
+  }
+
+  if (beforeStatus === "ACCEPTED" && afterStatus !== "ACCEPTED") {
+    return updateFollowCounters(event, after, -1, "follow_status_unaccepted");
+  }
+
+  return null;
+}
+
+exports.followRelationshipCreatedCounter =
+    onDocumentCreated("follow_relationships/{id}", handleFollowRelationshipCreated);
+exports.followRelationshipDeletedCounter =
+    onDocumentDeleted("follow_relationships/{id}", handleFollowRelationshipDeleted);
+exports.followRelationshipUpdatedCounter =
+    onDocumentWritten("follow_relationships/{id}", handleFollowRelationshipUpdated);
 
 exports.updateUserCustomClaims = onDocumentWritten(
     "subscriptions/{subscriptionId}",
@@ -915,7 +1054,14 @@ function getXDaysAgo(days) {
 // ================================
 
 const {getMessaging} = require("firebase-admin/messaging");
-const messaging = getMessaging();
+let messagingClient;
+
+function getMessagingClient() {
+  if (!messagingClient) {
+    messagingClient = getMessaging();
+  }
+  return messagingClient;
+}
 
 /**
  * Cloud Function to send immediate notifications
@@ -1004,7 +1150,7 @@ exports.sendImmediateNotification = onCall(async (request) => {
       tokens: tokens,
     };
 
-    const response = await messaging.sendEachForMulticast(message);
+    const response = await getMessagingClient().sendEachForMulticast(message);
 
     // Process any failed tokens
     const failedTokens = [];
@@ -1323,7 +1469,7 @@ async function sendImmediateNotificationInternal(targetUserId, type, title, body
     tokens: tokens,
   };
 
-  const response = await messaging.sendEachForMulticast(message);
+  const response = await getMessagingClient().sendEachForMulticast(message);
   
   if (response.failureCount > 0) {
     const failedTokens = [];
@@ -1577,7 +1723,7 @@ async function sendBatchedNotification(userId, notifications, style) {
     tokens: tokens,
   };
 
-  await messaging.sendEachForMulticast(message);
+  await getMessagingClient().sendEachForMulticast(message);
   
   // Store in history
   await storeNotificationHistory(userId, "BATCHED", title, body, {

@@ -368,6 +368,23 @@ service cloud.firestore {
                        request.resource.data.keys().hasAll(['followerId', 'followingId', 'status', 'createdAt']) &&
                        request.resource.data.status in ['PENDING', 'ACCEPTED', 'BLOCKED'] &&
                        !hasBlockRelationship(request.resource.data.followerId, request.resource.data.followingId);
+
+      // Allow the followed user to accept a pending request.
+      allow update: if isAuthenticated() &&
+                       (
+                         // Follower can update their own relationship.
+                         (request.resource.data.followerId == request.auth.uid &&
+                          request.resource.data.keys().hasAll(['followerId', 'followingId', 'status', 'createdAt']) &&
+                          request.resource.data.status in ['PENDING', 'ACCEPTED', 'BLOCKED'] &&
+                          !hasBlockRelationship(request.resource.data.followerId, request.resource.data.followingId)) ||
+                         // Following user can accept a pending request.
+                         (resource.data.followingId == request.auth.uid &&
+                          resource.data.status == 'PENDING' &&
+                          request.resource.data.followerId == resource.data.followerId &&
+                          request.resource.data.followingId == resource.data.followingId &&
+                          request.resource.data.keys().hasAll(['followerId', 'followingId', 'status', 'createdAt']) &&
+                          request.resource.data.status == 'ACCEPTED')
+                       );
                        
       // FIXED: Add explicit delete rule for unfollow operations
       // Allow deletion if user is either the follower or the one being followed

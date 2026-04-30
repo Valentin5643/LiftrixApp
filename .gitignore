@@ -5495,3 +5495,4 @@ nul
 .codanna/
 .serena/
 .fastembed_cache
+build-cache/
