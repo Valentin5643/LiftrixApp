@@ -428,19 +428,11 @@ abstract class DomainModule {
         @javax.inject.Singleton
         fun provideUnifiedWorkoutSessionManager(
             @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
-            workoutRepository: com.example.liftrix.domain.repository.workout.WorkoutRepository,
-            feedRepository: com.example.liftrix.domain.repository.social.FeedRepository,
-            cacheManager: com.example.liftrix.core.cache.CacheManager,
-            cacheInvalidationService: com.example.liftrix.service.CacheInvalidationService,
-            gymBuddyWorkoutCompletionNotifier: com.example.liftrix.service.GymBuddyWorkoutCompletionNotifier
+            completeWorkoutSessionUseCase: com.example.liftrix.domain.usecase.session.CompleteWorkoutSessionUseCase
         ): com.example.liftrix.service.UnifiedWorkoutSessionManager {
             return com.example.liftrix.service.UnifiedWorkoutSessionManager(
                 context = context,
-                workoutRepository = workoutRepository,
-                feedRepository = feedRepository,
-                cacheManager = cacheManager,
-                cacheInvalidationService = cacheInvalidationService,
-                gymBuddyWorkoutCompletionNotifier = gymBuddyWorkoutCompletionNotifier
+                completeWorkoutSessionUseCase = completeWorkoutSessionUseCase
             )
         }
 

@@ -58,10 +58,14 @@ class ComponentUsageValidationTest {
         workoutScreenFiles.forEach { file ->
             val content = file.readText()
             
-            // Verify UnifiedWorkoutCard import is present
+            // Verify canonical workout card usage is present
+            val hasCanonicalWorkoutCard = content.contains("import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard") ||
+                content.contains("import com.example.liftrix.ui.workout.components.*") && content.contains("UnifiedWorkoutCard(") ||
+                content.contains("RedesignedExerciseCard(")
+
             assertTrue(
-                content.contains("import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard"),
-                "File ${file.name} missing UnifiedWorkoutCard import"
+                hasCanonicalWorkoutCard,
+                "File ${file.name} missing canonical workout card usage"
             )
         }
     }
@@ -76,7 +80,12 @@ class ComponentUsageValidationTest {
             // Verify at least one ModernActionButton import is present
             val hasModernButtonImport = content.contains("import com.example.liftrix.ui.workout.components.PrimaryActionButton") ||
                                        content.contains("import com.example.liftrix.ui.workout.components.SecondaryActionButton") ||
-                                       content.contains("import com.example.liftrix.ui.workout.components.TertiaryActionButton")
+                                       content.contains("import com.example.liftrix.ui.workout.components.TertiaryActionButton") ||
+                                       content.contains("import com.example.liftrix.ui.workout.components.*") &&
+                                       (content.contains("PrimaryActionButton(") ||
+                                           content.contains("SecondaryActionButton(") ||
+                                           content.contains("TertiaryActionButton(") ||
+                                           content.contains("RedesignedPrimaryButton("))
             
             assertTrue(
                 hasModernButtonImport,
@@ -117,8 +126,9 @@ class ComponentUsageValidationTest {
             val hasLegacyComment = content.contains("// Legacy card")
             val hasSpecializedComment = content.contains("// Specialized") && content.contains("card")
             val hasUnifiedCardUsage = content.contains("UnifiedWorkoutCard(")
+            val hasRedesignedCardUsage = content.contains("RedesignedExerciseCard(")
             
-            if (hasRawCardUsage && !hasLegacyComment && !hasSpecializedComment) {
+            if (hasRawCardUsage && !hasLegacyComment && !hasSpecializedComment && !hasRedesignedCardUsage) {
                 assertTrue(
                     hasUnifiedCardUsage,
                     "File ${file.name} should use UnifiedWorkoutCard for card components or mark specialized cards with comment"
@@ -137,7 +147,8 @@ class ComponentUsageValidationTest {
             // Count usage of modern vs legacy buttons
             val modernButtonUsage = content.split("PrimaryActionButton(").size - 1 +
                                   content.split("SecondaryActionButton(").size - 1 +
-                                  content.split("TertiaryActionButton(").size - 1
+                                  content.split("TertiaryActionButton(").size - 1 +
+                                  content.split("RedesignedPrimaryButton(").size - 1
                                   
             val legacyButtonUsage = content.split("Button(").size - 1 +
                                    content.split("OutlinedButton(").size - 1 +
@@ -244,8 +255,9 @@ class ComponentUsageValidationTest {
             "home/HomeScreen.kt",
             "workout/WorkoutScreen.kt",
             "workout/create/CreateWorkoutScreen.kt",
-            "workout/active/ActiveWorkoutScreen.kt",
-            "workout/edit/EditWorkoutScreen.kt",
+            "workout/active/RedesignedActiveWorkoutScreen.kt",
+            "workout/create/RedesignedCreateTemplateScreen.kt",
+            "workout/edit/RedesignedEditWorkoutScreen.kt",
             "workout/WorkoutTemplateScreen.kt",
             "progress/ProgressDashboardScreen.kt"
         )
@@ -266,7 +278,9 @@ class ComponentUsageValidationTest {
             "home/HomeScreen.kt",
             "workout/WorkoutScreen.kt", 
             "workout/create/CreateWorkoutScreen.kt",
-            "workout/active/ActiveWorkoutScreen.kt"
+            "workout/active/RedesignedActiveWorkoutScreen.kt",
+            "workout/create/RedesignedCreateTemplateScreen.kt",
+            "workout/edit/RedesignedEditWorkoutScreen.kt"
         )
         
         requiredScreens.forEach { screenPath ->
