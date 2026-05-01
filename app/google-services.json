@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "734273269747-bnf6e4u6c9rvnk5ovu48saepag0picdi.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.liftrix",
+            "certificate_hash": "1729aef93bb27aed2304fd56bee8b145d4ce6758"
+          }
+        },
+        {
+          "client_id": "734273269747-jjcfa8fl7ensdndgigmjvgmputjhq1jl.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.liftrix",
+            "certificate_hash": "13a8e4b7df9ac06ab5ad6b8590a85b40f9e4e71b"
+          }
+        },
+        {
           "client_id": "734273269747-ojaksa5nhir6re5sqskn7qlbflec2f94.apps.googleusercontent.com",
           "client_type": 3
         }

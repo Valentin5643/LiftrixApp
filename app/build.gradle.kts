@@ -16,6 +16,16 @@ plugins {
     id("jacoco")
 }
 
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        load(FileInputStream(localPropertiesFile))
+    }
+}
+
+fun localOrEnvironment(name: String): String =
+    (System.getenv(name) ?: localProperties.getProperty(name)).orEmpty()
+
 // Dependency resolution strategies for deterministic builds
 configurations.all {
     resolutionStrategy {
@@ -84,7 +94,7 @@ composeCompiler {
 android {
     namespace = "com.example.liftrix"
     compileSdk = 35
-    buildToolsVersion = "35.0.0"  // Aligned with compileSdk
+    buildToolsVersion = "34.0.0"  // Installed SDK build tools with complete binaries
 
     defaultConfig {
         applicationId = "com.example.liftrix"
@@ -193,6 +203,11 @@ android {
 
             // Secure OAuth configuration from properties
             buildConfigField("String", "GOOGLE_CLIENT_ID", "\"${project.findProperty("GOOGLE_CLIENT_ID_DEBUG") ?: "734273269747-ojaksa5nhir6re5sqskn7qlbflec2f94.apps.googleusercontent.com"}\"")
+            buildConfigField(
+                "String",
+                "FIREBASE_APP_CHECK_DEBUG_SECRET",
+                "\"${localOrEnvironment("FIREBASE_APP_CHECK_DEBUG_SECRET")}\""
+            )
         }
     }
     compileOptions {

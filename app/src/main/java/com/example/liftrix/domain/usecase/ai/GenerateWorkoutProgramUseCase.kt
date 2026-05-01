@@ -28,10 +28,12 @@ import com.example.liftrix.domain.usecase.exercise.ExerciseQueryUseCase
 import com.example.liftrix.domain.usecase.profile.ProfileQueryUseCase
 import com.example.liftrix.domain.usecase.template.TemplateCommandUseCase
 import javax.inject.Inject
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.jsonObject
 import timber.log.Timber
 
@@ -45,11 +47,11 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
     private val cache: WorkoutGenerationCache
 ) {
 
-    private val json = Json {
-        ignoreUnknownKeys = false
-        isLenient = false
-        coerceInputValues = false
+    private val workoutJson = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
         explicitNulls = false
+        coerceInputValues = true
     }
 
     suspend operator fun invoke(
@@ -422,7 +424,7 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         )
         return try {
             if (normalizedJson.contains("\"error\"")) {
-                val error = json.decodeFromString<GeneratedWorkoutProgramError>(normalizedJson)
+                val error = workoutJson.decodeFromString<GeneratedWorkoutProgramError>(normalizedJson)
                 liftrixFailure(
                     LiftrixError.BusinessLogicError(
                         code = error.error.code.name,
@@ -431,14 +433,23 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
                     )
                 )
             } else {
-                val root = json.parseToJsonElement(normalizedJson).jsonObject
+                val root = workoutJson.parseToJsonElement(normalizedJson).jsonObject
                 val program = if ("program" in root) {
-                    val response = json.decodeFromString<com.example.liftrix.domain.model.ai.GeneratedWorkoutProgramResponse>(normalizedJson)
+                    val response = workoutJson.decodeFromString<AiWorkoutResponseDto>(normalizedJson)
                     Timber.i("GenerateWorkoutProgramUseCase: wrapped AI program parsed successfully")
                     response.program
+                        ?.toGeneratedProgram(
+                            schemaVersion = response.schemaVersion ?: GeneratedWorkoutProgram.SCHEMA_VERSION,
+                            catalog = catalog
+                        )
+                        ?: throw IllegalArgumentException("Generated workout response is missing program")
                 } else {
                     Timber.i("GenerateWorkoutProgramUseCase: direct AI program parsed successfully")
-                    json.decodeFromString<GeneratedWorkoutProgram>(normalizedJson)
+                    workoutJson.decodeFromString<AiWorkoutProgramDto>(normalizedJson)
+                        .toGeneratedProgram(
+                            schemaVersion = GeneratedWorkoutProgram.SCHEMA_VERSION,
+                            catalog = catalog
+                        )
                 }
                 Result.success(program)
             }
@@ -768,12 +779,15 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         val days: List<AiWorkoutDayDto> = emptyList()
     )
 
+    @OptIn(ExperimentalSerializationApi::class)
     @Serializable
     private data class AiWorkoutDayDto(
         @SerialName("day_name")
         val dayName: String? = null,
         @SerialName("day_number")
+        @JsonNames("day")
         val dayNumber: Int? = null,
+        val focus: String? = null,
         @SerialName("estimated_duration_minutes")
         val estimatedDurationMinutes: Int? = null,
         val exercises: List<AiWorkoutExerciseDto> = emptyList()

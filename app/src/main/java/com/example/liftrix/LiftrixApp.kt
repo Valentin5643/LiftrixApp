@@ -7,6 +7,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
 import android.os.Process
+import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.WorkManager
@@ -63,6 +64,7 @@ class LiftrixApp : Application() {
     val isAppCheckInitialized: StateFlow<Boolean> = _isAppCheckInitialized.asStateFlow()
 
     companion object {
+        private const val TAG = "LiftrixApp"
         const val WORKOUT_TIMER_CHANNEL_ID = "workout_timer_channel"
         
         @Volatile
@@ -76,6 +78,14 @@ class LiftrixApp : Application() {
             return INSTANCE?.isAppCheckInitialized?.value ?: false
         }
     }
+
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(base)
+        INSTANCE = this
+
+        // App Check must be installed before Hilt can create Firebase singletons.
+        initializeFirebaseAppCheck(verifyToken = false)
+    }
     
     override fun onCreate() {
         super.onCreate()
@@ -85,6 +95,9 @@ class LiftrixApp : Application() {
 
         // Initialize Timber for logging
         Timber.plant(Timber.DebugTree())
+
+        // Mark/log App Check readiness and perform a single non-forced verification.
+        initializeFirebaseAppCheck(verifyToken = true)
 
         // SPEC-20241228: Log Room-First Architecture Configuration
         logOfflineArchitectureMode()
@@ -113,10 +126,6 @@ class LiftrixApp : Application() {
             debugVerifyWorkerFactory()
         }
         
-        // Initialize Firebase and App Check FIRST before any other Firebase services
-        initializeFirebaseAppCheck()
-        
-        
         // Create notification channels
         createNotificationChannels()
         
@@ -138,17 +147,19 @@ class LiftrixApp : Application() {
      * CRITICAL: This must be called before any Firebase AI service calls to ensure valid tokens.
      * Thread-safe initialization with proper singleton check.
      */
-    private fun initializeFirebaseAppCheck() {
+    private fun initializeFirebaseAppCheck(verifyToken: Boolean) {
         try {
             val firebaseApp = AppCheckInitializer.initialize(this@LiftrixApp)
-            Timber.d(
-                "Firebase initialized for App Check. appName=%s, package=%s, projectId=%s",
-                firebaseApp.name,
-                packageName,
-                firebaseApp.options.projectId
+            Log.i(
+                TAG,
+                "Firebase initialized for App Check. appName=${firebaseApp.name}, " +
+                    "package=$packageName, projectId=${firebaseApp.options.projectId}, " +
+                    "provider=${FirebaseAppCheckProviderInstaller.providerName}"
             )
 
             _isAppCheckInitialized.value = true
+
+            if (!verifyToken) return
 
             // Trigger exactly one debug-provider token exchange so Firebase prints the debug secret.
             // A 403 here is configuration, not a retryable startup failure.
@@ -167,7 +178,7 @@ class LiftrixApp : Application() {
                 }
             
         } catch (e: Exception) {
-            Timber.e(e, "Critical error during Firebase/App Check initialization")
+            Log.e(TAG, "Critical error during Firebase/App Check initialization", e)
         }
     }
 

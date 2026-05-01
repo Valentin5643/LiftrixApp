@@ -32,6 +32,7 @@ import com.google.firebase.ai.type.content
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
+import kotlin.random.Random
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -87,6 +88,16 @@ class AIChatServiceImpl @Inject constructor(
                 is DebugAppCheckTokenNotRegisteredException -> LiftrixError.BusinessLogicError(
                     code = "APP_CHECK_DEBUG_TOKEN_NOT_REGISTERED",
                     errorMessage = throwable.message ?: "Debug App Check token is not registered.",
+                    analyticsContext = mapOf("user_id" to userId)
+                )
+                is AppCheckRateLimitedException -> LiftrixError.BusinessLogicError(
+                    code = "APP_CHECK_RATE_LIMITED",
+                    errorMessage = "AI security verification is temporarily rate limited. Please try again later.",
+                    analyticsContext = mapOf("user_id" to userId)
+                )
+                is AppCheckUnavailableException -> LiftrixError.BusinessLogicError(
+                    code = "APP_CHECK_UNAVAILABLE",
+                    errorMessage = "AI security verification is temporarily unavailable. Please try again later.",
                     analyticsContext = mapOf("user_id" to userId)
                 )
                 else -> LiftrixError.NetworkError(
@@ -174,20 +185,20 @@ class AIChatServiceImpl @Inject constructor(
             } ?: false
             
             if (!isAppCheckReady) {
-                Timber.e("AIChatService: App Check not ready after 30 seconds - attempting to proceed anyway")
-                // Don't throw immediately - try to proceed as App Check might work anyway
+                Timber.e("AIChatService: App Check not ready after 30 seconds")
+                throw AppCheckUnavailableException("App Check was not initialized before Firebase AI request.")
             }
             
             // Obtain App Check token with proper async handling and exponential backoff
-            val appCheckToken = obtainAppCheckTokenWithRetry()
+            val appCheckToken = obtainAppCheckToken()
             
             if (appCheckToken == null) {
                 val message = "Failed to obtain App Check token after retries. " +
                     "Debug builds require a registered App Check debug token; release builds require Play Integrity, package, and SHA setup."
                 Timber.e("AIChatService: $message")
-                throw IllegalStateException(message)
+                throw AppCheckUnavailableException(message)
             } else {
-                Timber.d("AIChatService: App Check token obtained successfully (${if (appCheckToken.fromCache) "cached" else "refreshed"}): ${appCheckToken.token.take(10)}...")
+                Timber.d("AIChatService: App Check token obtained successfully from cache path, expiresAt=${appCheckToken.expireTimeMillis}")
             }
             
             // Create model with language-specific system instruction
@@ -248,6 +259,8 @@ class AIChatServiceImpl @Inject constructor(
                     throw Exception("Network connectivity issue. Please check your connection and try again.")
                 }
                 is DebugAppCheckTokenNotRegisteredException -> throw e
+                is AppCheckRateLimitedException -> throw e
+                is AppCheckUnavailableException -> throw e
                 is SecurityException -> {
                     Timber.e("Firebase AI permissions error: ${e.message}")
                     throw Exception("AI service security configuration error. Verify Firebase App Check provider, package name, and SHA fingerprints.")
@@ -461,131 +474,81 @@ class AIChatServiceImpl @Inject constructor(
     }
     
     /**
-     * Obtains App Check token with exponential backoff retry strategy.
+     * Obtains an App Check token using the SDK cache path.
      * 
-     * @return AppCheckToken if successful, null if all retries failed
+     * @return AppCheckToken if successful, null if the request timed out
      */
-    private suspend fun obtainAppCheckTokenWithRetry(): AppCheckToken? {
-        val maxRetries = 1 // Do not retry App Check 403s; debug tokens must be registered manually.
-        var currentDelay = 1000L // Start with 1 second
-        
-        repeat(maxRetries) { attempt ->
-            // Apply exponential backoff BEFORE the attempt (except for first attempt)
-            if (attempt > 0) {
-                Timber.d("AIChatService: Waiting ${currentDelay}ms before retry attempt ${attempt + 1}")
-                delay(currentDelay)
-                currentDelay = (currentDelay * 2).coerceAtMost(8000L) // Exponential backoff capped at 8 seconds
-            }
-            
+    private suspend fun obtainAppCheckToken(): AppCheckToken? {
+        Timber.d("AIChatService: Attempting cached App Check token retrieval")
+        val tokenResult = withTimeoutOrNull(10_000) {
             try {
-                Timber.d("AIChatService: Attempting to obtain App Check token (attempt ${attempt + 1}/$maxRetries)")
-                
-                // Use timeout for each token request to prevent hanging
-                val tokenResult = withTimeoutOrNull(10_000) { // 10 second timeout per attempt
-                    if (attempt == 0) {
-                        // First attempt: try cached token
-                        try {
-                            Firebase.appCheck.getAppCheckToken(false).await()
-                        } catch (e: Exception) {
-                            val errorMsg = e.message ?: ""
-                            if (isDebugAppCheckTokenMissing(e)) {
-                                logDebugAppCheckTokenInstructions(e)
-                                throw DebugAppCheckTokenNotRegisteredException(e)
-                            }
-                            Timber.w(
-                                e,
-                                "AIChatService: Failed to get cached App Check token. type=%s, message=%s",
-                                e.javaClass.name,
-                                errorMsg
-                            )
-                            
-                            // Log specific guidance for common App Check issues
-                            when {
-                                errorMsg.contains("app check token is invalid", ignoreCase = true) ||
-                                errorMsg.contains("app attestation failed", ignoreCase = true) -> {
-                                    Timber.e("═════════════════════════════════════════════════════════════")
-                                    Timber.e("FIREBASE APP CHECK DEBUG TOKEN REQUIRED")
-                                    Timber.e("═════════════════════════════════════════════════════════════")
-                                    Timber.e("For debug builds, you must register the debug token:")
-                                    Timber.e("1. Check logcat for: 'Enter this debug token in the Firebase Console'")
-                                    Timber.e("2. Copy the token that appears after this message")
-                                    Timber.e("3. Go to Firebase Console → App Check → Apps → Manage debug tokens")
-                                    Timber.e("4. Add the token with a descriptive name")
-                                    Timber.e("5. Restart the app after registering the token")
-                                    Timber.e("═════════════════════════════════════════════════════════════")
-                                }
-                                errorMsg.contains("too many attempts", ignoreCase = true) -> {
-                                    Timber.e("AIChatService: Rate limited by Firebase. Increasing backoff delay.")
-                                    currentDelay = (currentDelay * 3).coerceAtMost(15000L)
-                                }
-                            }
-                            null
-                        }
-                    } else {
-                        // Subsequent attempts: force refresh
-                        try {
-                            Timber.d("AIChatService: Forcing token refresh on attempt ${attempt + 1}")
-                            Firebase.appCheck.getAppCheckToken(true).await()
-                        } catch (e: Exception) {
-                            val errorMsg = e.message ?: ""
-                            Timber.w(
-                                e,
-                                "AIChatService: Failed to refresh App Check token. type=%s, message=%s",
-                                e.javaClass.name,
-                                errorMsg
-                            )
-                            
-                            // Adjust delay for rate limiting
-                            if (errorMsg.contains("too many attempts", ignoreCase = true)) {
-                                currentDelay = (currentDelay * 3).coerceAtMost(15000L)
-                            }
-                            null
-                        }
-                    }
-                }
-                
-                if (tokenResult != null) {
-                    val fromCache = attempt == 0
-                    Timber.d("AIChatService: Successfully obtained ${if (fromCache) "cached" else "refreshed"} App Check token")
-                    return AppCheckToken(
-                        token = tokenResult.token,
-                        expireTimeMillis = tokenResult.expireTimeMillis,
-                        fromCache = fromCache
-                    )
-                }
-                
-                // If token request timed out or failed
-                Timber.w("AIChatService: Token request failed or timed out on attempt ${attempt + 1}")
-                
+                Firebase.appCheck.getAppCheckToken(false).await()
             } catch (e: Exception) {
-                val errorMessage = e.message?.lowercase() ?: ""
-                Timber.e(e, "AIChatService: Exception during App Check token retrieval on attempt ${attempt + 1}")
-                
-                // Adjust delay based on error type
-                when {
-                    errorMessage.contains("too many attempts") || 
-                    errorMessage.contains("rate limit") -> {
-                        // For rate limiting, use more aggressive backoff
-                        currentDelay = (currentDelay * 3).coerceAtMost(15000L)
-                    }
-                    errorMessage.contains("task is not yet complete") -> {
-                        // For async issues, use moderate backoff
-                        currentDelay = (currentDelay * 1.5).toLong().coerceAtMost(10000L)
-                    }
-                }
+                handleAppCheckTokenFailure(e)
             }
         }
-        
-        Timber.e("AIChatService: Failed to obtain App Check token after $maxRetries attempts")
-        return null
+
+        if (tokenResult == null) {
+            Timber.w("AIChatService: App Check token request timed out")
+            delay(appCheckBackoffDelayMillis())
+            return null
+        }
+
+        Timber.d("AIChatService: Successfully obtained App Check token via cached retrieval")
+        return AppCheckToken(
+            expireTimeMillis = tokenResult.expireTimeMillis
+        )
+    }
+
+    private fun handleAppCheckTokenFailure(error: Exception): Nothing {
+        val errorMsg = error.message.orEmpty()
+        if (isDebugAppCheckTokenMissing(error)) {
+            logDebugAppCheckTokenInstructions(error)
+            throw DebugAppCheckTokenNotRegisteredException(error)
+        }
+
+        Timber.w(
+            error,
+            "AIChatService: Failed to get cached App Check token. type=%s, message=%s",
+            error.javaClass.name,
+            errorMsg
+        )
+
+        when {
+            isAppCheckRateLimited(error) -> {
+                Timber.e("AIChatService: App Check token request was rate limited by Firebase; not retrying in this chat request.")
+                throw AppCheckRateLimitedException(error)
+            }
+            isAppCheckAttestationFailure(error) -> {
+                logDebugAppCheckTokenInstructions(error)
+                throw DebugAppCheckTokenNotRegisteredException(error)
+            }
+            else -> throw AppCheckUnavailableException("Failed to obtain App Check token.", error)
+        }
+    }
+
+    private fun appCheckBackoffDelayMillis(): Long {
+        val jitter = Random.nextLong(0L, 250L)
+        return 1_000L + jitter
     }
 
     private fun isDebugAppCheckTokenMissing(error: Throwable): Boolean {
-        val message = error.message.orEmpty()
         return BuildConfig.DEBUG &&
             error is FirebaseException &&
-            message.contains("403", ignoreCase = true) &&
-            message.contains("app attestation failed", ignoreCase = true)
+            isAppCheckAttestationFailure(error)
+    }
+
+    private fun isAppCheckRateLimited(error: Throwable): Boolean =
+        error is FirebaseException &&
+            error.message.orEmpty().contains("too many attempts", ignoreCase = true)
+
+    private fun isAppCheckAttestationFailure(error: Throwable): Boolean {
+        val message = error.message.orEmpty()
+        return error is FirebaseException &&
+            (
+                message.contains("403", ignoreCase = true) &&
+                    message.contains("app attestation failed", ignoreCase = true)
+                )
     }
 
     private fun logDebugAppCheckTokenInstructions(error: Throwable) {
@@ -601,9 +564,7 @@ class AIChatServiceImpl @Inject constructor(
      * Data class to hold App Check token information.
      */
     private data class AppCheckToken(
-        val token: String,
-        val expireTimeMillis: Long,
-        val fromCache: Boolean
+        val expireTimeMillis: Long
     )
 }
 
@@ -617,3 +578,10 @@ class DebugAppCheckTokenNotRegisteredException(
         "Search Logcat for 'Enter this debug secret into the allow list in the Firebase Console', add that token under App Check > com.example.liftrix > Manage debug tokens, then clear app data or reinstall.",
     cause
 )
+class AppCheckRateLimitedException(
+    cause: Throwable
+) : Exception("Firebase App Check token exchange is rate limited. Wait before retrying.", cause)
+class AppCheckUnavailableException(
+    message: String,
+    cause: Throwable? = null
+) : Exception(message, cause)
