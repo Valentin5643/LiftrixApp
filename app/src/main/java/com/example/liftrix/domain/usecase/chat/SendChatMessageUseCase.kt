@@ -8,6 +8,7 @@ import com.example.liftrix.domain.model.chat.WorkoutContext
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.model.error.withAnalyticsContext
 import com.example.liftrix.domain.repository.ChatRepository
 import com.example.liftrix.domain.service.AIChatService
 import com.example.liftrix.domain.service.AbuseAction
@@ -48,10 +49,29 @@ class SendChatMessageUseCase @Inject constructor(
         language: String = "en"
     ): LiftrixResult<Pair<ChatMessage, ChatMessage>> = liftrixCatching(
         errorMapper = { throwable ->
+            Timber.e(
+                throwable,
+                "[AI] SendChatMessageUseCase: failed userId=%s conversationId=%s messageChars=%d language=%s cause=%s",
+                userId,
+                conversationId ?: "generated",
+                message.length,
+                language,
+                throwable.message ?: throwable.javaClass.simpleName
+            )
             when (throwable) {
+                is LiftrixError -> throwable.withAnalyticsContext(
+                    mapOf(
+                        "user_id" to userId,
+                        "operation" to "SEND_CHAT_MESSAGE",
+                        "conversation_id" to (conversationId ?: "generated"),
+                        "message_chars" to message.length.toString(),
+                        "source" to "SendChatMessageUseCase"
+                    )
+                )
                 is IllegalArgumentException -> LiftrixError.ValidationError(
                     field = "message",
                     violations = listOf(throwable.message ?: "Invalid message format"),
+                    errorMessage = throwable.message ?: "Invalid message format",
                     analyticsContext = mapOf(
                         "user_id" to userId,
                         "operation" to "SEND_CHAT_MESSAGE",
@@ -60,7 +80,7 @@ class SendChatMessageUseCase @Inject constructor(
                 )
                 else -> LiftrixError.BusinessLogicError(
                     code = "CHAT_MESSAGE_FAILED",
-                    errorMessage = "Failed to send message. Please try again.",
+                    errorMessage = throwable.message ?: "Failed to send message. Please try again.",
                     isRecoverable = true, // Make error recoverable for retry
                     analyticsContext = mapOf(
                         "user_id" to userId,
@@ -83,7 +103,7 @@ class SendChatMessageUseCase @Inject constructor(
         // Generate conversation ID if not provided
         val activeConversationId = conversationId ?: generateConversationId()
         
-        Timber.d("SendChatMessageUseCase: Sending message for user $userId in conversation $activeConversationId")
+        Timber.i("[AI] SendChatMessageUseCase: sending message user=$userId conversation=$activeConversationId messageChars=${message.length} language=$language")
         
         // 1. Check rate limits
         val rateLimitStatus = rateLimitingService.checkLimits(userId)
@@ -128,7 +148,23 @@ class SendChatMessageUseCase @Inject constructor(
             }
         }
         
-        // 3. Save user message
+        // 3. Load prior conversation context before saving the current user message.
+        // Firebase AI chat history must contain completed prior turns, not the message
+        // that is about to be sent again via sendMessage().
+        val recentMessages = chatRepository.observeConversation(userId, activeConversationId)
+            .first()
+            .takeLast(10)
+        Timber.i(
+            "[AI] SendChatMessageUseCase: loaded prior conversation context conversation=%s messages=%d",
+            activeConversationId,
+            recentMessages.size
+        )
+
+        // 4. Get user chat preferences for personalization before the AI call
+        val currentPreferences = chatRepository.observePreferences(userId).first()
+        val userPreferences = currentPreferences?.userContextPrompt
+
+        // 5. Save user message
         val userMessage = chatRepository.saveMessage(
             userId = userId,
             message = message,
@@ -138,21 +174,7 @@ class SendChatMessageUseCase @Inject constructor(
             workoutContext = workoutContext
         ).getOrThrow()
         
-        Timber.d("SendChatMessageUseCase: User message saved with ID ${userMessage.id}")
-        
-        // 4. Get recent conversation history for context
-        val recentMessages = chatRepository.getRecentMessages(userId, limit = 10)
-            .fold(
-                onSuccess = { it },
-                onFailure = { 
-                    Timber.w("Failed to get recent messages for context: ${it.message}")
-                    emptyList() 
-                }
-            )
-        
-        // 5. Get user chat preferences for personalization
-        val currentPreferences = chatRepository.observePreferences(userId).first()
-        val userPreferences = currentPreferences?.userContextPrompt
+        Timber.i("[AI] SendChatMessageUseCase: user message saved id=${userMessage.id}")
         
         // 6. Build conversation context
         val conversationContext = com.example.liftrix.domain.service.ConversationContext(
@@ -162,6 +184,7 @@ class SendChatMessageUseCase @Inject constructor(
         )
         
         // 7. Get AI response
+        Timber.i("[AI] SendChatMessageUseCase: requesting AI response conversation=$activeConversationId priorMessages=${recentMessages.size}")
         val aiResponse = aiChatService.generateResponse(
             userId = userId,
             message = message,
@@ -169,7 +192,7 @@ class SendChatMessageUseCase @Inject constructor(
             language = if (language == "ro") com.example.liftrix.domain.service.Language.ROMANIAN else com.example.liftrix.domain.service.Language.ENGLISH
         ).getOrThrow()
         
-        Timber.d("SendChatMessageUseCase: AI response generated in ${aiResponse.processingTimeMs}ms using ${aiResponse.tokensUsed} tokens")
+        Timber.i("[AI] SendChatMessageUseCase: AI response generated processingMs=${aiResponse.processingTimeMs} tokens=${aiResponse.tokensUsed}")
         
         // 7. Save AI response
         val assistantMessage = chatRepository.saveMessage(
@@ -183,7 +206,7 @@ class SendChatMessageUseCase @Inject constructor(
             processingTimeMs = aiResponse.processingTimeMs
         ).getOrThrow()
         
-        Timber.d("SendChatMessageUseCase: AI message saved with ID ${assistantMessage.id}")
+        Timber.i("[AI] SendChatMessageUseCase: AI message saved id=${assistantMessage.id}")
         
         // Return both messages
         userMessage to assistantMessage

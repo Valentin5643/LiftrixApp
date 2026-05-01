@@ -12,11 +12,13 @@ class WorkoutGenerationIntentClassifier @Inject constructor() {
         if (normalized.isBlank()) return ChatIntent.GeneralChat
         if (negativeSignals.any { normalized.contains(it) }) return ChatIntent.GeneralChat
 
-        val hasModificationSignal = modificationSignals.any { normalized.contains(it) } &&
-            !normalized.contains(" make me ")
         val hasSourceSignal = sourceSignals.any { normalized.contains(it) }
         val hasProgressionSignal = progressionSignals.any { normalized.contains(it) }
         val hasWorkoutTargetSignal = workoutTargetSignals.any { normalized.contains(it) }
+        val hasEditModificationSignal = editModificationSignals.any { normalized.contains(it) }
+        val hasGoalRetargetSignal = goalRetargetSignals.any { normalized.contains(it) }
+        val hasModificationSignal = (hasEditModificationSignal || (hasSourceSignal && hasGoalRetargetSignal)) &&
+            !normalized.contains(" make me ")
 
         if (hasProgressionSignal && hasWorkoutTargetSignal) return ChatIntent.UpdatePlanFromProgress
         if (hasModificationSignal && hasSourceSignal) return ChatIntent.ModifyWorkout
@@ -26,8 +28,10 @@ class WorkoutGenerationIntentClassifier @Inject constructor() {
             splitSignals.any { normalized.contains(it) } ||
             Regex("\\b\\d\\s*(-| )?day\\b").containsMatchIn(normalized)
         val hasDomainSignal = domainSignals.any { normalized.contains(it) }
+        val hasGoalSignal = goalRetargetSignals.any { normalized.contains(it) }
 
         if (hasPlanningSignal && hasDomainSignal) return ChatIntent.GenerateWorkout
+        if (hasGoalSignal && hasDomainSignal) return ChatIntent.GenerateWorkout
 
         val ambiguousHomeTraining = normalized.contains(" train at home ") ||
             normalized.contains(" home training ") ||
@@ -49,7 +53,13 @@ class WorkoutGenerationIntentClassifier @Inject constructor() {
             " routine ",
             " workouts for ",
             " make me ",
-            " put together "
+            " put together ",
+            " give me ",
+            " recommend ",
+            " suggest ",
+            " i want ",
+            " want ",
+            " need "
         )
         private val splitSignals = listOf(
             " split ",
@@ -72,6 +82,8 @@ class WorkoutGenerationIntentClassifier @Inject constructor() {
             " bodyweight ",
             " home ",
             " split ",
+            " full body ",
+            " full-body ",
             " days ",
             " routine ",
             " train "
@@ -87,9 +99,8 @@ class WorkoutGenerationIntentClassifier @Inject constructor() {
             " pain ",
             " injury "
         )
-        private val modificationSignals = listOf(
+        private val editModificationSignals = listOf(
             " adjust ",
-            " make ",
             " modify ",
             " edit ",
             " change ",
@@ -100,9 +111,15 @@ class WorkoutGenerationIntentClassifier @Inject constructor() {
             " swap ",
             " replace ",
             " harder ",
-            " easier ",
+            " easier "
+        )
+        private val goalRetargetSignals = listOf(
             " hypertrophy ",
             " strength ",
+            " endurance ",
+            " cardio ",
+            " fat loss ",
+            " muscle ",
             " intensity ",
             " volume "
         )

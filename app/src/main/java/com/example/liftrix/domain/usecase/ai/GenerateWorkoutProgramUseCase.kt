@@ -54,31 +54,94 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         coerceInputValues = true
     }
 
+    private val fullGymEquipment = Equipment.entries.toSet() - Equipment.BODYWEIGHT_ONLY
+    private val weeklyCountPatterns = listOf(
+        Regex("""\b([1-6])\s*[- ]?\s*days?\b"""),
+        Regex("""\b([1-6])\s*(?:x|times)\s*(?:/|per)?\s*(?:week|weekly)\b"""),
+        Regex("""\b([1-6])\s*(?:workouts?|sessions?)\s*(?:a|per)?\s*week\b""")
+    )
+    private val wordNumbers = mapOf(
+        "one" to 1,
+        "two" to 2,
+        "three" to 3,
+        "four" to 4,
+        "five" to 5,
+        "six" to 6
+    )
+    private val noEquipmentTerms = listOf(
+        "bodyweight only",
+        "body weight only",
+        "no equipment",
+        "without equipment",
+        "equipment free",
+        "no weights",
+        "without weights",
+        "no gym equipment"
+    )
+    private val bodyweightTerms = listOf("bodyweight", "body weight", "calisthenics")
+    private val fullGymTerms = listOf(
+        "full gym",
+        "commercial gym",
+        "gym equipment",
+        "at the gym",
+        "in the gym",
+        "gym workout",
+        "gym program",
+        "gym routine",
+        "machine workout",
+        "machines",
+        "weight room"
+    )
+    private val homeBodyweightTerms = listOf("home workout", "home training", "at home", "train at home")
+    private val dumbbellTerms = listOf("dumbbell", "dumbbells", "db only", "dbs")
+    private val barbellTerms = listOf("barbell", "barbells", "squat rack", "rack", "plates", "bench press")
+    private val bandTerms = listOf("resistance band", "resistance bands", "bands", "banded")
+    private val kettlebellTerms = listOf("kettlebell", "kettlebells")
+    private val pullUpTerms = listOf("pull-up", "pull up", "pullup", "chin-up", "chin up", "chinup")
+    private val benchTerms = listOf("bench", "incline bench", "flat bench")
+    private val cableTerms = listOf("cable", "cables", "cable machine", "pulley", "lat pulldown", "machine")
+    private val treadmillTerms = listOf("treadmill", "running machine")
+    private val bikeTerms = listOf("exercise bike", "stationary bike", "bike", "cycling")
+    private val singleSessionTerms = listOf(
+        "single workout",
+        "one workout",
+        "1 workout",
+        "single session",
+        "one session",
+        "1 session",
+        "today workout",
+        "today's workout",
+        "quick workout"
+    )
+    private val programShapeTerms = listOf("program", "routine", "plan", "split", "weekly", "per week", "/week")
+
     suspend operator fun invoke(
         userId: String,
         prompt: String,
         language: Language = Language.ENGLISH,
         saveAfterGeneration: Boolean = false
     ): LiftrixResult<WorkoutGenerationResult> {
-        Timber.i("GenerateWorkoutProgramUseCase: request started user=$userId promptChars=${prompt.length} saveAfterGeneration=$saveAfterGeneration")
+        Timber.i("[AI] GenerateWorkoutProgramUseCase: request started user=$userId promptChars=${prompt.length} language=${language.code} saveAfterGeneration=$saveAfterGeneration")
         if (userId.isBlank() || prompt.isBlank()) {
-            Timber.w("GenerateWorkoutProgramUseCase: validation failed for blank userId or prompt")
+            Timber.w("[AI] GenerateWorkoutProgramUseCase: validation failed for blank userId or prompt")
             return liftrixFailure(validationError("request", listOf("User ID and prompt are required")))
         }
 
-        Timber.d("GenerateWorkoutProgramUseCase: loading profile")
+        Timber.d("[AI] GenerateWorkoutProgramUseCase: loading profile")
         val profile = profileQueryUseCase.getById(userId).getOrElse { return Result.failure(it) }
         val request = buildRequest(userId, prompt, language, profile, saveAfterGeneration)
         Timber.i(
-            "GenerateWorkoutProgramUseCase: prompt built days=${request.normalizedConstraints.daysPerWeek} equipment=${request.normalizedConstraints.allowedEquipment} goal=${request.normalizedConstraints.goal} level=${request.normalizedConstraints.level}"
+            "[AI] GenerateWorkoutProgramUseCase: constraints days=${request.normalizedConstraints.daysPerWeek} duration=${request.normalizedConstraints.sessionDurationMinutes} equipment=${request.normalizedConstraints.allowedEquipment} excluded=${request.normalizedConstraints.excludedEquipment} goal=${request.normalizedConstraints.goal} level=${request.normalizedConstraints.level}"
         )
-        Timber.d("GenerateWorkoutProgramUseCase: loading exercise catalog")
-        val catalog = exerciseQueryUseCase.invoke().getOrElse { return Result.failure(it) }
-            .filter { it.equipment in request.normalizedConstraints.allowedEquipment }
-        Timber.i("GenerateWorkoutProgramUseCase: compatible catalog size=${catalog.size}")
+        Timber.d("[AI] GenerateWorkoutProgramUseCase: loading exercise catalog")
+        val rawCatalog = exerciseQueryUseCase.invoke().getOrElse { return Result.failure(it) }
+        val catalog = rawCatalog.filter { it.equipment in request.normalizedConstraints.allowedEquipment }
+        Timber.i(
+            "[AI] GenerateWorkoutProgramUseCase: catalog raw=${rawCatalog.size} compatible=${catalog.size} compatibleEquipment=${catalog.equipmentBreakdown()}"
+        )
 
         if (catalog.isEmpty()) {
-            Timber.w("GenerateWorkoutProgramUseCase: no compatible exercises for equipment=${request.normalizedConstraints.allowedEquipment}")
+            Timber.w("[AI] GenerateWorkoutProgramUseCase: no compatible exercises for equipment=${request.normalizedConstraints.allowedEquipment}")
             return liftrixFailure(
                 LiftrixError.BusinessLogicError(
                     code = "AI_WORKOUT_GENERATION_UNSATISFIABLE",
@@ -90,7 +153,7 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         }
 
         val generationPrompt = promptBuilder.build(request, catalog)
-        Timber.i("GenerateWorkoutProgramUseCase: prompt payload ready catalogHash=${generationPrompt.catalogHash} payloadChars=${generationPrompt.inputPayload.length}")
+        Timber.i("[AI] GenerateWorkoutProgramUseCase: prompt payload ready catalogHash=${generationPrompt.catalogHash} payloadChars=${generationPrompt.inputPayload.length}")
         val cacheKey = cache.keyFor(
             userId = userId,
             normalizedPrompt = prompt.trim().lowercase(),
@@ -100,12 +163,12 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         )
         if (!saveAfterGeneration) {
             cache.get(cacheKey)?.let {
-                Timber.i("GenerateWorkoutProgramUseCase: cache hit for preview")
+                Timber.i("[AI] GenerateWorkoutProgramUseCase: cache hit for preview")
                 return Result.success(it.copy(cacheHit = true))
             }
         }
 
-        Timber.i("GenerateWorkoutProgramUseCase: Firebase JSON generation started")
+        Timber.i("[AI] GenerateWorkoutProgramUseCase: Firebase JSON generation started")
         val generatedJson = generationService.generateProgramJson(
             userId = userId,
             userPrompt = prompt,
@@ -113,7 +176,7 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
             inputPayload = generationPrompt.inputPayload,
             language = language
         ).getOrElse { return Result.failure(it) }
-        Timber.i("GenerateWorkoutProgramUseCase: Firebase JSON generation succeeded chars=${generatedJson.json.length} tokens=${generatedJson.tokensUsed}")
+        Timber.i("[AI] GenerateWorkoutProgramUseCase: Firebase JSON generation succeeded chars=${generatedJson.json.length} tokens=${generatedJson.tokensUsed}")
 
         val parsed = parseOrRepair(
             userId = userId,
@@ -126,16 +189,16 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
             generationPrompt = generationPrompt,
             language = language
         ).getOrElse { return Result.failure(it) }
-        Timber.i("GenerateWorkoutProgramUseCase: parsing and validation succeeded days=${parsed.program.days.size} repairAttempts=${parsed.repairAttempts}")
+        Timber.i("[AI] GenerateWorkoutProgramUseCase: parsing and validation succeeded days=${parsed.program.days.size} repairAttempts=${parsed.repairAttempts}")
 
         val savedTemplates = if (saveAfterGeneration) {
-            Timber.i("GenerateWorkoutProgramUseCase: repository save started")
+            Timber.i("[AI] GenerateWorkoutProgramUseCase: repository save started")
             saveProgram(request, parsed.program).getOrElse { return Result.failure(it) }
         } else {
             emptyList()
         }
         if (saveAfterGeneration) {
-            Timber.i("GenerateWorkoutProgramUseCase: repository save succeeded templates=${savedTemplates.size}")
+            Timber.i("[AI] GenerateWorkoutProgramUseCase: repository save succeeded templates=${savedTemplates.size}")
         }
 
         val result = WorkoutGenerationResult(
@@ -149,9 +212,9 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         )
         if (!saveAfterGeneration) {
             cache.put(cacheKey, result)
-            Timber.d("GenerateWorkoutProgramUseCase: preview cached")
+            Timber.d("[AI] GenerateWorkoutProgramUseCase: preview cached")
         }
-        Timber.i("GenerateWorkoutProgramUseCase: final Result returned success savedTemplates=${result.savedTemplates.size}")
+        Timber.i("[AI] GenerateWorkoutProgramUseCase: final Result returned success savedTemplates=${result.savedTemplates.size}")
         return Result.success(result)
     }
 
@@ -159,14 +222,14 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         userId: String,
         program: GeneratedWorkoutProgram
     ): LiftrixResult<WorkoutGenerationResult> {
-        Timber.i("GenerateWorkoutProgramUseCase: save generated program started user=$userId days=${program.days.size}")
+        Timber.i("[AI] GenerateWorkoutProgramUseCase: save generated program started user=$userId days=${program.days.size}")
         val request = WorkoutGenerationRequest(
             userId = userId,
             userPrompt = "save generated program",
             normalizedConstraints = WorkoutGenerationConstraints(daysPerWeek = program.days.size)
         )
         val templates = saveProgram(request, program).getOrElse { return Result.failure(it) }
-        Timber.i("GenerateWorkoutProgramUseCase: save generated program succeeded templates=${templates.size}")
+        Timber.i("[AI] GenerateWorkoutProgramUseCase: save generated program succeeded templates=${templates.size}")
         return Result.success(WorkoutGenerationResult(program = program, savedTemplates = templates))
     }
 
@@ -181,15 +244,15 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         generationPrompt: com.example.liftrix.domain.model.ai.WorkoutGenerationPrompt,
         language: Language
     ): LiftrixResult<ParsedProgram> {
-        Timber.i("GenerateWorkoutProgramUseCase: parsing started rawChars=${rawJson.length}")
+        Timber.i("[AI] GenerateWorkoutProgramUseCase: parsing started rawChars=${rawJson.length}")
         parseProgram(rawJson, catalog).fold(
             onSuccess = { program ->
-                Timber.i("GenerateWorkoutProgramUseCase: parsing succeeded days=${program.days.size}")
-                Timber.i("GenerateWorkoutProgramUseCase: validation started")
+                Timber.i("[AI] GenerateWorkoutProgramUseCase: parsing succeeded days=${program.days.size}")
+                Timber.i("[AI] GenerateWorkoutProgramUseCase: validation started")
                 val validation = validator(program, request, catalog)
                 if (validation.isSuccess) {
                     val valid = validation.getOrThrow()
-                    Timber.i("GenerateWorkoutProgramUseCase: validation succeeded warnings=${valid.warnings.size}")
+                    Timber.i("[AI] GenerateWorkoutProgramUseCase: validation succeeded warnings=${valid.warnings.size}")
                     return Result.success(
                         ParsedProgram(
                             program = valid.program,
@@ -201,7 +264,7 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
                         )
                     )
                 }
-                Timber.w("GenerateWorkoutProgramUseCase: validation failed, repair started: ${validation.exceptionOrNull()?.message}")
+                Timber.w("[AI] GenerateWorkoutProgramUseCase: validation failed, repair started: ${validation.exceptionOrNull()?.message}")
                 return repairInvalidProgram(
                     userId, request, catalog, rawJson, generationPrompt,
                     tokensUsed, processingTimeMs, modelVersion,
@@ -211,7 +274,7 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
                 )
             },
             onFailure = { parseError ->
-                Timber.w("GenerateWorkoutProgramUseCase: parsing failed, repair started: ${parseError.message}")
+                Timber.w("[AI] GenerateWorkoutProgramUseCase: parsing failed, repair started: ${parseError.message}")
                 return repairInvalidProgram(
                     userId, request, catalog, rawJson, generationPrompt,
                     tokensUsed, processingTimeMs, modelVersion,
@@ -233,7 +296,7 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         repairInstruction: String,
         language: Language
     ): LiftrixResult<ParsedProgram> {
-        Timber.i("GenerateWorkoutProgramUseCase: repair request started instruction=${repairInstruction.take(160)}")
+        Timber.i("[AI] GenerateWorkoutProgramUseCase: repair request started instruction=${repairInstruction.take(240)}")
         val repairedJson = generationService.repairProgramJson(
             userId = userId,
             userPrompt = request.userPrompt,
@@ -243,45 +306,29 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
             repairInstruction = repairInstruction,
             language = language
         ).getOrElse { error ->
-            Timber.w(error, "GenerateWorkoutProgramUseCase: AI repair failed, local repair started")
-            return repairLocally(
-                request = request,
-                catalog = catalog,
-                sourceJson = invalidJson,
-                originalTokensUsed = originalTokensUsed,
-                originalProcessingTimeMs = originalProcessingTimeMs,
-                modelVersion = originalModelVersion,
-                repairAttempts = 1
+            Timber.w(error, "[AI] GenerateWorkoutProgramUseCase: AI repair failed; refusing fallback workout")
+            return invalidGenerationFailure(
+                stage = "repair",
+                details = "The AI generated a workout that did not pass validation: ${repairInstruction.take(500)}. Repair failed: ${error.message ?: error.javaClass.simpleName}."
             )
         }
-        Timber.i("GenerateWorkoutProgramUseCase: repair JSON received chars=${repairedJson.json.length}")
+        Timber.i("[AI] GenerateWorkoutProgramUseCase: repair JSON received chars=${repairedJson.json.length}")
 
         val repairedProgram = parseProgram(repairedJson.json, catalog).getOrElse {
-            Timber.w(it, "GenerateWorkoutProgramUseCase: repair parsing failed, local repair started")
-            return repairLocally(
-                request = request,
-                catalog = catalog,
-                sourceJson = invalidJson,
-                originalTokensUsed = originalTokensUsed + repairedJson.tokensUsed,
-                originalProcessingTimeMs = originalProcessingTimeMs + repairedJson.processingTimeMs,
-                modelVersion = repairedJson.modelVersion.ifBlank { originalModelVersion },
-                repairAttempts = 2
+            Timber.w(it, "[AI] GenerateWorkoutProgramUseCase: repair parsing failed; refusing fallback workout")
+            return invalidGenerationFailure(
+                stage = "repair_parse",
+                details = "The AI repair response was not valid workout JSON: ${it.message ?: it.javaClass.simpleName}."
             )
         }
         val validation = validator(repairedProgram, request, catalog).getOrElse {
-            Timber.w(it, "GenerateWorkoutProgramUseCase: repair validation failed errors=${it.message}")
-            return repairLocally(
-                request = request,
-                catalog = catalog,
-                sourceProgram = repairedProgram,
-                sourceJson = invalidJson,
-                originalTokensUsed = originalTokensUsed + repairedJson.tokensUsed,
-                originalProcessingTimeMs = originalProcessingTimeMs + repairedJson.processingTimeMs,
-                modelVersion = repairedJson.modelVersion.ifBlank { originalModelVersion },
-                repairAttempts = 2
+            Timber.w(it, "[AI] GenerateWorkoutProgramUseCase: repair validation failed; refusing fallback workout")
+            return invalidGenerationFailure(
+                stage = "repair_validation",
+                details = "The AI repair response still did not satisfy the request: ${it.message ?: it.javaClass.simpleName}."
             )
         }
-        Timber.i("GenerateWorkoutProgramUseCase: repair parsing and validation succeeded")
+        Timber.i("[AI] GenerateWorkoutProgramUseCase: repair parsing and validation succeeded")
         return Result.success(
             ParsedProgram(
                 program = validation.program,
@@ -294,137 +341,18 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         )
     }
 
-    private fun repairLocally(
-        request: WorkoutGenerationRequest,
-        catalog: List<ExerciseLibrary>,
-        sourceProgram: GeneratedWorkoutProgram? = null,
-        sourceJson: String,
-        originalTokensUsed: Int,
-        originalProcessingTimeMs: Long,
-        modelVersion: String,
-        repairAttempts: Int
-    ): LiftrixResult<ParsedProgram> {
-        val program = sourceProgram ?: parseProgram(sourceJson, catalog).getOrElse {
-            Timber.w(it, "GenerateWorkoutProgramUseCase: local repair cannot parse source JSON")
-            return invalidGenerationFailure("parse")
-        }
-        val locallyRepaired = locallyRepairProgram(program, request, catalog)
-        val validation = validator(locallyRepaired, request, catalog).getOrElse {
-            Timber.w(it, "GenerateWorkoutProgramUseCase: local repair validation failed errors=${it.message}")
-            return invalidGenerationFailure("validation")
-        }
-        Timber.i("GenerateWorkoutProgramUseCase: local repair validation succeeded warnings=${validation.warnings.size}")
-        return Result.success(
-            ParsedProgram(
-                program = validation.program,
-                warnings = validation.warnings,
-                repairAttempts = repairAttempts,
-                tokensUsed = originalTokensUsed,
-                processingTimeMs = originalProcessingTimeMs,
-                modelVersion = modelVersion
-            )
-        )
-    }
-
-    private fun locallyRepairProgram(
-        program: GeneratedWorkoutProgram,
-        request: WorkoutGenerationRequest,
-        catalog: List<ExerciseLibrary>
-    ): GeneratedWorkoutProgram {
-        val catalogById = catalog.associateBy { it.id }
-        val compatibleCatalog = catalog
-            .filter { it.equipment in request.normalizedConstraints.allowedEquipment }
-            .filter { it.equipment !in request.normalizedConstraints.excludedEquipment }
-            .filter { it.difficultyLevel <= maxDifficultyFor(request.normalizedConstraints.level) }
-
-        return program.copy(
-            level = request.normalizedConstraints.level,
-            goal = request.normalizedConstraints.goal,
-            days = program.days.map { day ->
-                day.copy(
-                    exercises = day.exercises.map { exercise ->
-                        val catalogExercise = catalogById[exercise.exerciseId]
-                        val shouldReplace = catalogExercise == null ||
-                            catalogExercise.difficultyLevel > maxDifficultyFor(request.normalizedConstraints.level) ||
-                            catalogExercise.equipment !in request.normalizedConstraints.allowedEquipment ||
-                            catalogExercise.equipment in request.normalizedConstraints.excludedEquipment
-
-                        val replacement = if (shouldReplace) {
-                            chooseReplacementExercise(exercise, compatibleCatalog)
-                        } else {
-                            catalogExercise
-                        }
-                        repairExercise(exercise, replacement, request)
-                    }
-                )
-            }
-        )
-    }
-
-    private fun repairExercise(
-        exercise: GeneratedWorkoutExercise,
-        catalogExercise: ExerciseLibrary?,
-        request: WorkoutGenerationRequest
-    ): GeneratedWorkoutExercise {
-        val beginner = request.normalizedConstraints.level == WorkoutProgramLevel.BEGINNER
-        val repairedPrescription = if (beginner && exercise.type == GeneratedPrescriptionType.REPS) {
-            clampBeginnerReps(exercise.repsMin, exercise.repsMax)
-        } else {
-            exercise.repsMin to exercise.repsMax
-        }
-
-        return exercise.copy(
-            exerciseId = catalogExercise?.id ?: exercise.exerciseId,
-            exerciseName = catalogExercise?.name ?: exercise.exerciseName,
-            primaryMuscle = catalogExercise?.primaryMuscleGroup ?: exercise.primaryMuscle,
-            equipment = catalogExercise?.equipment ?: exercise.equipment,
-            sets = if (beginner) exercise.sets.coerceIn(1, 3) else exercise.sets.coerceIn(1, 5),
-            repsMin = repairedPrescription.first,
-            repsMax = repairedPrescription.second,
-            restSeconds = exercise.restSeconds.coerceIn(30, 180)
-        )
-    }
-
-    private fun clampBeginnerReps(repsMin: Int?, repsMax: Int?): Pair<Int?, Int?> {
-        val min = repsMin ?: repsMax ?: 8
-        val max = repsMax ?: min
-        val clampedMin = min.coerceIn(8, 15)
-        val clampedMax = max.coerceIn(8, 15).coerceAtLeast(clampedMin)
-        return clampedMin to clampedMax
-    }
-
-    private fun chooseReplacementExercise(
-        exercise: GeneratedWorkoutExercise,
-        compatibleCatalog: List<ExerciseLibrary>
-    ): ExerciseLibrary? {
-        if (compatibleCatalog.isEmpty()) return null
-        return compatibleCatalog
-            .sortedWith(
-                compareBy<ExerciseLibrary> { if (it.primaryMuscleGroup == exercise.primaryMuscle) 0 else 1 }
-                    .thenBy { it.difficultyLevel }
-                    .thenByDescending { it.isCompound }
-                    .thenBy { it.name }
-            )
-            .firstOrNull()
-    }
-
-    private fun maxDifficultyFor(level: WorkoutProgramLevel): Int = when (level) {
-        WorkoutProgramLevel.BEGINNER -> 3
-        WorkoutProgramLevel.INTERMEDIATE -> 6
-        WorkoutProgramLevel.ADVANCED -> 10
-    }
-
     private fun parseProgram(
         rawJson: String,
         catalog: List<ExerciseLibrary>
     ): LiftrixResult<GeneratedWorkoutProgram> {
         val normalizedJson = normalizeJsonPayload(rawJson)
         Timber.d(
-            "GenerateWorkoutProgramUseCase: normalized JSON ready rawChars=${rawJson.length} normalizedChars=${normalizedJson.length}"
+            "[AI] GenerateWorkoutProgramUseCase: normalized JSON ready rawChars=${rawJson.length} normalizedChars=${normalizedJson.length}"
         )
         return try {
             if (normalizedJson.contains("\"error\"")) {
                 val error = workoutJson.decodeFromString<GeneratedWorkoutProgramError>(normalizedJson)
+                Timber.w("[AI] GenerateWorkoutProgramUseCase: AI returned structured error code=${error.error.code} message=${error.error.message}")
                 liftrixFailure(
                     LiftrixError.BusinessLogicError(
                         code = error.error.code.name,
@@ -436,7 +364,7 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
                 val root = workoutJson.parseToJsonElement(normalizedJson).jsonObject
                 val program = if ("program" in root) {
                     val response = workoutJson.decodeFromString<AiWorkoutResponseDto>(normalizedJson)
-                    Timber.i("GenerateWorkoutProgramUseCase: wrapped AI program parsed successfully")
+                    Timber.i("[AI] GenerateWorkoutProgramUseCase: wrapped AI program parsed successfully")
                     response.program
                         ?.toGeneratedProgram(
                             schemaVersion = response.schemaVersion ?: GeneratedWorkoutProgram.SCHEMA_VERSION,
@@ -444,7 +372,7 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
                         )
                         ?: throw IllegalArgumentException("Generated workout response is missing program")
                 } else {
-                    Timber.i("GenerateWorkoutProgramUseCase: direct AI program parsed successfully")
+                    Timber.i("[AI] GenerateWorkoutProgramUseCase: direct AI program parsed successfully")
                     workoutJson.decodeFromString<AiWorkoutProgramDto>(normalizedJson)
                         .toGeneratedProgram(
                             schemaVersion = GeneratedWorkoutProgram.SCHEMA_VERSION,
@@ -454,7 +382,7 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
                 Result.success(program)
             }
         } catch (exception: SerializationException) {
-            Timber.w(exception, "GenerateWorkoutProgramUseCase: JSON parse failed")
+            Timber.w(exception, "[AI] GenerateWorkoutProgramUseCase: JSON parse failed")
             liftrixFailure(
                 LiftrixError.BusinessLogicError(
                     code = "AI_WORKOUT_GENERATION_PARSE_FAILED",
@@ -463,7 +391,7 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
                 )
             )
         } catch (exception: IllegalArgumentException) {
-            Timber.w(exception, "GenerateWorkoutProgramUseCase: AI program DTO mapping failed")
+            Timber.w(exception, "[AI] GenerateWorkoutProgramUseCase: AI program DTO mapping failed")
             liftrixFailure(
                 LiftrixError.BusinessLogicError(
                     code = "AI_WORKOUT_GENERATION_PARSE_FAILED",
@@ -602,7 +530,7 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
     ): LiftrixResult<List<com.example.liftrix.domain.model.WorkoutTemplate>> {
         val saved = mutableListOf<com.example.liftrix.domain.model.WorkoutTemplate>()
         program.days.forEach { day ->
-            Timber.i("GenerateWorkoutProgramUseCase: saving template day=${day.dayName} exercises=${day.exercises.size}")
+            Timber.i("[AI] GenerateWorkoutProgramUseCase: saving template day=${day.dayName} exercises=${day.exercises.size}")
             val result = templateCommandUseCase.create(
                 userId = request.userId,
                 name = "${program.workoutName} - ${day.dayName}".take(100),
@@ -633,10 +561,10 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
                 }
             )
             saved.add(result.getOrElse {
-                Timber.e(it, "GenerateWorkoutProgramUseCase: template save failed day=${day.dayName}")
+                Timber.e(it, "[AI] GenerateWorkoutProgramUseCase: template save failed day=${day.dayName}")
                 return Result.failure(it)
             })
-            Timber.i("GenerateWorkoutProgramUseCase: template save succeeded day=${day.dayName} id=${saved.last().id.value}")
+            Timber.i("[AI] GenerateWorkoutProgramUseCase: template save succeeded day=${day.dayName} id=${saved.last().id.value}")
         }
         return Result.success(saved)
     }
@@ -659,9 +587,11 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         profile: UserProfile?,
         saveAfterGeneration: Boolean
     ): WorkoutGenerationRequest {
-        val allowedEquipment = extractEquipment(prompt)
-            .ifEmpty { profile?.availableEquipment?.toSet().orEmpty() }
-            .ifEmpty { setOf(Equipment.BODYWEIGHT_ONLY) }
+        val profileEquipment = profile?.availableEquipment?.toSet().orEmpty()
+        val allowedEquipment = resolveAllowedEquipment(
+            requestedEquipment = extractEquipment(prompt),
+            profileEquipment = profileEquipment
+        )
         val goal = extractGoal(prompt) ?: profile?.fitnessGoals?.firstOrNull()?.toProgramGoal() ?: WorkoutProgramGoal.GENERAL_FITNESS
         val level = extractLevel(prompt)
 
@@ -680,28 +610,57 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
             personalization = WorkoutGenerationPersonalization(
                 ageBand = ageBand(profile?.age),
                 profileGoals = profile?.fitnessGoals.orEmpty(),
-                profileEquipment = profile?.availableEquipment?.toSet().orEmpty(),
+                profileEquipment = profileEquipment,
                 experienceLevel = level
             ),
             saveAfterGeneration = saveAfterGeneration
         )
     }
 
+    private fun resolveAllowedEquipment(
+        requestedEquipment: Set<Equipment>,
+        profileEquipment: Set<Equipment>
+    ): Set<Equipment> = when {
+        requestedEquipment.isNotEmpty() -> requestedEquipment
+        profileEquipment.isNotEmpty() -> profileEquipment
+        else -> Equipment.entries.toSet()
+    }
+
     private fun extractDays(prompt: String): Int {
-        val match = Regex("""(\d+)\s*[- ]?\s*day""").find(prompt.lowercase())
-        return match?.groupValues?.getOrNull(1)?.toIntOrNull()?.coerceIn(1, 6) ?: 3
+        val lower = prompt.normalizedForParsing()
+        extractExplicitWeeklyCount(lower)?.let { return it }
+
+        return when {
+            hasAny(lower, listOf("arnold split")) -> 6
+            hasAny(lower, listOf("bro split")) -> 5
+            hasAny(lower, listOf("upper lower", "upper/lower")) -> 4
+            hasPplSplit(lower) -> 3
+            asksForSingleSession(lower) -> 1
+            hasAny(lower, listOf("full body", "full-body")) -> 3
+            else -> 3
+        }
     }
 
     private fun extractDuration(prompt: String): Int {
-        val match = Regex("""(\d+)\s*(minute|min)""").find(prompt.lowercase())
-        return match?.groupValues?.getOrNull(1)?.toIntOrNull()?.coerceIn(5, 90) ?: 45
+        val lower = prompt.lowercase()
+        val numericMatch = Regex("""\b(\d{1,3})\s*(?:-| )?\s*(?:minute|minutes|min|mins|m)\b""")
+            .find(lower)
+        if (numericMatch != null) {
+            return numericMatch.groupValues[1].toIntOrNull()?.coerceIn(5, 90) ?: 45
+        }
+
+        return when {
+            Regex("""\b(one|1)\s+hour\b""").containsMatchIn(lower) -> 60
+            Regex("""\bhalf\s+hour\b""").containsMatchIn(lower) -> 30
+            else -> 45
+        }
     }
 
     private fun extractLevel(prompt: String): WorkoutProgramLevel {
         val lower = prompt.lowercase()
         return when {
             "advanced" in lower -> WorkoutProgramLevel.ADVANCED
-            "intermediate" in lower -> WorkoutProgramLevel.INTERMEDIATE
+            "intermediate" in lower || "experienced" in lower -> WorkoutProgramLevel.INTERMEDIATE
             else -> WorkoutProgramLevel.BEGINNER
         }
     }
@@ -709,29 +668,79 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
     private fun extractGoal(prompt: String): WorkoutProgramGoal? {
         val lower = prompt.lowercase()
         return when {
-            "fat loss" in lower || "lose weight" in lower -> WorkoutProgramGoal.FAT_LOSS
-            "hypertrophy" in lower || "muscle" in lower -> WorkoutProgramGoal.HYPERTROPHY
-            "strength" in lower -> WorkoutProgramGoal.STRENGTH
-            "endurance" in lower || "cardio" in lower -> WorkoutProgramGoal.ENDURANCE
+            "fat loss" in lower || "lose weight" in lower || "weight loss" in lower || "cutting" in lower -> WorkoutProgramGoal.FAT_LOSS
+            "hypertrophy" in lower || "muscle" in lower || "build size" in lower || "bulk" in lower -> WorkoutProgramGoal.HYPERTROPHY
+            "strength" in lower || "get strong" in lower || "powerlifting" in lower -> WorkoutProgramGoal.STRENGTH
+            "endurance" in lower || "cardio" in lower || "conditioning" in lower || "stamina" in lower -> WorkoutProgramGoal.ENDURANCE
             else -> null
         }
     }
 
     private fun extractEquipment(prompt: String): Set<Equipment> {
-        val lower = prompt.lowercase()
-        return buildSet {
-            if ("dumbbell" in lower) add(Equipment.DUMBBELLS)
-            if ("barbell" in lower) add(Equipment.BARBELL)
-            if ("band" in lower) add(Equipment.RESISTANCE_BANDS)
-            if ("kettlebell" in lower) add(Equipment.KETTLEBELLS)
-            if ("pull-up" in lower || "pull up" in lower) add(Equipment.PULL_UP_BAR)
-            if ("bench" in lower) add(Equipment.BENCH)
-            if ("cable" in lower) add(Equipment.CABLE_MACHINE)
-            if ("treadmill" in lower) add(Equipment.TREADMILL)
-            if ("bike" in lower) add(Equipment.EXERCISE_BIKE)
-            if ("bodyweight" in lower || "home" in lower) add(Equipment.BODYWEIGHT_ONLY)
+        val lower = prompt.normalizedForParsing()
+        if (hasAny(lower, noEquipmentTerms)) return setOf(Equipment.BODYWEIGHT_ONLY)
+        if (hasAny(lower, fullGymTerms)) return fullGymEquipment
+
+        val includeBodyweight = hasAny(lower, bodyweightTerms)
+        val explicitEquipment = buildSet {
+            if (includeBodyweight) add(Equipment.BODYWEIGHT_ONLY)
+            if (hasAny(lower, dumbbellTerms)) add(Equipment.DUMBBELLS)
+            if (hasAny(lower, barbellTerms)) add(Equipment.BARBELL)
+            if (hasAny(lower, bandTerms)) add(Equipment.RESISTANCE_BANDS)
+            if (hasAny(lower, kettlebellTerms)) add(Equipment.KETTLEBELLS)
+            if (hasAny(lower, pullUpTerms)) add(Equipment.PULL_UP_BAR)
+            if (hasAny(lower, benchTerms)) add(Equipment.BENCH)
+            if (hasAny(lower, cableTerms)) add(Equipment.CABLE_MACHINE)
+            if (hasAny(lower, treadmillTerms)) add(Equipment.TREADMILL)
+            if (hasAny(lower, bikeTerms)) add(Equipment.EXERCISE_BIKE)
         }
+        if (explicitEquipment.isNotEmpty()) return explicitEquipment
+        if (hasAny(lower, homeBodyweightTerms)) return setOf(Equipment.BODYWEIGHT_ONLY)
+        return emptySet()
     }
+
+    private fun extractExplicitWeeklyCount(lowerPrompt: String): Int? {
+        weeklyCountPatterns.forEach { pattern ->
+            pattern.find(lowerPrompt)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let {
+                return it.coerceIn(1, 6)
+            }
+        }
+
+        wordNumbers.forEach { (word, value) ->
+            if (Regex("""\b$word\s*[- ]?\s*days?\b""").containsMatchIn(lowerPrompt)) return value
+            if (Regex("""\b$word\s*(?:workouts?|sessions?)\s*(?:a|per)?\s*week\b""").containsMatchIn(lowerPrompt)) {
+                return value
+            }
+        }
+
+        return null
+    }
+
+    private fun hasPplSplit(lowerPrompt: String): Boolean =
+        hasAny(lowerPrompt, listOf("push pull legs", "push/pull/legs", "push-pull-legs", "ppl split", "ppl program", "ppl routine"))
+
+    private fun asksForSingleSession(lowerPrompt: String): Boolean {
+        if (hasAny(lowerPrompt, singleSessionTerms)) return true
+        val hasProgramShape = hasAny(lowerPrompt, programShapeTerms) || hasPplSplit(lowerPrompt)
+        val singularWorkout = Regex("""\b(?:a|one|1)\s+(?:[a-z]+\s+){0,3}workout\b""").containsMatchIn(lowerPrompt)
+        return singularWorkout && !hasProgramShape
+    }
+
+    private fun String.normalizedForParsing(): String =
+        lowercase()
+            .replace(Regex("""[^\w\s/-]"""), " ")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+
+    private fun hasAny(text: String, terms: List<String>): Boolean =
+        terms.any { term -> text.contains(term) }
+
+    private fun List<ExerciseLibrary>.equipmentBreakdown(): String =
+        groupingBy { it.equipment }
+            .eachCount()
+            .entries
+            .sortedBy { it.key.name }
+            .joinToString(prefix = "{", postfix = "}") { "${it.key.name}=${it.value}" }
 
     private fun FitnessGoal.toProgramGoal(): WorkoutProgramGoal = when (this) {
         FitnessGoal.LOSE_WEIGHT -> WorkoutProgramGoal.FAT_LOSS
@@ -751,15 +760,24 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
     private fun validationError(field: String, violations: List<String>) =
         LiftrixError.ValidationError(field = field, violations = violations)
 
-    private fun invalidGenerationFailure(stage: String): LiftrixResult<ParsedProgram> =
-        liftrixFailure(
+    private fun invalidGenerationFailure(
+        stage: String,
+        details: String? = null
+    ): LiftrixResult<ParsedProgram> {
+        val message = details ?: "Generated workout program failed $stage after repair."
+        Timber.w("[AI] GenerateWorkoutProgramUseCase: generation failed stage=$stage details=${message.take(500)}")
+        return liftrixFailure(
             LiftrixError.BusinessLogicError(
                 code = "AI_WORKOUT_GENERATION_INVALID",
-                errorMessage = "Generated workout program failed $stage after repair.",
+                errorMessage = message,
                 isRecoverable = true,
-                analyticsContext = mapOf("stage" to stage)
+                analyticsContext = mapOf(
+                    "stage" to stage,
+                    "details" to message.take(500)
+                )
             )
         )
+    }
 
     @Serializable
     private data class AiWorkoutResponseDto(

@@ -78,6 +78,32 @@ interface WorkoutDao {
     @Query("SELECT * FROM workouts WHERE user_id = :userId AND date BETWEEN :startDate AND :endDate ORDER BY date ASC LIMIT :limit")
     @UserScoped
     suspend fun getWorkoutsInDateRangeForUser(userId: String, startDate: String, endDate: String, limit: Int = 10000): List<WorkoutEntity>
+
+    @Query("""
+        SELECT * FROM workouts
+        WHERE user_id = :userId
+        AND status = 'COMPLETED'
+        AND date BETWEEN :startDate AND :endDate
+        ORDER BY date ASC
+        LIMIT :limit
+    """)
+    @UserScoped
+    suspend fun getCompletedWorkoutsInDateRangeForUser(
+        userId: String,
+        startDate: String,
+        endDate: String,
+        limit: Int = 10000
+    ): List<WorkoutEntity>
+
+    @Query("""
+        SELECT * FROM workouts
+        WHERE user_id = :userId
+        AND status = 'COMPLETED'
+        ORDER BY date DESC, updated_at DESC, created_at DESC
+        LIMIT :limit
+    """)
+    @UserScoped
+    suspend fun getCompletedWorkoutsForStats(userId: String, limit: Int = 1000): List<WorkoutEntity>
     
     /**
      * Gets workouts for a user within a specific date range
@@ -464,35 +490,26 @@ interface WorkoutDao {
      */
     @Query("""
         SELECT 
-            date,
-            SUM(
-                CASE 
-                    WHEN exercises_json IS NOT NULL AND exercises_json != '' 
-                    THEN json_extract(exercises_json, '$.totalVolume') 
-                    ELSE 0 
+            w.date,
+            COALESCE(SUM(
+                CASE
+                    WHEN es.weight_kg > 0 AND es.reps > 0
+                    THEN es.weight_kg * es.reps
+                    ELSE 0
                 END
-            ) as total_volume,
-            SUM(
-                CASE 
-                    WHEN exercises_json IS NOT NULL AND exercises_json != '' 
-                    THEN json_extract(exercises_json, '$.totalSets') 
-                    ELSE 0 
-                END
-            ) as total_sets,
-            SUM(
-                CASE 
-                    WHEN exercises_json IS NOT NULL AND exercises_json != '' 
-                    THEN json_extract(exercises_json, '$.exerciseCount') 
-                    ELSE 0 
-                END
-            ) as exercise_count
-        FROM workouts 
-        WHERE user_id = :userId 
-        AND status = 'COMPLETED' 
-        AND date BETWEEN :startDate AND :endDate 
-        GROUP BY date
-        ORDER BY date
+            ), 0) as total_volume,
+            COUNT(es.id) as total_sets,
+            COUNT(DISTINCT e.exercise_library_id) as exercise_count
+        FROM workouts w
+        LEFT JOIN exercises e ON w.id = e.workout_id AND w.user_id = e.user_id
+        LEFT JOIN exercise_sets es ON e.id = es.exercise_id AND e.user_id = es.user_id
+        WHERE w.user_id = :userId
+        AND w.status = 'COMPLETED'
+        AND w.date BETWEEN :startDate AND :endDate
+        GROUP BY w.date
+        ORDER BY w.date
     """)
+    @UserScoped
     suspend fun getDailyVolumesByDateRange(
         userId: String,
         startDate: String,
@@ -505,21 +522,36 @@ interface WorkoutDao {
      * Calculates average duration, volume, and workout count for specified period
      */
     @Query("""
-        SELECT 
-            AVG(CASE WHEN end_time IS NOT NULL AND start_time IS NOT NULL 
-                THEN (strftime('%s', end_time) - strftime('%s', start_time)) / 60 
-                ELSE 0 END) as avgDurationMinutes,
-            AVG(CASE 
-                WHEN exercises_json IS NOT NULL AND exercises_json != '' 
-                THEN json_extract(exercises_json, '$.totalVolume') 
-                ELSE 0 
-            END) as avgVolume,
+        WITH workout_volumes AS (
+            SELECT
+                w.id,
+                CASE
+                    WHEN w.end_time IS NOT NULL AND w.start_time IS NOT NULL
+                    THEN (strftime('%s', w.end_time) - strftime('%s', w.start_time)) / 60
+                    ELSE 0
+                END as duration_minutes,
+                COALESCE(SUM(
+                    CASE
+                        WHEN es.weight_kg > 0 AND es.reps > 0
+                        THEN es.weight_kg * es.reps
+                        ELSE 0
+                    END
+                ), 0) as total_volume
+            FROM workouts w
+            LEFT JOIN exercises e ON w.id = e.workout_id AND w.user_id = e.user_id
+            LEFT JOIN exercise_sets es ON e.id = es.exercise_id AND e.user_id = es.user_id
+            WHERE w.user_id = :userId
+            AND w.status = 'COMPLETED'
+            AND w.date >= :since
+            GROUP BY w.id, w.start_time, w.end_time
+        )
+        SELECT
+            AVG(duration_minutes) as avgDurationMinutes,
+            AVG(total_volume) as avgVolume,
             COUNT(*) as workoutCount
-        FROM workouts 
-        WHERE user_id = :userId 
-        AND status = 'COMPLETED'
-        AND date >= :since
+        FROM workout_volumes
     """)
+    @UserScoped
     suspend fun getWorkoutStats(userId: String, since: String): WorkoutStatsResult
     
     /**
@@ -544,18 +576,28 @@ interface WorkoutDao {
      * Used for volume calendar intensity calculations
      */
     @Query("""
-        SELECT MAX(
-            CASE 
-                WHEN exercises_json IS NOT NULL AND exercises_json != '' 
-                THEN json_extract(exercises_json, '$.totalVolume') 
-                ELSE 0 
-            END
-        ) as maxVolume
-        FROM workouts 
-        WHERE user_id = :userId 
-        AND status = 'COMPLETED'
-        AND date BETWEEN :startDate AND :endDate
+        WITH workout_volumes AS (
+            SELECT
+                w.id,
+                COALESCE(SUM(
+                    CASE
+                        WHEN es.weight_kg > 0 AND es.reps > 0
+                        THEN es.weight_kg * es.reps
+                        ELSE 0
+                    END
+                ), 0) as total_volume
+            FROM workouts w
+            LEFT JOIN exercises e ON w.id = e.workout_id AND w.user_id = e.user_id
+            LEFT JOIN exercise_sets es ON e.id = es.exercise_id AND e.user_id = es.user_id
+            WHERE w.user_id = :userId
+            AND w.status = 'COMPLETED'
+            AND w.date BETWEEN :startDate AND :endDate
+            GROUP BY w.id
+        )
+        SELECT MAX(total_volume) as maxVolume
+        FROM workout_volumes
     """)
+    @UserScoped
     suspend fun getMaxVolumeInDateRange(
         userId: String,
         startDate: String,
@@ -601,10 +643,34 @@ interface WorkoutDao {
         ORDER BY date DESC, updated_at DESC
         LIMIT :limit
     """)
+    @UserScoped
     suspend fun getLastCompletedWorkoutsWithExercise(
         userId: String,
         exerciseId: String,
         limit: Int = 5,
+        excludeWorkoutId: String? = null
+    ): List<WorkoutEntity>
+
+    /**
+     * Gets recent completed workouts with JSON payloads for legacy fallback parsing.
+     *
+     * The repository filters these rows through the canonical/domain mapper and only uses
+     * them when normalized exercise rows are missing.
+     */
+    @Query("""
+        SELECT * FROM workouts
+        WHERE user_id = :userId
+        AND status = 'COMPLETED'
+        AND exercises_json IS NOT NULL
+        AND exercises_json != ''
+        AND (:excludeWorkoutId IS NULL OR id != :excludeWorkoutId)
+        ORDER BY date DESC, updated_at DESC
+        LIMIT :limit
+    """)
+    @UserScoped
+    suspend fun getRecentCompletedWorkoutsForExerciseJsonFallback(
+        userId: String,
+        limit: Int = 50,
         excludeWorkoutId: String? = null
     ): List<WorkoutEntity>
 }

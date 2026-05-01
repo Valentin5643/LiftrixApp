@@ -175,7 +175,9 @@ class ChatbotViewModel @Inject constructor(
         val trimmedContent = content.trim()
         if (trimmedContent.isBlank()) return
 
-        when (workoutGenerationIntentClassifier.classify(trimmedContent)) {
+        val intent = workoutGenerationIntentClassifier.classify(trimmedContent)
+        Timber.i("[AI] ChatbotViewModel: classified chat message intent=${intent.javaClass.simpleName} chars=${trimmedContent.length}")
+        when (intent) {
             ChatIntent.GenerateWorkout -> generateWorkoutProgram(trimmedContent)
             ChatIntent.ModifyWorkout -> modifyWorkoutProgram(trimmedContent, updateFromProgress = false)
             ChatIntent.UpdatePlanFromProgress -> modifyWorkoutProgram(trimmedContent, updateFromProgress = true)
@@ -242,7 +244,7 @@ class ChatbotViewModel @Inject constructor(
                         checkUsageLimits()
                     },
                     onFailure = { error ->
-                        Timber.e("Failed to get AI response: $error")
+                        Timber.e(error, "[AI] ChatbotViewModel: failed to get AI response")
                         val liftrixError = error as? LiftrixError
                         
                         // Remove the optimistic message on failure - use robust filtering
@@ -284,7 +286,7 @@ class ChatbotViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                Timber.i("ChatbotViewModel: workout generation UI flow started promptChars=${content.length}")
+                Timber.i("[AI] ChatbotViewModel: workout generation UI flow started promptChars=${content.length}")
                 _uiState.value = _uiState.value.copy(
                     messages = _uiState.value.messages + userMessage,
                     currentInput = "",
@@ -313,14 +315,14 @@ class ChatbotViewModel @Inject constructor(
                     return@launch
                 }
 
-                Timber.i("ChatbotViewModel: calling GenerateWorkoutProgramUseCase")
+                Timber.i("[AI] ChatbotViewModel: calling GenerateWorkoutProgramUseCase")
                 generateWorkoutProgramUseCase(
                     userId = userId!!,
                     prompt = content,
                     language = _uiState.value.currentLanguage.toDomainLanguage()
                 ).fold(
                     onSuccess = { result ->
-                        Timber.i("ChatbotViewModel: workout generation succeeded days=${result.program.days.size}")
+                        Timber.i("[AI] ChatbotViewModel: workout generation succeeded days=${result.program.days.size}")
                         val previewMessage = localMessage(
                             prefix = "workout_preview",
                             type = MessageType.AI_RESPONSE,
@@ -357,11 +359,11 @@ class ChatbotViewModel @Inject constructor(
                             isTyping = false,
                             isGeneratingProgram = false
                         )
-                        Timber.i("ChatbotViewModel: workout generation preview state emitted")
+                        Timber.i("[AI] ChatbotViewModel: workout generation preview state emitted")
                         checkUsageLimits()
                     },
                     onFailure = { error ->
-                        Timber.e(error, "ChatbotViewModel: workout generation failed")
+                        Timber.e(error, "[AI] ChatbotViewModel: workout generation failed")
                         _uiState.value = _uiState.value.copy(
                             messages = _uiState.value.messages.filterNot { it.id == userMessage.id },
                             isTyping = false,
@@ -400,14 +402,14 @@ class ChatbotViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                Timber.i("ChatbotViewModel: saving generated program days=${pending.program.days.size}")
+                Timber.i("[AI] ChatbotViewModel: saving generated program days=${pending.program.days.size}")
                 _uiState.value = _uiState.value.copy(isSavingGeneratedProgram = true, error = null)
                 generateWorkoutProgramUseCase.saveGeneratedProgram(
                     userId = id,
                     program = pending.program
                 ).fold(
                     onSuccess = { result ->
-                        Timber.i("ChatbotViewModel: generated program save succeeded templates=${result.savedTemplates.size}")
+                        Timber.i("[AI] ChatbotViewModel: generated program save succeeded templates=${result.savedTemplates.size}")
                         val savedMessage = localMessage(
                             prefix = "workout_saved",
                             type = MessageType.AI_RESPONSE,
@@ -424,7 +426,7 @@ class ChatbotViewModel @Inject constructor(
                         )
                     },
                     onFailure = { error ->
-                        Timber.e(error, "ChatbotViewModel: generated program save failed")
+                        Timber.e(error, "[AI] ChatbotViewModel: generated program save failed")
                         _uiState.value = _uiState.value.copy(
                             isSavingGeneratedProgram = false,
                             error = error.toLiftrixError("Failed to save generated workout")
@@ -432,7 +434,7 @@ class ChatbotViewModel @Inject constructor(
                     }
                 )
             } catch (exception: Exception) {
-                Timber.e(exception, "ChatbotViewModel: uncaught generated program save exception")
+                Timber.e(exception, "[AI] ChatbotViewModel: uncaught generated program save exception")
                 _uiState.value = _uiState.value.copy(
                     isSavingGeneratedProgram = false,
                     error = exception.toLiftrixError("Failed to save generated workout")

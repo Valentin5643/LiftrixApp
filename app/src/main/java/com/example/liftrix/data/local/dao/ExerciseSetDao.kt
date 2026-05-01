@@ -494,6 +494,83 @@ interface ExerciseSetDao {
         startDate: String,
         endDate: String
     ): List<DailyVolumeResult>
+
+    /**
+     * Gets normalized exercise performance aggregates for ranking and analytics.
+     */
+    @Query("""
+        SELECT
+            e.exercise_library_id,
+            el.name as exercise_name,
+            el.primary_muscle_group,
+            SUM(es.weight_kg * es.reps) as total_volume,
+            COUNT(es.id) as total_sets,
+            COUNT(DISTINCT w.date) as workout_days,
+            MAX(es.weight_kg * (1.0 + CAST(es.reps AS REAL) / 30.0)) as max_estimated_one_rm,
+            (
+                SUM(es.weight_kg * es.reps) * 0.4
+                + COUNT(DISTINCT w.date) * 10.0
+                + COUNT(es.id) * 2.0
+                + MAX(es.weight_kg * (1.0 + CAST(es.reps AS REAL) / 30.0)) * 0.3
+            ) as performance_score
+        FROM exercise_sets es
+        JOIN exercises e ON es.exercise_id = e.id
+        JOIN workouts w ON e.workout_id = w.id
+        JOIN exercise_library el ON e.exercise_library_id = el.id
+        WHERE w.user_id = :userId
+        AND w.status = 'COMPLETED'
+        AND es.weight_kg > 0
+        AND es.reps > 0
+        AND (
+            (es.completed_at IS NOT NULL AND DATE(es.completed_at / 1000, 'unixepoch') BETWEEN :startDate AND :endDate)
+            OR
+            (es.completed_at IS NULL AND DATE(w.date) BETWEEN :startDate AND :endDate)
+        )
+        GROUP BY e.exercise_library_id, el.name, el.primary_muscle_group
+        ORDER BY performance_score DESC
+        LIMIT :limit
+    """)
+    @UserScoped
+    suspend fun getExercisePerformanceData(
+        userId: String,
+        startDate: String,
+        endDate: String,
+        limit: Int = 100
+    ): List<ExercisePerformanceResult>
+
+    /**
+     * Gets normalized per-day exercise performance history.
+     */
+    @Query("""
+        SELECT
+            COALESCE(DATE(es.completed_at / 1000, 'unixepoch'), w.date) as date,
+            e.exercise_library_id,
+            SUM(es.weight_kg * es.reps) as total_volume,
+            COUNT(es.id) as total_sets,
+            MAX(es.weight_kg) as max_weight,
+            MAX(es.reps) as max_reps,
+            MAX(es.weight_kg * (1.0 + CAST(es.reps AS REAL) / 30.0)) as max_estimated_one_rm
+        FROM exercise_sets es
+        JOIN exercises e ON es.exercise_id = e.id
+        JOIN workouts w ON e.workout_id = w.id
+        WHERE w.user_id = :userId
+        AND w.status = 'COMPLETED'
+        AND es.weight_kg > 0
+        AND es.reps > 0
+        AND (
+            (es.completed_at IS NOT NULL AND DATE(es.completed_at / 1000, 'unixepoch') BETWEEN :startDate AND :endDate)
+            OR
+            (es.completed_at IS NULL AND DATE(w.date) BETWEEN :startDate AND :endDate)
+        )
+        GROUP BY COALESCE(DATE(es.completed_at / 1000, 'unixepoch'), w.date), e.exercise_library_id
+        ORDER BY date ASC
+    """)
+    @UserScoped
+    suspend fun getExercisePerformanceHistory(
+        userId: String,
+        startDate: String,
+        endDate: String
+    ): List<ExercisePerformanceHistoryResult>
     
     @Query("SELECT COUNT(*) FROM exercise_sets es JOIN exercises e ON es.exercise_id = e.id JOIN workouts w ON e.workout_id = w.id WHERE w.user_id = :userId AND es.completed_at IS NOT NULL")
     @UserScoped
@@ -673,4 +750,31 @@ data class DebugSetResult(
     val workout_date: String,
     val workout_status: String,
     val converted_date: String?
+)
+
+/**
+ * Data class for normalized exercise performance analytics.
+ */
+data class ExercisePerformanceResult(
+    val exercise_library_id: String,
+    val exercise_name: String,
+    val primary_muscle_group: String,
+    val total_volume: Double,
+    val total_sets: Int,
+    val workout_days: Int,
+    val max_estimated_one_rm: Double,
+    val performance_score: Double
+)
+
+/**
+ * Data class for normalized exercise performance history.
+ */
+data class ExercisePerformanceHistoryResult(
+    val date: String,
+    val exercise_library_id: String,
+    val total_volume: Double,
+    val total_sets: Int,
+    val max_weight: Double,
+    val max_reps: Int,
+    val max_estimated_one_rm: Double
 )

@@ -139,18 +139,18 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
             }
         }
     ) {
-        Timber.i("WorkoutProgramGenerationService: request started stage=$stage user=$userId promptChars=${userPrompt.length} payloadChars=${requestPayload.length}")
+        Timber.i("[AI] WorkoutProgramGenerationService: request started stage=$stage user=$userId promptChars=${userPrompt.length} payloadChars=${requestPayload.length}")
         require(userId.isNotBlank()) { "User ID cannot be blank" }
         validateRequest(userId, userPrompt, language)
-        Timber.d("WorkoutProgramGenerationService: request validation succeeded stage=$stage")
+        Timber.d("[AI] WorkoutProgramGenerationService: request validation succeeded stage=$stage")
 
         val startTime = System.currentTimeMillis()
         waitForAppCheck()
         val appCheckToken = obtainAppCheckTokenWithRetry()
             ?: throw IllegalStateException("AI service requires valid security tokens.")
 
-        Timber.d("WorkoutProgramGenerationService: App Check token ready (${if (appCheckToken.fromCache) "cached" else "refreshed"})")
-        Timber.i("WorkoutProgramGenerationService: Firebase AI call started stage=$stage model=$MODEL_NAME")
+        Timber.d("[AI] WorkoutProgramGenerationService: App Check token ready (${if (appCheckToken.fromCache) "cached" else "refreshed"})")
+        Timber.i("[AI] WorkoutProgramGenerationService: Firebase AI call started stage=$stage model=$MODEL_NAME")
 
         val generativeModel = Firebase.ai().generativeModel(
             modelName = MODEL_NAME,
@@ -158,9 +158,10 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
             systemInstruction = content { text(systemPrompt) }
         )
 
+        logRequestPayload(stage, userId, systemPrompt, requestPayload)
         val response = generativeModel.generateContent(content { text(requestPayload) })
         val responseText = response.text?.trim().orEmpty()
-        Timber.i("WorkoutProgramGenerationService: raw response received stage=$stage chars=${responseText.length}")
+        Timber.i("[AI] WorkoutProgramGenerationService: raw response received stage=$stage chars=${responseText.length}")
         logSanitizedRawResponse(responseText, stage)
         if (responseText.isBlank()) {
             throw IllegalStateException("Firebase AI returned an empty workout program response")
@@ -179,7 +180,7 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
         )
 
         val cleanedJson = stripCodeFence(responseText)
-        Timber.i("WorkoutProgramGenerationService: final JSON returned stage=$stage chars=${cleanedJson.length} tokens=$tokensUsed processingMs=$processingTime")
+        Timber.i("[AI] WorkoutProgramGenerationService: final JSON returned stage=$stage chars=${cleanedJson.length} tokens=$tokensUsed processingMs=$processingTime")
 
         WorkoutProgramJsonResponse(
             json = cleanedJson,
@@ -233,7 +234,7 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
             true
         } ?: false
         if (!isReady) {
-            Timber.w("WorkoutProgramGenerationService: App Check was not ready before AI call")
+            Timber.w("[AI] WorkoutProgramGenerationService: App Check was not ready before AI call")
         }
     }
 
@@ -255,7 +256,7 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
                     }
                     Timber.w(
                         e,
-                        "WorkoutProgramGenerationService: Failed to obtain App Check token. type=%s, message=%s",
+                        "[AI] WorkoutProgramGenerationService: Failed to obtain App Check token. type=%s, message=%s",
                         e.javaClass.name,
                         e.message.orEmpty()
                     )
@@ -319,8 +320,45 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
         val sanitized = responseText
             .replace(Regex("""(?i)(api[_-]?key|token|secret)["']?\s*[:=]\s*["'][^"']+["']"""), "$1:<redacted>")
             .take(4_000)
-        Timber.d("WorkoutProgramGenerationService: sanitized raw response stage=$stage: $sanitized")
+        Timber.d("[AI] WorkoutProgramGenerationService: sanitized raw response stage=$stage: $sanitized")
     }
+
+    private fun logRequestPayload(
+        stage: String,
+        userId: String,
+        systemPrompt: String,
+        requestPayload: String
+    ) {
+        if (!BuildConfig.DEBUG) return
+        Timber.d(
+            """
+            [AI] WorkoutProgramGenerationService request payload:
+            {
+              "stage": "$stage",
+              "user_id": "$userId",
+              "model": "$MODEL_NAME",
+              "system_instruction": ${systemPrompt.quoteForLogJson()},
+              "message": ${requestPayload.quoteForLogJson()}
+            }
+            """.trimIndent()
+        )
+    }
+
+    private fun String.quoteForLogJson(): String =
+        buildString {
+            append('"')
+            this@quoteForLogJson.forEach { char ->
+                when (char) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> append(char)
+                }
+            }
+            append('"')
+        }
 
     private fun estimateTokens(input: String, output: String): Int =
         (input.length + output.length) / 4

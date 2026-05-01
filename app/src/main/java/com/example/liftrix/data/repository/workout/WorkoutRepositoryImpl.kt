@@ -47,6 +47,7 @@ import com.example.liftrix.domain.repository.workout.WorkoutHistoryRepository
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.repository.workout.WorkoutSyncStatusRepository
 import com.example.liftrix.domain.repository.workout.ExercisePerformanceData
+import com.example.liftrix.domain.usecase.analytics.PerformanceDataPoint
 import com.example.liftrix.domain.usecase.analytics.WorkoutData
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -1201,16 +1202,11 @@ class WorkoutRepositoryImpl @Inject constructor(
                 )
             }
         ) {
-            // Get all completed workouts for stats calculation
-            val allWorkouts = workoutDao.getRecentCompletedWorkouts(userId, 1000) // Get a large sample
-                .catch { exception ->
-                    Timber.e(exception, "Error getting workouts for stats calculation")
-                    emit(emptyList())
-                }
-                .first()
-                .map { entity -> workoutMapper.toDomain(entity) }
+            val completedWorkouts = withContext(Dispatchers.IO) {
+                workoutDao.getCompletedWorkoutsForStats(userId, 1000)
+            }
             
-            if (allWorkouts.isEmpty()) {
+            if (completedWorkouts.isEmpty()) {
                 return@liftrixCatching WorkoutStats(
                     totalWorkouts = 0,
                     currentStreak = 0,
@@ -1219,16 +1215,13 @@ class WorkoutRepositoryImpl @Inject constructor(
                 )
             }
             
-            // Calculate total workouts
-            val totalWorkouts = allWorkouts.size
+            val totalWorkouts = completedWorkouts.size
             
-            // Calculate current streak (consecutive days with workouts)
-            val currentStreak = calculateCurrentStreak(allWorkouts)
+            val currentStreak = calculateCurrentStreakFromDates(completedWorkouts.map { it.date })
             
-            // Calculate average workout duration
-            val totalDuration = allWorkouts.mapNotNull { workout ->
-                workout.getDuration()
-            }.fold(Duration.ZERO) { acc, duration -> acc.plus(duration) }
+            val totalDuration = completedWorkouts
+                .map { workout -> calculateDuration(workout.startTime, workout.endTime) }
+                .fold(Duration.ZERO) { acc, duration -> acc.plus(duration) }
             
             val averageWorkoutDuration = if (totalWorkouts > 0 && totalDuration != Duration.ZERO) {
                 totalDuration.dividedBy(totalWorkouts.toLong())
@@ -1239,16 +1232,22 @@ class WorkoutRepositoryImpl @Inject constructor(
             // Calculate weekly volume (workouts in last 7 days)
             val now = LocalDate.now()
             val weekAgo = now.minusDays(7)
-            val weeklyWorkoutCount = allWorkouts.count { workout ->
+            val weeklyWorkouts = completedWorkouts.filter { workout ->
                 workout.date.isAfter(weekAgo) || workout.date.isEqual(weekAgo)
             }
-            val weeklyVolume = Duration.ofHours(weeklyWorkoutCount.toLong())
+            val weeklyVolume = weeklyWorkouts
+                .map { workout -> calculateDuration(workout.startTime, workout.endTime) }
+                .fold(Duration.ZERO) { acc, duration -> acc.plus(duration) }
             
             WorkoutStats(
                 totalWorkouts = totalWorkouts,
                 currentStreak = currentStreak,
                 weeklyVolume = weeklyVolume,
-                averageWorkoutDuration = averageWorkoutDuration
+                averageWorkoutDuration = averageWorkoutDuration,
+                workoutsThisWeek = weeklyWorkouts.size,
+                totalMinutesThisWeek = weeklyVolume.toMinutes().toInt(),
+                weeklyWorkouts = weeklyWorkouts.size,
+                workoutCount = totalWorkouts
             )
         }
     }
@@ -1283,6 +1282,38 @@ class WorkoutRepositoryImpl @Inject constructor(
         }
         
         return streak
+    }
+
+    private fun calculateCurrentStreakFromDates(workoutDates: List<LocalDate>): Int {
+        if (workoutDates.isEmpty()) return 0
+
+        val sortedDates = workoutDates.distinct().sortedDescending()
+        val today = LocalDate.now()
+        val mostRecentDate = sortedDates.first()
+        if (mostRecentDate.isBefore(today.minusDays(1))) {
+            return 0
+        }
+
+        var streak = 0
+        var expectedDate = if (mostRecentDate.isEqual(today)) today else today.minusDays(1)
+        for (date in sortedDates) {
+            if (date.isEqual(expectedDate)) {
+                streak++
+                expectedDate = expectedDate.minusDays(1)
+            } else if (date.isBefore(expectedDate)) {
+                break
+            }
+        }
+
+        return streak
+    }
+
+    private fun calculateDuration(startTime: Instant?, endTime: Instant?): Duration {
+        return if (startTime != null && endTime != null && endTime >= startTime) {
+            Duration.between(startTime, endTime)
+        } else {
+            Duration.ZERO
+        }
     }
     
     /**
@@ -1343,11 +1374,38 @@ class WorkoutRepositoryImpl @Inject constructor(
                 )
             }
         ) {
-            // Placeholder implementation
-            // In a real implementation, this would query the database for exercise data
-            // and aggregate it by exercise across the specified date range
-            Timber.d("Getting exercise performance data for user $userId from $startDate to $endDate")
-            emptyList<ExercisePerformanceData>()
+            withContext(Dispatchers.IO) {
+                val performanceRows = exerciseSetDao.getExercisePerformanceData(
+                    userId = userId,
+                    startDate = startDate.toString(),
+                    endDate = endDate.toString()
+                )
+                val historyByExercise = exerciseSetDao.getExercisePerformanceHistory(
+                    userId = userId,
+                    startDate = startDate.toString(),
+                    endDate = endDate.toString()
+                ).groupBy { it.exercise_library_id }
+
+                performanceRows.map { row ->
+                    val history = historyByExercise[row.exercise_library_id].orEmpty()
+                    ExercisePerformanceData(
+                        exerciseId = row.exercise_library_id,
+                        exerciseName = row.exercise_name,
+                        muscleGroup = row.primary_muscle_group,
+                        totalVolume = row.total_volume,
+                        totalSets = row.total_sets,
+                        workoutDays = row.workout_days,
+                        maxEstimated1RM = row.max_estimated_one_rm,
+                        performanceScore = row.performance_score,
+                        volumeHistory = history.mapNotNull { point ->
+                            point.toVolumeDataPoint()
+                        },
+                        oneRmHistory = history.mapNotNull { point ->
+                            point.toOneRmDataPoint()
+                        }
+                    )
+                }
+            }
         }
     }
     
@@ -1369,14 +1427,26 @@ class WorkoutRepositoryImpl @Inject constructor(
             val startDateString = startDate.toString()
             val endDateString = endDate.toString()
             
-            val workoutEntities = workoutDao.getWorkoutsInDateRangeForUser(userId, startDateString, endDateString)
+            val workoutEntities = workoutDao.getCompletedWorkoutsInDateRangeForUser(
+                userId = userId,
+                startDate = startDateString,
+                endDate = endDateString
+            )
+            val exerciseCountsByWorkoutId = exerciseDao.getCompletedExerciseCountsByWorkout(
+                userId = userId,
+                startDate = startDateString,
+                endDate = endDateString
+            ).associate { result ->
+                result.workout_id to result.exercise_count
+            }
             
             workoutEntities.map { entity ->
                 WorkoutData(
                     id = entity.id,
                     date = kotlinx.datetime.LocalDate.parse(entity.date.toString()),
                     durationMinutes = calculateDurationMinutes(entity.startTime, entity.endTime),
-                    exerciseCount = calculateExerciseCount(entity.exercisesJson)
+                    exerciseCount = exerciseCountsByWorkoutId[entity.id]
+                        ?: calculateExerciseCount(entity.exercisesJson)
                 )
             }
         }.fold(
@@ -1635,16 +1705,68 @@ class WorkoutRepositoryImpl @Inject constructor(
             withContext(Dispatchers.IO) {
                 Timber.d("Getting last completed workouts with exercise $exerciseId for user $userId")
                 
-                val workoutEntities = workoutDao.getLastCompletedWorkoutsWithExercise(
+                val normalizedWorkoutEntities = workoutDao.getLastCompletedWorkoutsWithExercise(
                     userId = userId,
                     exerciseId = exerciseId,
                     limit = limit,
                     excludeWorkoutId = excludeWorkoutId
                 )
+
+                val workoutEntities = if (normalizedWorkoutEntities.size >= limit) {
+                    normalizedWorkoutEntities
+                } else {
+                    val normalizedIds = normalizedWorkoutEntities.mapTo(mutableSetOf()) { it.id }
+                    val fallbackLimit = ((limit - normalizedWorkoutEntities.size) * 10)
+                        .coerceAtLeast(20)
+                    val fallbackWorkoutEntities = workoutDao.getRecentCompletedWorkoutsForExerciseJsonFallback(
+                        userId = userId,
+                        limit = fallbackLimit,
+                        excludeWorkoutId = excludeWorkoutId
+                    ).filterNot { entity ->
+                        entity.id in normalizedIds
+                    }.filter { entity ->
+                        entity.containsExerciseInJsonFallback(exerciseId)
+                    }
+
+                    (normalizedWorkoutEntities + fallbackWorkoutEntities)
+                        .distinctBy { entity -> entity.id }
+                        .take(limit)
+                }
                 
                 Timber.d("Found ${workoutEntities.size} completed workouts with exercise $exerciseId")
                 workoutEntities
             }
+        }
+    }
+
+    private fun com.example.liftrix.data.local.dao.ExercisePerformanceHistoryResult.toVolumeDataPoint(): PerformanceDataPoint? {
+        val parsedDate = runCatching { KotlinxLocalDate.parse(date) }.getOrNull() ?: return null
+        return PerformanceDataPoint(
+            date = parsedDate,
+            volume = total_volume,
+            weight = max_weight,
+            reps = max_reps
+        )
+    }
+
+    private fun com.example.liftrix.data.local.dao.ExercisePerformanceHistoryResult.toOneRmDataPoint(): PerformanceDataPoint? {
+        val parsedDate = runCatching { KotlinxLocalDate.parse(date) }.getOrNull() ?: return null
+        return PerformanceDataPoint(
+            date = parsedDate,
+            weight = max_weight,
+            reps = max_reps,
+            oneRm = max_estimated_one_rm
+        )
+    }
+
+    private fun WorkoutEntity.containsExerciseInJsonFallback(exerciseId: String): Boolean {
+        return runCatching {
+            workoutMapper.toDomain(this).exercises.any { exercise ->
+                exercise.libraryExercise.id == exerciseId
+            }
+        }.getOrElse { throwable ->
+            Timber.w(throwable, "Failed to parse legacy workout JSON for previous-set fallback")
+            false
         }
     }
 

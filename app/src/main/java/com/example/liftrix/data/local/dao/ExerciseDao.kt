@@ -165,6 +165,24 @@ interface ExerciseDao {
     """)
     @UserScoped
     suspend fun getAllExercisesForUser(userId: String): List<ExerciseEntity>
+
+    @Query("""
+        SELECT
+            e.workout_id,
+            COUNT(e.id) as exercise_count
+        FROM exercises e
+        JOIN workouts w ON e.workout_id = w.id
+        WHERE w.user_id = :userId
+        AND w.status = 'COMPLETED'
+        AND w.date BETWEEN :startDate AND :endDate
+        GROUP BY e.workout_id
+    """)
+    @UserScoped
+    suspend fun getCompletedExerciseCountsByWorkout(
+        userId: String,
+        startDate: String,
+        endDate: String
+    ): List<WorkoutExerciseCountResult>
     
     @Query("""
         SELECT COUNT(*) FROM exercises e 
@@ -281,4 +299,12 @@ data class MuscleGroupDistributionResult(
     val exercise_count: Int,
     val unique_exercises: Int,
     val workout_days: Int
+)
+
+/**
+ * Data class for normalized exercise counts by workout.
+ */
+data class WorkoutExerciseCountResult(
+    val workout_id: String,
+    val exercise_count: Int
 )
