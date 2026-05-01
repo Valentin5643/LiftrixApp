@@ -7,7 +7,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.AchievementRepository
-import com.example.liftrix.domain.repository.workout.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutHistoryRepository
 import com.example.liftrix.domain.service.achievement.AchievementCalculatorFactory
 import kotlinx.coroutines.flow.first
 import java.time.LocalDateTime
@@ -24,7 +24,7 @@ import javax.inject.Inject
  */
 class CalculateAchievementsUseCase @Inject constructor(
     private val achievementRepository: AchievementRepository,
-    private val workoutRepository: WorkoutRepository,
+    private val workoutHistoryRepository: WorkoutHistoryRepository,
     private val calculatorFactory: AchievementCalculatorFactory
 ) {
 
@@ -76,7 +76,7 @@ class CalculateAchievementsUseCase @Inject constructor(
     private suspend fun calculateStreakData(userId: String): LiftrixResult<StreakData> {
         return try {
             // Get the first emission from the flow
-            val allWorkouts = workoutRepository.getAllWorkoutsForUser(userId).first()
+            val allWorkouts = workoutHistoryRepository.getAllWorkoutsForUser(userId).first()
             val workouts = allWorkouts.filter { it.status == WorkoutStatus.COMPLETED && it.endTime != null }
             
             if (workouts.isEmpty()) {

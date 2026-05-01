@@ -2,18 +2,9 @@ package com.example.liftrix.domain.repository.workout
 
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutId
-import com.example.liftrix.domain.model.WorkoutStats
-import com.example.liftrix.domain.model.WorkoutSummary
-import com.example.liftrix.domain.model.FeedWorkout
 import com.example.liftrix.domain.model.common.LiftrixResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.LocalDate
-
-// Type alias for ExercisePerformanceData from CalculateExerciseRankingUseCase
-typealias ExercisePerformanceData = com.example.liftrix.domain.usecase.analytics.ExercisePerformanceData
-
-// Type alias for WorkoutData from GetWorkoutFrequencyAnalyticsUseCase
-typealias WorkoutData = com.example.liftrix.domain.usecase.analytics.WorkoutData
 
 /**
  * Repository interface for core workout operations following single responsibility principle.
@@ -64,20 +55,6 @@ interface WorkoutRepository {
      * @return Flow of LiftrixResult with workouts on the specified date
      */
     fun getWorkoutsByDate(date: LocalDate, userId: String): Flow<LiftrixResult<List<Workout>>>
-    
-    /**
-     * Get exercise performance data for analytics calculations.
-     * 
-     * @param userId The user ID for data scoping
-     * @param startDate Start date for data collection
-     * @param endDate End date for data collection
-     * @return LiftrixResult with list of exercise performance data
-     */
-    suspend fun getExercisePerformanceData(
-        userId: String,
-        startDate: LocalDate,
-        endDate: LocalDate
-    ): LiftrixResult<List<ExercisePerformanceData>>
     
     /**
      * Update an existing workout.
@@ -138,11 +115,7 @@ interface WorkoutRepository {
      * @return LiftrixResult indicating success or failure
      */
     suspend fun deleteAllWorkouts(userId: String): LiftrixResult<Unit>
-    
-    // ============== LEGACY COMPATIBILITY METHODS ==============
-    // These methods provide compatibility with the legacy codebase
-    // and will be gradually refactored to use the standardized methods above
-    
+
     /**
      * Save a workout (legacy method for compatibility).
      * Maps to createWorkout() or updateWorkout() based on workout state.
@@ -151,147 +124,5 @@ interface WorkoutRepository {
      * @return Result with Unit indicating success or failure
      */
     suspend fun saveWorkout(workout: Workout): Result<Unit>
-    
-    /**
-     * Get workout history for a user (legacy method for compatibility).
-     * 
-     * @param userId The user ID for data scoping
-     * @param limit Maximum number of workouts to return
-     * @param offset Offset for pagination
-     * @return LiftrixResult with list of workout summaries
-     */
-    suspend fun getUserWorkoutHistory(userId: String, limit: Int = 20, offset: Int = 0): LiftrixResult<List<WorkoutSummary>>
-    
-    /**
-     * Get count of workout history entries for a user (legacy method for compatibility).
-     * 
-     * @param userId The user ID for data scoping
-     * @return LiftrixResult with total count
-     */
-    suspend fun getWorkoutHistoryCount(userId: String): LiftrixResult<Int>
-    
-    /**
-     * Get all workouts for a user (legacy method for compatibility).
-     * Maps to getWorkoutsByUser() but returns Flow of List instead of Flow of LiftrixResult.
-     * 
-     * @param userId The user ID for data scoping
-     * @return Flow of workout lists
-     */
-    fun getAllWorkoutsForUser(userId: String): Flow<List<Workout>>
-    
-    /**
-     * Get unsynced workout count for a user (legacy method for compatibility).
-     * 
-     * @param userId The user ID for data scoping
-     * @return LiftrixResult with unsynced count
-     */
-    suspend fun getUnsyncedCount(userId: String): LiftrixResult<Int>
-    
-    /**
-     * Get unsynced workout count for a user (legacy method for compatibility).
-     * 
-     * @param userId The user ID for data scoping
-     * @return LiftrixResult with unsynced count
-     */
-    suspend fun getUnsyncedCountForUser(userId: String): LiftrixResult<Int>
-    
-    /**
-     * Queue workout for sync (legacy method for compatibility).
-     * 
-     * @param workoutId The workout ID to queue for sync
-     * @param userId The user ID for data scoping
-     * @return LiftrixResult indicating success or failure
-     */
-    suspend fun queueSync(workoutId: WorkoutId, userId: String): LiftrixResult<Unit>
-    
-    /**
-     * Trigger immediate sync for user (legacy method for compatibility).
-     * 
-     * @param userId The user ID for data scoping
-     * @return LiftrixResult indicating success or failure
-     */
-    suspend fun syncNow(userId: String): LiftrixResult<Unit>
-    
-    /**
-     * Trigger immediate sync for user (legacy method for compatibility).
-     * 
-     * @param userId The user ID for data scoping
-     * @return LiftrixResult indicating success or failure
-     */
-    suspend fun syncNowForUser(userId: String): LiftrixResult<Unit>
-    
-    /**
-     * Get feed workouts for display (legacy method for compatibility).
-     * 
-     * @param userId The user ID for data scoping
-     * @param limit Maximum number of feed workouts to return
-     * @return LiftrixResult with list of feed workouts
-     */
-    suspend fun getFeedWorkouts(userId: String, limit: Int = 10): LiftrixResult<List<FeedWorkout>>
-    
-    /**
-     * Get feed workouts for display as reactive Flow.
-     * 
-     * Returns a Flow of completed workouts formatted for display in the social feed.
-     * The Flow automatically updates when new workouts are completed.
-     * 
-     * @param userId The user ID for data scoping
-     * @param limit Maximum number of feed workouts to return
-     * @return Flow of LiftrixResult with list of feed workouts
-     */
-    fun getFeedWorkoutsReactive(userId: String, limit: Int = 10): Flow<LiftrixResult<List<FeedWorkout>>>
-    
-    /**
-     * Get recent activity feed showing all users' workouts with media.
-     * 
-     * Returns a Flow of completed workouts from all followed users and the current user.
-     * Includes media URLs from social posts when available.
-     * 
-     * @param userId The current user ID
-     * @param includeOthers If true, includes workouts from followed users. If false, only current user
-     * @param limit Maximum number of workouts to return
-     * @return Flow of LiftrixResult with list of feed workouts with media
-     */
-    fun getRecentActivityFeed(userId: String, includeOthers: Boolean = true, limit: Int = 20): Flow<LiftrixResult<List<FeedWorkout>>>
-    
-    /**
-     * Get workout statistics for a user (legacy method for compatibility).
-     * 
-     * @param userId The user ID for data scoping
-     * @return LiftrixResult with workout statistics
-     */
-    suspend fun getWorkoutStats(userId: String): LiftrixResult<WorkoutStats>
-    
-    /**
-     * Get workouts within a specific date range for a user.
-     * 
-     * @param userId The user ID for data scoping
-     * @param startDate Start date for the range (inclusive)
-     * @param endDate End date for the range (inclusive)
-     * @return List of simplified workout data for frequency calculations
-     */
-    suspend fun getWorkoutsInDateRange(
-        userId: String,
-        startDate: kotlinx.datetime.LocalDate,
-        endDate: kotlinx.datetime.LocalDate
-    ): List<WorkoutData>
-    
-    /**
-     * Get the last completed workouts containing a specific exercise for previous set data retrieval.
-     * 
-     * Used by GetPreviousSetDataUseCase to find historical performance data for workout comparison.
-     * Returns completed workouts that contain the specified exercise ID, ordered by recency.
-     * 
-     * @param userId The user ID for data scoping (MANDATORY for security)
-     * @param exerciseId The exercise ID to search for
-     * @param limit Maximum number of workouts to return (default: 5)
-     * @param excludeWorkoutId Optional workout ID to exclude (current active session)
-     * @return LiftrixResult with list of WorkoutEntity containing the exercise
-     */
-    suspend fun getLastCompletedWorkoutsWithExercise(
-        userId: String,
-        exerciseId: String,
-        limit: Int = 5,
-        excludeWorkoutId: String? = null
-    ): LiftrixResult<List<com.example.liftrix.data.local.entity.WorkoutEntity>>
+
 }

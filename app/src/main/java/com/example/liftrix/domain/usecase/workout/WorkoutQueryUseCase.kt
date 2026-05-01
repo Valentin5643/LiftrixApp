@@ -8,6 +8,8 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.common.liftrixFailure
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.repository.workout.PreviousSetRepository
+import com.example.liftrix.domain.repository.workout.WorkoutHistoryRepository
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import kotlinx.coroutines.flow.Flow
@@ -45,6 +47,8 @@ import javax.inject.Inject
  */
 class WorkoutQueryUseCase @Inject constructor(
     private val workoutRepository: WorkoutRepository,
+    private val workoutHistoryRepository: WorkoutHistoryRepository,
+    private val previousSetRepository: PreviousSetRepository,
     private val errorHandler: ErrorHandler
 ) {
 
@@ -181,7 +185,7 @@ class WorkoutQueryUseCase @Inject constructor(
                 Timber.d("Retrieving workout history for user: $userId, limit: $limit, offset: $offset")
 
                 // Get workout history from repository
-                val historyResult = workoutRepository.getUserWorkoutHistory(userId, limit, offset)
+                val historyResult = workoutHistoryRepository.getUserWorkoutHistory(userId, limit, offset)
                 historyResult.fold(
                     onSuccess = { summaries ->
                         emit(LiftrixResult.success(summaries))
@@ -230,7 +234,7 @@ class WorkoutQueryUseCase @Inject constructor(
 
             Timber.d("Getting workout history count for user: $userId")
 
-            val countResult = workoutRepository.getWorkoutHistoryCount(userId)
+            val countResult = workoutHistoryRepository.getWorkoutHistoryCount(userId)
             val count = countResult.getOrThrow()
 
             Timber.v("Total workout count for user $userId: $count")
@@ -279,7 +283,7 @@ class WorkoutQueryUseCase @Inject constructor(
                 Timber.d("[SETS-DEBUG-QUERY] Fetching history for userId='$userId', exerciseLibraryId='$exerciseLibraryId', limit=5")
 
                 // Get last completed workouts containing this exercise
-                val workoutsResult = workoutRepository.getLastCompletedWorkoutsWithExercise(
+                val workoutsResult = previousSetRepository.getLastCompletedWorkoutsWithExercise(
                     userId = userId,
                     exerciseId = exerciseLibraryId,
                     limit = 5,
@@ -369,7 +373,7 @@ class WorkoutQueryUseCase @Inject constructor(
             Timber.d("[PREV_SET_QUERY] Expected canonical ID format: 'muscle-exercise-variant' (e.g., 'core-ab-wheel-rollout')")
 
             // Get last completed workouts containing this exercise
-            val previousWorkouts = workoutRepository.getLastCompletedWorkoutsWithExercise(
+            val previousWorkouts = previousSetRepository.getLastCompletedWorkoutsWithExercise(
                 userId = userId,
                 exerciseId = exerciseId,
                 limit = 5,

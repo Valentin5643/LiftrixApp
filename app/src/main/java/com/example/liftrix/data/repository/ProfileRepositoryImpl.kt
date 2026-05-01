@@ -23,7 +23,7 @@ import com.example.liftrix.domain.model.common.liftrixSuccess
 import com.example.liftrix.domain.model.common.liftrixFailure
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.ProfileRepository
-import com.example.liftrix.domain.repository.workout.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutHistoryRepository
 import com.example.liftrix.sync.ProfileSyncWorker
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -41,7 +41,7 @@ class ProfileRepositoryImpl @Inject constructor(
     private val userProfileDao: UserProfileDao,
     private val userProfileMapper: UserProfileMapper,
     @ApplicationContext private val context: Context,
-    private val workoutRepository: WorkoutRepository,
+    private val workoutHistoryRepository: WorkoutHistoryRepository,
     private val database: LiftrixDatabase,
     private val syncCoordinator: SyncCoordinator,
     private val offlineQueueManager: OfflineQueueManager,
@@ -505,7 +505,7 @@ class ProfileRepositoryImpl @Inject constructor(
     override suspend fun calculateStreakData(userId: String): LiftrixResult<StreakData> {
         return try {
             // Get workout data for streak calculation
-            val workouts = workoutRepository.getAllWorkoutsForUser(userId)
+            val workouts = workoutHistoryRepository.getAllWorkoutsForUser(userId)
             // This would need to be implemented properly based on workout data
             // For now, return basic data from the profile
             val entity = userProfileDao.getProfileForUserSuspend(userId)

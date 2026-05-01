@@ -1,7 +1,9 @@
 package com.example.liftrix.ui.workout
 
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.repository.workout.WorkoutHistoryRepository
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutSyncStatusRepository
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutTemplatePreview
@@ -51,6 +53,8 @@ import javax.inject.Inject
 @HiltViewModel
 class WorkoutViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository,
+    private val workoutHistoryRepository: WorkoutHistoryRepository,
+    private val workoutSyncStatusRepository: WorkoutSyncStatusRepository,
     private val workoutTemplateRepository: TemplateRepository,
     private val folderRepository: FolderRepository,
     private val authRepository: AuthRepository,
@@ -191,7 +195,7 @@ class WorkoutViewModel @Inject constructor(
                         Timber.d("[WORKOUT-DEBUG] Starting workout observation for userId=${user.uid}")
 
                         combine(
-                            workoutRepository.getAllWorkoutsForUser(user.uid),
+                            workoutHistoryRepository.getAllWorkoutsForUser(user.uid),
                             syncManager.getSyncStatus()
                         ) { workouts, syncStatus ->
                             Timber.d("[WORKOUT-DEBUG] Workout read emitted count=${workouts.size} userId=${user.uid} syncStatus=${syncStatus::class.simpleName}")
@@ -491,7 +495,7 @@ class WorkoutViewModel @Inject constructor(
 
             val userIdResult = authQueryUseCase(waitForAuth = false)
             userIdResult.onSuccess { userId ->
-                val result = workoutRepository.syncNowForUser(userId.value)
+                val result = workoutSyncStatusRepository.syncNowForUser(userId.value)
 
                 result.onSuccess {
                     Timber.d("Sync started successfully")
@@ -531,7 +535,7 @@ class WorkoutViewModel @Inject constructor(
 
             val userIdResult = authQueryUseCase(waitForAuth = false)
             userIdResult.onSuccess { userId ->
-                val result = workoutRepository.getUnsyncedCountForUser(userId.value)
+                val result = workoutSyncStatusRepository.getUnsyncedCountForUser(userId.value)
 
                 result.onSuccess { count ->
                     updateWorkoutData { it.copy(unsyncedCount = count) }

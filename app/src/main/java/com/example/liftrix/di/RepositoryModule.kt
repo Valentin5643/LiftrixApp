@@ -47,7 +47,12 @@ import com.example.liftrix.domain.repository.session.SessionRepository
 import com.example.liftrix.domain.repository.exercise.ExerciseRepository
 import com.example.liftrix.domain.repository.template.TemplateRepository
 import com.example.liftrix.domain.repository.sharing.TemplateShareRepository
+import com.example.liftrix.domain.repository.workout.PreviousSetRepository
+import com.example.liftrix.domain.repository.workout.WorkoutAnalyticsDataRepository
+import com.example.liftrix.domain.repository.workout.WorkoutFeedDataRepository
+import com.example.liftrix.domain.repository.workout.WorkoutHistoryRepository
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutSyncStatusRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -210,5 +215,35 @@ abstract class RepositoryModule {
     abstract fun bindWorkoutRepository(
         workoutRepositoryImpl: WorkoutRepositoryImpl
     ): WorkoutRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindWorkoutHistoryRepository(
+        workoutRepositoryImpl: WorkoutRepositoryImpl
+    ): WorkoutHistoryRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindWorkoutAnalyticsDataRepository(
+        workoutRepositoryImpl: WorkoutRepositoryImpl
+    ): WorkoutAnalyticsDataRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindWorkoutSyncStatusRepository(
+        workoutRepositoryImpl: WorkoutRepositoryImpl
+    ): WorkoutSyncStatusRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindWorkoutFeedDataRepository(
+        workoutRepositoryImpl: WorkoutRepositoryImpl
+    ): WorkoutFeedDataRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindPreviousSetRepository(
+        workoutRepositoryImpl: WorkoutRepositoryImpl
+    ): PreviousSetRepository
 
 }

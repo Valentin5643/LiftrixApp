@@ -7,7 +7,7 @@ import androidx.work.WorkManager
 import androidx.work.OneTimeWorkRequestBuilder
 import com.example.liftrix.core.workmanager.WorkManagerProvider
 import androidx.work.ExistingWorkPolicy
-import com.example.liftrix.domain.repository.workout.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutSyncStatusRepository
 import com.example.liftrix.domain.repository.ProgressStatsRepository
 import com.example.liftrix.config.OfflineArchitectureFlags
 import kotlinx.coroutines.flow.Flow
@@ -20,7 +20,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 
 @Singleton
 class SyncManager @Inject constructor(
-    private val workoutRepository: WorkoutRepository,
+    private val workoutSyncStatusRepository: WorkoutSyncStatusRepository,
     private val progressStatsRepository: ProgressStatsRepository,
     @ApplicationContext private val context: Context
 ) {
@@ -61,7 +61,7 @@ class SyncManager @Inject constructor(
         ) {
             0
         } else {
-            workoutRepository.getUnsyncedCount(userId).getOrElse { 0 }
+            workoutSyncStatusRepository.getUnsyncedCount(userId).getOrElse { 0 }
         }
     }
 
@@ -72,7 +72,7 @@ class SyncManager @Inject constructor(
         return try {
             // Note: queueSync typically would queue all unsynced workouts
             // For now, we'll trigger a general sync for the user
-            workoutRepository.syncNow(userId).getOrThrow()
+            workoutSyncStatusRepository.syncNow(userId).getOrThrow()
             Timber.d("Sync queued successfully for user: $userId")
             Result.success(Unit)
         } catch (e: Exception) {
@@ -86,7 +86,7 @@ class SyncManager @Inject constructor(
      */
     suspend fun syncNow(userId: String): Result<Unit> {
         return try {
-            workoutRepository.syncNow(userId).getOrThrow()
+            workoutSyncStatusRepository.syncNow(userId).getOrThrow()
             Timber.d("Immediate sync initiated for user: $userId")
             Result.success(Unit)
         } catch (e: Exception) {

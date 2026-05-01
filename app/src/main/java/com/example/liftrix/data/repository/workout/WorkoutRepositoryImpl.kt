@@ -40,7 +40,12 @@ import com.example.liftrix.domain.model.Reps
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.repository.workout.PreviousSetRepository
+import com.example.liftrix.domain.repository.workout.WorkoutAnalyticsDataRepository
+import com.example.liftrix.domain.repository.workout.WorkoutFeedDataRepository
+import com.example.liftrix.domain.repository.workout.WorkoutHistoryRepository
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutSyncStatusRepository
 import com.example.liftrix.domain.repository.workout.ExercisePerformanceData
 import com.example.liftrix.domain.usecase.analytics.WorkoutData
 import kotlinx.coroutines.flow.Flow
@@ -97,7 +102,12 @@ class WorkoutRepositoryImpl @Inject constructor(
     private val kotlinxSerializer: KotlinxWorkoutSerializationService,
     private val exerciseConsistencyValidator: ExerciseConsistencyValidator,
     @ApplicationContext private val context: Context
-) : WorkoutRepository {
+) : WorkoutRepository,
+    WorkoutHistoryRepository,
+    WorkoutAnalyticsDataRepository,
+    WorkoutSyncStatusRepository,
+    WorkoutFeedDataRepository,
+    PreviousSetRepository {
     
     private val workManager: WorkManager
         get() = WorkManagerProvider.getInstance(context)

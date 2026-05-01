@@ -2,6 +2,8 @@ package com.example.liftrix.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.repository.workout.WorkoutAnalyticsDataRepository
+import com.example.liftrix.domain.repository.workout.WorkoutFeedDataRepository
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.model.CardData
 import com.example.liftrix.domain.model.FeedWorkout
@@ -45,6 +47,8 @@ import javax.inject.Inject
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository,
+    private val workoutFeedDataRepository: WorkoutFeedDataRepository,
+    private val workoutAnalyticsDataRepository: WorkoutAnalyticsDataRepository,
     private val authRepository: AuthRepository,
     private val authQueryUseCase: AuthQueryUseCase,
     private val analyticsService: AnalyticsService,
@@ -219,7 +223,7 @@ class HomeViewModel @Inject constructor(
                 currentFeedOffset = 0
 
                 // Load feed based on filter (Following vs Explore)
-                workoutRepository.getRecentActivityFeed(
+                workoutFeedDataRepository.getRecentActivityFeed(
                     userId = userId,
                     includeOthers = showAllUsersInRecentActivity,
                     limit = FEED_LIMIT
@@ -918,7 +922,7 @@ class HomeViewModel @Inject constructor(
         .flatMapLatest { userId ->
             flow {
                 try {
-                    val result = workoutRepository.getWorkoutStats(userId)
+                    val result = workoutAnalyticsDataRepository.getWorkoutStats(userId)
                     emit(result.getOrElse { WorkoutStats.EMPTY })
                 } catch (e: Exception) {
                     Timber.e(e, "Failed to load workout stats")

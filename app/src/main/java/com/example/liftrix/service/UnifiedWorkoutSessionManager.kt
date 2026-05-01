@@ -5,32 +5,23 @@ import android.content.Intent
 import android.content.SharedPreferences
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
-import com.example.liftrix.domain.model.UnifiedWorkoutSession
-import com.example.liftrix.domain.model.WorkoutSessionId
-import com.example.liftrix.domain.model.SessionExercise
-import com.example.liftrix.domain.model.SessionSet
-import com.example.liftrix.domain.model.ExerciseId
-import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.Equipment
-import com.example.liftrix.domain.model.Weight
-import com.example.liftrix.domain.model.WorkoutTemplateId
-import com.example.liftrix.domain.model.Workout
-import com.example.liftrix.domain.model.WorkoutId
-import com.example.liftrix.domain.model.WorkoutStatus
 import com.example.liftrix.domain.model.Exercise
+import com.example.liftrix.domain.model.ExerciseCategory
+import com.example.liftrix.domain.model.ExerciseId
 import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.model.ExerciseSet
 import com.example.liftrix.domain.model.ExerciseSetId
-import com.example.liftrix.domain.model.Reps
 import com.example.liftrix.domain.model.RPE
-import com.example.liftrix.domain.repository.workout.WorkoutRepository
-import com.example.liftrix.domain.repository.social.FeedRepository
-import com.example.liftrix.domain.model.social.CreateWorkoutPostRequest
-import com.example.liftrix.domain.model.social.PostVisibility
-import com.example.liftrix.core.cache.CacheManager
-import com.example.liftrix.core.cache.CacheKey
-import java.time.LocalDate
-import java.time.Duration
+import com.example.liftrix.domain.model.Reps
+import com.example.liftrix.domain.model.UnifiedWorkoutSession
+import com.example.liftrix.domain.model.SessionExercise
+import com.example.liftrix.domain.model.SessionSet
+import com.example.liftrix.domain.model.Weight
+import com.example.liftrix.domain.model.WorkoutSessionId
+import com.example.liftrix.domain.model.WorkoutTemplateId
+import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.usecase.session.CompleteWorkoutSessionUseCase
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -65,11 +56,7 @@ import javax.inject.Singleton
 @Singleton
 class UnifiedWorkoutSessionManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val workoutRepository: WorkoutRepository,
-    private val feedRepository: FeedRepository,
-    private val cacheManager: CacheManager,
-    private val cacheInvalidationService: CacheInvalidationService,
-    private val gymBuddyWorkoutCompletionNotifier: GymBuddyWorkoutCompletionNotifier
+    private val completeWorkoutSessionUseCase: CompleteWorkoutSessionUseCase
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val sharedPrefs: SharedPreferences = context.getSharedPreferences(
@@ -195,94 +182,12 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         _currentSession.value = completedSession
         
         scope.launch {
-            try {
-                // Save completed workout to repository
-                val completedWorkout = completedSession.toCompletedWorkout()
-                Timber.d("[WORKOUT-DEBUG] completeSession saving workout id=${completedWorkout.id.value} userId=${completedWorkout.userId} status=${completedWorkout.status} exercises=${completedWorkout.exercises.size}")
-                
-                // Use synchronous save to ensure database commit before session cleanup
-                val saveResult = if (workoutRepository is com.example.liftrix.data.repository.workout.WorkoutRepositoryImpl) {
-                    // Use the LiftrixResult-based method for proper error handling
-                    workoutRepository.createWorkout(completedWorkout)
-                } else {
-                    // Fallback to legacy save method
-                    val legacyResult = workoutRepository.saveWorkout(completedWorkout)
-                    if (legacyResult.isSuccess) {
-                        com.example.liftrix.domain.model.common.LiftrixResult.success(completedWorkout)
-                    } else {
-                        com.example.liftrix.domain.model.common.LiftrixResult.failure(
-                            com.example.liftrix.domain.model.error.LiftrixError.DatabaseError(
-                                errorMessage = "Failed to save workout: ${legacyResult.exceptionOrNull()?.message}",
-                                operation = "CREATE",
-                                table = "workouts"
-                            )
-                        )
-                    }
-                }
-                
-                saveResult.fold(
-                    onSuccess = { savedWorkout ->
-                        Timber.d("[WORKOUT-DEBUG] completeSession save success workoutId=${savedWorkout.id.value} userId=${savedWorkout.userId}")
-                        // Store the saved workout ID for navigation
-                        _savedWorkoutId.value = savedWorkout.id.value
-                        
-                        // Add small delay to ensure database transaction is fully committed
-                        kotlinx.coroutines.delay(100)
-                        
-                        // 🔍 AUTO-POST: Automatically create feed post for completed workout
-                        createAutomaticWorkoutPost(savedWorkout)
-                        
-                        // Invalidate analytics cache after workout completion using enhanced invalidation service
-                        invalidateWorkoutRelatedCache(savedWorkout)
-
-                        // Notify real Gym Buddy recipients only after the completed workout is persisted.
-                        notifyGymBuddiesWorkoutCompleted(savedWorkout)
-                        
-                        // Only clear session after confirmed database save
-                        clearSession()
-                    },
-                    onFailure = { exception ->
-                        Timber.e("[WORKOUT-DEBUG] completeSession save failed sessionId=${completedSession.id.value} userId=${completedSession.userId} error=${exception.message}")
-                        Timber.e("Failed to save completed workout: ${exception.message}")
-                        
-                        // Check if error is recoverable to decide whether to preserve session
-                        val shouldPreserveSession = when (exception) {
-                            is com.example.liftrix.domain.model.error.LiftrixError.DatabaseError -> {
-                                exception.isRecoverable
-                            }
-                            is com.example.liftrix.domain.model.error.LiftrixError.NetworkError -> {
-                                exception.isRecoverable
-                            }
-                            else -> false
-                        }
-                        
-                        if (shouldPreserveSession) {
-                            Timber.w("Preserving session for recoverable error: ${exception.message}")
-                            // Mark session as failed but preserve for retry
-                            _currentSession.value = completedSession.copy(
-                                sessionStatus = UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE
-                            )
-                            
-                            // Persist the failed session state to SharedPreferences
-                            persistSession(_currentSession.value!!)
-                        } else {
-                            Timber.w("Clearing session for non-recoverable error")
-                            clearSession()
-                        }
-                    }
-                )
-            } catch (e: Exception) {
-                Timber.e(e, "Error in completion process")
-                
-                // Preserve session on unexpected errors to prevent data loss
-                Timber.w("Preserving session due to unexpected error")
-                _currentSession.value = completedSession.copy(
+            persistCompletedSession(
+                sessionForPersistence = completedSession,
+                failedSessionState = completedSession.copy(
                     sessionStatus = UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE
                 )
-                scope.launch {
-                    persistSession(_currentSession.value!!)
-                }
-            }
+            )
         }
         
         Timber.d("Session completed: ${session.name}")
@@ -299,52 +204,13 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         Timber.i("Retrying save for session: ${session.name}")
         
         scope.launch {
-            try {
-                val completedWorkout = session.toCompletedWorkout()
-                Timber.d("Attempting to save workout: ${completedWorkout.name}")
-                
-                // Use same robust save method as completion
-                val saveResult = if (workoutRepository is com.example.liftrix.data.repository.workout.WorkoutRepositoryImpl) {
-                    // Use the LiftrixResult-based method for proper error handling
-                    workoutRepository.createWorkout(completedWorkout)
-                } else {
-                    // Fallback to legacy save method
-                    val legacyResult = workoutRepository.saveWorkout(completedWorkout)
-                    if (legacyResult.isSuccess) {
-                        com.example.liftrix.domain.model.common.LiftrixResult.success(completedWorkout)
-                    } else {
-                        com.example.liftrix.domain.model.common.LiftrixResult.failure(
-                            com.example.liftrix.domain.model.error.LiftrixError.DatabaseError(
-                                errorMessage = "Failed to save workout: ${legacyResult.exceptionOrNull()?.message}",
-                                operation = "CREATE",
-                                table = "workouts"
-                            )
-                        )
-                    }
-                }
-                
-                saveResult.fold(
-                    onSuccess = { savedWorkout ->
-                        Timber.i("Workout saved successfully on retry with ID: ${savedWorkout.id.value}")
-                        
-                        // Store the saved workout ID for navigation
-                        _savedWorkoutId.value = savedWorkout.id.value
-                        
-                        // Add delay for transaction commit
-                        kotlinx.coroutines.delay(100)
-                        
-                        // Update session status to completed and clear
-                        _currentSession.value = session.copy(sessionStatus = UnifiedWorkoutSession.SessionStatus.COMPLETED)
-                        clearSession()
-                    },
-                    onFailure = { exception ->
-                        Timber.e("Retry also failed for workout: ${completedWorkout.name}, error: ${exception.message}")
-                        // Keep session in FAILED_TO_SAVE state for another retry attempt
-                    }
-                )
-            } catch (e: Exception) {
-                Timber.e(e, "Error in retry process")
-            }
+            val completedSession = session.copy(
+                sessionStatus = UnifiedWorkoutSession.SessionStatus.COMPLETED
+            )
+            persistCompletedSession(
+                sessionForPersistence = completedSession,
+                failedSessionState = session
+            )
         }
         
         return true
@@ -633,27 +499,81 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             
             // Update the current session state
             _currentSession.value = completedSession
-            
-            // Persist the completed session through the repository
-            val result = workoutRepository.saveWorkout(completedSession.toWorkout())
-            
-            result.fold(
-                onSuccess = {
-                    Timber.d("Successfully saved completed workout")
-                    
-                    // Clear the session after successful save
-                    clearSession()
-                    
-                    return true
-                },
-                onFailure = { exception ->
-                    Timber.e(exception, "Failed to save completed workout")
-                    return false
-                }
+            return persistCompletedSession(
+                sessionForPersistence = completedSession,
+                failedSessionState = completedSession.copy(
+                    sessionStatus = UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE
+                )
             )
         } catch (e: Exception) {
             Timber.e(e, "Exception during session completion")
             return false
+        }
+    }
+
+    private suspend fun persistCompletedSession(
+        sessionForPersistence: UnifiedWorkoutSession,
+        failedSessionState: UnifiedWorkoutSession
+    ): Boolean {
+        return try {
+            completeWorkoutSessionUseCase(sessionForPersistence).fold(
+                onSuccess = { result ->
+                    Timber.d(
+                        "[WORKOUT-DEBUG] completion save success workoutId=${result.savedWorkoutId} " +
+                            "userId=${sessionForPersistence.userId}"
+                    )
+                    result.sideEffects.forEach { sideEffect ->
+                        Timber.d(
+                            "[WORKOUT-DEBUG] completion side effect effect=${sideEffect.effect} " +
+                                "state=${sideEffect.state} detail=${sideEffect.detail}"
+                        )
+                    }
+                    _savedWorkoutId.value = result.savedWorkoutId
+                    clearSession()
+                    true
+                },
+                onFailure = { exception ->
+                    Timber.e(
+                        "[WORKOUT-DEBUG] completion save failed sessionId=${sessionForPersistence.id.value} " +
+                            "userId=${sessionForPersistence.userId} error=${exception.message}"
+                    )
+                    Timber.e("Failed to save completed workout: ${exception.message}")
+                    handleCompletionFailure(failedSessionState, exception)
+                    false
+                }
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Error in completion process")
+            preserveFailedSession(failedSessionState)
+            false
+        }
+    }
+
+    private suspend fun handleCompletionFailure(
+        failedSessionState: UnifiedWorkoutSession,
+        exception: Throwable
+    ) {
+        if (isRecoverableCompletionError(exception)) {
+            Timber.w("Preserving session for recoverable error: ${exception.message}")
+            preserveFailedSession(failedSessionState)
+        } else {
+            Timber.w("Clearing session for non-recoverable error")
+            clearSession()
+        }
+    }
+
+    private suspend fun preserveFailedSession(session: UnifiedWorkoutSession) {
+        _currentSession.value = session.copy(
+            sessionStatus = UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE
+        )
+        persistSession(_currentSession.value!!)
+    }
+
+    private fun isRecoverableCompletionError(exception: Throwable): Boolean {
+        return when (exception) {
+            is LiftrixError.DatabaseError -> exception.isRecoverable
+            is LiftrixError.NetworkError -> exception.isRecoverable
+            else -> false
         }
     }
     
@@ -785,92 +705,6 @@ class UnifiedWorkoutSessionManager @Inject constructor(
     }
     
     /**
-     * Enhanced cache invalidation after workout completion using CacheInvalidationService.
-     * 
-     * This method provides comprehensive cache invalidation based on data relationships:
-     * - Invalidates volume, frequency, and 1RM progression data
-     * - Handles exercise-specific cache entries
-     * - Processes muscle group analytics
-     * - Updates dashboard and widget caches
-     * - Provides proper error handling and recovery
-     */
-    private suspend fun invalidateWorkoutRelatedCache(workout: Workout) {
-        try {
-            Timber.d("Enhanced cache invalidation for workout completion - user: ${workout.userId}")
-            
-            // Extract exercise IDs from the workout  
-            val exerciseIds = workout.exercises.map { it.libraryExercise.id }
-            
-            // Get workout date as LocalDate
-            val workoutDate = workout.date.let { javaDate ->
-                kotlinx.datetime.LocalDate(javaDate.year, javaDate.monthValue, javaDate.dayOfMonth)
-            }
-            
-            // Calculate workout duration in minutes
-            val workoutDuration = workout.getDuration()?.toMinutes()?.toInt() ?: 0
-            
-            // Use enhanced cache invalidation service
-            val invalidationResult = cacheInvalidationService.invalidateWorkoutData(
-                userId = workout.userId,
-                workoutDate = workoutDate,
-                exerciseIds = exerciseIds,
-                workoutDuration = workoutDuration
-            )
-            
-            invalidationResult.fold(
-                onSuccess = {
-                    Timber.i("Enhanced cache invalidation completed successfully for user: ${workout.userId}")
-                },
-                onFailure = { exception ->
-                    Timber.e(exception, "Enhanced cache invalidation failed for user: ${workout.userId}")
-                    
-                    // Fallback to basic cache invalidation
-                    fallbackCacheInvalidation(workout.userId)
-                }
-            )
-            
-        } catch (e: Exception) {
-            Timber.e(e, "Error in enhanced cache invalidation for user: ${workout.userId}")
-            
-            // Fallback to basic cache invalidation
-            fallbackCacheInvalidation(workout.userId)
-            // Don't let cache invalidation failure affect workout completion
-        }
-    }
-
-    private suspend fun notifyGymBuddiesWorkoutCompleted(workout: Workout) {
-        try {
-            gymBuddyWorkoutCompletionNotifier.notifyWorkoutCompleted(workout)
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to send Gym Buddy workout-completion notification")
-        }
-    }
-    
-    /**
-     * Fallback cache invalidation using basic pattern-based invalidation.
-     * 
-     * Used when the enhanced cache invalidation service fails, providing
-     * a simple but effective cache clearing mechanism to ensure data freshness.
-     */
-    private suspend fun fallbackCacheInvalidation(userId: String) {
-        try {
-            Timber.d("Fallback cache invalidation for user: $userId")
-            
-            // Use pattern-based invalidation for all user data
-            cacheManager.invalidatePattern { cacheKey ->
-                val keyString = cacheKey.keyString
-                keyString.contains(":$userId:") || keyString.contains("user:$userId")
-            }
-            
-            Timber.i("Fallback cache invalidation completed for user: $userId")
-            
-        } catch (e: Exception) {
-            Timber.e(e, "Fallback cache invalidation failed for user: $userId")
-            // Continue anyway - don't let cache issues block workout completion
-        }
-    }
-
-    /**
      * Starts the workout foreground service for persistent notifications
      */
     private fun startWorkoutForegroundService() {
@@ -916,58 +750,6 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         ) : RecoveryState()
     }
     
-    /**
-     * 🔍 AUTO-POST: Creates automatic workout post when workout is completed
-     */
-    private fun createAutomaticWorkoutPost(savedWorkout: Workout) {
-        scope.launch {
-            try {
-                Timber.d("🔍 WORKOUT-POSTS-DEBUG: Creating automatic post for workout ${savedWorkout.id.value}")
-                
-                // 🔥 FIX: Check if post already exists to prevent duplicates
-                val hasPostResult = feedRepository.hasPostForWorkout(savedWorkout.userId, savedWorkout.id.value)
-                hasPostResult.fold(
-                    onSuccess = { hasPost ->
-                        if (hasPost) {
-                            Timber.d("🔍 WORKOUT-POSTS-DEBUG: Skipping auto-post, already exists for workout ${savedWorkout.id.value}")
-                            return@launch
-                        }
-                        
-                        // Proceed with post creation
-                        val postRequest = CreateWorkoutPostRequest(
-                            workoutId = savedWorkout.id.value,
-                            caption = "Great workout completed! 💪",
-                            mediaUrls = emptyList(),
-                            visibility = PostVisibility.FOLLOWERS
-                        )
-                        
-                        val result = feedRepository.createPost(
-                            userId = savedWorkout.userId,
-                            request = postRequest
-                        )
-                        
-                        result.fold(
-                            onSuccess = { post ->
-                                Timber.d("🔍 WORKOUT-POSTS-DEBUG: Auto-post created successfully - ID=${post.id}")
-                            },
-                            onFailure = { error ->
-                                Timber.w("🔍 WORKOUT-POSTS-DEBUG: Auto-post creation failed: ${error.message}")
-                                // Don't fail workout completion if post creation fails
-                            }
-                        )
-                    },
-                    onFailure = { error ->
-                        Timber.w("🔍 WORKOUT-POSTS-DEBUG: Failed to check existing post: ${error.message}")
-                        // Don't fail workout completion if check fails
-                    }
-                )
-            } catch (e: Exception) {
-                Timber.w(e, "🔍 WORKOUT-POSTS-DEBUG: Exception during auto-post creation")
-                // Don't fail workout completion if post creation fails
-            }
-        }
-    }
-
     companion object {
         private const val KEY_CURRENT_SESSION = "current_session"
         private const val KEY_LAST_UPDATED = "last_updated"
@@ -1107,33 +889,5 @@ private fun SerializableSessionSet.toSessionSet(): SessionSet {
         actualWeight = actualWeight?.let { Weight(it) },
         actualTime = actualTime,
         completedAt = completedAt?.let { Instant.ofEpochSecond(it) }
-    )
-}
-
-/**
- * Extension function to convert UnifiedWorkoutSession to Workout for persistence.
- * Ensures proper conversion of session data to workout format.
- */
-private fun UnifiedWorkoutSession.toWorkout(): Workout {
-    return Workout(
-        userId = this.userId,
-        id = WorkoutId(this.id.value),
-        name = this.name,
-        date = LocalDate.now(),
-        exercises = this.exercises.map { sessionExercise ->
-            sessionExercise.toCompletedExercise()
-        },
-        status = when (this.sessionStatus) {
-            UnifiedWorkoutSession.SessionStatus.COMPLETED -> WorkoutStatus.COMPLETED
-            UnifiedWorkoutSession.SessionStatus.ACTIVE -> WorkoutStatus.IN_PROGRESS
-            UnifiedWorkoutSession.SessionStatus.PAUSED -> WorkoutStatus.IN_PROGRESS
-            UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE -> WorkoutStatus.COMPLETED
-        },
-        startTime = this.startedAt,
-        endTime = this.endedAt,
-        notes = this.notes,
-        templateId = this.templateId?.let { WorkoutId(it) },
-        createdAt = this.startedAt,
-        updatedAt = this.lastModified
     )
 }
