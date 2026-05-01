@@ -3,7 +3,7 @@ package com.example.liftrix.domain.usecase.session
 import com.example.liftrix.domain.model.UnifiedWorkoutSession
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.model.WorkoutTemplateId
-import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.repository.template.TemplateRepository
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import timber.log.Timber
 import javax.inject.Inject
@@ -24,7 +24,7 @@ import javax.inject.Inject
  */
 class ValidateUnifiedWorkoutSessionUseCase @Inject constructor(
     private val sessionManager: UnifiedWorkoutSessionManager,
-    private val workoutTemplateRepository: WorkoutTemplateRepository
+    private val workoutTemplateRepository: TemplateRepository
 ) {
     
     /**

@@ -9,7 +9,7 @@ import com.example.liftrix.domain.model.SessionExercise
 import com.example.liftrix.domain.model.SessionSet
 import com.example.liftrix.domain.model.WorkoutSessionId
 import com.example.liftrix.domain.model.WorkoutTemplateId
-import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.repository.template.TemplateRepository
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.model.common.LiftrixResult
 import java.time.Instant
@@ -44,7 +44,7 @@ import javax.inject.Inject
 @HiltViewModel
 class UnifiedActiveWorkoutViewModel @Inject constructor(
     private val sessionManager: UnifiedWorkoutSessionManager,
-    private val workoutTemplateRepository: WorkoutTemplateRepository,
+    private val workoutTemplateRepository: TemplateRepository,
     private val authRepository: AuthRepository,
     private val sessionOperationsUseCase: SessionOperationsUseCase,
     private val templateCommandUseCase: TemplateCommandUseCase,

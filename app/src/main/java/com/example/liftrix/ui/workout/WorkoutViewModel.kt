@@ -6,7 +6,7 @@ import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutTemplatePreview
 import com.example.liftrix.domain.repository.AuthRepository
-import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.repository.template.TemplateRepository
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.usecase.workout.WorkoutCommandUseCase
@@ -51,7 +51,7 @@ import javax.inject.Inject
 @HiltViewModel
 class WorkoutViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository,
-    private val workoutTemplateRepository: WorkoutTemplateRepository,
+    private val workoutTemplateRepository: TemplateRepository,
     private val folderRepository: FolderRepository,
     private val authRepository: AuthRepository,
     private val authQueryUseCase: AuthQueryUseCase,

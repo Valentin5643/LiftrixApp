@@ -3,7 +3,7 @@ package com.example.liftrix.ui.workout
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.WorkoutTemplate
-import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.repository.template.TemplateRepository
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.template.TemplateQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -41,7 +41,7 @@ sealed class WorkoutTemplatesDashboardUiState {
 @HiltViewModel
 class WorkoutTemplatesDashboardViewModel @Inject constructor(
     private val authQueryUseCase: AuthQueryUseCase,
-    private val workoutTemplateRepository: WorkoutTemplateRepository,
+    private val workoutTemplateRepository: TemplateRepository,
     private val templateQueryUseCase: TemplateQueryUseCase // 🔥 Consolidated use case
 ) : ViewModel() {
 
@@ -210,4 +210,3 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
 
 
 }
-

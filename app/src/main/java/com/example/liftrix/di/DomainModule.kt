@@ -356,7 +356,7 @@ abstract class DomainModule {
         @dagger.Provides
         fun provideStartWorkoutSessionUseCase(
             sessionManager: com.example.liftrix.service.UnifiedWorkoutSessionManager,
-            workoutTemplateRepository: com.example.liftrix.domain.repository.WorkoutTemplateRepository
+            workoutTemplateRepository: com.example.liftrix.domain.repository.template.TemplateRepository
         ): com.example.liftrix.domain.usecase.session.StartWorkoutSessionUseCase {
             return com.example.liftrix.domain.usecase.session.StartWorkoutSessionUseCase(
                 sessionManager = sessionManager,

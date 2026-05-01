@@ -5,7 +5,6 @@ import com.example.liftrix.data.repository.CustomExerciseRepositoryImpl
 import com.example.liftrix.data.repository.ProfileRepositoryImpl
 import com.example.liftrix.data.repository.ProgressStatsRepositoryImpl
 import com.example.liftrix.data.repository.SocialRepositoryImpl
-import com.example.liftrix.data.repository.WorkoutTemplateRepositoryImpl
 import com.example.liftrix.data.repository.ExerciseLibraryRepositoryImpl
 import com.example.liftrix.data.repository.FolderRepositoryImpl
 import com.example.liftrix.data.repository.GuestSessionRepositoryImpl
@@ -30,7 +29,6 @@ import com.example.liftrix.domain.repository.CustomExerciseRepository
 import com.example.liftrix.domain.repository.ProfileRepository
 import com.example.liftrix.domain.repository.ProgressStatsRepository
 import com.example.liftrix.domain.repository.SocialRepository
-import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import com.example.liftrix.domain.repository.ExerciseLibraryRepository
 import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.repository.GuestSessionRepository
@@ -98,14 +96,6 @@ abstract class RepositoryModule {
     abstract fun bindFolderRepository(
         folderRepositoryImpl: FolderRepositoryImpl
     ): FolderRepository
-
-    // Legacy compatibility bindings for gradual migration
-
-    @Binds
-    @Singleton
-    abstract fun bindWorkoutTemplateRepository(
-        workoutTemplateRepositoryImpl: WorkoutTemplateRepositoryImpl
-    ): WorkoutTemplateRepository
 
     @Binds
     @Singleton

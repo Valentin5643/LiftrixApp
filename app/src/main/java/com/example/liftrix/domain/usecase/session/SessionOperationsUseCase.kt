@@ -10,8 +10,8 @@ import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import com.example.liftrix.domain.repository.exercise.ExerciseRepository
+import com.example.liftrix.domain.repository.template.TemplateRepository
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import kotlinx.coroutines.flow.first
 import timber.log.Timber
@@ -41,7 +41,7 @@ import javax.inject.Inject
 class SessionOperationsUseCase @Inject constructor(
     private val sessionManager: UnifiedWorkoutSessionManager,
     private val exerciseRepository: ExerciseRepository,
-    private val workoutTemplateRepository: WorkoutTemplateRepository
+    private val workoutTemplateRepository: TemplateRepository
 ) {
 
     // ==================== EXERCISE MANAGEMENT ====================

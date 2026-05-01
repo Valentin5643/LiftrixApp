@@ -4,7 +4,7 @@ import com.example.liftrix.domain.model.*
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.FolderRepository
-import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.repository.template.TemplateRepository
 import io.mockk.*
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -25,7 +25,7 @@ import kotlin.test.fail
 class DeleteFolderUseCaseTest {
     
     private lateinit var folderRepository: FolderRepository
-    private lateinit var workoutTemplateRepository: WorkoutTemplateRepository
+    private lateinit var workoutTemplateRepository: TemplateRepository
     private lateinit var deleteFolderUseCase: DeleteFolderUseCase
     
     // Test data constants

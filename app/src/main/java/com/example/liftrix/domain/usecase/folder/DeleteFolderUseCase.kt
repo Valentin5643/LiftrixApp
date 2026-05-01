@@ -4,12 +4,12 @@ import com.example.liftrix.domain.model.FolderId
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.FolderRepository
-import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.repository.template.TemplateRepository
 import javax.inject.Inject
 
 class DeleteFolderUseCase @Inject constructor(
     private val folderRepository: FolderRepository,
-    private val workoutTemplateRepository: WorkoutTemplateRepository
+    private val workoutTemplateRepository: TemplateRepository
 ) {
     data class DeleteFolderInput(
         val userId: String,

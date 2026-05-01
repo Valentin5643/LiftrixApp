@@ -17,9 +17,9 @@ import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.FolderRepository
-import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import com.example.liftrix.domain.model.sharing.TemplateShareDeliveryMode
 import com.example.liftrix.domain.model.sharing.TemplateShareEvent
+import com.example.liftrix.domain.repository.template.TemplateRepository
 import com.example.liftrix.domain.repository.sharing.TemplateShareRepository
 import com.example.liftrix.domain.repository.social.GymBuddyRepository
 import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
@@ -55,7 +55,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class TemplateCommandUseCase @Inject constructor(
-    private val templateRepository: WorkoutTemplateRepository,
+    private val templateRepository: TemplateRepository,
     private val folderRepository: FolderRepository,
     private val authRepository: AuthRepository,
     private val workoutQueryUseCase: WorkoutQueryUseCase,

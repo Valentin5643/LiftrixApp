@@ -9,7 +9,7 @@ import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.repository.ProfileRepository
-import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.repository.template.TemplateRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
@@ -46,7 +46,7 @@ import javax.inject.Singleton
 class FolderOperationsUseCase @Inject constructor(
     private val folderRepository: FolderRepository,
     private val profileRepository: ProfileRepository,
-    private val workoutTemplateRepository: WorkoutTemplateRepository
+    private val workoutTemplateRepository: TemplateRepository
 ) {
 
     // In-memory storage for folder order (per user)

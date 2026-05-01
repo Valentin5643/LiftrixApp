@@ -3,7 +3,7 @@ package com.example.liftrix.domain.usecase.template
 import com.example.liftrix.domain.model.*
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.FolderRepository
-import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.repository.template.TemplateRepository
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -22,7 +22,7 @@ import kotlin.test.fail
  */
 class MoveWorkoutToFolderUseCaseTest {
     
-    private lateinit var workoutTemplateRepository: WorkoutTemplateRepository
+    private lateinit var workoutTemplateRepository: TemplateRepository
     private lateinit var folderRepository: FolderRepository
     private lateinit var moveWorkoutToFolderUseCase: MoveWorkoutToFolderUseCase
     

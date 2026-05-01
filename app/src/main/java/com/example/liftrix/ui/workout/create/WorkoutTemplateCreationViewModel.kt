@@ -18,7 +18,7 @@ import com.example.liftrix.domain.usecase.exercise.ExerciseQueryUseCase
 import com.example.liftrix.domain.usecase.exercise.SearchableExercise
 import com.example.liftrix.domain.usecase.template.TemplateCommandUseCase
 import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
-import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.repository.template.TemplateRepository
 import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.model.WorkoutTemplateId
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -51,7 +51,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
     private val authQueryUseCase: AuthQueryUseCase,
     private val exerciseQueryUseCase: ExerciseQueryUseCase,
     private val workoutQueryUseCase: WorkoutQueryUseCase,
-    private val workoutTemplateRepository: WorkoutTemplateRepository,
+    private val workoutTemplateRepository: TemplateRepository,
     private val folderRepository: FolderRepository
 ) : ModernBaseViewModel<WorkoutTemplateCreationUiState>(
     initialState = WorkoutTemplateCreationUiState.Loading

@@ -4,12 +4,12 @@ import com.example.liftrix.domain.model.FolderId
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.FolderRepository
-import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.repository.template.TemplateRepository
 import java.time.Instant
 import javax.inject.Inject
 
 class MoveWorkoutToFolderUseCase @Inject constructor(
-    private val workoutTemplateRepository: WorkoutTemplateRepository,
+    private val workoutTemplateRepository: TemplateRepository,
     private val folderRepository: FolderRepository
 ) {
     suspend operator fun invoke(
