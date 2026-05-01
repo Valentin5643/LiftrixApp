@@ -20,7 +20,6 @@ import com.example.liftrix.data.repository.social.ReportRepositoryImpl
 import com.example.liftrix.data.repository.sharing.TemplateShareRepositoryImpl
 import com.example.liftrix.data.repository.SyncPreferencesRepositoryImpl
 import com.example.liftrix.data.repository.PersonalRecordRepositoryImpl
-import com.example.liftrix.data.repository.session.SessionRepositoryImpl
 import com.example.liftrix.data.repository.exercise.ExerciseRepositoryImpl
 import com.example.liftrix.data.repository.template.TemplateRepositoryImpl
 import com.example.liftrix.data.repository.workout.WorkoutRepositoryImpl
@@ -43,7 +42,6 @@ import com.example.liftrix.domain.repository.social.BlockRepository
 import com.example.liftrix.domain.repository.social.ReportRepository
 import com.example.liftrix.domain.repository.SyncPreferencesRepository
 import com.example.liftrix.domain.repository.PersonalRecordRepository
-import com.example.liftrix.domain.repository.session.SessionRepository
 import com.example.liftrix.domain.repository.exercise.ExerciseRepository
 import com.example.liftrix.domain.repository.template.TemplateRepository
 import com.example.liftrix.domain.repository.sharing.TemplateShareRepository
@@ -191,12 +189,6 @@ abstract class RepositoryModule {
     // FEATURE-SPECIFIC REPOSITORIES
     // Migrated from di/module/* (DI-020)
     // ========================================
-
-    @Binds
-    @Singleton
-    abstract fun bindSessionRepository(
-        sessionRepositoryImpl: SessionRepositoryImpl
-    ): SessionRepository
 
     @Binds
     @Singleton
