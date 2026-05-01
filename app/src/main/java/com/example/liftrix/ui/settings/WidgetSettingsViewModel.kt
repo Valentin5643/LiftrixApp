@@ -517,8 +517,9 @@ class WidgetSettingsViewModel @Inject constructor(
         updateState { currentState ->
             when (currentState) {
                 is UiState.Error -> {
-                    if (currentState.previousData != null) {
-                        UiState.Success(currentState.previousData)
+                    val previousData = currentState.previousData
+                    if (previousData != null) {
+                        UiState.Success(previousData)
                     } else {
                         UiState.Loading
                     }

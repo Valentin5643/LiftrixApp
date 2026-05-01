@@ -221,9 +221,10 @@ fun CustomExerciseListScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
                         )
-                        if (state.showAction && state.actionText != null) {
+                        val actionText = state.actionText
+                        if (state.showAction && actionText != null) {
                             PrimaryActionButton(
-                                text = state.actionText,
+                                text = actionText,
                                 onClick = onCreateExercise,
                                 leadingIcon = Icons.Default.Add
                             )

@@ -346,8 +346,10 @@ private fun calculateWorkoutVolumeEnhanced(workoutId: String, exercises: List<Ex
         
         exercise.sets.forEach { set ->
             totalSets++
-            if (set.weight != null && set.reps != null) {
-                val setVolume = (set.weight.kilograms * set.reps.count).toFloat()
+            val weight = set.weight
+            val reps = set.reps
+            if (weight != null && reps != null) {
+                val setVolume = (weight.kilograms * reps.count).toFloat()
                 exerciseVolume += setVolume
                 exerciseValidSets++
                 validSets++
@@ -399,8 +401,10 @@ private fun calculateWorkoutVolume(workoutId: String, exercises: List<Exercise>)
         
         exercise.sets.forEach { set ->
             totalSets++
-            if (set.weight != null && set.reps != null) {
-                val setVolume = (set.weight.kilograms * set.reps.count).toFloat()
+            val weight = set.weight
+            val reps = set.reps
+            if (weight != null && reps != null) {
+                val setVolume = (weight.kilograms * reps.count).toFloat()
                 exerciseVolume += setVolume
                 exerciseValidSets++
                 validSets++
@@ -1153,4 +1157,3 @@ private fun parseExercisesFromWorkoutJson(exercisesJson: String, gson: com.googl
         emptyList()
     }
 }
-

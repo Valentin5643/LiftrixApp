@@ -64,9 +64,10 @@ fun WorkoutContextCard(
             Spacer(modifier = Modifier.height(LiftrixSpacing.small))
             
             // Exercise info if available
-            if (context.exerciseName != null) {
+            val exerciseName = context.exerciseName
+            if (exerciseName != null) {
                 ExerciseInfo(
-                    exerciseName = context.exerciseName,
+                    exerciseName = exerciseName,
                     exerciseCategory = context.exerciseCategory,
                     currentLanguage = currentLanguage
                 )

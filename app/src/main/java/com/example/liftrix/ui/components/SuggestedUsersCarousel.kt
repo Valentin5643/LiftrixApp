@@ -169,9 +169,10 @@ private fun SuggestedUserCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 
-                if (!suggestedUser.bio.isNullOrBlank()) {
+                val bio = suggestedUser.bio
+                if (!bio.isNullOrBlank()) {
                     Text(
-                        text = suggestedUser.bio,
+                        text = bio,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -201,9 +202,10 @@ private fun SuggestedUserCard(
                 }
                 
                 // Suggestion reason
-                if (!suggestedUser.suggestionReason.isNullOrBlank()) {
+                val suggestionReason = suggestedUser.suggestionReason
+                if (!suggestionReason.isNullOrBlank()) {
                     Text(
-                        text = suggestedUser.suggestionReason,
+                        text = suggestionReason,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,

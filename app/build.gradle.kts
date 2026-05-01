@@ -298,6 +298,15 @@ ksp {
 dependencies {
     // Custom Lint rules for architectural enforcement
     lintChecks(project(":lint-rules"))
+    implementation(project(":core:analytics"))
+    implementation(project(":core:domain"))
+    implementation(project(":core:domain-common"))
+    implementation(project(":core:design-system"))
+    implementation(project(":core:model"))
+    implementation(project(":core:network"))
+    implementation(project(":core:presentation"))
+    implementation(project(":core:ui"))
+    implementation(project(":feature:auth"))
     implementation(project(":user-scoping-annotations"))
     add("kspDebug", project(":user-scoping-processor"))
     add("kspRelease", project(":user-scoping-processor"))

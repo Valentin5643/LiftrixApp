@@ -638,9 +638,10 @@ private fun FollowingItem(
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium
                 )
-                if (!user.email.isNullOrEmpty()) {
+                val email = user.email
+                if (!email.isNullOrEmpty()) {
                     Text(
-                        text = user.email,
+                        text = email,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
@@ -724,9 +725,10 @@ private fun FollowerItem(
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium
                 )
-                if (!user.email.isNullOrEmpty()) {
+                val email = user.email
+                if (!email.isNullOrEmpty()) {
                     Text(
-                        text = user.email,
+                        text = email,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )

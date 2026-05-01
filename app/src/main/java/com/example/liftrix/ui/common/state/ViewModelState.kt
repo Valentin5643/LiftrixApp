@@ -159,7 +159,7 @@ sealed class RecommendationsState {
  * Sealed class hierarchy for WorkoutScreen state management.
  * Provides type-safe handling of all possible states for the workout dashboard.
  */
-sealed class WorkoutUiState : UiState<WorkoutScreenData>() {
+sealed class WorkoutUiState {
     /**
      * Initial loading state when workout data is being fetched.
      */
@@ -200,7 +200,7 @@ sealed class WorkoutUiState : UiState<WorkoutScreenData>() {
  * Sealed class hierarchy for HomeScreen state management.
  * Provides type-safe handling of all possible states for the home dashboard.
  */
-sealed class HomeUiState : UiState<HomeScreenData>() {
+sealed class HomeUiState {
     /**
      * Initial loading state when home data is being fetched.
      */
@@ -324,7 +324,7 @@ data class WorkoutTemplateCreationData(
  * Sealed class hierarchy for WorkoutTemplateCreationScreen state management.
  * Provides type-safe handling of all possible states during workout creation.
  */
-sealed class WorkoutTemplateCreationUiState : UiState<WorkoutTemplateCreationData>() {
+sealed class WorkoutTemplateCreationUiState {
     /**
      * Initial loading state when creation screen is being initialized.
      */
@@ -426,7 +426,7 @@ data class EditWorkoutData(
  * Sealed class hierarchy for EditWorkoutScreen state management.
  * Provides type-safe handling of all possible states during workout editing.
  */
-sealed class EditWorkoutUiState : UiState<EditWorkoutData>() {
+sealed class EditWorkoutUiState {
     /**
      * Initial loading state when editing screen is loading workout data.
      */
@@ -476,7 +476,7 @@ data class EditSessionData(
  * Sealed class hierarchy for Edit Session screen UI states.
  * Provides type-safe state management for session editing workflow.
  */
-sealed class EditSessionUiState : UiState<EditSessionData>() {
+sealed class EditSessionUiState {
     /**
      * Initial loading state when session data is being fetched.
      */

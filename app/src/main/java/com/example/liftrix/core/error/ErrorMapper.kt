@@ -102,7 +102,8 @@ object ErrorMapper {
                         }
                     }
                     error.operation != null -> {
-                        when (error.operation.uppercase()) {
+                        val operation = error.operation
+                        when (operation?.uppercase()) {
                             "INSERT" -> "Unable to save new item. Please try again."
                             "UPDATE" -> "Unable to save changes. Please try again."
                             "DELETE" -> "Unable to delete item. Please try again."

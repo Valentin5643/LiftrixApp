@@ -346,10 +346,11 @@ private fun PRDetailsCard(
                 }
 
                 // Improvement percentage
-                if (notification.improvementPercent != null && notification.improvementPercent > 0) {
+                val improvementPercent = notification.improvementPercent
+                if (improvementPercent != null && improvementPercent > 0) {
                     PRStatColumn(
                         label = "Improvement",
-                        value = "+${String.format("%.1f", notification.improvementPercent)}%",
+                        value = "+${String.format("%.1f", improvementPercent)}%",
                         icon = Icons.Default.TrendingUp,
                         isImprovement = true
                     )

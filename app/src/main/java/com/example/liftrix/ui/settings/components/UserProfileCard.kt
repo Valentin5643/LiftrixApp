@@ -70,24 +70,27 @@ fun UserProfileCard(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 // Prioritize display sources to prevent race conditions and invalid data
+                val socialUsername = socialProfile?.username
+                val userProfileDisplayName = userProfile?.displayName
+                val socialProfileDisplayName = socialProfile?.displayName
+                val authDisplayName = user?.displayName
+                val authEmail = user?.email
                 val displayText = when {
                     // 1. Prefer social profile username if available and NOT a temporary username
-                    socialProfile?.username?.isNotBlank() == true && 
-                        !socialProfile.username.startsWith("user_") && 
-                        !socialProfile.username.contains("User ", ignoreCase = true) -> "@${socialProfile.username}"
+                    socialUsername?.isNotBlank() == true &&
+                        !socialUsername.startsWith("user_") &&
+                        !socialUsername.contains("User ", ignoreCase = true) -> "@$socialUsername"
                     // 2. Use user profile display name if available and not a fallback
-                    userProfile?.displayName?.isNotBlank() == true && 
-                        !userProfile.displayName.startsWith("User ") -> userProfile.displayName
+                    userProfileDisplayName?.let { it.isNotBlank() && !it.startsWith("User ") } == true -> userProfileDisplayName
                     // 3. Use social profile display name if available and not a fallback
-                    socialProfile?.displayName?.isNotBlank() == true && 
-                        !socialProfile.displayName.startsWith("User ") -> socialProfile.displayName
+                    socialProfileDisplayName?.let { it.isNotBlank() && !it.startsWith("User ") } == true -> socialProfileDisplayName
                     // 4. Fall back to Firebase Auth display name if not a fallback
-                    user?.displayName?.isNotBlank() == true && 
-                        !user.displayName.startsWith("User ") -> user.displayName
+                    authDisplayName?.isNotBlank() == true &&
+                        !authDisplayName.startsWith("User ") -> authDisplayName
                     // 5. Use Firebase Auth email if valid
-                    user?.email?.isNotBlank() == true && 
-                        !user.email.startsWith("user_") && 
-                        !user.isAnonymous -> user.email.substringBefore("@")
+                    authEmail?.isNotBlank() == true &&
+                        !authEmail.startsWith("user_") &&
+                        user?.isAnonymous != true -> authEmail.substringBefore("@")
                     // 6. Default welcome message (avoids showing temporary usernames)
                     else -> "Welcome to Liftrix"
                 }

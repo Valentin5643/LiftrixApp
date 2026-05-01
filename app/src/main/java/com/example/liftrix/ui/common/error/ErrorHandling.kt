@@ -112,8 +112,9 @@ fun <T> ErrorHandler(
                 showAsSnackbar -> {
                     // Snackbar handling is done through SnackbarManager
                     // Content is still shown if previousData exists
-                    if (uiState.previousData != null) {
-                        content(uiState.previousData)
+                    val previousData = uiState.previousData
+                    if (previousData != null) {
+                        content(previousData)
                     } else {
                         ErrorEmptyState(
                             error = uiState.error,
@@ -123,9 +124,10 @@ fun <T> ErrorHandler(
                 }
                 
                 else -> {
-                    if (uiState.previousData != null) {
+                    val previousData = uiState.previousData
+                    if (previousData != null) {
                         // Show content with inline error
-                        content(uiState.previousData)
+                        content(previousData)
                         ErrorDisplay(
                             error = uiState.error,
                             onRetry = onRetry,
@@ -435,15 +437,17 @@ fun <T> AutoErrorHandler(
                     )
                     
                     // Still show content if available
-                    if (uiState.previousData != null) {
-                        content(uiState.previousData)
+                    val previousData = uiState.previousData
+                    if (previousData != null) {
+                        content(previousData)
                     }
                 }
                 
                 shouldShowAsSnackbar(error) && snackbarManager != null -> {
                     // Show snackbar and content
-                    if (uiState.previousData != null) {
-                        content(uiState.previousData)
+                    val previousData = uiState.previousData
+                    if (previousData != null) {
+                        content(previousData)
                     } else {
                         ErrorEmptyState(
                             error = error,
@@ -460,8 +464,9 @@ fun <T> AutoErrorHandler(
                 
                 else -> {
                     // Show inline error display
-                    if (uiState.previousData != null) {
-                        content(uiState.previousData)
+                    val previousData = uiState.previousData
+                    if (previousData != null) {
+                        content(previousData)
                         ErrorDisplay(
                             error = error,
                             onRetry = onRetry,

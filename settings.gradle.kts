@@ -1,4 +1,5 @@
 pluginManagement {
+    includeBuild("build-logic")
     repositories {
         google()
         mavenCentral()
@@ -23,6 +24,15 @@ buildCache {
 
 rootProject.name = "Liftrix"
 include(":app")
+include(":core:analytics")
+include(":core:domain")
+include(":core:domain-common")
+include(":core:design-system")
+include(":core:model")
+include(":core:network")
+include(":core:presentation")
+include(":core:ui")
+include(":feature:auth")
 include(":lint-rules")
 include(":user-scoping-annotations")
 include(":user-scoping-processor")

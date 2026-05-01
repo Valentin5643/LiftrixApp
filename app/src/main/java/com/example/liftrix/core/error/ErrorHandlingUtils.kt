@@ -410,10 +410,11 @@ fun shouldRetryOperation(
     return when (error) {
         is LiftrixError.NetworkError -> {
             // Retry network errors except for client errors (4xx)
-            error.httpStatusCode == null || 
-            error.httpStatusCode == 408 || 
-            error.httpStatusCode == 429 || 
-            error.httpStatusCode >= 500
+            val httpStatusCode = error.httpStatusCode
+            httpStatusCode == null ||
+                httpStatusCode == 408 ||
+                httpStatusCode == 429 ||
+                httpStatusCode >= 500
         }
         
         is LiftrixError.DatabaseError -> {

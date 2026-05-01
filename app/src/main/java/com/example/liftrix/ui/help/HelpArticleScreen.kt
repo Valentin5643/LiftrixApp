@@ -62,7 +62,7 @@ fun HelpArticleScreen(
                 // Only show share button when article is loaded
                 val currentState = uiState
                 if (currentState is UiState.Success && currentState.data.selectedArticle != null) {
-                    val article = currentState.data.selectedArticle
+                    val article = currentState.data.selectedArticle!!
                     IconButton(
                         onClick = {
                             // Create share intent with article details

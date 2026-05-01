@@ -176,10 +176,11 @@ object FirebaseErrorMapper {
         return error.isRecoverable && when (error) {
             is LiftrixError.NetworkError -> {
                 // Retry network errors except for 4xx client errors (except 408, 429)
-                error.httpStatusCode == null || 
-                error.httpStatusCode == 408 || 
-                error.httpStatusCode == 429 || 
-                error.httpStatusCode >= 500
+                val httpStatusCode = error.httpStatusCode
+                httpStatusCode == null ||
+                    httpStatusCode == 408 ||
+                    httpStatusCode == 429 ||
+                    httpStatusCode >= 500
             }
             is LiftrixError.DatabaseError -> {
                 // Retry transient database errors like conflicts and timeouts

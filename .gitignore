@@ -1,4 +1,4 @@
-*.iml
+c*.iml
 .gradle
 /local.properties
 /.idea/caches
@@ -5500,3 +5500,6 @@ nul
 .serena/
 .fastembed_cache
 build-cache/
+/build-logic/convention/build/generated-sources/kotlin-dsl-accessors/kotlin/gradle/kotlin/dsl/accessors/_004b304880ea820eda29cd37eb5b8a5d/Accessors1a3myc2xcjkjlhq7vkxcb1wim.kt
+/build-logic/convention/build/generated-sources/kotlin-dsl-accessors/kotlin/gradle/kotlin/dsl/accessors/_6b3b32fa407078ce50b4fde73f365ada/Accessors1a3myc2xcjkjlhq7vkxcb1wim.kt
+/build-logic/
