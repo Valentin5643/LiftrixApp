@@ -1,16 +1,13 @@
 package com.example.liftrix.domain.model
 
-import android.os.Parcelable
-import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
 
 /**
  * Enum representing the types of fitness equipment available to a user.
  * Each enum constant has a user-friendly display name.
  */
-@Parcelize
 @Serializable
-enum class Equipment(val displayName: String) : Parcelable {
+enum class Equipment(val displayName: String) {
     DUMBBELLS("Dumbbells"),
     BARBELL("Barbell"),
     RESISTANCE_BANDS("Resistance Bands"),
@@ -24,18 +21,17 @@ enum class Equipment(val displayName: String) : Parcelable {
 }
 
 /**
- * Type alias for equipment identifier
+ * Type alias for equipment identifier.
  */
 typealias EquipmentId = String
 
 /**
- * Enum representing equipment categories for grouping
+ * Enum representing equipment categories for grouping.
  */
-@Parcelize
 @Serializable
-enum class EquipmentCategory(val displayName: String) : Parcelable {
+enum class EquipmentCategory(val displayName: String) {
     WEIGHTS("Weights"),
     CARDIO("Cardio"),
     BODYWEIGHT("Bodyweight"),
     ACCESSORIES("Accessories")
-} 
+}

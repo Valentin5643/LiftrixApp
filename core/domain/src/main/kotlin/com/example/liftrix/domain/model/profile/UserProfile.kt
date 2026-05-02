@@ -27,7 +27,6 @@ data class UserProfile(
     val completedAt: LocalDateTime?,
     val updatedAt: LocalDateTime,
     val profileVersion: Long = 1,
-    // Profile image fields for visual identity
     val profileImageUrl: String? = null,
     val profileImageUpdatedAt: LocalDateTime? = null,
     val hasCustomProfileImage: Boolean = false
@@ -49,23 +48,25 @@ data class UserProfile(
         }
     }
 
+    val isComplete: Boolean
+        get() = age != null && weight != null && fitnessGoals.isNotEmpty()
+
+    fun validateAge(): Boolean = age != null && age in MIN_AGE..MAX_AGE
+
     companion object {
         const val MIN_AGE: Int = 13
         const val MAX_AGE: Int = 100
         const val MAX_OTHER_EQUIPMENT_LENGTH: Int = 200
-        
+
         /**
          * Creates a minimal user profile with only required fields populated.
          * Used for satisfying foreign key constraints when user data is minimal.
-         * 
-         * @param userId The Firebase user ID
-         * @return Minimal UserProfile with default values
          */
         fun createMinimal(userId: String): UserProfile {
             val now = LocalDateTime.now()
             return UserProfile(
                 userId = userId,
-                displayName = "User", // Default display name
+                displayName = "User",
                 bio = null,
                 age = null,
                 weight = null,
@@ -90,9 +91,4 @@ data class UserProfile(
             )
         }
     }
-
-    val isComplete: Boolean
-        get() = age != null && weight != null && fitnessGoals.isNotEmpty()
-
-    fun validateAge(): Boolean = age != null && age in MIN_AGE..MAX_AGE
-} 
+}

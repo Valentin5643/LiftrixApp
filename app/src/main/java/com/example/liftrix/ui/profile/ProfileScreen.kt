@@ -215,13 +215,14 @@ private fun ProfileContent(
     }
     
     // Bio Section
-    if (!profile.bio.isNullOrBlank()) {
+    val bio = profile.bio
+    if (!bio.isNullOrBlank()) {
         UnifiedWorkoutCard(
             title = "About",
             subtitle = null
         ) {
             Text(
-                text = profile.bio,
+                text = bio,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )

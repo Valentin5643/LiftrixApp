@@ -11,57 +11,16 @@ import javax.inject.Singleton
 
 /**
  * Consolidated use case for all profile query operations.
- *
- * **Replaces**:
- * - GetProfileUseCase.kt
- *
- * **Design Philosophy**:
- * - CQRS pattern for read operations
- * - Consistent LiftrixResult error handling
- * - User scoping enforced for all operations
- * - Flow-based reactive data access
- *
- * **Usage Examples**:
- * ```kotlin
- * // Get profile as Flow (replaces GetProfileUseCase.invoke)
- * val profileFlow = profileQueryUseCase.invoke(userId)
- *
- * // Get profile once (new method)
- * val profileResult = profileQueryUseCase.getById(userId)
- *
- * // Check profile existence (replaces GetProfileUseCase.hasProfile)
- * val exists = profileQueryUseCase.hasProfile(userId)
- *
- * // Check profile completion (replaces GetProfileUseCase.hasCompletedProfile)
- * val isComplete = profileQueryUseCase.hasCompletedProfile(userId)
- * ```
- *
- * @property profileRepository Repository for profile data access
  */
 @Singleton
 class ProfileQueryUseCase @Inject constructor(
     private val profileRepository: ProfileRepository
 ) {
-
-    /**
-     * Retrieves a user's profile as a reactive stream.
-     * Replaces GetProfileUseCase.invoke()
-     *
-     * @param userId The ID of the user whose profile to retrieve
-     * @return Flow<UserProfile?> that emits profile updates, null if not found
-     */
     suspend operator fun invoke(userId: String): Flow<UserProfile?> {
         require(userId.isNotBlank()) { "User ID cannot be blank" }
         return profileRepository.getProfile(userId)
     }
 
-    /**
-     * Retrieves a user's profile as a single value with error handling.
-     * New method for non-reactive use cases.
-     *
-     * @param userId The ID of the user whose profile to retrieve
-     * @return LiftrixResult<UserProfile?> containing profile or error
-     */
     suspend fun getById(userId: String): LiftrixResult<UserProfile?> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
@@ -75,12 +34,6 @@ class ProfileQueryUseCase @Inject constructor(
         profileRepository.getUserProfile(userId).getOrThrow()
     }
 
-    /**
-     * Gets a public profile if available.
-     *
-     * @param userId The ID of the user whose public profile to retrieve
-     * @return LiftrixResult<UserProfile?> containing public profile or null
-     */
     suspend fun getPublicProfile(userId: String): LiftrixResult<UserProfile?> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
@@ -94,13 +47,6 @@ class ProfileQueryUseCase @Inject constructor(
         profileRepository.getPublicProfile(userId).getOrThrow()
     }
 
-    /**
-     * Checks if a user has a profile.
-     * Replaces GetProfileUseCase.hasProfile()
-     *
-     * @param userId The ID of the user to check
-     * @return LiftrixResult<Boolean> indicating if profile exists
-     */
     suspend fun hasProfile(userId: String): LiftrixResult<Boolean> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
@@ -114,13 +60,6 @@ class ProfileQueryUseCase @Inject constructor(
         profileRepository.hasProfile(userId)
     }
 
-    /**
-     * Checks if a user has completed their profile onboarding.
-     * Replaces GetProfileUseCase.hasCompletedProfile()
-     *
-     * @param userId The ID of the user to check
-     * @return LiftrixResult<Boolean> indicating if profile is complete
-     */
     suspend fun hasCompletedProfile(userId: String): LiftrixResult<Boolean> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
@@ -134,13 +73,6 @@ class ProfileQueryUseCase @Inject constructor(
         profileRepository.hasCompletedProfile(userId)
     }
 
-    /**
-     * Gets the count of unsynced profiles for a user.
-     * New method for sync monitoring.
-     *
-     * @param userId The ID of the user to check
-     * @return LiftrixResult<Int> with unsynced count
-     */
     suspend fun getUnsyncedCount(userId: String): LiftrixResult<Int> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
@@ -154,13 +86,6 @@ class ProfileQueryUseCase @Inject constructor(
         profileRepository.getUnsyncedCount(userId)
     }
 
-    /**
-     * Gets public profiles for discovery.
-     * New method for social features.
-     *
-     * @param limit Maximum number of profiles to return
-     * @return LiftrixResult<List<UserProfile>> with public profiles
-     */
     suspend fun getPublicProfiles(limit: Int = 50): LiftrixResult<List<UserProfile>> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(

@@ -63,13 +63,12 @@ class ProfileCompletionCalculator @Inject constructor() {
     private fun isFieldComplete(profile: UserProfile, field: String): Boolean {
         return when (field) {
             FIELD_DISPLAY_NAME -> profile.displayName.isNotBlank()
-            FIELD_AGE -> profile.age != null && profile.age > 0
-            FIELD_WEIGHT -> profile.weight != null && profile.weight.kilograms > 0
+            FIELD_AGE -> profile.age?.let { it > 0 } == true
+            FIELD_WEIGHT -> profile.weight?.let { it.kilograms > 0 } == true
             FIELD_FITNESS_GOALS -> profile.fitnessGoals.isNotEmpty()
             FIELD_EQUIPMENT -> profile.availableEquipment.isNotEmpty()
-            FIELD_BIO -> !profile.bio.isNullOrBlank() && profile.bio.length >= MIN_BIO_LENGTH
-            FIELD_GOALS_PRIORITY -> profile.goalsPriority != null && 
-                                   profile.goalsPriority.keys.containsAll(profile.fitnessGoals)
+            FIELD_BIO -> profile.bio?.let { it.isNotBlank() && it.length >= MIN_BIO_LENGTH } == true
+            FIELD_GOALS_PRIORITY -> profile.goalsPriority?.keys?.containsAll(profile.fitnessGoals) == true
             FIELD_OTHER_EQUIPMENT -> if (profile.availableEquipment.any { it.name.contains("Other", ignoreCase = true) }) {
                 !profile.otherEquipment.isNullOrBlank()
             } else true // Not required if "Other" equipment not selected

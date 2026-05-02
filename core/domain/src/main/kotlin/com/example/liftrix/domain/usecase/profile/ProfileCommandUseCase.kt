@@ -9,61 +9,17 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.ProfileRepository
-import com.example.liftrix.service.ProfileCompletionCalculator
-import timber.log.Timber
 import java.time.LocalDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Consolidated use case for all profile command (write) operations.
- *
- * **Replaces**:
- * - SaveProfileUseCase.kt
- * - ValidateProfileInputUseCase.kt (validation logic)
- * - SaveUserProfileUseCase.kt
- * - SyncOnboardingProfileAfterLoginUseCase.kt (sync logic)
- *
- * **Design Philosophy**:
- * - CQRS pattern for write operations
- * - Consistent LiftrixResult error handling
- * - Comprehensive validation before persistence
- * - User scoping enforced for all operations
- *
- * **Usage Examples**:
- * ```kotlin
- * // Save profile (replaces SaveProfileUseCase)
- * val result = profileCommandUseCase.saveProfile(profile)
- *
- * // Update partial profile
- * val updateResult = profileCommandUseCase.updatePartial(
- *     userId = userId,
- *     updates = mapOf("age" to 25, "weight" to 75.0)
- * )
- *
- * // Delete profile
- * val deleteResult = profileCommandUseCase.deleteProfile(userId)
- *
- * // Sync profile
- * val syncResult = profileCommandUseCase.syncProfile(userId)
- * ```
- *
- * @property profileRepository Repository for profile data access
+ * Consolidated use case for all profile command operations.
  */
 @Singleton
 class ProfileCommandUseCase @Inject constructor(
-    private val profileRepository: ProfileRepository,
-    private val profileCompletionCalculator: ProfileCompletionCalculator
+    private val profileRepository: ProfileRepository
 ) {
-
-    /**
-     * Saves a complete user profile with validation and completion calculation.
-     * Replaces SaveProfileUseCase.invoke() and SaveUserProfileUseCase.invoke()
-     *
-     * @param profile The UserProfile to save
-     * @param strictValidation If true, enforces required fields (age, weight). Default = false for partial profiles.
-     * @return LiftrixResult<Unit> indicating success or validation/persistence error
-     */
     suspend fun saveProfile(
         profile: UserProfile,
         strictValidation: Boolean = false
@@ -78,37 +34,22 @@ class ProfileCommandUseCase @Inject constructor(
     ) {
         require(profile.userId.isNotBlank()) { "Profile must have a valid user ID" }
 
-        // Validate profile before saving
         val validationError = validateProfile(profile, strictValidation)
         if (validationError != null) {
-            Timber.e("Profile validation failed for user ${profile.userId}: $validationError")
             throw IllegalArgumentException(validationError)
         }
 
-        // Calculate profile completion percentage
-        val completionPercentage = profileCompletionCalculator.calculateCompletion(profile)
-
-        // Update profile with completion percentage and timestamp
+        val completionPercentage = calculateCompletion(profile)
+        val now = LocalDateTime.now()
         val enhancedProfile = profile.copy(
             profileCompletionPercentage = completionPercentage,
-            updatedAt = LocalDateTime.now(),
-            completedAt = if (completionPercentage >= 100) LocalDateTime.now() else profile.completedAt
+            updatedAt = now,
+            completedAt = if (completionPercentage >= 100) now else profile.completedAt
         )
 
-        // Save profile through repository
         profileRepository.saveUserProfile(enhancedProfile).getOrThrow()
-
-        Timber.d("Profile saved successfully for user: ${profile.userId}, completion: $completionPercentage%")
     }
 
-    /**
-     * Updates partial profile fields.
-     * New method for progressive updates.
-     *
-     * @param userId The user ID whose profile to update
-     * @param updates Map of field names to values
-     * @return LiftrixResult<Unit> indicating success or error
-     */
     suspend fun updatePartial(
         userId: String,
         updates: Map<String, Any>
@@ -127,12 +68,6 @@ class ProfileCommandUseCase @Inject constructor(
         profileRepository.updatePartialProfile(userId, updates).getOrThrow()
     }
 
-    /**
-     * Deletes a user's profile.
-     *
-     * @param userId The user ID whose profile to delete
-     * @return LiftrixResult<Unit> indicating success or error
-     */
     suspend fun deleteProfile(userId: String): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
@@ -146,13 +81,6 @@ class ProfileCommandUseCase @Inject constructor(
         profileRepository.deleteProfile(userId).getOrThrow()
     }
 
-    /**
-     * Triggers immediate profile sync.
-     * Replaces SyncOnboardingProfileAfterLoginUseCase logic.
-     *
-     * @param userId The user ID whose profile to sync
-     * @return LiftrixResult<Unit> indicating success or error
-     */
     suspend fun syncProfile(userId: String): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
@@ -166,13 +94,6 @@ class ProfileCommandUseCase @Inject constructor(
         profileRepository.syncNow(userId).getOrThrow()
     }
 
-    /**
-     * Queues background profile sync.
-     * New method for non-urgent sync operations.
-     *
-     * @param userId The user ID whose profile to sync
-     * @return LiftrixResult<Unit> indicating success or error
-     */
     suspend fun queueSync(userId: String): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
@@ -186,13 +107,6 @@ class ProfileCommandUseCase @Inject constructor(
         profileRepository.queueSync(userId).getOrThrow()
     }
 
-    /**
-     * Updates profile completion percentage.
-     * New method for tracking onboarding progress.
-     *
-     * @param userId The user ID to update
-     * @return LiftrixResult<Int> with completion percentage
-     */
     suspend fun updateCompletion(userId: String): LiftrixResult<Int> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
@@ -206,13 +120,6 @@ class ProfileCommandUseCase @Inject constructor(
         profileRepository.updateProfileCompletion(userId).getOrThrow()
     }
 
-    /**
-     * Calculates and updates streak data.
-     * New method for gamification features.
-     *
-     * @param userId The user ID to calculate for
-     * @return LiftrixResult<StreakData> with calculated streak
-     */
     suspend fun calculateStreak(userId: String): LiftrixResult<StreakData> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
@@ -226,14 +133,6 @@ class ProfileCommandUseCase @Inject constructor(
         profileRepository.calculateStreakData(userId).getOrThrow()
     }
 
-    /**
-     * Updates privacy settings for profile.
-     * New method for privacy controls.
-     *
-     * @param userId The user ID to update
-     * @param isPublic Whether profile should be public
-     * @return LiftrixResult<Unit> indicating success or error
-     */
     suspend fun updatePrivacy(
         userId: String,
         isPublic: Boolean
@@ -250,58 +149,18 @@ class ProfileCommandUseCase @Inject constructor(
         profileRepository.updatePrivacySettings(userId, isPublic).getOrThrow()
     }
 
-    /**
-     * Validates all profile fields according to business rules.
-     * Combines validation logic from SaveProfileUseCase and SaveUserProfileUseCase
-     *
-     * @param profile The profile to validate
-     * @param strictValidation If true, enforces required fields (age, weight)
-     * @return Error message if validation fails, null if valid
-     */
     private fun validateProfile(profile: UserProfile, strictValidation: Boolean = false): String? {
-        // Validate display name (always required for SaveUserProfileUseCase)
-        val displayNameValidation = validateDisplayName(profile.displayName)
-        if (displayNameValidation != null) return displayNameValidation
-
-        // Validate bio if provided
-        val bioValidation = validateBio(profile.bio)
-        if (bioValidation != null) return bioValidation
-
-        // Validate age
-        val ageValidation = validateAge(profile.age, strictValidation)
-        if (ageValidation != null) return ageValidation
-
-        // Validate weight
-        val weightValidation = validateWeight(profile.weight, strictValidation)
-        if (weightValidation != null) return weightValidation
-
-        // Validate equipment selection
-        val equipmentValidation = validateEquipment(profile.availableEquipment, strictValidation)
-        if (equipmentValidation != null) return equipmentValidation
-
-        // Validate other equipment description
-        val otherEquipmentValidation = validateOtherEquipment(profile.otherEquipment)
-        if (otherEquipmentValidation != null) return otherEquipmentValidation
-
-        // Validate fitness goals
-        val goalsValidation = validateGoals(profile.fitnessGoals, strictValidation)
-        if (goalsValidation != null) return goalsValidation
-
-        // Validate goal priorities
-        val priorityValidation = validateGoalsPriority(profile.fitnessGoals, profile.goalsPriority)
-        if (priorityValidation != null) return priorityValidation
-
-        // Validate streak data consistency
-        val streakValidation = validateStreakData(profile)
-        if (streakValidation != null) return streakValidation
-
-        return null // All validations passed
+        return validateDisplayName(profile.displayName)
+            ?: validateBio(profile.bio)
+            ?: validateAge(profile.age, strictValidation)
+            ?: validateWeight(profile.weight, strictValidation)
+            ?: validateEquipment(profile.availableEquipment, strictValidation)
+            ?: validateOtherEquipment(profile.otherEquipment)
+            ?: validateGoals(profile.fitnessGoals, strictValidation)
+            ?: validateGoalsPriority(profile.fitnessGoals, profile.goalsPriority)
+            ?: validateStreakData(profile)
     }
 
-    /**
-     * Validates display name field.
-     * From SaveUserProfileUseCase
-     */
     private fun validateDisplayName(displayName: String): String? {
         return when {
             displayName.isBlank() -> "Display name is required"
@@ -312,13 +171,8 @@ class ProfileCommandUseCase @Inject constructor(
         }
     }
 
-    /**
-     * Validates bio field if provided.
-     * From SaveUserProfileUseCase
-     */
     private fun validateBio(bio: String?): String? {
-        if (bio == null) return null // Bio is optional
-
+        if (bio == null) return null
         return when {
             bio.length > MAX_BIO_LENGTH -> "Bio cannot exceed $MAX_BIO_LENGTH characters"
             bio.isBlank() -> "Bio cannot be blank if provided"
@@ -326,38 +180,26 @@ class ProfileCommandUseCase @Inject constructor(
         }
     }
 
-    /**
-     * Validates age field according to business rules.
-     * Combines logic from SaveProfileUseCase (strict) and SaveUserProfileUseCase (optional)
-     */
     private fun validateAge(age: Int?, strictValidation: Boolean): String? {
         return when {
             age == null && strictValidation -> "Age is required for profile completion"
-            age == null -> null // Age optional for partial profiles
+            age == null -> null
             age < UserProfile.MIN_AGE -> "Age must be at least ${UserProfile.MIN_AGE} years old"
             age > UserProfile.MAX_AGE -> "Age cannot exceed ${UserProfile.MAX_AGE} years"
             else -> null
         }
     }
 
-    /**
-     * Validates weight field and value constraints.
-     * Combines logic from SaveProfileUseCase (strict) and SaveUserProfileUseCase (optional)
-     */
     private fun validateWeight(weight: Weight?, strictValidation: Boolean): String? {
         return when {
             weight == null && strictValidation -> "Weight is required for profile completion"
-            weight == null -> null // Weight optional for partial profiles
+            weight == null -> null
             weight.kilograms <= 0.0 -> "Weight must be a positive value"
             weight.kilograms > Weight.MAX_WEIGHT_KG -> "Weight cannot exceed ${Weight.MAX_WEIGHT_KG} kg"
             else -> null
         }
     }
 
-    /**
-     * Validates equipment selection for duplicates and reasonable limits.
-     * Combines logic from both use cases
-     */
     private fun validateEquipment(equipment: List<Equipment>, strictValidation: Boolean): String? {
         return when {
             equipment.isEmpty() && strictValidation -> "At least one equipment type must be selected"
@@ -367,10 +209,6 @@ class ProfileCommandUseCase @Inject constructor(
         }
     }
 
-    /**
-     * Validates other equipment description length and content.
-     * From both use cases
-     */
     private fun validateOtherEquipment(otherEquipment: String?): String? {
         return when {
             otherEquipment != null && otherEquipment.length > UserProfile.MAX_OTHER_EQUIPMENT_LENGTH -> {
@@ -383,10 +221,6 @@ class ProfileCommandUseCase @Inject constructor(
         }
     }
 
-    /**
-     * Validates fitness goals selection.
-     * Combines logic from both use cases
-     */
     private fun validateGoals(goals: List<FitnessGoal>, strictValidation: Boolean): String? {
         return when {
             goals.isEmpty() && strictValidation -> "At least one fitness goal must be selected"
@@ -396,31 +230,19 @@ class ProfileCommandUseCase @Inject constructor(
         }
     }
 
-    /**
-     * Validates goal priority mappings.
-     * From both use cases with complete logic
-     */
     private fun validateGoalsPriority(goals: List<FitnessGoal>, priority: Map<FitnessGoal, Int>?): String? {
-        if (priority == null) return null // Optional field
+        if (priority == null) return null
 
         return when {
-            !priority.keys.containsAll(goals) -> {
-                "Priority map must contain all selected fitness goals"
-            }
+            !priority.keys.containsAll(goals) -> "Priority map must contain all selected fitness goals"
             priority.values.any { it < MIN_PRIORITY || it > MAX_PRIORITY } -> {
                 "Goal priorities must be between $MIN_PRIORITY and $MAX_PRIORITY"
             }
-            priority.values.distinct().size != priority.values.size -> {
-                "Goal priorities must be unique values"
-            }
+            priority.values.distinct().size != priority.values.size -> "Goal priorities must be unique values"
             else -> null
         }
     }
 
-    /**
-     * Validates streak data consistency.
-     * From SaveUserProfileUseCase
-     */
     private fun validateStreakData(profile: UserProfile): String? {
         return when {
             profile.currentStreak < 0 -> "Current streak cannot be negative"
@@ -434,6 +256,45 @@ class ProfileCommandUseCase @Inject constructor(
         }
     }
 
+    private fun calculateCompletion(profile: UserProfile): Int {
+        var totalScore = 0
+        var maxPossibleScore = 0
+
+        COMPLETION_FIELDS.forEach { (field, weight) ->
+            maxPossibleScore += weight
+            if (isFieldComplete(profile, field)) {
+                totalScore += weight
+            }
+        }
+
+        return if (maxPossibleScore > 0) {
+            ((totalScore.toFloat() / maxPossibleScore.toFloat()) * 100).toInt().coerceIn(0, 100)
+        } else {
+            0
+        }
+    }
+
+    private fun isFieldComplete(profile: UserProfile, field: String): Boolean {
+        return when (field) {
+            FIELD_DISPLAY_NAME -> profile.displayName.isNotBlank()
+            FIELD_AGE -> profile.age != null && profile.age > 0
+            FIELD_WEIGHT -> profile.weight != null && profile.weight.kilograms > 0
+            FIELD_FITNESS_GOALS -> profile.fitnessGoals.isNotEmpty()
+            FIELD_EQUIPMENT -> profile.availableEquipment.isNotEmpty()
+            FIELD_BIO -> !profile.bio.isNullOrBlank() && profile.bio.length >= MIN_BIO_LENGTH
+            FIELD_GOALS_PRIORITY -> profile.goalsPriority != null &&
+                profile.goalsPriority.keys.containsAll(profile.fitnessGoals)
+            FIELD_OTHER_EQUIPMENT -> if (
+                profile.availableEquipment.any { it.name.contains("Other", ignoreCase = true) }
+            ) {
+                !profile.otherEquipment.isNullOrBlank()
+            } else {
+                true
+            }
+            else -> false
+        }
+    }
+
     companion object {
         private const val MAX_DISPLAY_NAME_LENGTH = 50
         private const val MIN_DISPLAY_NAME_LENGTH = 2
@@ -442,7 +303,28 @@ class ProfileCommandUseCase @Inject constructor(
         private const val MAX_GOAL_SELECTIONS = 7
         private const val MIN_PRIORITY = 1
         private const val MAX_PRIORITY = 5
+        private const val MIN_BIO_LENGTH = 10
+
+        private const val FIELD_DISPLAY_NAME = "display_name"
+        private const val FIELD_AGE = "age"
+        private const val FIELD_WEIGHT = "weight"
+        private const val FIELD_FITNESS_GOALS = "fitness_goals"
+        private const val FIELD_EQUIPMENT = "equipment"
+        private const val FIELD_BIO = "bio"
+        private const val FIELD_GOALS_PRIORITY = "goals_priority"
+        private const val FIELD_OTHER_EQUIPMENT = "other_equipment"
 
         private val DISPLAY_NAME_REGEX = Regex("^[a-zA-Z0-9\\s._-]+$")
+
+        private val COMPLETION_FIELDS = mapOf(
+            FIELD_DISPLAY_NAME to 20,
+            FIELD_FITNESS_GOALS to 25,
+            FIELD_EQUIPMENT to 20,
+            FIELD_AGE to 15,
+            FIELD_WEIGHT to 15,
+            FIELD_BIO to 10,
+            FIELD_GOALS_PRIORITY to 8,
+            FIELD_OTHER_EQUIPMENT to 7
+        )
     }
 }

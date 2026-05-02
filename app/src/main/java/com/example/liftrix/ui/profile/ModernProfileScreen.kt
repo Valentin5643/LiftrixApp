@@ -337,10 +337,11 @@ private fun ModernProfileContent(
         }
         
         // About Section Card
-        if (!profile.bio.isNullOrBlank()) {
+        val bio = profile.bio
+        if (!bio.isNullOrBlank()) {
             ModernCard(title = "About") {
                 Text(
-                    text = profile.bio,
+                    text = bio,
                     color = textSecondary,
                     fontSize = 14.sp,
                     lineHeight = 20.sp
