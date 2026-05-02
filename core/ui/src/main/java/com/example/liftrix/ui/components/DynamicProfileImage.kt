@@ -65,6 +65,8 @@ fun DynamicProfileImage(
         if (storagePath.isNullOrBlank()) {
             Timber.d("[DYNAMIC_PROFILE_IMAGE] No storage path provided for $debugContext")
             imageState = ImageState.ShowInitials
+        } else if (storagePath.startsWith("http://") || storagePath.startsWith("https://")) {
+            imageState = ImageState.HasUrl(storagePath)
         } else if (urlResolver == null) {
             Timber.w("[DYNAMIC_PROFILE_IMAGE] No URL resolver available from CompositionLocal for $debugContext")
             imageState = ImageState.ShowInitials

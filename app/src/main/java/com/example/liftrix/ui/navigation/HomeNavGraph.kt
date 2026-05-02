@@ -44,7 +44,6 @@ fun NavGraphBuilder.homeGraph(
     ) {
         composable(HomeRoutes.HOME_MAIN) {
             HomeScreen(
-                navController = navController,
                 onNavigateToWorkout = { workoutId ->
                     // Legacy navigation - replaced by type-safe LiftrixRoute.WorkoutDetails
                     onNavigateToWorkout()
@@ -56,6 +55,21 @@ fun NavGraphBuilder.homeGraph(
                 onNavigateToMyWorkouts = {
                     // Legacy navigation - functionality moved to Progress screen
                     navController.navigate(HomeRoutes.MY_WORKOUTS)
+                },
+                onNavigateToPublicProfile = { userId ->
+                    navController.navigate(LiftrixRoute.PublicProfile(userId))
+                },
+                onNavigateToUserSearch = {
+                    navController.navigate(LiftrixRoute.UserSearch)
+                },
+                onNavigateToPostComments = { postId ->
+                    navController.navigate(LiftrixRoute.PostComments(postId))
+                },
+                onNavigateToWorkoutDetails = { workoutId ->
+                    navController.navigate(LiftrixRoute.WorkoutDetails(workoutId))
+                },
+                onNavigateToEditWorkout = { workoutId ->
+                    navController.navigateToEditWorkout(workoutId)
                 }
             )
         }

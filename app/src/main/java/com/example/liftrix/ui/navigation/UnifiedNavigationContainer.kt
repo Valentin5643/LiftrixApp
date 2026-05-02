@@ -200,8 +200,7 @@ fun UnifiedNavigationContainer(
                         )
                         
                         HomeScreen(
-                            navController = navController,
-                            onNavigateToWorkout = {
+                            onNavigateToWorkout = { _ ->
                                 navController.navigateToWorkout()
                             },
                             onNavigateToFriends = {
@@ -209,6 +208,34 @@ fun UnifiedNavigationContainer(
                             },
                             onNavigateToMyWorkouts = {
                                 navController.navigate(LiftrixRoute.UserWorkouts)
+                            },
+                            onNavigateToPublicProfile = { userId ->
+                                navController.navigateToPublicProfile(userId)
+                            },
+                            onNavigateToUserSearch = {
+                                navController.navigate(LiftrixRoute.UserSearch)
+                            },
+                            onNavigateToPostComments = { postId ->
+                                navController.navigate(LiftrixRoute.PostComments(postId))
+                            },
+                            onNavigateToWorkoutDetails = { workoutId ->
+                                navController.navigate(LiftrixRoute.WorkoutDetails(workoutId))
+                            },
+                            onNavigateToEditWorkout = { workoutId ->
+                                navController.navigateToEditWorkout(workoutId)
+                            },
+                            syncStatusContent = {
+                                val syncStatusViewModel = hiltViewModel<com.example.liftrix.ui.common.sync.SyncStatusViewModel>()
+                                val syncStatus by syncStatusViewModel.syncStatus.collectAsState(
+                                    initial = com.example.liftrix.sync.SyncStatus.Idle
+                                )
+
+                                com.example.liftrix.ui.common.sync.SyncStatusIndicator(
+                                    syncStatus = syncStatus,
+                                    showText = true,
+                                    autoHideSuccess = true,
+                                    contentDescription = "Firebase sync status"
+                                )
                             }
                         )
                     }

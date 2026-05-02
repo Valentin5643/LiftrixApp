@@ -307,6 +307,7 @@ dependencies {
     implementation(project(":core:presentation"))
     implementation(project(":core:ui"))
     implementation(project(":feature:auth"))
+    implementation(project(":feature:home"))
     implementation(project(":feature:profile"))
     implementation(project(":user-scoping-annotations"))
     add("kspDebug", project(":user-scoping-processor"))
