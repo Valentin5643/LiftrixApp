@@ -119,15 +119,16 @@ class WorkoutTemplateMapper @Inject constructor() {
     ): List<TemplateExercise> {
         return exercises.mapIndexed { index, exercise ->
             val normalizedTargetSets = exercise.targetSets ?: DEFAULT_TEMPLATE_SETS
-            val normalizedTargetReps = exercise.targetReps
+            val targetReps = exercise.targetReps
+            val normalizedTargetReps = targetReps
                 ?.takeIf { it.count > 0 }
                 ?: DEFAULT_TEMPLATE_REPS
 
-            if (exercise.targetSets == null || exercise.targetReps == null || exercise.targetReps.count <= 0) {
+            if (exercise.targetSets == null || targetReps == null || targetReps.count <= 0) {
                 timber.log.Timber.w(
                     "EDIT-WORKOUT-DEBUG: $source normalized templateId=$templateId " +
                         "exerciseIndex=$index exerciseName='${exercise.name}' " +
-                        "targetSets=${exercise.targetSets} targetReps=${exercise.targetReps?.count} " +
+                        "targetSets=${exercise.targetSets} targetReps=${targetReps?.count} " +
                         "normalizedTargetSets=$normalizedTargetSets normalizedTargetReps=${normalizedTargetReps.count}"
                 )
             }

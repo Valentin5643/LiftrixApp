@@ -2,7 +2,6 @@ package com.example.liftrix.domain.util
 
 import com.example.liftrix.domain.model.ExerciseSet
 import com.example.liftrix.domain.model.Weight
-import timber.log.Timber
 
 /**
  * Centralized utility for calculating workout volume across different data sources.
@@ -94,20 +93,14 @@ object VolumeCalculator {
         exerciseName: String,
         includeIncomplete: Boolean = false
     ): Double {
-        Timber.d("VOLUME_CALC_DEBUG: Calculating volume for '$exerciseName' - ${sets.size} sets")
-        
         val totalVolume = sets
             .filter { includeIncomplete || it.isCompleted }
             .sumOf { set ->
                 val weightKg = set.weight?.kilograms ?: 0.0
                 val repsCount = set.reps?.count ?: 0
-                val setVolume = weightKg * repsCount
-                
-                Timber.d("VOLUME_CALC_DEBUG: Set - weight=${weightKg}kg, reps=$repsCount, completed=${set.isCompleted}, volume=${setVolume}kg")
-                setVolume
+                weightKg * repsCount
             }
-        
-        Timber.d("VOLUME_CALC_DEBUG: Exercise '$exerciseName' total volume: ${totalVolume}kg")
+
         return totalVolume
     }
     

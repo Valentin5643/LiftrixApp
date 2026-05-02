@@ -452,11 +452,13 @@ abstract class DomainModule {
         @javax.inject.Singleton
         fun provideUnifiedWorkoutSessionManager(
             @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
-            completeWorkoutSessionUseCase: com.example.liftrix.domain.usecase.session.CompleteWorkoutSessionUseCase
+            completeWorkoutSessionUseCase: com.example.liftrix.domain.usecase.session.CompleteWorkoutSessionUseCase,
+            authRepository: com.example.liftrix.domain.repository.AuthRepository
         ): com.example.liftrix.service.UnifiedWorkoutSessionManager {
             return com.example.liftrix.service.UnifiedWorkoutSessionManager(
                 context = context,
-                completeWorkoutSessionUseCase = completeWorkoutSessionUseCase
+                completeWorkoutSessionUseCase = completeWorkoutSessionUseCase,
+                authRepository = authRepository
             )
         }
 
