@@ -42,7 +42,9 @@
             <option value="$PROJECT_DIR$/core/ui" />
             <option value="$PROJECT_DIR$/feature" />
             <option value="$PROJECT_DIR$/feature/auth" />
+            <option value="$PROJECT_DIR$/feature/home" />
             <option value="$PROJECT_DIR$/feature/profile" />
+            <option value="$PROJECT_DIR$/feature/progress" />
             <option value="$PROJECT_DIR$/lint-rules" />
             <option value="$PROJECT_DIR$/user-scoping-annotations" />
             <option value="$PROJECT_DIR$/user-scoping-processor" />

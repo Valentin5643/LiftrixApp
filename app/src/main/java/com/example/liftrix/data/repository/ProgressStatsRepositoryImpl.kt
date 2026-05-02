@@ -18,6 +18,7 @@ import com.example.liftrix.domain.repository.DashboardData
 import com.example.liftrix.domain.repository.DurationDataPoint
 import com.example.liftrix.domain.repository.FrequencyDataPoint
 import com.example.liftrix.domain.repository.ProgressStatsRepository
+import com.example.liftrix.sync.ProgressStatsSyncRepository
 import kotlin.random.Random
 import com.example.liftrix.domain.repository.ProgressSummary
 import com.example.liftrix.domain.repository.VolumeDataPoint
@@ -44,7 +45,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
     private val analyticsMapper: AnalyticsMapper,
     private val cacheManager: com.example.liftrix.core.cache.CacheManager,
     private val realtimeSyncManager: RealtimeSyncManager
-) : ProgressStatsRepository {
+) : ProgressStatsRepository, ProgressStatsSyncRepository {
 
     companion object {
         private const val MILLISECONDS_PER_MINUTE = 60_000L

@@ -1,0 +1,72 @@
+package com.example.liftrix.ui.theme
+
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+
+object LiftrixColors {
+    val Primary = LiftrixColorsV2.Teal
+    val Secondary = LiftrixColorsV2.TealHover
+    val TiffanyBlue = LiftrixColorsV2.Teal
+    val PersianGreen = LiftrixColorsV2.TealDark
+    val Snow = Color(0xFFFFFAFA)
+    val SurfaceLight = Color(0xFFF7F9FA)
+    val OnSurface = Color(0xFF1D1B20)
+    val Error = Color(0xFFBA1A1A)
+    val Night = Color(0xFF111418)
+    val Jet = Color(0xFF2D3136)
+}
+
+enum class ThemeVersion {
+    V1,
+    V2
+}
+
+val PrimaryGradient: Brush = Brush.linearGradient(
+    colors = listOf(LiftrixColorsV2.Teal, LiftrixColorsV2.TealHover)
+)
+
+object LiftrixAnimations {
+    const val durationFast = 150
+    const val durationMedium = 300
+    const val durationSlow = 500
+}
+
+object LiftrixTokens {
+    object CornerRadius {
+        val Medium = 12.dp
+        val Large = 16.dp
+    }
+
+    object Elevation {
+        object Level1 { const val value = 1f }
+        object Level4 { const val value = 8f }
+        object Level5 { const val value = 12f }
+    }
+}
+
+@Composable
+fun LiftrixTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
+) {
+    MaterialTheme(
+        colorScheme = if (darkTheme) {
+            darkColorScheme(
+                primary = LiftrixColorsV2.Teal,
+                secondary = LiftrixColorsV2.TealHover
+            )
+        } else {
+            lightColorScheme(
+                primary = LiftrixColorsV2.Teal,
+                secondary = LiftrixColorsV2.TealHover
+            )
+        },
+        content = content
+    )
+}

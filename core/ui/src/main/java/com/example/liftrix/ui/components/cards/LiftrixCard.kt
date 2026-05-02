@@ -82,10 +82,52 @@ fun CompactLiftrixCard(
     )
 }
 
+@Composable
+fun ElevatedLiftrixCard(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    elevation: CardElevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+    colors: CardColors = CardDefaults.cardColors(
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface
+    ),
+    shape: Shape = RoundedCornerShape(12.dp),
+    enabled: Boolean = true,
+    contentPadding: PaddingValues = PaddingValues(24.dp),
+    contentDescription: String? = null,
+    content: @Composable () -> Unit
+) {
+    LiftrixCard(
+        modifier = modifier,
+        onClick = onClick,
+        elevation = elevation,
+        colors = colors,
+        shape = shape,
+        enabled = enabled,
+        contentPadding = contentPadding,
+        contentDescription = contentDescription,
+        content = content
+    )
+}
+
 object CardSpacing {
+    val XXS = 4.dp
+    val XS = 8.dp
+    val S = 12.dp
+    val M = 16.dp
+    val L = 24.dp
+    val XL = 32.dp
     val xs = 4.dp
     val sm = 8.dp
     val md = 12.dp
     val lg = 16.dp
     val xl = 24.dp
+}
+
+object CardElevations {
+    @Composable
+    fun subtle() = CardDefaults.cardElevation(defaultElevation = 1.dp)
+
+    @Composable
+    fun medium() = CardDefaults.cardElevation(defaultElevation = 4.dp)
 }

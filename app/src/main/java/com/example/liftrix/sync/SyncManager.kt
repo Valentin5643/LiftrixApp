@@ -8,7 +8,6 @@ import androidx.work.OneTimeWorkRequestBuilder
 import com.example.liftrix.core.workmanager.WorkManagerProvider
 import androidx.work.ExistingWorkPolicy
 import com.example.liftrix.domain.repository.workout.WorkoutSyncStatusRepository
-import com.example.liftrix.domain.repository.ProgressStatsRepository
 import com.example.liftrix.config.OfflineArchitectureFlags
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -21,7 +20,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 @Singleton
 class SyncManager @Inject constructor(
     private val workoutSyncStatusRepository: WorkoutSyncStatusRepository,
-    private val progressStatsRepository: ProgressStatsRepository,
+    private val progressStatsRepository: ProgressStatsSyncRepository,
     @ApplicationContext private val context: Context
 ) {
     

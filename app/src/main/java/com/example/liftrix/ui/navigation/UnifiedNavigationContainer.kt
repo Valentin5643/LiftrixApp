@@ -63,15 +63,19 @@ import com.example.liftrix.ui.common.LiveSessionBar
 import com.example.liftrix.domain.model.ShareableContent
 import com.example.liftrix.domain.model.ShareableContentType
 import com.example.liftrix.domain.model.SocialPlatform
-import com.example.liftrix.domain.model.ProgressComparison
-import com.example.liftrix.domain.model.ProgressPhoto
-import com.example.liftrix.domain.model.BodyPart
-import com.example.liftrix.domain.model.PhotoType
 import com.example.liftrix.ui.home.HomeScreen
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.ui.settings.sync.SyncSettingsViewModel
 import com.example.liftrix.ui.share.ShareWorkoutViewModel
-import com.example.liftrix.ui.progress.ProgressComparisonViewModel
+import com.example.liftrix.feature.progress.navigation.AnomalyDashboardRoute
+import com.example.liftrix.feature.progress.navigation.AnomalySettingsRoute
+import com.example.liftrix.feature.progress.navigation.ExerciseRankingDetailRoute
+import com.example.liftrix.feature.progress.navigation.MuscleGroupDetailRoute
+import com.example.liftrix.feature.progress.navigation.OneRmDetailRoute
+import com.example.liftrix.feature.progress.navigation.ProgressComparisonRoute
+import com.example.liftrix.feature.progress.navigation.ProgressDashboardRoute
+import com.example.liftrix.feature.progress.navigation.VolumeAnalysisDetailRoute
+import com.example.liftrix.feature.progress.navigation.WorkoutFrequencyDetailRoute
 import com.example.liftrix.ui.workout.WorkoutScreen
 import com.example.liftrix.ui.workout.active.RedesignedActiveWorkoutScreen
 import com.example.liftrix.ui.workout.create.RedesignedCreateTemplateScreen
@@ -79,8 +83,6 @@ import com.example.liftrix.ui.workout.edit.RedesignedEditWorkoutScreen
 import com.example.liftrix.ui.workout.custom.CustomExerciseCreationScreen
 import com.example.liftrix.ui.workout.custom.CustomExerciseEditScreen
 import com.example.liftrix.ui.workout.custom.CustomExerciseListScreen
-import com.example.liftrix.ui.progress.ProgressDashboardScreen
-import com.example.liftrix.ui.progress.detail.WorkoutFrequencyDetailScreen
 import com.example.liftrix.ui.coach.CoachScreen
 import com.example.liftrix.ui.settings.account.EmailChangeScreen
 import com.example.liftrix.ui.settings.account.PasswordChangeScreen
@@ -263,7 +265,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.Progress> {
-                    ProgressDashboardScreen(
+                    ProgressDashboardRoute(
                         onNavigateToVolumeDetail = {
                             navController.navigate(LiftrixRoute.VolumeAnalysisDetail)
                         },
@@ -808,7 +810,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.AnomalyDashboard> {
-                    com.example.liftrix.ui.anomaly.AnomalyDashboardScreen(
+                    AnomalyDashboardRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
@@ -819,7 +821,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.AnomalySettings> {
-                    com.example.liftrix.ui.anomaly.AnomalySettingsScreen(
+                    AnomalySettingsRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }
@@ -1077,12 +1079,9 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.ProgressComparison> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.ProgressComparison>()
-                    ProgressComparisonContainer(
+                    ProgressComparisonRoute(
                         comparisonId = route.comparisonId,
-                        shareMode = route.shareMode,
-                        onNavigateBack = {
-                            navController.popBackStackSafely()
-                        }
+                        shareMode = route.shareMode
                     )
                 }
                 
@@ -1190,41 +1189,23 @@ fun UnifiedNavigationContainer(
                 
                 // Analytics Detail Screen Routes
                 composable<LiftrixRoute.VolumeAnalysisDetail> {
-                    com.example.liftrix.ui.progress.detail.VolumeAnalysisDetailScreen(
-                        navController = navController,
-                        groupBy = com.example.liftrix.domain.model.analytics.VolumeGrouping.BY_WEEK,
-                        timeRange = com.example.liftrix.domain.model.analytics.TimeRangeType.MONTH
-                    )
+                    VolumeAnalysisDetailRoute(navController = navController)
                 }
                 
                 composable<LiftrixRoute.OneRmDetail> {
-                    com.example.liftrix.ui.progress.detail.OneRmProgressionDetailScreen(
-                        navController = navController,
-                        exerciseIds = null, // Default to all exercises
-                        timeRange = com.example.liftrix.domain.model.analytics.TimeRangeType.MONTH
-                    )
+                    OneRmDetailRoute(navController = navController)
                 }
                 
                 composable<LiftrixRoute.MuscleGroupDetail> {
-                    com.example.liftrix.ui.progress.detail.MuscleGroupDetailScreen(
-                        navController = navController,
-                        muscleGroup = null, // Default to all muscle groups
-                        timeRange = com.example.liftrix.domain.model.analytics.TimeRangeType.MONTH
-                    )
+                    MuscleGroupDetailRoute(navController = navController)
                 }
                 
                 composable<LiftrixRoute.ExerciseRankingDetail> {
-                    com.example.liftrix.ui.progress.detail.ExerciseRankingDetailScreen(
-                        navController = navController,
-                        sortBy = com.example.liftrix.domain.model.analytics.RankingMetric.PERFORMANCE_SCORE,
-                        limit = 20
-                    )
+                    ExerciseRankingDetailRoute(navController = navController)
                 }
                 
                 composable<LiftrixRoute.WorkoutFrequencyDetail> {
-                    WorkoutFrequencyDetailScreen(
-                        navController = navController
-                    )
+                    WorkoutFrequencyDetailRoute(navController = navController)
                 }
                 
                 // Social Follow System Routes
@@ -1817,75 +1798,5 @@ private fun ShareWorkoutContainer(
             viewModel.generateQRCode(shareUrl)
         },
         modifier = modifier
-    )
-}
-
-/**
- * Container composable for ProgressComparison screen that bridges the gap between
- * navigation parameters and the actual screen requirements.
- */
-@Composable  
-private fun ProgressComparisonContainer(
-    comparisonId: String,
-    shareMode: Boolean,
-    onNavigateBack: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // Load progress comparison data
-    val viewModel: ProgressComparisonViewModel = hiltViewModel()
-    val uiState by viewModel.uiState.collectAsState()
-    
-    LaunchedEffect(comparisonId) {
-        viewModel.loadComparison(comparisonId, shareMode)
-    }
-    
-    val comparison = uiState.comparison ?: run {
-        // Fallback placeholder while loading
-        val currentTime = System.currentTimeMillis()
-        val placeholderBeforePhoto = ProgressPhoto(
-            id = "before_photo_$comparisonId",
-            userId = "",
-            mediaId = "placeholder_media_before",
-            bodyPart = BodyPart.FULL_BODY,
-            photoType = PhotoType.FRONT,
-            isPrivate = !shareMode,
-            takenAt = currentTime - (4 * 7 * 24 * 60 * 60 * 1000), // 4 weeks ago
-            createdAt = currentTime
-        )
-        val placeholderAfterPhoto = ProgressPhoto(
-            id = "after_photo_$comparisonId",
-            userId = "",
-            mediaId = "placeholder_media_after",
-            bodyPart = BodyPart.FULL_BODY,
-            photoType = PhotoType.FRONT,
-            isPrivate = !shareMode,
-            takenAt = currentTime,
-            createdAt = currentTime
-        )
-        ProgressComparison(
-            id = comparisonId,
-            userId = "",
-            name = "Loading...",
-            bodyPart = BodyPart.FULL_BODY,
-            beforePhoto = placeholderBeforePhoto,
-            afterPhoto = placeholderAfterPhoto,
-            timeDifferenceWeeks = 4,
-            createdAt = currentTime
-        )
-    }
-    
-    com.example.liftrix.ui.progress.ProgressComparisonView(
-        comparison = comparison,
-        modifier = modifier,
-        onImageTap = { photo ->
-            // Handle image tap - open in full screen viewer
-            // For now, just log the action since the methods don't exist yet
-            timber.log.Timber.d("Image tap requested for photo: ${photo.id}")
-        },
-        onComparisonModeToggle = {
-            // Handle comparison mode toggle (side-by-side vs overlay)
-            // For now, just log the action since the methods don't exist yet
-            timber.log.Timber.d("Comparison mode toggle requested")
-        }
     )
 }

@@ -51,6 +51,7 @@ import com.example.liftrix.domain.repository.workout.WorkoutFeedDataRepository
 import com.example.liftrix.domain.repository.workout.WorkoutHistoryRepository
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.repository.workout.WorkoutSyncStatusRepository
+import com.example.liftrix.sync.ProgressStatsSyncRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -85,6 +86,12 @@ abstract class RepositoryModule {
     abstract fun bindProgressStatsRepository(
         progressStatsRepositoryImpl: ProgressStatsRepositoryImpl
     ): ProgressStatsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindProgressStatsSyncRepository(
+        progressStatsRepositoryImpl: ProgressStatsRepositoryImpl
+    ): ProgressStatsSyncRepository
 
 
     @Binds

@@ -5,8 +5,6 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.Data
-import com.example.liftrix.domain.repository.ProgressStatsRepository
-import com.example.liftrix.domain.repository.markCalculationsClean
 import com.example.liftrix.data.remote.dto.AnalyticsDto
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixSuccess
@@ -45,7 +43,7 @@ import java.time.Instant
 class AnalyticsSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
-    private val progressStatsRepository: ProgressStatsRepository,
+    private val progressStatsRepository: ProgressStatsSyncRepository,
     private val firestore: FirebaseFirestore,
     private val auth: FirebaseAuth
 ) : CoroutineWorker(context, params) {

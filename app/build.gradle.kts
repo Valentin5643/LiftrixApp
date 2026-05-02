@@ -309,6 +309,7 @@ dependencies {
     implementation(project(":feature:auth"))
     implementation(project(":feature:home"))
     implementation(project(":feature:profile"))
+    implementation(project(":feature:progress"))
     implementation(project(":user-scoping-annotations"))
     add("kspDebug", project(":user-scoping-processor"))
     add("kspRelease", project(":user-scoping-processor"))

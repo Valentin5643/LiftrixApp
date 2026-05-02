@@ -22,6 +22,7 @@ import com.example.liftrix.domain.model.ExerciseSet
 import com.example.liftrix.domain.model.analytics.CalorieCalculator
 import com.example.liftrix.domain.repository.MetDataRepository
 import com.example.liftrix.domain.repository.ProgressStatsRepository
+import com.example.liftrix.domain.progress.ProgressWidgetResolverPort
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.domain.service.NetworkConnectivityMonitor
 import com.example.liftrix.feature.AnalyticsABTestManager
@@ -32,7 +33,6 @@ import com.example.liftrix.monitoring.ChartRenderingMonitor
 import com.example.liftrix.monitoring.NavigationPerformanceTracker
 import com.example.liftrix.service.AnalyticsEngine
 import com.example.liftrix.service.PerformanceBenchmark
-import com.example.liftrix.service.WidgetResolver
 import com.example.liftrix.ui.progress.components.AnalyticsWidgetManager
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.analytics.ktx.analytics
@@ -328,7 +328,7 @@ abstract class FirebaseModule {
         @Provides
         @Singleton
         fun provideAnalyticsWidgetManager(
-            widgetResolver: WidgetResolver
+            widgetResolver: ProgressWidgetResolverPort
         ): AnalyticsWidgetManager {
             return AnalyticsWidgetManager(widgetResolver)
         }
