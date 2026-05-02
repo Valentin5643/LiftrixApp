@@ -23,8 +23,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.liftrix.BuildConfig
 import com.example.liftrix.MainActivity
 import com.example.liftrix.domain.model.AuthEvent
 import com.example.liftrix.domain.model.AuthState
@@ -189,6 +191,9 @@ private fun AuthFlowScreen(
     var showOnboarding by remember { mutableStateOf(false) }
     var isSignUpMode by remember { mutableStateOf(false) }
     var authenticatedUserId by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val themeManager = remember { com.example.liftrix.ui.theme.ThemeManager.getInstance(context) }
+    val isDarkTheme = themeManager.getEffectiveThemeState(androidx.compose.foundation.isSystemInDarkTheme())
     
     when {
         showOnboarding -> {
@@ -209,7 +214,9 @@ private fun AuthFlowScreen(
         showAuthScreen -> {
             AuthScreen(
                 onAuthSuccess = onAuthSuccess,
-                initialSignUpMode = isSignUpMode
+                initialSignUpMode = isSignUpMode,
+                googleClientId = BuildConfig.GOOGLE_CLIENT_ID,
+                isDarkThemeOverride = isDarkTheme
             )
         }
         else -> {
@@ -220,7 +227,8 @@ private fun AuthFlowScreen(
                 onSignIn = {
                     isSignUpMode = false
                     showAuthScreen = true
-                }
+                },
+                isDarkThemeOverride = isDarkTheme
             )
         }
     }

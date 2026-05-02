@@ -13,6 +13,8 @@ import com.example.liftrix.domain.usecase.ValidationResult
 import com.example.liftrix.domain.service.OnboardingDataStore
 import com.example.liftrix.ui.onboarding.model.OnboardingStep
 import com.example.liftrix.ui.onboarding.model.UserProfileData
+import com.example.liftrix.ui.onboarding.model.toSnapshot
+import com.example.liftrix.domain.model.onboarding.WeightUnit
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -336,7 +338,7 @@ class OnboardingViewModel @Inject constructor(
             // This approach ensures data survives guest→authenticated user transitions
             Timber.d("Storing onboarding data temporarily for user: ${profileData.userId}")
             
-            val storeResult = onboardingDataStore.storeOnboardingData(profileData)
+            val storeResult = onboardingDataStore.storeOnboardingData(profileData.toSnapshot())
             
             if (storeResult.isSuccess) {
                 // Data stored successfully - proceed to authentication
@@ -781,7 +783,9 @@ class OnboardingViewModel @Inject constructor(
                         Timber.d("Found pending onboarding data, transferring to authenticated user: $authenticatedUserId")
                         
                         // Validate and save the pending data with the authenticated user ID
-                        val saveResult = validateAndSaveDirectlyToProfile(pendingData)
+                        val saveResult = validateAndSaveDirectlyToProfile(
+                            UserProfileData.fromSnapshot(pendingData)
+                        )
                         
                         if (saveResult.isSuccess) {
                             // Clear pending data after successful transfer

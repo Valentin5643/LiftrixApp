@@ -1,6 +1,7 @@
 package com.example.liftrix.ui.onboarding
 
 import com.example.liftrix.domain.model.UserProfile
+import com.example.liftrix.domain.model.onboarding.WeightUnit
 import com.example.liftrix.ui.onboarding.model.OnboardingStep
 import com.example.liftrix.ui.onboarding.model.UserProfileData
 
@@ -76,11 +77,3 @@ sealed class OnboardingEvent {
     object RetryOperation : OnboardingEvent()
     object ClearError : OnboardingEvent()
 }
-
-/**
- * Weight unit enum for weight input screen.
- */
-enum class WeightUnit(val symbol: String, val displayName: String) {
-    KILOGRAMS("kg", "Kilograms"),
-    POUNDS("lbs", "Pounds")
-} 

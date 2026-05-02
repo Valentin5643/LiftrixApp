@@ -24,7 +24,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.usecase.ValidationResult
-import com.example.liftrix.ui.theme.LiftrixTheme
 
 /**
  * Reusable validation error text component with consistent styling and animations.
@@ -204,7 +203,7 @@ fun InputFieldError(
 @Preview(showBackground = true)
 @Composable
 private fun ValidationErrorTextPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         ValidationErrorText(
             message = "Age must be at least 13 years old"
         )
@@ -214,7 +213,7 @@ private fun ValidationErrorTextPreview() {
 @Preview(showBackground = true)
 @Composable
 private fun ValidationSuccessIndicatorPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         ValidationSuccessIndicator(
             message = "Great! This age is supported"
         )
@@ -224,7 +223,7 @@ private fun ValidationSuccessIndicatorPreview() {
 @Preview(showBackground = true)
 @Composable
 private fun ValidationLoadingIndicatorPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         ValidationLoadingIndicator(
             message = "Checking weight validity..."
         )
@@ -234,7 +233,7 @@ private fun ValidationLoadingIndicatorPreview() {
 @Preview(showBackground = true)
 @Composable
 private fun InputFieldErrorPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         InputFieldError(
             validationResult = ValidationResult.Invalid("Weight must be a positive value"),
             successMessage = "Weight looks good!"

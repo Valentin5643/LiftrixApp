@@ -5,13 +5,11 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.example.liftrix.domain.model.Equipment
-import com.example.liftrix.domain.model.FitnessGoal
+import com.example.liftrix.domain.model.onboarding.OnboardingDataSnapshot
+import com.example.liftrix.domain.model.onboarding.WeightUnit
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.ui.onboarding.WeightUnit
-import com.example.liftrix.ui.onboarding.model.UserProfileData
 import kotlinx.coroutines.flow.first
 import timber.log.Timber
 import javax.inject.Inject
@@ -33,9 +31,9 @@ import javax.inject.Singleton
  * Security: Uses encrypted storage to protect sensitive user data during temporary storage.
  */
 @Singleton
-class OnboardingDataStore @Inject constructor(
+class OnboardingDataStoreImpl @Inject constructor(
     @Named("onboardingDataStore") private val dataStore: DataStore<Preferences>
-) {
+) : OnboardingDataStore {
     
     companion object {
         private val HAS_PENDING_DATA_KEY = booleanPreferencesKey("onboarding_has_pending_data")
@@ -61,7 +59,7 @@ class OnboardingDataStore @Inject constructor(
      * Store onboarding data temporarily during the authentication flow.
      * This data will survive the guest→authenticated user transition.
      */
-    suspend fun storeOnboardingData(profileData: UserProfileData): LiftrixResult<Unit> = liftrixCatching(
+    override suspend fun storeOnboardingData(profileData: OnboardingDataSnapshot): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
                 code = "STORE_ONBOARDING_DATA_FAILED",
@@ -88,15 +86,15 @@ class OnboardingDataStore @Inject constructor(
             
             // Store equipment selection
             preferences[SELECTED_EQUIPMENT_KEY] = profileData.selectedEquipment
-                .joinToString(",") { it.name }
+                .joinToString(",")
             
             // Store goals selection
             preferences[SELECTED_GOALS_KEY] = profileData.selectedGoals
-                .joinToString(",") { it.name }
+                .joinToString(",")
             
             // Store goals priority as "GOAL1:1,GOAL2:2" format
             preferences[GOALS_PRIORITY_KEY] = profileData.goalsPriority
-                .map { "${it.key.name}:${it.value}" }
+                .map { "${it.key}:${it.value}" }
                 .joinToString(",")
         }
         
@@ -106,7 +104,7 @@ class OnboardingDataStore @Inject constructor(
     /**
      * Check if there is pending onboarding data that needs to be transferred.
      */
-    suspend fun hasPendingOnboardingData(): Boolean {
+    override suspend fun hasPendingOnboardingData(): Boolean {
         return try {
             val preferences = dataStore.data.first()
             val hasPendingData = preferences[HAS_PENDING_DATA_KEY] ?: false
@@ -133,10 +131,10 @@ class OnboardingDataStore @Inject constructor(
     }
     
     /**
-     * Retrieve and reconstruct UserProfileData from temporary storage.
+     * Retrieve and reconstruct onboarding data from temporary storage.
      * This is used after successful authentication to transfer the data.
      */
-    suspend fun retrievePendingOnboardingData(newUserId: String): LiftrixResult<UserProfileData?> = liftrixCatching(
+    override suspend fun retrievePendingOnboardingData(newUserId: String): LiftrixResult<OnboardingDataSnapshot?> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
                 code = "RETRIEVE_ONBOARDING_DATA_FAILED",
@@ -168,8 +166,8 @@ class OnboardingDataStore @Inject constructor(
         
         Timber.d("Retrieving pending onboarding data for new user ID: $newUserId")
         
-        // Reconstruct UserProfileData with new user ID
-        val profileData = UserProfileData(
+        // Reconstruct onboarding data with new user ID
+        val profileData = OnboardingDataSnapshot(
             userId = newUserId, // Use the new authenticated user ID
             ageInput = preferences[AGE_INPUT_KEY] ?: "",
             weightInput = preferences[WEIGHT_INPUT_KEY] ?: "",
@@ -178,8 +176,8 @@ class OnboardingDataStore @Inject constructor(
             } ?: WeightUnit.KILOGRAMS,
             preferNotToSayWeight = preferences[PREFER_NOT_SAY_WEIGHT_KEY] ?: false,
             otherEquipmentInput = preferences[OTHER_EQUIPMENT_KEY] ?: "",
-            selectedEquipment = parseEquipmentSelection(preferences[SELECTED_EQUIPMENT_KEY] ?: ""),
-            selectedGoals = parseGoalsSelection(preferences[SELECTED_GOALS_KEY] ?: ""),
+            selectedEquipment = parseNameSet(preferences[SELECTED_EQUIPMENT_KEY] ?: ""),
+            selectedGoals = parseNameSet(preferences[SELECTED_GOALS_KEY] ?: ""),
             goalsPriority = parseGoalsPriority(preferences[GOALS_PRIORITY_KEY] ?: "")
         )
         
@@ -191,7 +189,7 @@ class OnboardingDataStore @Inject constructor(
     /**
      * Clear pending onboarding data after successful transfer or expiry.
      */
-    suspend fun clearPendingOnboardingData(): LiftrixResult<Unit> = liftrixCatching(
+    override suspend fun clearPendingOnboardingData(): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
                 code = "CLEAR_ONBOARDING_DATA_FAILED",
@@ -221,7 +219,7 @@ class OnboardingDataStore @Inject constructor(
     /**
      * Get summary of pending data for debugging and logging.
      */
-    suspend fun getPendingDataSummary(): String {
+    override suspend fun getPendingDataSummary(): String {
         return try {
             val preferences = dataStore.data.first()
             val hasPendingData = preferences[HAS_PENDING_DATA_KEY] ?: false
@@ -231,8 +229,8 @@ class OnboardingDataStore @Inject constructor(
             } else {
                 val timestamp = preferences[STORED_TIMESTAMP_KEY]?.toLongOrNull() ?: 0L
                 val ageInput = preferences[AGE_INPUT_KEY] ?: ""
-                val equipmentCount = parseEquipmentSelection(preferences[SELECTED_EQUIPMENT_KEY] ?: "").size
-                val goalsCount = parseGoalsSelection(preferences[SELECTED_GOALS_KEY] ?: "").size
+                val equipmentCount = parseNameSet(preferences[SELECTED_EQUIPMENT_KEY] ?: "").size
+                val goalsCount = parseNameSet(preferences[SELECTED_GOALS_KEY] ?: "").size
                 
                 "Pending data: timestamp=$timestamp, age='$ageInput', equipment=$equipmentCount, goals=$goalsCount"
             }
@@ -243,31 +241,18 @@ class OnboardingDataStore @Inject constructor(
     
     // Private helper methods for parsing stored data
     
-    private fun parseEquipmentSelection(equipmentString: String): Set<Equipment> {
-        return if (equipmentString.isBlank()) {
+    private fun parseNameSet(value: String): Set<String> {
+        return if (value.isBlank()) {
             emptySet()
         } else {
-            equipmentString.split(",")
-                .mapNotNull { 
-                    try { Equipment.valueOf(it.trim()) } catch (e: Exception) { null }
-                }
+            value.split(",")
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
                 .toSet()
         }
     }
     
-    private fun parseGoalsSelection(goalsString: String): Set<FitnessGoal> {
-        return if (goalsString.isBlank()) {
-            emptySet()
-        } else {
-            goalsString.split(",")
-                .mapNotNull { 
-                    try { FitnessGoal.valueOf(it.trim()) } catch (e: Exception) { null }
-                }
-                .toSet()
-        }
-    }
-    
-    private fun parseGoalsPriority(priorityString: String): Map<FitnessGoal, Int> {
+    private fun parseGoalsPriority(priorityString: String): Map<String, Int> {
         return if (priorityString.isBlank()) {
             emptyMap()
         } else {
@@ -275,12 +260,8 @@ class OnboardingDataStore @Inject constructor(
                 .mapNotNull { entry ->
                     val parts = entry.split(":")
                     if (parts.size == 2) {
-                        try {
-                            val goal = FitnessGoal.valueOf(parts[0].trim())
-                            val priority = parts[1].trim().toInt()
-                            goal to priority
-                        } catch (e: Exception) {
-                            null
+                        parts[0].trim().takeIf { it.isNotBlank() }?.let { goal ->
+                            parts[1].trim().toIntOrNull()?.let { priority -> goal to priority }
                         }
                     } else {
                         null

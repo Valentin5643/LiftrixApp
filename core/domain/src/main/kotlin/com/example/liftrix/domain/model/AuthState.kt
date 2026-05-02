@@ -1,7 +1,5 @@
 package com.example.liftrix.domain.model
 
-import com.example.liftrix.ui.auth.components.ConsentData
-
 sealed class AuthState {
     data object Initial : AuthState()
     data object Loading : AuthState()
@@ -17,11 +15,11 @@ sealed class AuthEvent {
         val email: String,
         val password: String,
         val username: String,
-        val consents: ConsentData
+        val consents: ConsentChoices
     ) : AuthEvent()
     data class ForgotPassword(val email: String) : AuthEvent()
     data object GoogleSignIn : AuthEvent()
     data object AnonymousSignIn : AuthEvent()
     data object SignOut : AuthEvent()
     data object ClearError : AuthEvent()
-} 
+}

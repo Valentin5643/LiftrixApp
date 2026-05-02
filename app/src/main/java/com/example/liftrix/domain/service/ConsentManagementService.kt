@@ -21,9 +21,9 @@ import javax.inject.Singleton
  * IMPORTANT: All consents must be explicit. No implicit consent is allowed.
  */
 @Singleton
-class ConsentManagementService @Inject constructor(
+class ConsentManagementServiceImpl @Inject constructor(
     private val consentDao: ConsentDao
-) {
+) : ConsentManagementService {
     /**
      * Check if user has given required consents.
      * Required: Privacy Policy + Health Data consent
@@ -81,7 +81,7 @@ class ConsentManagementService @Inject constructor(
      * @param analyticsConsent Analytics/Crashlytics participation
      * @param marketingConsent Marketing communications
      */
-    suspend fun recordConsent(
+    override suspend fun recordConsent(
         userId: String,
         privacyPolicyVersion: String,
         healthDataConsent: Boolean,

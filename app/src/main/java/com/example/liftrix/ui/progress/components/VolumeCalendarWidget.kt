@@ -49,18 +49,15 @@ fun VolumeCalendarWidget(
         Column(
             verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
         ) {
-            // Month navigation header
             VolumeCalendarNavigation(
                 currentMonth = YearMonth.of(calendarData.year, calendarData.month.ordinal + 1),
                 onMonthChange = { /* Future: Navigate to new month */ }
             )
             
-            // Calendar month header with weekday labels
             CalendarMonthHeader(
                 month = YearMonth.of(calendarData.year, calendarData.month.ordinal + 1)
             )
             
-            // Calendar grid with 7 columns (Sunday-Saturday)
             LazyVerticalGrid(
                 columns = GridCells.Fixed(7),
                 horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing1),

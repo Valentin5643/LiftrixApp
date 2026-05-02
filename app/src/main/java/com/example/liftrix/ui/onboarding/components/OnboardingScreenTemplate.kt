@@ -44,7 +44,6 @@ import com.example.liftrix.ui.onboarding.accessibility.AccessibilityUtils.access
 import com.example.liftrix.ui.onboarding.accessibility.AccessibilityUtils.accessibleProgress
 import com.example.liftrix.ui.onboarding.accessibility.AccessibilityUtils.enhancedAccessibilitySemantics
 import com.example.liftrix.ui.onboarding.accessibility.OnboardingStepAnnouncer
-import com.example.liftrix.ui.theme.LiftrixTheme
 
 /**
  * Reusable template for onboarding screens with comprehensive accessibility support.
@@ -367,7 +366,7 @@ private fun OnboardingFooter(
 @Preview(showBackground = true)
 @Composable
 private fun OnboardingScreenTemplatePreview() {
-    LiftrixTheme {
+    MaterialTheme {
         OnboardingScreenTemplate(
             title = "What's your age?",
             subtitle = "This helps us recommend safe and effective workouts",
@@ -398,7 +397,7 @@ private fun OnboardingScreenTemplatePreview() {
 @Preview(showBackground = true)
 @Composable
 private fun OnboardingScreenTemplateLoadingPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         OnboardingScreenTemplate(
             title = "Saving your profile",
             subtitle = "Please wait while we save your information",

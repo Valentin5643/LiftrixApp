@@ -29,7 +29,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.usecase.ValidationResult
-import com.example.liftrix.ui.theme.LiftrixTheme
 
 /**
  * Reusable text field component for onboarding forms with consistent styling,
@@ -309,7 +308,7 @@ object InputValidationFilters {
 @Preview(showBackground = true, name = "OnboardingTextField")
 @Composable
 private fun OnboardingTextFieldPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         OnboardingTextField(
             value = "25",
             onValueChange = {},
@@ -325,7 +324,7 @@ private fun OnboardingTextFieldPreview() {
 @Preview(showBackground = true, name = "OnboardingTextField Error")
 @Composable
 private fun OnboardingTextFieldErrorPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         OnboardingTextField(
             value = "12",
             onValueChange = {},
@@ -341,7 +340,7 @@ private fun OnboardingTextFieldErrorPreview() {
 @Preview(showBackground = true, name = "OnboardingFilterChip")
 @Composable
 private fun OnboardingFilterChipPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         OnboardingFilterChip(
             selected = true,
             onClick = {},
@@ -353,7 +352,7 @@ private fun OnboardingFilterChipPreview() {
 @Preview(showBackground = true, name = "PrimaryActionButton")
 @Composable
 private fun PrimaryActionButtonPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         PrimaryActionButton(
             onClick = {},
             text = "Continue",
@@ -365,7 +364,7 @@ private fun PrimaryActionButtonPreview() {
 @Preview(showBackground = true, name = "PrimaryActionButton Loading")
 @Composable
 private fun PrimaryActionButtonLoadingPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         PrimaryActionButton(
             onClick = {},
             text = "Continue",

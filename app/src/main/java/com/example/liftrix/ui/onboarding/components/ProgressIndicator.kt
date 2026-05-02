@@ -35,7 +35,6 @@ import androidx.compose.ui.unit.dp
 import com.example.liftrix.ui.onboarding.animation.OnboardingAnimations
 import com.example.liftrix.ui.onboarding.animation.OnboardingAnimationComponents
 import com.example.liftrix.ui.onboarding.animation.AnimationPerformanceUtils.rememberAnimationState
-import com.example.liftrix.ui.theme.LiftrixTheme
 
 /**
  * Performance-optimized progress indicator with Material Design motion and smooth 60fps animations.
@@ -304,7 +303,7 @@ fun calculateProgress(currentStep: Int, totalSteps: Int): Float {
 @Preview(showBackground = true, name = "With Step Indicators")
 @Composable
 private fun OnboardingProgressIndicatorPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(24.dp)
@@ -336,7 +335,7 @@ private fun OnboardingProgressIndicatorPreview() {
 @Preview(showBackground = true, name = "Without Step Indicators")
 @Composable
 private fun OnboardingProgressIndicatorSimplePreview() {
-    LiftrixTheme {
+    MaterialTheme {
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -362,7 +361,7 @@ private fun OnboardingProgressIndicatorSimplePreview() {
 @Preview(showBackground = true, name = "Different Step Counts")
 @Composable
 private fun OnboardingProgressIndicatorVariationsPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(24.dp)

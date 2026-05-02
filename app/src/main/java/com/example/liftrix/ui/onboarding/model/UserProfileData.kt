@@ -4,7 +4,8 @@ import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.FitnessGoal
 import com.example.liftrix.domain.model.UserProfile
 import com.example.liftrix.domain.model.Weight
-import com.example.liftrix.ui.onboarding.WeightUnit
+import com.example.liftrix.domain.model.onboarding.OnboardingDataSnapshot
+import com.example.liftrix.domain.model.onboarding.WeightUnit
 import java.time.LocalDateTime
 
 /**
@@ -186,5 +187,39 @@ data class UserProfileData(
                 goalsPriority = userProfile.goalsPriority ?: emptyMap()
             )
         }
+
+        fun fromSnapshot(snapshot: OnboardingDataSnapshot): UserProfileData {
+            return UserProfileData(
+                userId = snapshot.userId,
+                ageInput = snapshot.ageInput,
+                weightInput = snapshot.weightInput,
+                weightUnit = snapshot.weightUnit,
+                preferNotToSayWeight = snapshot.preferNotToSayWeight,
+                selectedEquipment = snapshot.selectedEquipment.mapNotNull { name ->
+                    runCatching { Equipment.valueOf(name) }.getOrNull()
+                }.toSet(),
+                otherEquipmentInput = snapshot.otherEquipmentInput,
+                selectedGoals = snapshot.selectedGoals.mapNotNull { name ->
+                    runCatching { FitnessGoal.valueOf(name) }.getOrNull()
+                }.toSet(),
+                goalsPriority = snapshot.goalsPriority.mapNotNull { (name, priority) ->
+                    runCatching { FitnessGoal.valueOf(name) }.getOrNull()?.let { it to priority }
+                }.toMap()
+            )
+        }
     }
-} 
+}
+
+fun UserProfileData.toSnapshot(): OnboardingDataSnapshot {
+    return OnboardingDataSnapshot(
+        userId = userId,
+        ageInput = ageInput,
+        weightInput = weightInput,
+        weightUnit = weightUnit,
+        preferNotToSayWeight = preferNotToSayWeight,
+        selectedEquipment = selectedEquipment.map { it.name }.toSet(),
+        otherEquipmentInput = otherEquipmentInput,
+        selectedGoals = selectedGoals.map { it.name }.toSet(),
+        goalsPriority = goalsPriority.mapKeys { it.key.name }
+    )
+}

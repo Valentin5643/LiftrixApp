@@ -15,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.liftrix.ui.theme.LiftrixTheme
 
 /**
  * Preview composable showcasing all authentication UI components
@@ -23,7 +22,7 @@ import com.example.liftrix.ui.theme.LiftrixTheme
 @Preview(showBackground = true)
 @Composable
 fun AuthComponentsPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
@@ -99,7 +98,7 @@ fun AuthComponentsPreview() {
 @Preview(showBackground = true)
 @Composable
 fun AuthTextFieldPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         Surface(
             modifier = Modifier
                 .fillMaxSize()

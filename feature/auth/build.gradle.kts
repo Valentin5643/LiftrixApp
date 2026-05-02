@@ -16,9 +16,19 @@ dependencies {
     implementation(project(":core:ui"))
 
     implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.ui)
+    implementation(libs.androidx.ui.graphics)
+    implementation(libs.androidx.ui.tooling.preview)
+    implementation(libs.androidx.material3)
+    implementation("androidx.compose.material:material-icons-extended")
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.hilt.navigation.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.timber)
+    implementation("com.google.android.gms:play-services-auth:21.3.0")
     implementation("javax.inject:javax.inject:1")
+
+    debugImplementation(libs.androidx.ui.tooling)
 }

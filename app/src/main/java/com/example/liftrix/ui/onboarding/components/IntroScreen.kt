@@ -28,7 +28,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.ui.onboarding.model.OnboardingStep
-import com.example.liftrix.ui.theme.LiftrixTheme
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import androidx.compose.foundation.isSystemInDarkTheme
 
@@ -207,7 +206,7 @@ private fun PersonalizationPreview() {
 @Preview(showBackground = true)
 @Composable
 private fun IntroScreenPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         IntroScreen(
             onStart = {},
             onSkip = {}
@@ -218,7 +217,7 @@ private fun IntroScreenPreview() {
 @Preview(showBackground = true, name = "Dark Theme")
 @Composable
 private fun IntroScreenDarkPreview() {
-    LiftrixTheme(darkTheme = true) {
+    MaterialTheme {
         IntroScreen(
             onStart = {},
             onSkip = {}

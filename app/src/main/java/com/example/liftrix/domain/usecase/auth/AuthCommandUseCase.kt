@@ -24,6 +24,7 @@ import com.example.liftrix.sync.SyncCoordinator
 import com.example.liftrix.sync.SyncManager
 import com.example.liftrix.sync.UserPublicSyncWorker
 import com.example.liftrix.ui.common.state.StateCleanupManager
+import com.example.liftrix.ui.onboarding.model.UserProfileData
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -53,7 +54,7 @@ import javax.inject.Inject
  * - Preserves all timing behaviors and profile creation sequences
  * - Maintains backward compatibility for existing users
  */
-class AuthCommandUseCase @Inject constructor(
+class AuthCommandUseCaseImpl @Inject constructor(
     private val authRepository: AuthRepository,
     private val userAccountRepository: UserAccountRepository,
     private val profileRepository: ProfileRepository,
@@ -67,7 +68,7 @@ class AuthCommandUseCase @Inject constructor(
     private val syncManager: SyncManager,
     private val stateCleanupManager: StateCleanupManager,
     @ApplicationContext private val context: Context
-) {
+) : AuthCommandUseCase {
 
     private val workManager: WorkManager
         get() = WorkManagerProvider.getInstance(context)
@@ -91,7 +92,7 @@ class AuthCommandUseCase @Inject constructor(
      * @param password User password
      * @return LiftrixResult containing authenticated user or error
      */
-    suspend fun signInWithEmail(email: String, password: String): LiftrixResult<User> = liftrixCatching(
+    override suspend fun signInWithEmail(email: String, password: String): LiftrixResult<User> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.AuthenticationError(
                 errorMessage = "Sign in failed: ${throwable.message}",
@@ -146,7 +147,7 @@ class AuthCommandUseCase @Inject constructor(
      * @param idToken Google ID token from authentication
      * @return LiftrixResult containing authenticated user or error
      */
-    suspend fun signInWithGoogle(idToken: String): LiftrixResult<User> = liftrixCatching(
+    override suspend fun signInWithGoogle(idToken: String): LiftrixResult<User> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.AuthenticationError(
                 errorMessage = "Google sign in failed: ${throwable.message}",
@@ -213,7 +214,7 @@ class AuthCommandUseCase @Inject constructor(
      * @param username Unique username (3-20 chars, alphanumeric + underscore)
      * @return LiftrixResult containing authenticated user or error
      */
-    suspend fun signUpWithEmail(
+    override suspend fun signUpWithEmail(
         email: String,
         password: String,
         username: String
@@ -347,7 +348,7 @@ class AuthCommandUseCase @Inject constructor(
      *
      * @return LiftrixResult containing anonymous user or error
      */
-    suspend fun signInAnonymously(): LiftrixResult<User> = liftrixCatching(
+    override suspend fun signInAnonymously(): LiftrixResult<User> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.AuthenticationError(
                 errorMessage = "Anonymous sign in failed: ${throwable.message}",
@@ -375,7 +376,7 @@ class AuthCommandUseCase @Inject constructor(
      *
      * @return LiftrixResult with success or error
      */
-    suspend fun signOut(): LiftrixResult<Unit> = liftrixCatching(
+    override suspend fun signOut(): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.AuthenticationError(
                 errorMessage = "Sign out failed: ${throwable.message}",
@@ -439,7 +440,7 @@ class AuthCommandUseCase @Inject constructor(
      *
      * @return LiftrixResult with success or error
      */
-    suspend fun signOutEnhanced(): LiftrixResult<Unit> = liftrixCatching(
+    override suspend fun signOutEnhanced(): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.AuthenticationError(
                 errorMessage = "Enhanced sign out failed: ${throwable.message}",
@@ -536,7 +537,7 @@ class AuthCommandUseCase @Inject constructor(
      * @param email Email address to send reset link
      * @return LiftrixResult with success or error
      */
-    suspend fun resetPassword(email: String): LiftrixResult<Unit> = liftrixCatching(
+    override suspend fun resetPassword(email: String): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.AuthenticationError(
                 errorMessage = "Password reset failed: ${throwable.message}",
@@ -868,8 +869,9 @@ class AuthCommandUseCase @Inject constructor(
 
                     transferResult.fold(
                         onSuccess = { pendingData ->
-                            if (pendingData != null && pendingData.isCompleteForSaving()) {
-                                val userProfile = pendingData.toDomainModel()
+                            val profileData = pendingData?.let(UserProfileData::fromSnapshot)
+                            if (profileData != null && profileData.isCompleteForSaving()) {
+                                val userProfile = profileData.toDomainModel()
 
                                 profileRepository.saveProfile(userProfile).fold(
                                     onSuccess = {

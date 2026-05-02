@@ -44,7 +44,6 @@ import com.example.liftrix.ui.onboarding.animation.OnboardingAnimations
 import com.example.liftrix.ui.onboarding.animation.OnboardingAnimationComponents
 import com.example.liftrix.ui.onboarding.animation.AnimationPerformanceUtils.rememberAnimationState
 import com.example.liftrix.ui.onboarding.model.OnboardingStep
-import com.example.liftrix.ui.theme.LiftrixTheme
 
 /**
  * Age input screen for onboarding flow with comprehensive accessibility support.
@@ -354,7 +353,7 @@ private fun AgeValidationMessage(
 @Preview(showBackground = true)
 @Composable
 private fun AgeInputScreenPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         AgeInputScreen(
             currentAge = "25",
             onAgeChange = {},
@@ -368,7 +367,7 @@ private fun AgeInputScreenPreview() {
 @Preview(showBackground = true, name = "Empty State")
 @Composable
 private fun AgeInputScreenEmptyPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         AgeInputScreen(
             currentAge = "",
             onAgeChange = {},
@@ -382,7 +381,7 @@ private fun AgeInputScreenEmptyPreview() {
 @Preview(showBackground = true, name = "Error State")
 @Composable
 private fun AgeInputScreenErrorPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         AgeInputScreen(
             currentAge = "10",
             onAgeChange = {},
@@ -396,7 +395,7 @@ private fun AgeInputScreenErrorPreview() {
 @Preview(showBackground = true, name = "Dark Theme")
 @Composable
 private fun AgeInputScreenDarkPreview() {
-    LiftrixTheme(darkTheme = true) {
+    MaterialTheme {
         AgeInputScreen(
             currentAge = "25",
             onAgeChange = {},

@@ -57,7 +57,6 @@ import com.example.liftrix.domain.model.FitnessGoal
 import com.example.liftrix.domain.usecase.ValidationResult
 import com.example.liftrix.domain.usecase.ValidateProfileInputUseCase
 import com.example.liftrix.ui.onboarding.model.OnboardingStep
-import com.example.liftrix.ui.theme.LiftrixTheme
 
 /**
  * Fitness goals selection screen for onboarding flow.
@@ -538,7 +537,7 @@ private fun validateGoalsSelection(goals: List<FitnessGoal>): ValidationResult {
 @Preview(showBackground = true)
 @Composable
 private fun GoalsSelectionScreenPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         GoalsSelectionScreen(
             selectedGoals = setOf(
                 FitnessGoal.BUILD_MUSCLE,
@@ -562,7 +561,7 @@ private fun GoalsSelectionScreenPreview() {
 @Preview(showBackground = true, name = "Empty State")
 @Composable
 private fun GoalsSelectionScreenEmptyPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         GoalsSelectionScreen(
             selectedGoals = emptySet(),
             goalsPriority = emptyMap(),
@@ -578,7 +577,7 @@ private fun GoalsSelectionScreenEmptyPreview() {
 @Preview(showBackground = true, name = "Dark Theme")
 @Composable
 private fun GoalsSelectionScreenDarkPreview() {
-    LiftrixTheme(darkTheme = true) {
+    MaterialTheme {
         GoalsSelectionScreen(
             selectedGoals = setOf(
                 FitnessGoal.INCREASE_STRENGTH,

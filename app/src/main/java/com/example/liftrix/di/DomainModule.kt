@@ -30,6 +30,30 @@ abstract class DomainModule {
 
     @dagger.Binds
     @javax.inject.Singleton
+    abstract fun bindAuthCommandUseCase(
+        impl: com.example.liftrix.domain.usecase.auth.AuthCommandUseCaseImpl
+    ): com.example.liftrix.domain.usecase.auth.AuthCommandUseCase
+
+    @dagger.Binds
+    @javax.inject.Singleton
+    abstract fun bindManageGuestSessionUseCase(
+        impl: com.example.liftrix.domain.usecase.guest.ManageGuestSessionUseCaseImpl
+    ): com.example.liftrix.domain.usecase.guest.ManageGuestSessionUseCase
+
+    @dagger.Binds
+    @javax.inject.Singleton
+    abstract fun bindConsentManagementService(
+        impl: com.example.liftrix.domain.service.ConsentManagementServiceImpl
+    ): com.example.liftrix.domain.service.ConsentManagementService
+
+    @dagger.Binds
+    @javax.inject.Singleton
+    abstract fun bindOnboardingDataStoreContract(
+        impl: com.example.liftrix.domain.service.OnboardingDataStoreImpl
+    ): com.example.liftrix.domain.service.OnboardingDataStore
+
+    @dagger.Binds
+    @javax.inject.Singleton
     abstract fun bindWeightMemoryService(
         impl: com.example.liftrix.data.service.WeightMemoryServiceImpl
     ): com.example.liftrix.domain.service.WeightMemoryService

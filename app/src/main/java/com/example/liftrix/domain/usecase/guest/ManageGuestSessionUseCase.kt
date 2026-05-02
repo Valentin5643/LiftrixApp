@@ -12,14 +12,14 @@ import javax.inject.Singleton
  * Manages guest user sessions including workout limits and nudging logic
  */
 @Singleton
-class ManageGuestSessionUseCase @Inject constructor(
+class ManageGuestSessionUseCaseImpl @Inject constructor(
     private val guestSessionRepository: GuestSessionRepository
-) {
+) : ManageGuestSessionUseCase {
 
     /**
      * Gets the current guest session or creates a new one
      */
-    suspend fun getOrCreateGuestSession(userId: String): LiftrixResult<GuestSession> {
+    override suspend fun getOrCreateGuestSession(userId: String): LiftrixResult<GuestSession> {
         return try {
             val result = guestSessionRepository.getGuestSession(userId)
             result.fold(
@@ -36,7 +36,7 @@ class ManageGuestSessionUseCase @Inject constructor(
     /**
      * Records a completed workout for a guest user
      */
-    suspend fun recordWorkoutCompleted(userId: String): LiftrixResult<GuestSession> {
+    override suspend fun recordWorkoutCompleted(userId: String): LiftrixResult<GuestSession> {
         return try {
             val sessionResult = getOrCreateGuestSession(userId)
             sessionResult.fold(
@@ -57,7 +57,7 @@ class ManageGuestSessionUseCase @Inject constructor(
     /**
      * Records a significant interaction from a guest user
      */
-    suspend fun recordSignificantInteraction(
+    override suspend fun recordSignificantInteraction(
         userId: String, 
         interaction: SignificantInteraction
     ): LiftrixResult<GuestSession> {
@@ -81,7 +81,7 @@ class ManageGuestSessionUseCase @Inject constructor(
     /**
      * Records that a nudge was shown to the user
      */
-    suspend fun recordNudgeShown(userId: String): LiftrixResult<GuestSession> {
+    override suspend fun recordNudgeShown(userId: String): LiftrixResult<GuestSession> {
         return try {
             val sessionResult = getOrCreateGuestSession(userId)
             sessionResult.fold(
@@ -102,7 +102,7 @@ class ManageGuestSessionUseCase @Inject constructor(
     /**
      * Marks that the user has seen the limit warning
      */
-    suspend fun markLimitWarningSeen(userId: String): LiftrixResult<GuestSession> {
+    override suspend fun markLimitWarningSeen(userId: String): LiftrixResult<GuestSession> {
         return try {
             val sessionResult = getOrCreateGuestSession(userId)
             sessionResult.fold(
@@ -123,7 +123,7 @@ class ManageGuestSessionUseCase @Inject constructor(
     /**
      * Checks if a nudge should be shown to the user
      */
-    suspend fun shouldShowNudge(userId: String): LiftrixResult<Boolean> {
+    override suspend fun shouldShowNudge(userId: String): LiftrixResult<Boolean> {
         return try {
             val sessionResult = getOrCreateGuestSession(userId)
             sessionResult.fold(
@@ -138,7 +138,7 @@ class ManageGuestSessionUseCase @Inject constructor(
     /**
      * Checks if the limit warning should be shown
      */
-    suspend fun shouldShowLimitWarning(userId: String): LiftrixResult<Boolean> {
+    override suspend fun shouldShowLimitWarning(userId: String): LiftrixResult<Boolean> {
         return try {
             val sessionResult = getOrCreateGuestSession(userId)
             sessionResult.fold(
@@ -153,7 +153,7 @@ class ManageGuestSessionUseCase @Inject constructor(
     /**
      * Gets the number of workouts remaining for the guest user
      */
-    suspend fun getWorkoutsRemaining(userId: String): LiftrixResult<Int> {
+    override suspend fun getWorkoutsRemaining(userId: String): LiftrixResult<Int> {
         return try {
             val sessionResult = getOrCreateGuestSession(userId)
             sessionResult.fold(
@@ -168,7 +168,7 @@ class ManageGuestSessionUseCase @Inject constructor(
     /**
      * Checks if the guest session is still active (within limits)
      */
-    suspend fun isGuestSessionActive(userId: String): LiftrixResult<Boolean> {
+    override suspend fun isGuestSessionActive(userId: String): LiftrixResult<Boolean> {
         return try {
             val sessionResult = getOrCreateGuestSession(userId)
             sessionResult.fold(
@@ -183,7 +183,7 @@ class ManageGuestSessionUseCase @Inject constructor(
     /**
      * Gets an appropriate nudge message for the current session state
      */
-    suspend fun getNudgeMessage(userId: String): LiftrixResult<String> {
+    override suspend fun getNudgeMessage(userId: String): LiftrixResult<String> {
         return try {
             val sessionResult = getOrCreateGuestSession(userId)
             sessionResult.fold(
@@ -198,7 +198,7 @@ class ManageGuestSessionUseCase @Inject constructor(
     /**
      * Clears the guest session (when user signs up)
      */
-    suspend fun clearGuestSession(userId: String): LiftrixResult<Unit> {
+    override suspend fun clearGuestSession(userId: String): LiftrixResult<Unit> {
         return try {
             guestSessionRepository.clearGuestSession(userId)
         } catch (e: Exception) {

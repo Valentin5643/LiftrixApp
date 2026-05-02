@@ -14,14 +14,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import com.example.liftrix.ui.workout.components.PrimaryActionButton
-import com.example.liftrix.ui.workout.components.TertiaryActionButton
-import com.example.liftrix.ui.theme.LiftrixColorsV2
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -108,30 +104,24 @@ fun ForgotPasswordDialog(
             }
         },
         confirmButton = {
-            if (isLoading) {
-                PrimaryActionButton(
-                    text = "Sending...",
-                    onClick = { /* Loading state - no action */ },
-                    enabled = false
-                )
-            } else {
-                PrimaryActionButton(
-                    text = "Send Reset Link",
-                    onClick = {
-                        keyboardController?.hide()
-                        isLoading = true
-                        onSendReset(email)
-                    },
-                    enabled = isFormValid && !isLoading
-                )
+            Button(
+                onClick = {
+                    keyboardController?.hide()
+                    isLoading = true
+                    onSendReset(email)
+                },
+                enabled = isFormValid && !isLoading
+            ) {
+                Text(if (isLoading) "Sending..." else "Send Reset Link")
             }
         },
         dismissButton = {
-            TertiaryActionButton(
-                text = "Cancel",
+            TextButton(
                 onClick = onDismiss,
                 enabled = !isLoading
-            )
+            ) {
+                Text("Cancel")
+            }
         },
         modifier = modifier
     )

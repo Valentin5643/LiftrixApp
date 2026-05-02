@@ -45,32 +45,33 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.liftrix.feature.auth.R
 import com.example.liftrix.domain.model.AuthEvent
 import com.example.liftrix.domain.model.AuthState
+import com.example.liftrix.domain.model.ConsentChoices
 import com.example.liftrix.ui.auth.components.ConsentDialog
 import com.example.liftrix.ui.auth.components.SignInForm
 import com.example.liftrix.ui.auth.components.SignUpForm
-import com.example.liftrix.ui.common.components.LiftrixBrandHeader
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import timber.log.Timber
-import com.example.liftrix.R
+
 @Composable
 fun AuthScreen(
     onAuthSuccess: () -> Unit,
     modifier: Modifier = Modifier,
     initialSignUpMode: Boolean = false,
+    googleClientId: String = "",
+    isDarkThemeOverride: Boolean? = null,
     viewModel: AuthViewModel = hiltViewModel()
 ) {
     val authState by viewModel.authState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
-    
-    // FIXED: Use ThemeManager to respect user's explicit theme preference instead of system theme
-    val themeManager = remember { com.example.liftrix.ui.theme.ThemeManager.getInstance(context) }
-    val isDarkTheme = themeManager.getEffectiveThemeState(isSystemInDarkTheme())
+
+    val isDarkTheme = isDarkThemeOverride ?: isSystemInDarkTheme()
     val dividerColor = if (isDarkTheme) LiftrixColorsV2.Dark.Divider else LiftrixColorsV2.Light.Divider
     val textSecondary = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
     val textTertiary = if (isDarkTheme) LiftrixColorsV2.Dark.TextTertiary else LiftrixColorsV2.Light.TextTertiary
@@ -83,10 +84,13 @@ fun AuthScreen(
     // Setup Google Sign-In client outside of onClick - this ensures it's ready when needed
     val googleSignInClient = remember {
         try {
-            val clientId = com.example.liftrix.BuildConfig.GOOGLE_CLIENT_ID
-            Timber.d("Configuring Google Sign-In client with clientId: $clientId")
+            if (googleClientId.isBlank()) {
+                Timber.e("Google Sign-In client id is missing")
+                return@remember null
+            }
+            Timber.d("Configuring Google Sign-In client")
             val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                .requestIdToken(clientId)
+                .requestIdToken(googleClientId)
                 .requestEmail()
                 .requestProfile()
                 .build()
@@ -424,7 +428,12 @@ fun AuthScreen(
                             email = email,
                             password = password,
                             username = username,
-                            consents = consentData
+                            consents = ConsentChoices(
+                                privacyPolicy = consentData.privacyPolicy,
+                                healthData = consentData.healthData,
+                                aiChat = consentData.aiChat,
+                                analytics = consentData.analytics
+                            )
                         )
                     )
                     showConsentDialog = false

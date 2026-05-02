@@ -40,9 +40,8 @@ import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.usecase.ValidationResult
 import com.example.liftrix.domain.usecase.ValidateProfileInputUseCase
 import com.example.liftrix.ui.onboarding.OnboardingState
-import com.example.liftrix.ui.onboarding.WeightUnit
+import com.example.liftrix.domain.model.onboarding.WeightUnit
 import com.example.liftrix.ui.onboarding.model.OnboardingStep
-import com.example.liftrix.ui.theme.LiftrixTheme
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import androidx.compose.foundation.isSystemInDarkTheme
 import kotlin.math.round
@@ -470,7 +469,7 @@ private fun SkipOption(
 @Preview(showBackground = true)
 @Composable
 private fun WeightInputScreenPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         WeightInputScreen(
             currentWeight = "70.5",
             currentUnit = WeightUnit.KILOGRAMS,
@@ -486,7 +485,7 @@ private fun WeightInputScreenPreview() {
 @Preview(showBackground = true, name = "Pounds Unit")
 @Composable
 private fun WeightInputScreenPoundsPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         WeightInputScreen(
             currentWeight = "155",
             currentUnit = WeightUnit.POUNDS,
@@ -502,7 +501,7 @@ private fun WeightInputScreenPoundsPreview() {
 @Preview(showBackground = true, name = "Empty State")
 @Composable
 private fun WeightInputScreenEmptyPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         WeightInputScreen(
             currentWeight = "",
             currentUnit = WeightUnit.KILOGRAMS,
@@ -518,7 +517,7 @@ private fun WeightInputScreenEmptyPreview() {
 @Preview(showBackground = true, name = "Dark Theme")
 @Composable
 private fun WeightInputScreenDarkPreview() {
-    LiftrixTheme(darkTheme = true) {
+    MaterialTheme {
         WeightInputScreen(
             currentWeight = "70.5",
             currentUnit = WeightUnit.KILOGRAMS,

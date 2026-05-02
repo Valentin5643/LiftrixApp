@@ -33,7 +33,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.liftrix.ui.theme.LiftrixTheme
 
 /**
  * Modal dialog warning users about personalization benefits when skipping onboarding steps.
@@ -234,7 +233,7 @@ private fun BenefitItem(
 @Preview(showBackground = true)
 @Composable
 private fun SkipWarningDialogPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         SkipWarningDialog(
             onDismiss = { },
             onSkipAnyway = { },
@@ -249,7 +248,7 @@ private fun SkipWarningDialogPreview() {
 @Preview(showBackground = true, name = "Warning Content")
 @Composable
 private fun WarningContentPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         Column(
             modifier = Modifier.padding(16.dp)
         ) {

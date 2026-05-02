@@ -348,7 +348,7 @@ private fun WeightInputScreen(
             onWeightChange = { weight: String -> 
                 viewModel.handleEvent(OnboardingEvent.UpdateWeight(weight))
             },
-            onUnitChange = { unit: com.example.liftrix.ui.onboarding.WeightUnit -> 
+            onUnitChange = { unit: com.example.liftrix.domain.model.onboarding.WeightUnit -> 
                 viewModel.handleEvent(OnboardingEvent.UpdateWeightUnit(unit))
             },
             onContinue = onNavigateNext,

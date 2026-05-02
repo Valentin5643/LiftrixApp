@@ -44,7 +44,6 @@ import com.example.liftrix.domain.model.UserProfile
 import com.example.liftrix.domain.usecase.ValidationResult
 import com.example.liftrix.domain.usecase.ValidateProfileInputUseCase
 import com.example.liftrix.ui.onboarding.model.OnboardingStep
-import com.example.liftrix.ui.theme.LiftrixTheme
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import androidx.compose.foundation.isSystemInDarkTheme
 
@@ -500,7 +499,7 @@ private fun EquipmentValidationMessage(
 @Preview(showBackground = true)
 @Composable
 private fun EquipmentSelectionScreenPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         EquipmentSelectionScreen(
             selectedEquipment = setOf(Equipment.DUMBBELLS, Equipment.BENCH, Equipment.RESISTANCE_BANDS),
             otherEquipment = "Yoga mat, foam roller",
@@ -516,7 +515,7 @@ private fun EquipmentSelectionScreenPreview() {
 @Preview(showBackground = true, name = "Empty State")
 @Composable
 private fun EquipmentSelectionScreenEmptyPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         EquipmentSelectionScreen(
             selectedEquipment = emptySet(),
             otherEquipment = "",
@@ -532,7 +531,7 @@ private fun EquipmentSelectionScreenEmptyPreview() {
 @Preview(showBackground = true, name = "Dark Theme")
 @Composable
 private fun EquipmentSelectionScreenDarkPreview() {
-    LiftrixTheme(darkTheme = true) {
+    MaterialTheme {
         EquipmentSelectionScreen(
             selectedEquipment = setOf(Equipment.DUMBBELLS, Equipment.BARBELL),
             otherEquipment = "Medicine ball",

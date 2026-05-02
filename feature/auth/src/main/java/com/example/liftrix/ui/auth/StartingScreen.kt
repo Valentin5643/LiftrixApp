@@ -36,24 +36,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.liftrix.R
-import com.example.liftrix.ui.common.components.LiftrixBrandHeader
-import com.example.liftrix.ui.theme.LiftrixTheme
+import com.example.liftrix.feature.auth.R
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import androidx.compose.foundation.isSystemInDarkTheme
-import com.example.liftrix.ui.theme.getStableBackground
-import com.example.liftrix.ui.theme.DirectV2Colors
 
 @Composable
 fun StartingScreen(
     onGetStarted: () -> Unit,
     onSignIn: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isDarkThemeOverride: Boolean? = null
 ) {
-    val isDarkTheme = isSystemInDarkTheme()
+    val isDarkTheme = isDarkThemeOverride ?: isSystemInDarkTheme()
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = getStableBackground() // FIXED: Use stable background color to prevent fallbacks during auth
+        color = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundPrimary
     ) {
         Column(
             modifier = Modifier
@@ -262,7 +259,7 @@ private fun DrawScope.drawDumbbell(
 @Preview(showBackground = true)
 @Composable
 private fun StartingScreenPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         StartingScreen(
             onGetStarted = { },
             onSignIn = { }
@@ -273,7 +270,7 @@ private fun StartingScreenPreview() {
 @Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun StartingScreenDarkPreview() {
-    LiftrixTheme(darkTheme = true) {
+    MaterialTheme {
         StartingScreen(
             onGetStarted = { },
             onSignIn = { }

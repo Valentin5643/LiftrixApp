@@ -80,10 +80,7 @@ fun SignInForm(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     
-    // FIXED: Use ThemeManager to respect user's explicit theme preference instead of system theme
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val themeManager = remember { com.example.liftrix.ui.theme.ThemeManager.getInstance(context) }
-    val isDarkTheme = themeManager.getEffectiveThemeState(isSystemInDarkTheme())
+    val isDarkTheme = isSystemInDarkTheme()
     val textFieldShape = RoundedCornerShape(14.dp)
     val textPrimary = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary
     val textSecondary = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary

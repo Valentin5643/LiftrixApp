@@ -4,11 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.AuthEvent
 import com.example.liftrix.domain.model.AuthState
+import com.example.liftrix.domain.model.ConsentChoices
 import com.example.liftrix.domain.service.ConsentManagementService
 import com.example.liftrix.domain.usecase.auth.AuthCommandUseCase
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.usecase.guest.ManageGuestSessionUseCase
-import com.example.liftrix.ui.auth.components.ConsentData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -167,7 +167,7 @@ class AuthViewModel @Inject constructor(
         email: String,
         password: String,
         username: String,
-        consents: ConsentData
+        consents: ConsentChoices
     ) {
         viewModelScope.launch {
             isAuthOperationInProgress = true

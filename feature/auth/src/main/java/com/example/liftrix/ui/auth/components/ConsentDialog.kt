@@ -190,12 +190,7 @@ private fun ConsentCheckboxRow(
 }
 
 /**
- * Data class representing user consent choices.
- *
- * @property privacyPolicy User agreed to Privacy Policy (required)
- * @property healthData User consented to health data processing (required)
- * @property aiChat User consented to AI chat feature (required)
- * @property analytics User opted-in to analytics/crashlytics (optional)
+ * UI-owned consent choices collected by the auth dialog.
  */
 data class ConsentData(
     val privacyPolicy: Boolean,

@@ -43,10 +43,9 @@ import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.FitnessGoal
 import com.example.liftrix.ui.onboarding.OnboardingState
 import com.example.liftrix.ui.onboarding.OnboardingViewModel
-import com.example.liftrix.ui.onboarding.WeightUnit
+import com.example.liftrix.domain.model.onboarding.WeightUnit
 import com.example.liftrix.ui.onboarding.model.OnboardingStep
 import com.example.liftrix.ui.onboarding.model.UserProfileData
-import com.example.liftrix.ui.theme.LiftrixTheme
 
 /**
  * Completion screen showing success feedback and profile summary.
@@ -405,7 +404,7 @@ private fun CelebrationMessage() {
 @Preview(showBackground = true)
 @Composable
 private fun CompletionScreenPreview() {
-    LiftrixTheme {
+    MaterialTheme {
         val sampleProfileData = UserProfileData(
             userId = "preview-user",
             ageInput = "25",
