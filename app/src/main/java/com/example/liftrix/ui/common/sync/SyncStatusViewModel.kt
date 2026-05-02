@@ -3,6 +3,7 @@ package com.example.liftrix.ui.common.sync
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.repository.SyncStatusRepository
+import com.example.liftrix.domain.service.SyncStatus as DomainSyncStatus
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.sync.SyncManager
 import com.example.liftrix.sync.SyncStatus
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -57,6 +59,7 @@ class SyncStatusViewModel @Inject constructor(
         .filterNotNull()
         .flatMapLatest { userId ->
             syncStatusRepository.getSyncStatus(userId)
+                .map { it.toAppSyncStatus() }
         }
         .catch { throwable ->
             Timber.e(throwable, "Error observing sync status")
@@ -229,4 +232,12 @@ class SyncStatusViewModel @Inject constructor(
             syncStatusRepository.cleanupUserStatus(userId)
         }
     }
+
+    private fun DomainSyncStatus.toAppSyncStatus(): SyncStatus =
+        when (this) {
+            DomainSyncStatus.Idle -> SyncStatus.Idle
+            DomainSyncStatus.Syncing -> SyncStatus.Syncing
+            is DomainSyncStatus.Success -> SyncStatus.Success(syncedCount)
+            is DomainSyncStatus.Error -> SyncStatus.Error(message)
+        }
 }

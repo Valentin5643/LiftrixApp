@@ -73,9 +73,10 @@ fun UserSearchResultCard(
             )
             
             // Bio section if available
-            if (!user.bio.isNullOrBlank()) {
+            val bio = user.bio
+            if (!bio.isNullOrBlank()) {
                 UserBio(
-                    bio = user.bio,
+                    bio = bio,
                     modifier = Modifier.fillMaxWidth()
                 )
             }

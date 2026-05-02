@@ -318,10 +318,12 @@ class FeedViewModel @Inject constructor(
                 append("💪 By: ${post.authorDisplayName ?: post.authorUsername}\n")
             }
             
-            if (post.workoutSummary?.totalSets != null) {
-                append("📊 ${post.workoutSummary.totalSets} sets")
-                if (post.workoutDuration != null) {
-                    append(" • ${post.workoutDuration / 60}m")
+            val summary = post.workoutSummary
+            if (summary?.totalSets != null) {
+                append("📊 ${summary.totalSets} sets")
+                val duration = post.workoutDuration
+                if (duration != null) {
+                    append(" • ${duration / 60}m")
                 }
                 append("\n")
             }

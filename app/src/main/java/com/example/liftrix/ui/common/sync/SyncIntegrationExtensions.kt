@@ -852,7 +852,12 @@ private fun getSyncHistory(userId: String, syncRepository: SyncRepository): Stat
  */
 fun getProfileViewModelSyncStatus(userId: String, syncStatusRepository: SyncStatusRepository): StateFlow<com.example.liftrix.sync.SyncStatus> {
     return syncStatusRepository.getSyncStatus(userId).map { status ->
-        status ?: com.example.liftrix.sync.SyncStatus.Idle
+        when (status) {
+            com.example.liftrix.domain.service.SyncStatus.Idle -> com.example.liftrix.sync.SyncStatus.Idle
+            com.example.liftrix.domain.service.SyncStatus.Syncing -> com.example.liftrix.sync.SyncStatus.Syncing
+            is com.example.liftrix.domain.service.SyncStatus.Success -> com.example.liftrix.sync.SyncStatus.Success(status.syncedCount)
+            is com.example.liftrix.domain.service.SyncStatus.Error -> com.example.liftrix.sync.SyncStatus.Error(status.message)
+        }
     }.stateIn(
         scope = kotlinx.coroutines.GlobalScope,
         started = SharingStarted.WhileSubscribed(5000),

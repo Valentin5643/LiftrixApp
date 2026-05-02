@@ -174,8 +174,9 @@ class SocialSearchUseCase @Inject constructor(
 
         // Validate workout range if provided
         val filters = request.filters
-        if (filters.minWorkouts != null && filters.maxWorkouts != null &&
-            filters.minWorkouts > filters.maxWorkouts) {
+        val minWorkouts = filters.minWorkouts
+        val maxWorkouts = filters.maxWorkouts
+        if (minWorkouts != null && maxWorkouts != null && minWorkouts > maxWorkouts) {
             violations.add("Minimum workouts cannot be greater than maximum workouts")
         }
 
@@ -278,10 +279,12 @@ class SocialSearchUseCase @Inject constructor(
             }
 
             // Apply workout count filters
-            if (filters.minWorkouts != null && user.totalWorkouts < filters.minWorkouts) {
+            val minWorkouts = filters.minWorkouts
+            val maxWorkouts = filters.maxWorkouts
+            if (minWorkouts != null && user.totalWorkouts < minWorkouts) {
                 return@filter false
             }
-            if (filters.maxWorkouts != null && user.totalWorkouts > filters.maxWorkouts) {
+            if (maxWorkouts != null && user.totalWorkouts > maxWorkouts) {
                 return@filter false
             }
 

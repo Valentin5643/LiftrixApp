@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.collection.LruCache
+import com.example.liftrix.domain.service.ProfileImageLoader
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -38,7 +39,7 @@ import javax.inject.Singleton
 @Singleton
 class ProfileImageCache @Inject constructor(
     @ApplicationContext private val context: Context
-) {
+) : ProfileImageLoader {
     
     companion object {
         private const val CACHE_DIR_NAME = "profile_images"
@@ -85,7 +86,7 @@ class ProfileImageCache @Inject constructor(
      * @param userId User ID for cache key scoping (optional for better organization)
      * @return Bitmap if successfully loaded, null if all cache levels fail
      */
-    suspend fun loadImage(imageUrl: String, userId: String? = null): Bitmap? {
+    override suspend fun loadImage(imageUrl: String, userId: String): Bitmap? {
         return withContext(Dispatchers.IO) {
             try {
                 val cacheKey = generateCacheKey(imageUrl, userId)
@@ -128,7 +129,7 @@ class ProfileImageCache @Inject constructor(
      * Useful for warming cache before UI display.
      */
     suspend fun preloadImage(imageUrl: String, userId: String? = null) {
-        loadImage(imageUrl, userId)
+        loadImage(imageUrl, userId.orEmpty())
     }
     
     /**

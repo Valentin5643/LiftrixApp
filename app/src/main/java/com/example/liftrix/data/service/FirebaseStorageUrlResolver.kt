@@ -1,5 +1,6 @@
 package com.example.liftrix.data.service
 
+import com.example.liftrix.domain.service.ProfileImageUrlResolver
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
@@ -23,7 +24,7 @@ import javax.inject.Singleton
 @Singleton
 class FirebaseStorageUrlResolver @Inject constructor(
     private val firebaseStorage: FirebaseStorage
-) {
+) : ProfileImageUrlResolver {
     
     /**
      * Resolves a Firebase Storage path to a fresh download URL.
@@ -32,7 +33,7 @@ class FirebaseStorageUrlResolver @Inject constructor(
      * @param storagePathOrUrl Storage path like "profile_images/userId/avatar.jpg" or full URL
      * @return Fresh download URL with valid token, or null if file doesn't exist
      */
-    suspend fun resolveUrl(storagePathOrUrl: String): String? {
+    override suspend fun resolveUrl(storagePathOrUrl: String): String? {
         return try {
             // Check if input is already a full URL or a storage path
             val storagePath = if (storagePathOrUrl.startsWith("http://") || storagePathOrUrl.startsWith("https://")) {

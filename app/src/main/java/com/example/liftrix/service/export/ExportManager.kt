@@ -111,7 +111,7 @@ class ExportManager @Inject constructor(
             
             // Return Flow tracking work progress
             workManager.getWorkInfoByIdFlow(workRequest.id)
-                .map { workInfo -> mapWorkInfoToProgress(workInfo) }
+                .map { workInfo -> workInfo?.let(::mapWorkInfoToProgress) ?: ExportProgress.Queued }
                 
         }.getOrThrow()
     }
@@ -171,7 +171,7 @@ class ExportManager @Inject constructor(
             
             // Return Flow tracking work progress
             workManager.getWorkInfoByIdFlow(workRequest.id)
-                .map { workInfo -> mapWorkInfoToProgress(workInfo) }
+                .map { workInfo -> workInfo?.let(::mapWorkInfoToProgress) ?: ExportProgress.Queued }
                 
         }.getOrThrow()
     }

@@ -18,6 +18,7 @@ import com.example.liftrix.domain.validation.ProfileValidator
 import com.example.liftrix.service.MediaProcessingServiceImpl
 import com.example.liftrix.service.QRCodeServiceImpl
 import com.example.liftrix.service.share.PlatformShareAdapterImpl
+import com.example.liftrix.sync.ProfileSyncServiceAdapter
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -66,6 +67,10 @@ abstract class FeatureModule {
     @Binds
     @Singleton
     abstract fun bindPlatformShareAdapter(impl: PlatformShareAdapterImpl): PlatformShareAdapter
+
+    @Binds
+    @Singleton
+    abstract fun bindProfileSyncService(impl: ProfileSyncServiceAdapter): ProfileSyncService
 
     // ========================================
     // NOTIFICATION SYSTEM

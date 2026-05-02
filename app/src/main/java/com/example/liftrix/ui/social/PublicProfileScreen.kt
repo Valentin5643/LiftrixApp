@@ -391,10 +391,11 @@ fun ModernProfileContent(
             )
 
             // About Section Card
-            if (!profile.bio.isNullOrBlank()) {
+            val bio = profile.bio
+            if (!bio.isNullOrBlank()) {
                 ModernCard(title = "About") {
                     Text(
-                        text = profile.bio,
+                        text = bio,
                         color = textSecondary,
                         fontSize = 14.sp,
                         lineHeight = 20.sp
@@ -403,7 +404,8 @@ fun ModernProfileContent(
             }
 
             // Fitness Overview - 2x2 Grid
-            if (profile.publicWorkoutStats != null) {
+            val workoutStats = profile.publicWorkoutStats
+            if (workoutStats != null) {
                 ModernCard(title = "Fitness Overview") {
                     Column(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -415,14 +417,14 @@ fun ModernProfileContent(
                             ModernStatCard(
                                 modifier = Modifier.weight(1f),
                                 icon = Icons.Default.Timer,
-                                value = formatDuration(profile.publicWorkoutStats.totalWorkoutTime.toInt()),
+                                value = formatDuration(workoutStats.totalWorkoutTime.toInt()),
                                 label = "TOTAL TIME",
                                 iconColor = primaryTeal
                             )
                             ModernStatCard(
                                 modifier = Modifier.weight(1f),
                                 icon = Icons.Default.AvTimer,
-                                value = formatDuration(profile.publicWorkoutStats.averageWorkoutTime.toInt()),
+                                value = formatDuration(workoutStats.averageWorkoutTime.toInt()),
                                 label = "AVG SESSION",
                                 iconColor = primaryTeal
                             )
@@ -434,14 +436,14 @@ fun ModernProfileContent(
                             ModernStatCard(
                                 modifier = Modifier.weight(1f),
                                 icon = Icons.Default.TrendingUp,
-                                value = "${profile.publicWorkoutStats.currentStreak} days",
+                                value = "${workoutStats.currentStreak} days",
                                 label = "CURRENT STREAK",
                                 iconColor = primaryTeal
                             )
                             ModernStatCard(
                                 modifier = Modifier.weight(1f),
                                 icon = Icons.Default.EmojiEvents,
-                                value = "${profile.publicWorkoutStats.longestStreak} days",
+                                value = "${workoutStats.longestStreak} days",
                                 label = "BEST STREAK",
                                 iconColor = primaryTeal
                             )
@@ -581,10 +583,11 @@ fun ProfileContent(
                 )
             }
 
-            if (!profile.bio.isNullOrBlank()) {
+            val bio = profile.bio
+            if (!bio.isNullOrBlank()) {
                 item {
                     ProfileBioSection(
-                        bio = profile.bio,
+                        bio = bio,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -608,28 +611,21 @@ fun ProfileContent(
         }*/
 
             // Fitness goals section - Added fitness goals to profile model
-            if (!profile.fitnessGoals.isNullOrEmpty()) {
+            val fitnessGoals = profile.fitnessGoals
+            if (!fitnessGoals.isNullOrEmpty()) {
                 item {
                     GoalsSection(
-                        goals = profile.fitnessGoals,
+                        goals = fitnessGoals,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
 
-            if (profile.achievements.isNotEmpty()) {
-                item {
-                    AchievementsSection(
-                        achievements = profile.achievements.map { it.title },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-
-            if (profile.publicWorkoutStats != null) {
+            val workoutStats = profile.publicWorkoutStats
+            if (workoutStats != null) {
                 item {
                     WorkoutStatsSection(
-                        stats = profile.publicWorkoutStats,
+                        stats = workoutStats,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
