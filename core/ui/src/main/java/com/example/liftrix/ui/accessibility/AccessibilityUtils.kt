@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.accessibility
 
+import android.content.Context
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
@@ -10,6 +11,21 @@ import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.WidgetData
 
 object AccessibilityUtils {
+    fun announceForAccessibility(
+        text: String,
+        delayMs: Long = 100L
+    ) {
+        // Core UI keeps this as a no-op utility; platform-specific announcements
+        // are provided by app-owned accessibility services.
+    }
+
+    fun announceToScreenReader(
+        context: Context,
+        text: String
+    ) {
+        // See announceForAccessibility.
+    }
+
     fun Modifier.dragDropGridAccessibilitySemantics(
         totalWidgets: Int,
         isDragging: Boolean,

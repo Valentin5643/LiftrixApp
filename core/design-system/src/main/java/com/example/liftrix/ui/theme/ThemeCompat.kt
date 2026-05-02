@@ -1,6 +1,10 @@
 package com.example.liftrix.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.TweenSpec
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -18,6 +22,8 @@ object LiftrixColors {
     val SurfaceLight = Color(0xFFF7F9FA)
     val OnSurface = Color(0xFF1D1B20)
     val Error = Color(0xFFBA1A1A)
+    val PrimaryContainer = LiftrixColorsV2.TealSurface
+    val TertiaryContainer = LiftrixColorsV2.TealLight.copy(alpha = 0.2f)
     val Night = Color(0xFF111418)
     val Jet = Color(0xFF2D3136)
 }
@@ -35,9 +41,28 @@ object LiftrixAnimations {
     const val durationFast = 150
     const val durationMedium = 300
     const val durationSlow = 500
+    val bouncySpring: SpringSpec<Float> = spring()
+    val microInteractionSpec: TweenSpec<Float> = tween(durationMillis = durationFast)
+    val standardTransitionSpec: TweenSpec<Float> = tween(durationMillis = durationMedium)
+    val fastTransitionSpec: TweenSpec<Float> = tween(durationMillis = durationFast)
+    val standardSpring: SpringSpec<Float> = spring()
 }
 
 object LiftrixTokens {
+    object TouchTarget {
+        val IconSmall = 16.dp
+        val IconMedium = 24.dp
+        val IconLarge = 32.dp
+        val Minimum = 48.dp
+    }
+
+    object SemanticColors {
+        val Success = Color(0xFF2E7D32)
+        val Error = Color(0xFFBA1A1A)
+        val Warning = Color(0xFFFFA000)
+        val Info = Color(0xFF1976D2)
+    }
+
     object CornerRadius {
         val Medium = 12.dp
         val Large = 16.dp

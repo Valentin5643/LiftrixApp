@@ -1686,7 +1686,7 @@ class WorkoutRepositoryImpl @Inject constructor(
         exerciseId: String,
         limit: Int,
         excludeWorkoutId: String?
-    ): LiftrixResult<List<com.example.liftrix.data.local.entity.WorkoutEntity>> {
+    ): LiftrixResult<List<Workout>> {
         return liftrixCatching(
             errorMapper = { throwable ->
                 LiftrixError.DatabaseError(
@@ -1734,7 +1734,7 @@ class WorkoutRepositoryImpl @Inject constructor(
                 }
                 
                 Timber.d("Found ${workoutEntities.size} completed workouts with exercise $exerciseId")
-                workoutEntities
+                workoutEntities.map { workoutMapper.toDomain(it) }
             }
         }
     }

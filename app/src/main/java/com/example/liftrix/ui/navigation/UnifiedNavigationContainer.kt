@@ -1054,7 +1054,20 @@ fun UnifiedNavigationContainer(
                     val route = backStackEntry.toRoute<LiftrixRoute.PostWorkoutSummary>()
                     com.example.liftrix.ui.workout.completion.PostWorkoutSummaryScreen(
                         workoutId = route.workoutId,
-                        navController = navController
+                        navController = navController,
+                        onNavigateToWorkoutDetails = { workoutId ->
+                            navController.navigate(LiftrixRoute.WorkoutDetails(workoutId))
+                        },
+                        onNavigateToPostCreation = { workoutId ->
+                            navController.navigate(LiftrixRoute.PostCreation(workoutId))
+                        },
+                        onNavigateHome = {
+                            navController.navigate(LiftrixRoute.Home) {
+                                popUpTo(LiftrixRoute.Home) {
+                                    inclusive = false
+                                }
+                            }
+                        }
                     )
                 }
                 
@@ -1063,7 +1076,13 @@ fun UnifiedNavigationContainer(
                     val route = backStackEntry.toRoute<LiftrixRoute.WorkoutDetails>()
                     com.example.liftrix.ui.workout.details.WorkoutDetailsScreen(
                         workoutId = route.workoutId,
-                        navController = navController
+                        navController = navController,
+                        onNavigateToEditWorkout = { workoutId ->
+                            navController.navigate(LiftrixRoute.EditWorkout(workoutId))
+                        },
+                        onNavigateToShareWorkout = { workoutId ->
+                            navController.navigate(LiftrixRoute.ShareWorkout(workoutId))
+                        }
                     )
                 }
                 

@@ -250,7 +250,7 @@ abstract class FeatureModule {
             followRelationshipDao: FollowRelationshipDao,
             blockedUserDao: BlockedUserDao
         ): PrivacyEnforcementService =
-            PrivacyEnforcementService(
+            com.example.liftrix.service.PrivacyEnforcementServiceImpl(
                 privacySettingsDao = privacySettingsDao,
                 followRelationshipDao = followRelationshipDao,
                 blockedUserDao = blockedUserDao
@@ -268,6 +268,38 @@ abstract class FeatureModule {
             settingsRepository: SettingsRepository
         ): NotificationService =
             NotificationServiceImpl(firebaseMessaging, settingsRepository)
+
+        @Provides
+        @Singleton
+        fun provideWorkoutRemoteNotificationSender(
+            firebaseMessaging: FirebaseMessaging
+        ): com.example.liftrix.domain.service.WorkoutRemoteNotificationSender =
+            com.example.liftrix.service.FirebaseWorkoutRemoteNotificationSender(firebaseMessaging)
+
+        @Provides
+        @Singleton
+        fun provideWorkoutNotificationTokenSource(
+            fcmTokenRepository: com.example.liftrix.domain.repository.FCMTokenRepository
+        ): com.example.liftrix.domain.service.WorkoutNotificationTokenSource =
+            com.example.liftrix.service.WorkoutNotificationTokenSourceAdapter(fcmTokenRepository)
+
+        @Provides
+        @Singleton
+        fun provideWorkoutLocalNotificationPresenter(
+            notificationHandler: NotificationHandler
+        ): com.example.liftrix.domain.service.WorkoutLocalNotificationPresenter =
+            com.example.liftrix.service.WorkoutLocalNotificationPresenterAdapter(notificationHandler)
+
+        @Provides
+        @Singleton
+        fun provideCacheInvalidationService(
+            cacheManager: com.example.liftrix.core.cache.EnhancedCacheManager,
+            keyGenerator: com.example.liftrix.core.cache.CacheKeyGenerator
+        ): com.example.liftrix.service.CacheInvalidationService =
+            com.example.liftrix.service.CacheInvalidationServiceImpl(
+                cacheManager = cacheManager,
+                keyGenerator = keyGenerator
+            )
 
         @Provides
         @Singleton
