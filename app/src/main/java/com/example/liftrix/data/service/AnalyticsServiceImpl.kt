@@ -202,19 +202,20 @@ class AnalyticsServiceImpl @Inject constructor(
         userId: String,
         workoutId: String,
         workoutName: String,
-        metrics: WorkoutMetrics,
+        metrics: Any,
         durationMinutes: Long?
     ): Result<Unit> {
         return try {
+            val workoutMetrics = metrics as? WorkoutMetrics
             firebaseAnalytics.logEvent(EVENT_WORKOUT_COMPLETED) {
                 param(FirebaseAnalytics.Param.ITEM_ID, workoutId)
                 param(FirebaseAnalytics.Param.ITEM_NAME, workoutName)
                 param(FirebaseAnalytics.Param.CONTENT_TYPE, "workout")
-                param(PARAM_EXERCISE_COUNT, metrics.exerciseCount.toLong())
-                param(PARAM_TOTAL_SETS, metrics.totalSets.toLong())
-                param(PARAM_COMPLETED_SETS, metrics.completedSets.toLong())
-                param(PARAM_COMPLETION_PERCENTAGE, metrics.completionPercentage)
-                param(PARAM_TOTAL_VOLUME_KG, metrics.totalVolume.kilograms)
+                param(PARAM_EXERCISE_COUNT, workoutMetrics?.exerciseCount?.toLong() ?: 0L)
+                param(PARAM_TOTAL_SETS, workoutMetrics?.totalSets?.toLong() ?: 0L)
+                param(PARAM_COMPLETED_SETS, workoutMetrics?.completedSets?.toLong() ?: 0L)
+                param(PARAM_COMPLETION_PERCENTAGE, workoutMetrics?.completionPercentage ?: 0.0)
+                param(PARAM_TOTAL_VOLUME_KG, workoutMetrics?.totalVolume?.kilograms ?: 0.0)
                 durationMinutes?.let { param(PARAM_DURATION_MINUTES, it) }
             }
             
@@ -222,7 +223,7 @@ class AnalyticsServiceImpl @Inject constructor(
             firebaseCrashlytics.setCustomKey("current_workout_id", "")
             firebaseCrashlytics.setCustomKey("workout_phase", "completed")
             
-            Timber.d("Workout completion logged: $workoutId with ${metrics.exerciseCount} exercises, ${metrics.totalSets} sets")
+            Timber.d("Workout completion logged: $workoutId with ${workoutMetrics?.exerciseCount ?: 0} exercises, ${workoutMetrics?.totalSets ?: 0} sets")
             Result.success(Unit)
         } catch (exception: Exception) {
             Timber.e(exception, "Failed to log workout completion: $workoutId")

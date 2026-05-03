@@ -51,6 +51,10 @@ object AnomalyDetectionMapper {
      * Converts WorkoutAnomalyEntity from database to WorkoutAnomaly domain model
      */
     fun WorkoutAnomalyEntity.toDomain(): WorkoutAnomaly {
+        val previousType = previousValueType
+        val previousData = previousValueData
+        val correctedType = correctedValueType
+        val correctedData = correctedValueData
         return WorkoutAnomaly(
             id = id,
             userId = userId,
@@ -59,15 +63,15 @@ object AnomalyDetectionMapper {
             exerciseName = exerciseName,
             anomalyType = anomalyType,
             currentValue = parseAnomalyValue(currentValueType, currentValueData),
-            previousValue = if (previousValueType != null && previousValueData != null) {
-                parseAnomalyValue(previousValueType, previousValueData)
+            previousValue = if (previousType != null && previousData != null) {
+                parseAnomalyValue(previousType, previousData)
             } else null,
             confidenceScore = confidenceScore,
             detectedAt = detectedAt,
             resolvedAt = resolvedAt,
             userAction = userAction,
-            correctedValue = if (correctedValueType != null && correctedValueData != null) {
-                parseAnomalyValue(correctedValueType, correctedValueData)
+            correctedValue = if (correctedType != null && correctedData != null) {
+                parseAnomalyValue(correctedType, correctedData)
             } else null
         )
     }

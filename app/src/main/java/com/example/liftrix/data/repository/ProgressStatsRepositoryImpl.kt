@@ -186,8 +186,10 @@ class ProgressStatsRepositoryImpl @Inject constructor(
                     exerciseList.forEach { exercise ->
                         val sets = exerciseSetDao.getSetsByExercise(exercise.id, userId)
                         sets.forEach { set ->
-                            if (set.weightKg != null && set.reps != null) {
-                                totalVolume += set.weightKg * set.reps
+                            val weightKg = set.weightKg
+                            val reps = set.reps
+                            if (weightKg != null && reps != null) {
+                                totalVolume += weightKg * reps
                             }
                         }
                     }

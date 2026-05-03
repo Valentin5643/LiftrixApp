@@ -255,8 +255,10 @@ class UserSearchRepositoryImpl @Inject constructor(
                 val workouts = workoutsFlow.first()
                 workouts.map { workout ->
                     // Calculate duration from start and end times
-                    val durationMinutes = if (workout.startTime != null && workout.endTime != null) {
-                        val durationSeconds = workout.endTime.epochSecond - workout.startTime.epochSecond
+                    val startTime = workout.startTime
+                    val endTime = workout.endTime
+                    val durationMinutes = if (startTime != null && endTime != null) {
+                        val durationSeconds = endTime.epochSecond - startTime.epochSecond
                         "${durationSeconds / 60}m"
                     } else {
                         "N/A"

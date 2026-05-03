@@ -39,8 +39,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.liftrix.domain.model.WorkoutId
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,13 +58,38 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.example.liftrix.ui.navigation.LiftrixRoute
 import com.example.liftrix.ui.common.LiveSessionBar
-import com.example.liftrix.domain.model.ShareableContent
-import com.example.liftrix.domain.model.ShareableContentType
-import com.example.liftrix.domain.model.SocialPlatform
-import com.example.liftrix.ui.home.HomeScreen
+import com.example.liftrix.feature.chat.navigation.AIChatSettingsRoute
+import com.example.liftrix.feature.chat.navigation.ChatbotRoute
+import com.example.liftrix.feature.chat.navigation.CoachRoute
+import com.example.liftrix.feature.home.navigation.HomeRoute
+import com.example.liftrix.feature.profile.navigation.FollowerListRoute
+import com.example.liftrix.feature.profile.navigation.ImageCropRoute
+import com.example.liftrix.feature.profile.navigation.ProfileEditRoute
+import com.example.liftrix.feature.profile.navigation.UserProfileRoute
+import com.example.liftrix.feature.social.navigation.FriendsRoute
+import com.example.liftrix.feature.social.navigation.GymBuddyRoute
+import com.example.liftrix.feature.social.navigation.PostCommentsRoute
+import com.example.liftrix.feature.social.navigation.ShareWorkoutRoute
+import com.example.liftrix.feature.social.navigation.TemplateBuddyShareRoute
+import com.example.liftrix.feature.social.navigation.UserSearchRoute
+import com.example.liftrix.feature.social.navigation.WorkoutShareInboxRoute
+import com.example.liftrix.feature.social.navigation.WorkoutSharedWithYouRoute
+import com.example.liftrix.feature.workout.navigation.ActiveWorkoutRoute
+import com.example.liftrix.feature.workout.navigation.CreateWorkoutRoute
+import com.example.liftrix.feature.workout.navigation.CustomExerciseCreationRoute
+import com.example.liftrix.feature.workout.navigation.CustomExerciseEditRoute
+import com.example.liftrix.feature.workout.navigation.CustomExerciseListRoute
+import com.example.liftrix.feature.workout.navigation.EditSessionRoute
+import com.example.liftrix.feature.workout.navigation.EditWorkoutRoute
+import com.example.liftrix.feature.workout.navigation.ExerciseSelectionRoute
+import com.example.liftrix.feature.workout.navigation.PostCreationRoute
+import com.example.liftrix.feature.workout.navigation.PostWorkoutSummaryRoute
+import com.example.liftrix.feature.workout.navigation.TemplateCreationRoute
+import com.example.liftrix.feature.workout.navigation.UserWorkoutsRoute
+import com.example.liftrix.feature.workout.navigation.WorkoutDetailsRoute
+import com.example.liftrix.feature.workout.navigation.WorkoutRoute
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.ui.settings.sync.SyncSettingsViewModel
-import com.example.liftrix.ui.share.ShareWorkoutViewModel
 import com.example.liftrix.feature.progress.navigation.AnomalyDashboardRoute
 import com.example.liftrix.feature.progress.navigation.AnomalySettingsRoute
 import com.example.liftrix.feature.progress.navigation.ExerciseRankingDetailRoute
@@ -76,30 +99,27 @@ import com.example.liftrix.feature.progress.navigation.ProgressComparisonRoute
 import com.example.liftrix.feature.progress.navigation.ProgressDashboardRoute
 import com.example.liftrix.feature.progress.navigation.VolumeAnalysisDetailRoute
 import com.example.liftrix.feature.progress.navigation.WorkoutFrequencyDetailRoute
-import com.example.liftrix.ui.workout.WorkoutScreen
-import com.example.liftrix.ui.workout.active.RedesignedActiveWorkoutScreen
-import com.example.liftrix.ui.workout.create.RedesignedCreateTemplateScreen
-import com.example.liftrix.ui.workout.edit.RedesignedEditWorkoutScreen
-import com.example.liftrix.ui.workout.custom.CustomExerciseCreationScreen
-import com.example.liftrix.ui.workout.custom.CustomExerciseEditScreen
-import com.example.liftrix.ui.workout.custom.CustomExerciseListScreen
-import com.example.liftrix.ui.coach.CoachScreen
-import com.example.liftrix.ui.settings.account.EmailChangeScreen
-import com.example.liftrix.ui.settings.account.PasswordChangeScreen
-import com.example.liftrix.ui.settings.account.UsernameChangeScreen
-import com.example.liftrix.ui.settings.account.AccountDeletionFlow
-import com.example.liftrix.ui.help.HelpScreen
-import com.example.liftrix.ui.help.HelpArticleScreen
-import com.example.liftrix.ui.support.ContactSupportScreen
-import com.example.liftrix.ui.support.SupportTicketScreen
-import com.example.liftrix.ui.settings.about.AboutScreen
-import com.example.liftrix.ui.settings.legal.PrivacyPolicyScreen
-import com.example.liftrix.ui.settings.legal.TermsOfServiceScreen
-import com.example.liftrix.ui.settings.legal.CommunityGuidelinesScreen
-import com.example.liftrix.ui.chat.ChatbotScreen
-import com.example.liftrix.ui.chat.settings.AIChatSettingsScreen
-import com.example.liftrix.ui.social.SocialViewModel
-import com.example.liftrix.ui.social.SocialEvent
+import com.example.liftrix.feature.settings.navigation.AIDisclaimerRoute
+import com.example.liftrix.feature.settings.navigation.AboutRoute
+import com.example.liftrix.feature.settings.navigation.AccountDeletionRoute
+import com.example.liftrix.feature.settings.navigation.AdminBanManagementRoute
+import com.example.liftrix.feature.settings.navigation.CommunityGuidelinesRoute
+import com.example.liftrix.feature.settings.navigation.ContactSupportRoute
+import com.example.liftrix.feature.settings.navigation.ContentModerationPolicyRoute
+import com.example.liftrix.feature.settings.navigation.DataPortabilityRoute
+import com.example.liftrix.feature.settings.navigation.EmailChangeRoute
+import com.example.liftrix.feature.settings.navigation.HelpArticleRoute
+import com.example.liftrix.feature.settings.navigation.HelpCenterRoute
+import com.example.liftrix.feature.settings.navigation.NotificationSettingsRoute
+import com.example.liftrix.feature.settings.navigation.PasswordChangeRoute
+import com.example.liftrix.feature.settings.navigation.PrivacyPolicyRoute
+import com.example.liftrix.feature.settings.navigation.RefundSubscriptionPolicyRoute
+import com.example.liftrix.feature.settings.navigation.SettingsRoute
+import com.example.liftrix.feature.settings.navigation.SupportTicketRoute
+import com.example.liftrix.feature.settings.navigation.TermsOfServiceRoute
+import com.example.liftrix.feature.settings.navigation.UpgradeToPremiumRoute
+import com.example.liftrix.feature.settings.navigation.UsernameChangeRoute
+import com.example.liftrix.feature.settings.navigation.WidgetSettingsRoute
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import com.example.liftrix.ui.components.ConditionalWorkoutFab
 import com.example.liftrix.ui.components.WorkoutCreationModal
@@ -201,7 +221,7 @@ fun UnifiedNavigationContainer(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                         )
                         
-                        HomeScreen(
+                        HomeRoute(
                             onNavigateToWorkout = { _ ->
                                 navController.navigateToWorkout()
                             },
@@ -244,7 +264,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.Workout> {
-                    WorkoutScreen(
+                    WorkoutRoute(
                         onNavigateToActiveWorkout = { templateId ->
                             navController.navigateToActiveWorkout(
                                 templateId = templateId, 
@@ -285,11 +305,11 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.Coach> {
-                    CoachScreen(navController = navController)
+                    CoachRoute(navController = navController)
                 }
                 
                 composable<LiftrixRoute.Friends> {
-                    com.example.liftrix.ui.social.FriendsScreen(
+                    FriendsRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
@@ -307,7 +327,7 @@ fun UnifiedNavigationContainer(
                 
                 // Social Discovery Routes
                 composable<LiftrixRoute.UserSearch> {
-                    com.example.liftrix.ui.social.UserSearchScreen(
+                    UserSearchRoute(
                         onNavigateToProfile = { userId ->
                             navController.navigateToPublicProfile(userId)
                         }
@@ -316,7 +336,7 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.PublicProfile> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.PublicProfile>()
-                    com.example.liftrix.ui.profile.UserProfileScreen(
+                    UserProfileRoute(
                         userId = route.userId,
                         onNavigateBack = {
                             navController.popBackStackSafely()
@@ -333,52 +353,15 @@ fun UnifiedNavigationContainer(
                     )
                 }
                 
-                composable<LiftrixRoute.WorkoutDetails> { backStackEntry ->
-                    val route = backStackEntry.toRoute<LiftrixRoute.WorkoutDetails>()
-                    // WorkoutDetailsScreen implementation placeholder
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Workout Details Screen")
-                            Text("Workout ID: ${route.workoutId}")
-                            Button(
-                                onClick = { navController.popBackStackSafely() }
-                            ) {
-                                Text("Back")
-                            }
-                        }
-                    }
-                }
-                
                 composable<LiftrixRoute.ExerciseSelection> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.ExerciseSelection>()
-                    com.example.liftrix.ui.workout.selection.ExerciseSelectionScreen(
-                        onNavigateBack = {
-                            navController.popBackStackSafely()
-                        },
-                        onExerciseSelected = { exerciseLibrary ->
-                            if (route.isForTemplate) {
-                                if (route.replaceExerciseIndex != null) {
-                                    // Pass replacement data back to edit screen
-                                    navController.previousBackStackEntry?.savedStateHandle?.set(
-                                        "replace_exercise",
-                                        Pair(route.replaceExerciseIndex, exerciseLibrary)
-                                    )
-                                } else {
-                                    // Pass selected exercise back to template creation (add new)
-                                    navController.previousBackStackEntry?.savedStateHandle?.set(
-                                        "selected_exercise", 
-                                        exerciseLibrary
-                                    )
-                                }
-                                navController.popBackStackSafely()
-                            } else {
-                                // Add exercise to current session
-                                viewModel.addExerciseToCurrentSession(exerciseLibrary)
-                                navController.popBackStackSafely()
-                            }
+                    ExerciseSelectionRoute(
+                        isForTemplate = route.isForTemplate,
+                        replaceExerciseIndex = route.replaceExerciseIndex,
+                        backStackEntry = navController.previousBackStackEntry ?: backStackEntry,
+                        onNavigateBack = { navController.popBackStackSafely() },
+                        onSessionExerciseSelected = { exerciseLibrary ->
+                            viewModel.addExerciseToCurrentSession(exerciseLibrary)
                         },
                         onCreateCustomExercise = {
                             navController.navigate(LiftrixRoute.CustomExerciseCreation)
@@ -391,7 +374,7 @@ fun UnifiedNavigationContainer(
                 
                 // Custom Exercise Management Routes
                 composable<LiftrixRoute.CustomExerciseCreation> {
-                    com.example.liftrix.ui.workout.custom.CustomExerciseCreationScreen(
+                    CustomExerciseCreationRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
@@ -405,7 +388,7 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.CustomExerciseEdit> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.CustomExerciseEdit>()
-                    com.example.liftrix.ui.workout.custom.CustomExerciseEditScreen(
+                    CustomExerciseEditRoute(
                         exerciseId = route.exerciseId,
                         onNavigateBack = {
                             navController.popBackStackSafely()
@@ -419,7 +402,7 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.CustomExerciseList> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.CustomExerciseList>()
-                    com.example.liftrix.ui.workout.custom.CustomExerciseListScreen(
+                    CustomExerciseListRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
@@ -442,8 +425,10 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.ActiveWorkout> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.ActiveWorkout>()
-                    com.example.liftrix.ui.workout.active.RedesignedActiveWorkoutScreen(
+                    ActiveWorkoutRoute(
                         navController = navController,
+                        isBlankWorkout = route.isBlankWorkout,
+                        templateId = route.templateId,
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
@@ -455,25 +440,22 @@ fun UnifiedNavigationContainer(
                         },
                         onNavigateToPostWorkoutSummary = { workoutId ->
                             navController.navigate(LiftrixRoute.PostWorkoutSummary(workoutId))
-                        },
-                        isBlankWorkout = route.isBlankWorkout,
-                        templateId = route.templateId
+                        }
                     )
                 }
                 
                 composable<LiftrixRoute.TemplateCreation> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.TemplateCreation>()
                     
-                    com.example.liftrix.ui.workout.create.RedesignedCreateTemplateScreen(
+                    TemplateCreationRoute(
+                        initialFolderId = route.folderId,
+                        navBackStackEntry = backStackEntry,
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
                         onNavigateToExerciseSelection = {
                             navController.navigateToExerciseSelection(isForTemplate = true)
-                        },
-                        editTemplateId = null,
-                        navBackStackEntry = backStackEntry,
-                        initialFolderId = route.folderId
+                        }
                     )
                 }
                 
@@ -497,7 +479,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.Settings> {
-                    com.example.liftrix.ui.settings.SettingsScreen(
+                    SettingsRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
@@ -629,7 +611,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.WidgetSettings> {
-                    com.example.liftrix.ui.settings.WidgetSettingsScreen(
+                    WidgetSettingsRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }
@@ -638,7 +620,7 @@ fun UnifiedNavigationContainer(
                 
                 // Account Management Routes (Added for SPEC-20250116-account-management)
                 composable<LiftrixRoute.EmailChange> {
-                    EmailChangeScreen(
+                    EmailChangeRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }
@@ -646,7 +628,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.PasswordChange> {
-                    PasswordChangeScreen(
+                    PasswordChangeRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }
@@ -654,7 +636,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.UsernameChange> {
-                    UsernameChangeScreen(
+                    UsernameChangeRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }
@@ -662,7 +644,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.AccountDeletion> {
-                    AccountDeletionFlow(
+                    AccountDeletionRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
@@ -675,7 +657,7 @@ fun UnifiedNavigationContainer(
                 
                 // Help and Support System Routes (Added for SPEC-20250116-app-information)
                 composable<LiftrixRoute.HelpCenter> {
-                    com.example.liftrix.ui.help.HelpScreen(
+                    HelpCenterRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
@@ -690,7 +672,7 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.HelpArticle> { backStackEntry ->
                     val articleRoute = backStackEntry.toRoute<LiftrixRoute.HelpArticle>()
-                    com.example.liftrix.ui.help.HelpArticleScreen(
+                    HelpArticleRoute(
                         articleId = articleRoute.articleId,
                         onNavigateBack = {
                             navController.popBackStackSafely()
@@ -699,7 +681,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.ContactSupport> {
-                    com.example.liftrix.ui.support.ContactSupportScreen(
+                    ContactSupportRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
@@ -711,7 +693,7 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.SupportTicket> { backStackEntry ->
                     val ticketRoute = backStackEntry.toRoute<LiftrixRoute.SupportTicket>()
-                    com.example.liftrix.ui.support.SupportTicketScreen(
+                    SupportTicketRoute(
                         ticketId = ticketRoute.ticketId,
                         onNavigateBack = {
                             navController.popBackStackSafely()
@@ -720,7 +702,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.About> {
-                    com.example.liftrix.ui.settings.about.AboutScreen(
+                    AboutRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
@@ -739,7 +721,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.PrivacyPolicy> {
-                    com.example.liftrix.ui.settings.legal.PrivacyPolicyScreen(
+                    PrivacyPolicyRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }
@@ -747,7 +729,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.TermsOfService> {
-                    com.example.liftrix.ui.settings.legal.TermsOfServiceScreen(
+                    TermsOfServiceRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }
@@ -755,7 +737,7 @@ fun UnifiedNavigationContainer(
                 }
 
                 composable<LiftrixRoute.AIDisclaimer> {
-                    com.example.liftrix.ui.settings.legal.AIDisclaimerScreen(
+                    AIDisclaimerRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }
@@ -763,7 +745,7 @@ fun UnifiedNavigationContainer(
                 }
 
                 composable<LiftrixRoute.CommunityGuidelines> {
-                    CommunityGuidelinesScreen(
+                    CommunityGuidelinesRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }
@@ -771,7 +753,7 @@ fun UnifiedNavigationContainer(
                 }
 
                 composable<LiftrixRoute.ContentModerationPolicy> {
-                    com.example.liftrix.ui.settings.legal.ContentModerationPolicyScreen(
+                    ContentModerationPolicyRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }
@@ -779,7 +761,7 @@ fun UnifiedNavigationContainer(
                 }
 
                 composable<LiftrixRoute.RefundSubscriptionPolicy> {
-                    com.example.liftrix.ui.settings.legal.RefundSubscriptionPolicyScreen(
+                    RefundSubscriptionPolicyRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }
@@ -787,7 +769,7 @@ fun UnifiedNavigationContainer(
                 }
 
                 composable<LiftrixRoute.DataPortability> {
-                    com.example.liftrix.ui.settings.data.DataPortabilityScreen(
+                    DataPortabilityRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }
@@ -796,7 +778,7 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.AIChatbot> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.AIChatbot>()
-                    ChatbotScreen(
+                    ChatbotRoute(
                         conversationId = route.conversationId,
                         initialWorkoutContext = route.workoutContext,
                         onNavigateBack = { navController.popBackStackSafely() }
@@ -804,7 +786,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.AIChatSettings> {
-                    AIChatSettingsScreen(
+                    AIChatSettingsRoute(
                         onNavigateBack = { navController.popBackStackSafely() }
                     )
                 }
@@ -929,39 +911,10 @@ fun UnifiedNavigationContainer(
                 // Workout Editing Routes
                 composable<LiftrixRoute.EditWorkout> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.EditWorkout>()
-                    val editWorkoutViewModel = hiltViewModel<com.example.liftrix.ui.workout.edit.EditWorkoutViewModel>()
-                    
-                    // Listen for exercise replacement from navigation
-                    LaunchedEffect(backStackEntry.savedStateHandle) {
-                        backStackEntry.savedStateHandle.getStateFlow<Pair<Int, com.example.liftrix.domain.model.ExerciseLibrary>?>(
-                            "replace_exercise", null
-                        ).collect { replacementData ->
-                            if (replacementData != null) {
-                                editWorkoutViewModel.replaceExercise(replacementData.first, replacementData.second)
-                                // Clear the saved state to prevent re-triggering
-                                backStackEntry.savedStateHandle.remove<Pair<Int, com.example.liftrix.domain.model.ExerciseLibrary>>("replace_exercise")
-                            }
-                        }
-                    }
-                    
-                    // Listen for new exercise addition from navigation
-                    LaunchedEffect(backStackEntry.savedStateHandle) {
-                        backStackEntry.savedStateHandle.getStateFlow<com.example.liftrix.domain.model.ExerciseLibrary?>(
-                            "selected_exercise", null
-                        ).collect { selectedExercise ->
-                            if (selectedExercise != null) {
-                                editWorkoutViewModel.handleEvent(com.example.liftrix.ui.workout.edit.EditWorkoutEvent.AddExercise(selectedExercise.id))
-                                // Clear the saved state to prevent re-triggering
-                                backStackEntry.savedStateHandle.remove<com.example.liftrix.domain.model.ExerciseLibrary>("selected_exercise")
-                            }
-                        }
-                    }
-                    
-                    com.example.liftrix.ui.workout.edit.RedesignedEditWorkoutScreen(
-                        workoutId = WorkoutId(route.workoutId),
-                        onNavigateBack = {
-                            navController.popBackStackSafely()
-                        },
+                    EditWorkoutRoute(
+                        workoutId = route.workoutId,
+                        backStackEntry = backStackEntry,
+                        onNavigateBack = { navController.popBackStackSafely() },
                         onNavigateToExerciseSelection = {
                             navController.navigateToExerciseSelection(isForTemplate = true)
                         },
@@ -976,23 +929,20 @@ fun UnifiedNavigationContainer(
                                 }
                             }
                         },
-                        viewModel = editWorkoutViewModel
                     )
                 }
                 
                 composable<LiftrixRoute.EditSession> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.EditSession>()
-                    com.example.liftrix.ui.workout.edit.EditSessionScreen(
-                        sessionId = WorkoutId(route.sessionId),
-                        onNavigateBack = {
-                            navController.popBackStackSafely()
-                        }
+                    EditSessionRoute(
+                        sessionId = route.sessionId,
+                        onNavigateBack = { navController.popBackStackSafely() }
                     )
                 }
                 
                 composable<LiftrixRoute.CreateWorkout> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.CreateWorkout>()
-                    com.example.liftrix.ui.workout.create.CreateWorkoutScreen(
+                    CreateWorkoutRoute(
                         initialFolderId = route.folderId,
                         onNavigateBack = {
                             navController.popBackStackSafely()
@@ -1012,7 +962,7 @@ fun UnifiedNavigationContainer(
                 // Profile Management Routes
                 composable<LiftrixRoute.Profile> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.Profile>()
-                    com.example.liftrix.ui.profile.ProfileEditScreenRedesigned(
+                    ProfileEditRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
@@ -1023,7 +973,7 @@ fun UnifiedNavigationContainer(
                 }
 
                 composable<LiftrixRoute.ProfileEdit> {
-                    com.example.liftrix.ui.profile.ProfileEditScreenRedesigned(
+                    ProfileEditRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
@@ -1035,7 +985,7 @@ fun UnifiedNavigationContainer(
 
                 composable<LiftrixRoute.ImageCrop> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.ImageCrop>()
-                    com.example.liftrix.ui.profile.ImageCropScreen(
+                    ImageCropRoute(
                         imageUri = android.net.Uri.parse(route.imageUri),
                         onNavigateBack = { 
                             navController.popBackStackSafely() 
@@ -1052,7 +1002,7 @@ fun UnifiedNavigationContainer(
                 // Post-workout summary screen
                 composable<LiftrixRoute.PostWorkoutSummary> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.PostWorkoutSummary>()
-                    com.example.liftrix.ui.workout.completion.PostWorkoutSummaryScreen(
+                    PostWorkoutSummaryRoute(
                         workoutId = route.workoutId,
                         navController = navController,
                         onNavigateToWorkoutDetails = { workoutId ->
@@ -1074,7 +1024,7 @@ fun UnifiedNavigationContainer(
                 // Workout details screen  
                 composable<LiftrixRoute.WorkoutDetails> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.WorkoutDetails>()
-                    com.example.liftrix.ui.workout.details.WorkoutDetailsScreen(
+                    WorkoutDetailsRoute(
                         workoutId = route.workoutId,
                         navController = navController,
                         onNavigateToEditWorkout = { workoutId ->
@@ -1088,7 +1038,7 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.ShareWorkout> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.ShareWorkout>()
-                    ShareWorkoutContainer(
+                    ShareWorkoutRoute(
                         workoutId = route.workoutId,
                         onNavigateBack = {
                             navController.popBackStackSafely()
@@ -1108,7 +1058,7 @@ fun UnifiedNavigationContainer(
                 // If you need to navigate to the feed, use LiftrixRoute.Home instead
                 
                 composable<LiftrixRoute.NotificationSettings> {
-                    com.example.liftrix.ui.settings.NotificationSettingsScreen(
+                    NotificationSettingsRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }
@@ -1116,7 +1066,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.GymBuddy> {
-                    com.example.liftrix.ui.social.gymbuddy.GymBuddyScreen(
+                    GymBuddyRoute(
                         onNavigateToQrScanner = {
                             navController.navigate(LiftrixRoute.QRScanner)
                         }
@@ -1146,7 +1096,7 @@ fun UnifiedNavigationContainer(
 
                 composable<LiftrixRoute.TemplateBuddyShare> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.TemplateBuddyShare>()
-                    com.example.liftrix.ui.sharing.TemplateBuddyShareScreen(
+                    TemplateBuddyShareRoute(
                         templateId = route.templateId,
                         onNavigateBack = { navController.popBackStackSafely() },
                         onOpenQrShareMode = { navController.navigate(LiftrixRoute.GymBuddy) }
@@ -1155,7 +1105,7 @@ fun UnifiedNavigationContainer(
 
                 composable<LiftrixRoute.WorkoutSharedWithYou> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.WorkoutSharedWithYou>()
-                    com.example.liftrix.ui.sharing.WorkoutSharedWithYouScreen(
+                    WorkoutSharedWithYouRoute(
                         shareId = route.shareId,
                         onNavigateBack = { navController.popBackStackSafely() },
                         onSaved = {
@@ -1166,7 +1116,7 @@ fun UnifiedNavigationContainer(
 
                 composable<LiftrixRoute.WorkoutShareInbox> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.WorkoutShareInbox>()
-                    com.example.liftrix.ui.sharing.WorkoutShareInboxScreen(
+                    WorkoutShareInboxRoute(
                         senderId = route.senderId,
                         onNavigateBack = { navController.popBackStackSafely() },
                         onOpenShare = { shareId ->
@@ -1176,14 +1126,29 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.UserWorkouts> {
-                    com.example.liftrix.ui.workouts.UserWorkoutsScreen(
-                        navController = navController
+                    UserWorkoutsRoute(
+                        onNavigateBack = { navController.popBackStackSafely() },
+                        onNavigateToWorkoutDetails = { workoutId ->
+                            navController.navigate(LiftrixRoute.WorkoutDetails(workoutId))
+                        },
+                        onNavigateToPostComments = { postId ->
+                            navController.navigate(LiftrixRoute.PostComments(postId))
+                        },
+                        onNavigateToProfile = {
+                            navController.navigate(LiftrixRoute.Profile())
+                        },
+                        onNavigateToCreateWorkout = {
+                            navController.navigate(LiftrixRoute.CreateWorkout(folderId = null))
+                        },
+                        onNavigateToEditWorkout = { workoutId ->
+                            navController.navigate(LiftrixRoute.EditWorkout(workoutId))
+                        }
                     )
                 }
                 
                 composable<LiftrixRoute.PostCreation> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.PostCreation>()
-                    com.example.liftrix.ui.workout.completion.PostCreationScreen(
+                    PostCreationRoute(
                         workoutId = route.workoutId,
                         onNavigateBack = { navController.popBackStackSafely() },
                         onPostCreated = { postId ->
@@ -1200,7 +1165,7 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.PostComments> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.PostComments>()
-                    com.example.liftrix.ui.social.comments.PostCommentsScreen(
+                    PostCommentsRoute(
                         postId = route.postId,
                         onNavigateBack = { navController.popBackStackSafely() }
                     )
@@ -1230,16 +1195,10 @@ fun UnifiedNavigationContainer(
                 // Social Follow System Routes
                 composable<LiftrixRoute.FollowersList> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.FollowersList>()
-                    val listType = when (route.listType) {
-                        "FOLLOWERS" -> com.example.liftrix.ui.profile.FollowerListType.FOLLOWERS
-                        "FOLLOWING" -> com.example.liftrix.ui.profile.FollowerListType.FOLLOWING
-                        "PENDING_REQUESTS" -> com.example.liftrix.ui.profile.FollowerListType.PENDING_REQUESTS
-                        else -> com.example.liftrix.ui.profile.FollowerListType.FOLLOWERS
-                    }
-
-                    com.example.liftrix.ui.profile.FollowerListScreen(
+                    FollowerListRoute(
                         userId = route.userId,
-                        listType = listType,
+                        rawListType = route.listType,
+                        fallbackListType = "FOLLOWERS",
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
@@ -1251,16 +1210,10 @@ fun UnifiedNavigationContainer(
 
                 composable<LiftrixRoute.FollowingList> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.FollowingList>()
-                    val listType = when (route.listType) {
-                        "FOLLOWERS" -> com.example.liftrix.ui.profile.FollowerListType.FOLLOWERS
-                        "FOLLOWING" -> com.example.liftrix.ui.profile.FollowerListType.FOLLOWING
-                        "PENDING_REQUESTS" -> com.example.liftrix.ui.profile.FollowerListType.PENDING_REQUESTS
-                        else -> com.example.liftrix.ui.profile.FollowerListType.FOLLOWING
-                    }
-
-                    com.example.liftrix.ui.profile.FollowerListScreen(
+                    FollowerListRoute(
                         userId = route.userId,
-                        listType = listType,
+                        rawListType = route.listType,
+                        fallbackListType = "FOLLOWING",
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
@@ -1272,7 +1225,7 @@ fun UnifiedNavigationContainer(
                 
                 // Admin System Routes (Admin-only access)
                 composable<LiftrixRoute.AdminBanManagement> {
-                    com.example.liftrix.ui.admin.AdminBanManagementScreen(
+                    AdminBanManagementRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }
@@ -1281,7 +1234,7 @@ fun UnifiedNavigationContainer(
                 
                 // Subscription Management Routes
                 composable<LiftrixRoute.UpgradeToPremium> {
-                    com.example.liftrix.ui.settings.upgrade.UpgradeToPremiumScreen(
+                    UpgradeToPremiumRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
@@ -1770,52 +1723,5 @@ private fun NavigationAwareTopAppBar(
             titleContentColor = MaterialTheme.colorScheme.onSurface,
             actionIconContentColor = MaterialTheme.colorScheme.onSurface
         )
-    )
-}
-
-/**
- * Container composable for ShareWorkout screen that bridges the gap between
- * navigation parameters (workoutId) and the actual screen requirements (ShareableContent).
- */
-@Composable
-private fun ShareWorkoutContainer(
-    workoutId: String,
-    onNavigateBack: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // Load workout data and convert to shareable content
-    val viewModel: ShareWorkoutViewModel = hiltViewModel()
-    val uiState by viewModel.uiState.collectAsState()
-    
-    LaunchedEffect(workoutId) {
-        viewModel.loadWorkout(workoutId)
-    }
-    
-    val shareableContent = uiState.shareableContent ?: ShareableContent(
-        id = workoutId,
-        type = ShareableContentType.WORKOUT,
-        title = "Loading workout...",
-        subtitle = "",
-        stats = emptyMap(),
-        imageUrl = null,
-        userAvatar = null,
-        metadata = emptyMap()
-    )
-    
-    val shareUrl = "https://liftrix.app/share/workout/$workoutId"
-    
-    com.example.liftrix.ui.share.ShareWorkoutScreen(
-        workoutContent = shareableContent,
-        shareUrl = shareUrl,
-        onNavigateBack = onNavigateBack,
-        onShareToPlatform = { platform, message ->
-            // Implement platform-specific sharing
-            viewModel.shareWorkout(platform, message ?: "", shareUrl)
-        },
-        onGenerateQRCode = {
-            // Generate QR code for workout sharing
-            viewModel.generateQRCode(shareUrl)
-        },
-        modifier = modifier
     )
 }

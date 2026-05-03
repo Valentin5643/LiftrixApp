@@ -18,6 +18,9 @@ import com.example.liftrix.data.repository.PRNotificationRepositoryImpl
 import com.example.liftrix.data.repository.social.BlockRepositoryImpl
 import com.example.liftrix.data.repository.social.ReportRepositoryImpl
 import com.example.liftrix.data.repository.sharing.TemplateShareRepositoryImpl
+import com.example.liftrix.data.service.AIMessageReportServiceImpl
+import com.example.liftrix.data.service.AbusePreventionService
+import com.example.liftrix.data.service.RateLimitingService
 import com.example.liftrix.data.repository.SyncPreferencesRepositoryImpl
 import com.example.liftrix.data.repository.PersonalRecordRepositoryImpl
 import com.example.liftrix.data.repository.exercise.ExerciseRepositoryImpl
@@ -51,6 +54,9 @@ import com.example.liftrix.domain.repository.workout.WorkoutFeedDataRepository
 import com.example.liftrix.domain.repository.workout.WorkoutHistoryRepository
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.repository.workout.WorkoutSyncStatusRepository
+import com.example.liftrix.domain.service.AIMessageReportService
+import com.example.liftrix.domain.service.AbusePreventionServiceContract
+import com.example.liftrix.domain.service.RateLimitingServiceContract
 import com.example.liftrix.sync.ProgressStatsSyncRepository
 import dagger.Binds
 import dagger.Module
@@ -173,6 +179,24 @@ abstract class RepositoryModule {
     abstract fun bindReportRepository(
         reportRepositoryImpl: ReportRepositoryImpl
     ): ReportRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAIMessageReportService(
+        aiMessageReportServiceImpl: AIMessageReportServiceImpl
+    ): AIMessageReportService
+
+    @Binds
+    @Singleton
+    abstract fun bindRateLimitingService(
+        rateLimitingService: RateLimitingService
+    ): RateLimitingServiceContract
+
+    @Binds
+    @Singleton
+    abstract fun bindAbusePreventionService(
+        abusePreventionService: AbusePreventionService
+    ): AbusePreventionServiceContract
 
     @Binds
     @Singleton

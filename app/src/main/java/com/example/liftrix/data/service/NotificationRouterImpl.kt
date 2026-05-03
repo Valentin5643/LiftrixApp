@@ -481,10 +481,11 @@ class NotificationRouterImpl @Inject constructor(
     }
 
     private fun mapToAppNotification(entity: NotificationQueueEntity): AppNotification {
-        val dataMap = if (entity.data.isNullOrEmpty()) {
+        val rawData = entity.data
+        val dataMap = if (rawData.isNullOrEmpty()) {
             emptyMap()
         } else {
-            entity.data.split(",").associate { pair ->
+            rawData.split(",").associate { pair ->
                 val (key, value) = pair.split("=", limit = 2)
                 key to value
             }

@@ -3,6 +3,7 @@ package com.example.liftrix.ui.workout
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.WorkoutId
+import com.example.liftrix.domain.model.toExercise
 import com.example.liftrix.domain.repository.exercise.ExerciseRepository
 import com.example.liftrix.domain.model.common.LiftrixResult
 import dagger.hilt.android.lifecycle.HiltViewModel

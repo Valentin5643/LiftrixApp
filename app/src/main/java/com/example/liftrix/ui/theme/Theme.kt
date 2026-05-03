@@ -22,14 +22,6 @@ import com.example.liftrix.ui.common.PerformanceOptimizations
 import timber.log.Timber
 import java.util.Calendar
 
-/**
- * Theme version enumeration - maintained for backward compatibility
- */
-enum class ThemeVersion {
-    V1,  // Legacy 5-color system (mapped to V2 colors)
-    V2   // Modern Teal-based system
-}
-
 // Performance-optimized color scheme creation with V2 system optimizations
 // Uses ColorSystemOptimizations for 20%+ performance improvement in theme switching
 private val LightColorScheme = ColorSystemOptimizations.getColorScheme(false)

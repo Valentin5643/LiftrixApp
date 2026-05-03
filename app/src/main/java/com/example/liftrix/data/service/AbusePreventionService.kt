@@ -6,6 +6,7 @@ import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.repository.ChatRepository
 import com.example.liftrix.domain.service.AbuseAction
 import com.example.liftrix.domain.service.AbuseDetection
+import com.example.liftrix.domain.service.AbusePreventionServiceContract
 import com.example.liftrix.domain.service.AbuseType
 import com.example.liftrix.domain.service.AnalyticsTracker
 import com.example.liftrix.domain.model.common.LiftrixResult
@@ -24,7 +25,7 @@ class AbusePreventionService @Inject constructor(
     private val chatRepository: ChatRepository,
     private val remoteConfig: RemoteConfigManager,
     private val analyticsTracker: AnalyticsTracker
-) {
+) : AbusePreventionServiceContract {
     
     companion object {
         private const val HOURLY_BASELINE = 10
@@ -78,7 +79,7 @@ class AbusePreventionService @Inject constructor(
      * @param message The message content to analyze
      * @return Detection result with recommended action
      */
-    suspend fun detectAbuse(userId: String, message: String): AbuseDetection {
+    override suspend fun detectAbuse(userId: String, message: String): AbuseDetection {
         val lowercaseMessage = message.lowercase()
         
         // 1. Context-aware jailbreak detection

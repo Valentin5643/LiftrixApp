@@ -5,6 +5,8 @@ import com.example.liftrix.data.remote.config.RemoteConfigManager
 import com.example.liftrix.domain.repository.ChatRepository
 import com.example.liftrix.domain.repository.SubscriptionRepository
 import com.example.liftrix.domain.service.AnalyticsTracker
+import com.example.liftrix.domain.service.AIUsageStats
+import com.example.liftrix.domain.service.RateLimitingServiceContract
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.service.RateLimitStatus
 import kotlinx.coroutines.flow.first
@@ -26,7 +28,7 @@ class RateLimitingService @Inject constructor(
     private val subscriptionRepository: SubscriptionRepository,
     private val remoteConfig: RemoteConfigManager,
     private val analyticsTracker: AnalyticsTracker
-) {
+) : RateLimitingServiceContract {
     
     companion object {
         // Default limits (can be overridden by Remote Config)
@@ -49,7 +51,7 @@ class RateLimitingService @Inject constructor(
      * @param userId The user to check
      * @return Current rate limit status with details
      */
-    suspend fun checkLimits(userId: String): RateLimitStatus {
+    override suspend fun checkLimits(userId: String): RateLimitStatus {
         try {
             // Get configurable thresholds from Remote Config
             val maxDailyMessages = remoteConfig.getLong("ai_max_daily_messages").getOrDefault(DEFAULT_DAILY_MESSAGES.toLong()).toInt()
@@ -343,7 +345,7 @@ class RateLimitingService @Inject constructor(
     /**
      * Gets usage statistics for analytics.
      */
-    suspend fun getUsageStats(userId: String): UsageStats {
+    override suspend fun getUsageStats(userId: String): AIUsageStats {
         try {
             val todayStart = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, 0)
@@ -379,7 +381,7 @@ class RateLimitingService @Inject constructor(
                 formatTimestamp(System.currentTimeMillis())
             )
             
-            return UsageStats(
+            return AIUsageStats(
                 dailyMessages = todayMessages,
                 monthlyTokens = monthTokens,
                 hourlyTokens = hourlyTokens,
@@ -387,19 +389,9 @@ class RateLimitingService @Inject constructor(
             )
         } catch (e: Exception) {
             Timber.e(e, "Error getting usage stats for user $userId")
-            return UsageStats()
+            return AIUsageStats()
         }
     }
-    
-    /**
-     * Data class for usage statistics.
-     */
-    data class UsageStats(
-        val dailyMessages: Int = 0,
-        val monthlyTokens: Int = 0,
-        val hourlyTokens: Int = 0,
-        val estimatedMonthlyCost: Double = 0.0
-    )
 
     private suspend fun getLocalPreferenceMonthlyLimit(userId: String, monthlyTokensUsed: Int): Int? {
         return try {

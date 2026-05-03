@@ -36,6 +36,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.timber)
     implementation("androidx.paging:paging-common:3.2.1")
+    implementation("eu.bambooapps:compose-material3-pullrefresh:1.1.1")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-service:2.8.7")
     implementation("javax.inject:javax.inject:1")

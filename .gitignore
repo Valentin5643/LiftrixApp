@@ -188,3 +188,8 @@ build-cache/
 /feature/workout/build/kspCaches/debug/sourceToOutputs
 /feature/workout/build/outputs/logs/manifest-merger-debug-report.txt
 /feature/workout/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin
+/core/sync/build/outputs/logs/manifest-merger-debug-report.txt
+/feature/social/build/
+/feature/workout/build/
+/core/database/build/
+/core/data/build/
