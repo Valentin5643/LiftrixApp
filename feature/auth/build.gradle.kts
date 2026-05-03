@@ -1,5 +1,7 @@
 plugins {
     id("liftrix.android.compose.library")
+    id("com.google.dagger.hilt.android")
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -25,10 +27,12 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.hilt.navigation.compose)
+    implementation(libs.hilt.android)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.timber)
     implementation("com.google.android.gms:play-services-auth:21.3.0")
     implementation("javax.inject:javax.inject:1")
 
+    ksp(libs.hilt.compiler)
     debugImplementation(libs.androidx.ui.tooling)
 }
