@@ -26,6 +26,7 @@ dependencies {
     implementation(libs.firebase.messaging)
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.hilt.android)
     implementation(libs.hilt.work)
     implementation(libs.work.runtime.ktx)
@@ -34,6 +35,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.datetime)
     implementation(libs.gson)
+    implementation(libs.guava)
     implementation(libs.timber)
     implementation(libs.room.ktx)
 

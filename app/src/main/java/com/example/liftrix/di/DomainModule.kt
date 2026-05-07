@@ -162,12 +162,12 @@ abstract class DomainModule {
         @dagger.Provides
         @javax.inject.Singleton
         fun provideAnalyticsService(
-            widgetManager: com.example.liftrix.ui.progress.components.AnalyticsWidgetManager,
+            widgetManager: com.example.liftrix.domain.service.analytics.AnalyticsWidgetManager,
             preferencesRepository: com.example.liftrix.domain.repository.WidgetPreferencesRepository,
             analyticsEngine: com.example.liftrix.service.AnalyticsEngine,
             cacheManager: com.example.liftrix.core.cache.CacheManager,
             widgetCacheManager: com.example.liftrix.service.cache.WidgetCacheManager,
-            realtimeSyncManager: com.example.liftrix.service.sync.RealtimeSyncManager,
+            syncScheduler: com.example.liftrix.domain.sync.SyncScheduler,
             getWidgetDataUseCase: com.example.liftrix.domain.usecase.analytics.GetWidgetDataUseCase,
             @IoDispatcher ioDispatcher: kotlinx.coroutines.CoroutineDispatcher
         ): com.example.liftrix.service.AnalyticsService {
@@ -177,7 +177,7 @@ abstract class DomainModule {
                 analyticsEngine = analyticsEngine,
                 cacheManager = cacheManager,
                 widgetCacheManager = widgetCacheManager,
-                realtimeSyncManager = realtimeSyncManager,
+                syncScheduler = syncScheduler,
                 getWidgetDataUseCase = getWidgetDataUseCase,
                 ioDispatcher = ioDispatcher
             )
@@ -394,7 +394,7 @@ abstract class DomainModule {
             workoutDao: com.example.liftrix.data.local.dao.WorkoutDao,
             dataExportDao: com.example.liftrix.data.local.dao.DataExportDao
         ): com.example.liftrix.domain.usecase.export.ExportWorkoutsUseCase {
-            return com.example.liftrix.domain.usecase.export.ExportWorkoutsUseCase(
+            return com.example.liftrix.domain.usecase.export.ExportWorkoutsUseCaseImpl(
                 workoutDao = workoutDao,
                 dataExportDao = dataExportDao
             )
@@ -409,7 +409,7 @@ abstract class DomainModule {
             workoutDao: com.example.liftrix.data.local.dao.WorkoutDao,
             dataImportDao: com.example.liftrix.data.local.dao.DataImportDao
         ): com.example.liftrix.domain.usecase.data_import.DataImportUseCase {
-            return com.example.liftrix.domain.usecase.data_import.DataImportUseCase(
+            return com.example.liftrix.domain.usecase.data_import.DataImportUseCaseImpl(
                 formatDetector = formatDetector,
                 parserFactory = parserFactory,
                 exerciseMappingService = exerciseMappingService,

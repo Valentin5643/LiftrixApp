@@ -17,7 +17,6 @@ dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:presentation"))
     implementation(project(":core:ui"))
-    implementation(project(":feature:workout"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)

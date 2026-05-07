@@ -1,6 +1,5 @@
 package com.example.liftrix.domain.usecase.data_import
 
-import android.net.Uri
 import com.example.liftrix.data.local.dao.DataImportDao
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.local.entity.DataImportEntity
@@ -46,13 +45,13 @@ import javax.inject.Inject
  * @property workoutDao DAO for workout database operations
  * @property dataImportDao DAO for import tracking operations
  */
-class DataImportUseCase @Inject constructor(
+class DataImportUseCaseImpl @Inject constructor(
     private val formatDetector: FormatDetector,
     private val parserFactory: WorkoutParserFactory,
     private val exerciseMappingService: ExerciseMappingService,
     private val workoutDao: WorkoutDao,
     private val dataImportDao: DataImportDao
-) {
+) : DataImportUseCase {
 
     // ==================== QUERY OPERATIONS ====================
 
@@ -72,8 +71,8 @@ class DataImportUseCase @Inject constructor(
      * @param inputStream Input stream for reading file contents
      * @return LiftrixResult<ImportValidation> with validation results and preview
      */
-    suspend fun validateFile(
-        uri: Uri,
+    override suspend fun validateFile(
+        uri: Any,
         inputStream: InputStream
     ): LiftrixResult<ImportValidation> = liftrixCatching(
         errorMapper = { throwable ->
@@ -135,7 +134,7 @@ class DataImportUseCase @Inject constructor(
      * @param importId ID of the import to monitor
      * @return Flow<ImportProgress> emitting progress updates
      */
-    fun getImportProgress(importId: String): Flow<ImportProgress> = flow {
+    override fun getImportProgress(importId: String): Flow<ImportProgress> = flow {
         // This would typically integrate with a background processing system
         // For now, emit basic progress updates
         emit(ImportProgress(importId, 0, "Starting import..."))
@@ -165,9 +164,9 @@ class DataImportUseCase @Inject constructor(
      * @param options Import options including conflict strategy
      * @return LiftrixResult<ImportResult> with import results
      */
-    suspend fun import(
+    override suspend fun import(
         userId: String,
-        uri: Uri,
+        uri: Any,
         inputStream: InputStream,
         options: ImportOptions
     ): LiftrixResult<ImportResult> = liftrixCatching(
@@ -803,56 +802,3 @@ class DataImportUseCase @Inject constructor(
 }
 
 // ==================== DATA MODELS ====================
-
-data class ImportValidation(
-    val format: String,
-    val isValid: Boolean,
-    val totalWorkouts: Int,
-    val totalExercises: Int,
-    val totalSets: Int,
-    val errors: List<ImportValidationError>,
-    val warnings: List<ImportValidationError>,
-    val unmappedExercises: List<String>,
-    val preview: List<ParsedWorkout>
-)
-
-data class ImportOptions(
-    val detectedFormat: String?,
-    val sourceApp: String?,
-    val conflictStrategy: ConflictStrategy,
-    val allowValidationErrors: Boolean = false
-)
-
-data class ImportResult(
-    val importId: String,
-    val importedCount: Int,
-    val skippedCount: Int,
-    val errors: List<ImportValidationError>,
-    val warnings: List<ImportValidationError>,
-    val unmappedExercises: List<String>
-)
-
-data class ImportProgress(
-    val importId: String,
-    val progressPercentage: Int,
-    val statusMessage: String
-)
-
-data class ImportValidationResult(
-    val isValid: Boolean,
-    val errors: List<ImportValidationError>,
-    val warnings: List<ImportValidationError>,
-    val totalWorkouts: Int,
-    val validWorkouts: Int,
-    val totalExercises: Int,
-    val validExercises: Int,
-    val totalSets: Int,
-    val validSets: Int,
-    val unmappedExercises: List<String>
-)
-
-enum class ConflictStrategy {
-    SKIP,
-    REPLACE,
-    MERGE
-}

@@ -16,6 +16,7 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.ui.accessibility.AccessibilityUtils
+import com.example.liftrix.ui.common.AccessibilityUtils as CommonAccessibilityUtils
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.max
@@ -409,7 +410,7 @@ object AccessibilityEnhancements {
         priority: LiveRegionMode = LiveRegionMode.Polite,
         delayMs: Long = 100L
     ) {
-        AccessibilityUtils.announceForAccessibility(
+        CommonAccessibilityUtils.announceForAccessibility(
             text = text,
             delayMs = delayMs
         )
@@ -444,7 +445,7 @@ object AccessibilityEnhancements {
                 // Announce focus change to screen readers
                 announceText?.let { text ->
                     delay(100L) // Brief delay for focus to settle
-                    AccessibilityUtils.announceToScreenReader(context, text)
+                    CommonAccessibilityUtils.announceToScreenReader(context, text)
                 }
             }
         }

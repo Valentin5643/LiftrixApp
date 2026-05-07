@@ -14,7 +14,7 @@ import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material3.Icon
-import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
+import com.example.liftrix.ui.components.actions.UnifiedWorkoutCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable

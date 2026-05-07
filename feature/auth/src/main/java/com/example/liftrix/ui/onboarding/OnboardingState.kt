@@ -3,7 +3,7 @@ package com.example.liftrix.ui.onboarding
 import com.example.liftrix.domain.model.UserProfile
 import com.example.liftrix.domain.model.onboarding.WeightUnit
 import com.example.liftrix.ui.onboarding.model.OnboardingStep
-import com.example.liftrix.ui.onboarding.model.UserProfileData
+import com.example.liftrix.domain.model.onboarding.UserProfileData
 
 /**
  * MVI State sealed class for onboarding flow.

@@ -21,14 +21,12 @@ android {
 
 dependencies {
     implementation(project(":core:analytics"))
-    implementation(project(":core:data"))
     implementation(project(":core:design-system"))
     implementation(project(":core:domain"))
     implementation(project(":core:domain-common"))
     implementation(project(":core:model"))
     implementation(project(":core:notifications"))
     implementation(project(":core:presentation"))
-    implementation(project(":core:sync"))
     implementation(project(":core:ui"))
 
     implementation(platform(libs.androidx.compose.bom))

@@ -6,6 +6,9 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.Data
 import com.example.liftrix.data.remote.dto.AnalyticsDto
+import com.example.liftrix.domain.sync.AnalyticsCalculation
+import com.example.liftrix.domain.sync.ProgressStatsSyncRepository
+import com.example.liftrix.domain.sync.markCalculationsClean
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixSuccess
 import com.example.liftrix.domain.model.common.liftrixFailure
@@ -439,17 +442,4 @@ data class AuthValidationResult(
     val isValid: Boolean,
     val reason: String,
     val userId: String?
-)
-
-/**
- * Domain model for analytics calculation pending sync
- * 
- * Temporary placeholder - will be properly defined in repository layer
- */
-data class AnalyticsCalculation(
-    val id: String,
-    val calculationType: String,
-    val result: String,
-    val timestamp: Long,
-    val metadata: Map<String, String>? = null
 )

@@ -569,7 +569,8 @@ private fun SyncStatusIndicator(
     val color = when (syncStatus) {
         SyncStatus.Idle -> MaterialTheme.colorScheme.onSurfaceVariant
         SyncStatus.Syncing -> MaterialTheme.colorScheme.primary
-        is SyncStatus.Success -> MaterialTheme.colorScheme.primary
+        is SyncStatus.Success,
+        is SyncStatus.AnalyticsSuccess -> MaterialTheme.colorScheme.primary
         is SyncStatus.Error -> MaterialTheme.colorScheme.error
     }
     if (showText) {
@@ -577,13 +578,14 @@ private fun SyncStatusIndicator(
             text = when (syncStatus) {
                 SyncStatus.Idle -> "Idle"
                 SyncStatus.Syncing -> "Syncing"
-                is SyncStatus.Success -> "Synced"
+                is SyncStatus.Success,
+                is SyncStatus.AnalyticsSuccess -> "Synced"
                 is SyncStatus.Error -> "Sync failed"
             },
             color = color,
             style = MaterialTheme.typography.labelMedium
         )
-    } else if (!(autoHideSuccess && syncStatus is SyncStatus.Success)) {
+    } else if (!(autoHideSuccess && (syncStatus is SyncStatus.Success || syncStatus is SyncStatus.AnalyticsSuccess))) {
         Icon(
             imageVector = Icons.Default.CloudSync,
             contentDescription = contentDescription,

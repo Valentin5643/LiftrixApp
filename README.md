@@ -446,6 +446,19 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 </div>
 
 ---
+<div align="center">
+
+## InfoEducație 2026
+
+Materialele pentru jurizare sunt disponibile în folderul:
+
+[`00_InfoEducatie-2026/`](./00_InfoEducatie-2026/)
+
+Conține documentația tehnică, declarația de resurse externe, prezentarea, APK-ul și dovezile tehnice relevante.
+
+</div>
+
+---
 
 <div align="center">
 

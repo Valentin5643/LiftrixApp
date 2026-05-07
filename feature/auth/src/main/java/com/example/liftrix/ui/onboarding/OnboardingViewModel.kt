@@ -12,8 +12,8 @@ import com.example.liftrix.domain.usecase.ValidateProfileInputUseCase
 import com.example.liftrix.domain.usecase.ValidationResult
 import com.example.liftrix.domain.service.OnboardingDataStore
 import com.example.liftrix.ui.onboarding.model.OnboardingStep
-import com.example.liftrix.ui.onboarding.model.UserProfileData
-import com.example.liftrix.ui.onboarding.model.toSnapshot
+import com.example.liftrix.domain.model.onboarding.UserProfileData
+import com.example.liftrix.domain.model.onboarding.toSnapshot
 import com.example.liftrix.domain.model.onboarding.WeightUnit
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow

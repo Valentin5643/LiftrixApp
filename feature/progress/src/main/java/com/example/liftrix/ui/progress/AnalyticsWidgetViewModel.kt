@@ -25,7 +25,7 @@ import com.example.liftrix.domain.progress.ProgressAnalyticsServicePort
 import com.example.liftrix.domain.progress.ProgressWidgetResolverPort
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
-import com.example.liftrix.ui.progress.components.AnalyticsWidgetManager
+import com.example.liftrix.domain.service.analytics.AnalyticsWidgetManager
 import java.time.LocalDateTime
 import timber.log.Timber
 

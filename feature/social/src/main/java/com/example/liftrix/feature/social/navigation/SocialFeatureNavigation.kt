@@ -17,6 +17,7 @@ import com.example.liftrix.ui.social.FriendsScreen
 import com.example.liftrix.ui.social.UserSearchScreen
 import com.example.liftrix.ui.social.comments.PostCommentsScreen
 import com.example.liftrix.ui.social.gymbuddy.GymBuddyScreen
+import com.example.liftrix.ui.social.onboarding.SocialOnboardingScreen
 
 @Composable
 fun FriendsRoute(
@@ -36,6 +37,17 @@ fun FriendsRoute(
 @Composable
 fun UserSearchRoute(onNavigateToProfile: (String) -> Unit) {
     UserSearchScreen(onNavigateToProfile = onNavigateToProfile)
+}
+
+@Composable
+fun SocialOnboardingRoute(
+    onNavigateBack: () -> Unit,
+    onComplete: () -> Unit
+) {
+    SocialOnboardingScreen(
+        onNavigateBack = onNavigateBack,
+        onComplete = onComplete
+    )
 }
 
 @Composable

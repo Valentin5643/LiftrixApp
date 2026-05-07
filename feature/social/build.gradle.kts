@@ -19,7 +19,6 @@ dependencies {
     implementation(project(":core:notifications"))
     implementation(project(":core:presentation"))
     implementation(project(":core:ui"))
-    implementation(project(":feature:workout"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
@@ -49,6 +48,7 @@ dependencies {
     implementation("androidx.camera:camera-camera2:1.4.0")
     implementation("androidx.camera:camera-lifecycle:1.4.0")
     implementation("androidx.camera:camera-view:1.4.0")
+    implementation(libs.guava)
     implementation("javax.inject:javax.inject:1")
 
     ksp(libs.hilt.compiler)

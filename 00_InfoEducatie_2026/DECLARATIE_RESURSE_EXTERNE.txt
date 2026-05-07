@@ -1,0 +1,121 @@
+DECLARAȚIE PRIVIND RESURSELE EXTERNE ȘI CONTRIBUȚIA AUTORULUI
+
+Proiect: Liftrix – aplicație Android de fitness tracking
+Autor: [DE COMPLETAT – Nume Prenume]
+Data: [DE COMPLETAT]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. RESURSE SOFTWARE EXTERNE
+
+1.1 Framework și UI
+- Jetpack Compose (androidx.compose.ui, material3, ui-tooling-preview) – framework de UI declarativ Android
+- Material Design 3 (Material You) – sistem de design Google, utilizat ca bază vizuală
+- Navigation Compose (androidx.navigation:navigation-compose) – navigare type-safe în Compose
+- Lifecycle (lifecycle-viewmodel-compose, lifecycle-runtime-compose) – gestionarea ciclului de viață
+
+1.2 Bază de date locală
+- Room (room-runtime, room-ktx, room-paging) – ORM pentru SQLite pe Android
+
+1.3 Sincronizare în fundal
+- WorkManager (androidx.work:work-runtime-ktx) – orchestrarea taskurilor periodice în background
+
+1.4 Injecție de dependențe
+- Hilt / Dagger (hilt-android, hilt-navigation-compose, hilt-work) – framework DI pentru Android
+
+1.5 Paginare
+- Paging 3 (androidx.paging:paging-runtime, paging-compose) – paginare pentru feed-ul social
+
+1.6 Firebase (8 servicii integrate prin Firebase BOM 32.6.0)
+- Firebase Authentication – autentificare utilizatori
+- Firebase Firestore – bază de date cloud cu suport offline
+- Firebase Storage – stocare media (fotografii, videoclipuri)
+- Firebase Analytics – colectare date de utilizare
+- Firebase Performance Monitoring – monitorizare performanță
+- Firebase Crashlytics – raportare erori în producție
+- Firebase Remote Config – feature flags
+- Firebase Vertex AI (firebase-vertexai) – integrare model Gemini 2.5 pentru coaching AI
+
+1.7 Autentificare externă
+- Google Sign-In SDK (com.google.android.gms:play-services-auth) – autentificare OAuth cu cont Google
+
+1.8 Securitate
+- AndroidX Security Crypto (androidx.security:security-crypto) – SharedPreferences criptat
+- Google Tink (com.google.crypto.tink:tink-android) – operații criptografice adiționale
+
+1.9 Utilități
+- Timber – logging
+- Coil – încărcare asincronă de imagini [DE COMPLETAT – confirmați prezența în build.gradle]
+- Kotlin Coroutines – programare asincronă
+
+1.10 Testare
+- JUnit 4, MockK, Mockito, Turbine, Espresso, Compose UI Test, Hilt Testing, Room Testing
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+2. RESURSE DE CONȚINUT ȘI DESIGN EXTERNE
+
+- Sistemul de iconuri utilizat în interfață: [DE COMPLETAT – ex. Material Icons, Phosphor Icons etc.]
+- Fonturile utilizate în aplicație: [DE COMPLETAT – ex. sistem / Google Fonts]
+- Ilustrații sau imagini de onboarding: [DE COMPLETAT – specificate dacă există]
+- Biblioteca de exerciții (200+ exerciții predefinite): conținut creat de autor sau preluat dintr-o
+  sursă externă [DE COMPLETAT – precizați sursa sau confirmați că este original]
+- Nu au fost utilizate template-uri de proiect plătite sau UI kit-uri comerciale terțe, conform
+  documentației disponibile.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+3. UTILIZAREA INSTRUMENTELOR AI
+
+Instrumentele AI (de tip asistent de cod sau chat generativ) au fost utilizate în procesul de
+dezvoltare în următoarele scopuri:
+
+- Asistență la implementare: generare de variante de cod pentru structuri repetitive
+  (ex. module Hilt, pattern-uri DAO, configurații WorkManager)
+- Documentare: sprijin la redactarea comentariilor KDoc și a documentației tehnice
+- Debugging: identificarea cauzelor unor erori de compilare sau comportamente neașteptate
+- Brainstorming: explorarea unor opțiuni arhitecturale (Clean Architecture, MVI vs. MVVM)
+
+Toate deciziile arhitecturale, structura proiectului, logica de business și implementarea finală
+au fost verificate, adaptate și integrate de autor.
+
+Notă: Modelul Gemini 2.5 (Firebase Vertex AI) reprezintă o funcționalitate a aplicației
+(coaching AI in-app), nu un instrument de dezvoltare.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+4. CONTRIBUȚIA AUTORULUI
+
+Toate componentele de mai jos au fost proiectate și implementate direct de autor:
+
+- Proiectare arhitecturală: structura Clean Architecture cu 4 straturi, pattern MVVM + MVI,
+  sistem de erori LiftrixResult<T>, design-ul bazei de date (29 entități, 28 DAO-uri)
+- Implementare: 85+ use case-uri, 16 repository-uri, 22 module Hilt, 30+ rute de navigare,
+  sistem de sincronizare cu 10 workeri specializați, rezolvare conflicte
+- Funcționalități: modul de antrenament, dashboard analytics (15 widget-uri), sistem social
+  cu trei niveluri de confidențialitate, sistem QR de conectare, notificări inteligente,
+  integrarea AI coaching (Firebase Vertex AI / Gemini 2.5)
+- Design UI: sistem de culori propriu (LiftrixColorsV2), componente Compose personalizate,
+  grafice bezier cu animații 60fps
+- Securitate: user-scoping la nivel de DAO, Firebase Security Rules, criptare locală
+- Testare: teste unitare pentru ViewModels și repository-uri, teste de integrare cu Room in-memory
+- Documentare: fișiere de arhitectură, dependențe, ghid de dezvoltare și funcționalități
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+5. MENȚIUNE PRIVIND AUTORUL
+
+Proiectul Liftrix este realizat individual, de către un singur autor.
+Nu a existat contribuție din partea altor persoane la cod, design sau documentație.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+INFORMAȚII DE COMPLETAT ÎNAINTE DE PREDARE
+
+□ Numele și prenumele autorului (secțiunea antet)
+□ Data declarației
+□ Sistemul de iconuri utilizat (Material Icons Extended / alt set)
+□ Fonturile utilizate în aplicație
+□ Sursa bibliotecii de exerciții (200+ exerciții) – original sau adaptat
+□ Prezența bibliotecii Coil în build.gradle – confirmare
+□ Eventuale imagini / ilustrații de onboarding – sursă sau confirmare că sunt originale

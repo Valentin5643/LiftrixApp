@@ -33,7 +33,7 @@ import com.example.liftrix.monitoring.ChartRenderingMonitor
 import com.example.liftrix.monitoring.NavigationPerformanceTracker
 import com.example.liftrix.service.AnalyticsEngine
 import com.example.liftrix.service.PerformanceBenchmark
-import com.example.liftrix.ui.progress.components.AnalyticsWidgetManager
+import com.example.liftrix.domain.service.analytics.AnalyticsWidgetManager
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.analytics.ktx.analytics
 import com.google.firebase.auth.FirebaseAuth

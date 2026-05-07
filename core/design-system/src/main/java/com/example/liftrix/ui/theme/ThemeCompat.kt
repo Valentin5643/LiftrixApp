@@ -16,6 +16,8 @@ import androidx.compose.ui.unit.dp
 object LiftrixColors {
     val Primary = LiftrixColorsV2.Teal
     val Secondary = LiftrixColorsV2.TealHover
+    val OnPrimary = Color.White
+    val OnSecondary = Color.White
     val TiffanyBlue = LiftrixColorsV2.Teal
     val PersianGreen = LiftrixColorsV2.TealDark
     val Snow = Color(0xFFFFFAFA)
@@ -38,11 +40,19 @@ val PrimaryGradient: Brush = Brush.linearGradient(
 )
 
 object LiftrixAnimations {
+    const val FAST = 150
+    const val STANDARD = 300
     const val durationFast = 150
     const val durationMedium = 300
     const val durationSlow = 500
     val bouncySpring: SpringSpec<Float> = spring()
+    val athleticMicroSpring: SpringSpec<Float> = spring()
+    val athleticEntranceSpring: SpringSpec<Float> = spring()
+    val athleticScreenTransitionSpec: SpringSpec<Float> = spring()
+    val athleticModalSpec: SpringSpec<Float> = spring()
+    val exitSpec: TweenSpec<Float> = tween(durationMillis = FAST)
     val microInteractionSpec: TweenSpec<Float> = tween(durationMillis = durationFast)
+    val fastColorTransitionSpec: TweenSpec<Color> = tween(durationMillis = durationFast)
     val standardTransitionSpec: TweenSpec<Float> = tween(durationMillis = durationMedium)
     val fastTransitionSpec: TweenSpec<Float> = tween(durationMillis = durationFast)
     val standardSpring: SpringSpec<Float> = spring()
@@ -63,16 +73,40 @@ object LiftrixTokens {
         val Info = Color(0xFF1976D2)
     }
 
+    object ColorRoles {
+        val SecondaryContainer = LiftrixColorsV2.TealSurface
+        val OnSecondaryContainer = LiftrixColorsV2.TealDark
+    }
+
     object CornerRadius {
         val Medium = 12.dp
         val Large = 16.dp
     }
 
+    object Opacity {
+        const val Disabled = 0.38f
+    }
+
+    object Spacing {
+        val ExtraSmall = 4.dp
+        val Small = 8.dp
+        val Medium = 12.dp
+        val Large = 16.dp
+        val ExtraLarge = 24.dp
+    }
+
     object Elevation {
         object Level1 { const val value = 1f }
+        object Level2 { const val value = 4f }
         object Level4 { const val value = 8f }
         object Level5 { const val value = 12f }
     }
+}
+
+val CardElevationGradient: Brush = LiftrixColorsV2.Gradients.CardElevationGradientLight
+
+object AccessibilityColors {
+    fun Color.luminance(): Float = (0.2126f * red) + (0.7152f * green) + (0.0722f * blue)
 }
 
 @Composable

@@ -1,5 +1,7 @@
 plugins {
     id("liftrix.android.library")
+    id("com.google.dagger.hilt.android")
+    alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
 }
 
@@ -8,6 +10,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":core:domain"))
     api(project(":core:domain-common"))
 
     implementation(project(":core:model"))
@@ -17,6 +20,11 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.datetime)
+    implementation(libs.androidx.exifinterface)
     implementation(libs.timber)
+    implementation(libs.hilt.android)
     compileOnly("javax.inject:javax.inject:1")
+
+    add("kspDebug", libs.hilt.compiler)
+    add("kspRelease", libs.hilt.compiler)
 }

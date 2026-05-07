@@ -4,7 +4,9 @@ import androidx.compose.runtime.Composable
 import com.example.liftrix.ui.admin.AdminBanManagementScreen
 import com.example.liftrix.ui.help.HelpArticleScreen
 import com.example.liftrix.ui.help.HelpScreen
+import com.example.liftrix.ui.settings.DashboardCustomizationScreen
 import com.example.liftrix.ui.settings.NotificationSettingsScreen
+import com.example.liftrix.ui.settings.PrivacySettingsScreen
 import com.example.liftrix.ui.settings.SettingsScreen
 import com.example.liftrix.ui.settings.WidgetSettingsScreen
 import com.example.liftrix.ui.settings.about.AboutScreen
@@ -86,6 +88,16 @@ fun WidgetSettingsRoute(onNavigateBack: () -> Unit) {
 @Composable
 fun NotificationSettingsRoute(onNavigateBack: () -> Unit) {
     NotificationSettingsScreen(onNavigateBack = onNavigateBack)
+}
+
+@Composable
+fun DashboardCustomizationRoute(onNavigateBack: () -> Unit) {
+    DashboardCustomizationScreen(onNavigateBack = onNavigateBack)
+}
+
+@Composable
+fun PrivacySettingsRoute(onNavigateBack: () -> Unit) {
+    PrivacySettingsScreen(onNavigateBack = onNavigateBack)
 }
 
 @Composable

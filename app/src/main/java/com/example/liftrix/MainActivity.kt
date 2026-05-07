@@ -27,14 +27,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.liftrix.ui.MainViewModel
 import com.example.liftrix.sync.SyncCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import com.example.liftrix.ui.auth.AuthActivity
 import com.example.liftrix.ui.navigation.UnifiedNavigationContainer
 import com.example.liftrix.ui.theme.LiftrixTheme
 import com.example.liftrix.ui.theme.ThemeManager
@@ -43,7 +41,6 @@ import com.example.liftrix.domain.service.WeightUnitManager
 import com.example.liftrix.data.service.FirebaseStorageUrlResolver
 import com.example.liftrix.ui.common.LocalFirebaseStorageUrlResolver
 import com.example.liftrix.ui.common.LocalProfileImageCache
-import com.example.liftrix.ui.common.components.LiftrixLoadingAnimation
 import com.example.liftrix.service.ProfileImageCache
 import androidx.compose.runtime.CompositionLocalProvider
 import dagger.hilt.android.AndroidEntryPoint
@@ -150,9 +147,12 @@ fun LoadingScreen() {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            LiftrixLoadingAnimation(
-                message = "Loading Liftrix...",
-                size = 144.dp
+            CircularProgressIndicator()
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Loading Liftrix...",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground
             )
         }
     }

@@ -1,11 +1,11 @@
 package com.example.liftrix.di
 
-import com.example.liftrix.feature.home.AppHomeAnalyticsAdapter
-import com.example.liftrix.feature.home.AppHomeAuthAdapter
-import com.example.liftrix.feature.home.AppHomeFeedAdapter
-import com.example.liftrix.feature.home.AppHomeSocialAdapter
-import com.example.liftrix.feature.home.AppHomeWorkoutAdapter
-import com.example.liftrix.feature.home.AppPostCreationAdapter
+import com.example.liftrix.di.feature.home.AppHomeAnalyticsAdapter
+import com.example.liftrix.di.feature.home.AppHomeAuthAdapter
+import com.example.liftrix.di.feature.home.AppHomeFeedAdapter
+import com.example.liftrix.di.feature.home.AppHomeSocialAdapter
+import com.example.liftrix.di.feature.home.AppHomeWorkoutAdapter
+import com.example.liftrix.di.feature.home.AppPostCreationAdapter
 import com.example.liftrix.feature.home.ports.HomeAnalyticsPort
 import com.example.liftrix.feature.home.ports.HomeAuthPort
 import com.example.liftrix.feature.home.ports.HomeFeedPort

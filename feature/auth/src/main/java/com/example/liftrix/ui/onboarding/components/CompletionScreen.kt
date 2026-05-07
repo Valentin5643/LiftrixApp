@@ -45,7 +45,7 @@ import com.example.liftrix.ui.onboarding.OnboardingState
 import com.example.liftrix.ui.onboarding.OnboardingViewModel
 import com.example.liftrix.domain.model.onboarding.WeightUnit
 import com.example.liftrix.ui.onboarding.model.OnboardingStep
-import com.example.liftrix.ui.onboarding.model.UserProfileData
+import com.example.liftrix.domain.model.onboarding.UserProfileData
 
 /**
  * Completion screen showing success feedback and profile summary.

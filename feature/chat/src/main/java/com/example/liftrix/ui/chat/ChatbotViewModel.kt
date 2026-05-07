@@ -20,10 +20,9 @@ import com.example.liftrix.domain.model.chat.UsageLimits
 import com.example.liftrix.domain.service.Language as DomainLanguage
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.ai.ChatIntent
-import com.example.liftrix.domain.usecase.ai.GenerateWorkoutProgramUseCase
 import com.example.liftrix.domain.usecase.ai.ModifyWorkoutProgramRequest
-import com.example.liftrix.domain.usecase.ai.ModifyWorkoutProgramUseCase
 import com.example.liftrix.domain.usecase.ai.WorkoutGenerationIntentClassifier
+import com.example.liftrix.domain.usecase.ai.WorkoutProgramGateway
 import com.example.liftrix.domain.model.ai.WorkoutModificationSaveMode
 import com.example.liftrix.domain.usecase.chat.SendChatMessageUseCase
 import com.example.liftrix.domain.usecase.chat.CheckUsageLimitsUseCase
@@ -57,8 +56,7 @@ class ChatbotViewModel @Inject constructor(
     private val sendChatMessageUseCase: SendChatMessageUseCase,
     private val checkUsageLimitsUseCase: CheckUsageLimitsUseCase,
     private val workoutGenerationIntentClassifier: WorkoutGenerationIntentClassifier,
-    private val generateWorkoutProgramUseCase: GenerateWorkoutProgramUseCase,
-    private val modifyWorkoutProgramUseCase: ModifyWorkoutProgramUseCase,
+    private val workoutProgramGateway: WorkoutProgramGateway,
     private val aiMessageReportService: AIMessageReportService
 ) : ModernBaseViewModel<ChatbotUiState>(
     initialState = ChatbotUiState()
@@ -316,7 +314,7 @@ class ChatbotViewModel @Inject constructor(
                 }
 
                 Timber.i("[AI] ChatbotViewModel: calling GenerateWorkoutProgramUseCase")
-                generateWorkoutProgramUseCase(
+                workoutProgramGateway.generate(
                     userId = userId!!,
                     prompt = content,
                     language = _uiState.value.currentLanguage.toDomainLanguage()
@@ -404,7 +402,7 @@ class ChatbotViewModel @Inject constructor(
             try {
                 Timber.i("[AI] ChatbotViewModel: saving generated program days=${pending.program.days.size}")
                 _uiState.value = _uiState.value.copy(isSavingGeneratedProgram = true, error = null)
-                generateWorkoutProgramUseCase.saveGeneratedProgram(
+                workoutProgramGateway.saveGeneratedProgram(
                     userId = id,
                     program = pending.program
                 ).fold(
@@ -482,7 +480,7 @@ class ChatbotViewModel @Inject constructor(
                     return@launch
                 }
 
-                modifyWorkoutProgramUseCase.preview(
+                workoutProgramGateway.previewModification(
                     ModifyWorkoutProgramRequest(
                         userId = id,
                         message = content,
@@ -559,7 +557,7 @@ class ChatbotViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _uiState.value = _uiState.value.copy(isSavingGeneratedProgram = true, error = null)
-                modifyWorkoutProgramUseCase.saveConfirmedModification(
+                workoutProgramGateway.saveConfirmedModification(
                     userId = id,
                     result = pending,
                     saveMode = saveMode

@@ -13,6 +13,7 @@ import com.example.liftrix.data.service.*
 import com.example.liftrix.domain.repository.*
 import com.example.liftrix.domain.repository.social.*
 import com.example.liftrix.domain.service.*
+import com.example.liftrix.domain.sync.SyncScheduler
 import com.example.liftrix.domain.share.PlatformShareAdapter
 import com.example.liftrix.domain.validation.ProfileValidator
 import com.example.liftrix.service.MediaProcessingServiceImpl
@@ -150,14 +151,14 @@ abstract class FeatureModule {
             blockedUserDao: BlockedUserDao,
             userAccountDao: UserAccountDao,
             database: LiftrixDatabase,
-            @ApplicationContext context: Context
+            syncScheduler: SyncScheduler
         ): SocialProfileRepository =
             SocialProfileRepositoryImpl(
                 socialProfileDao,
                 blockedUserDao,
                 userAccountDao,
                 database,
-                context
+                syncScheduler
             )
 
         @Provides
@@ -174,12 +175,12 @@ abstract class FeatureModule {
             feedCacheDao: FeedCacheDao,
             followRelationshipDao: FollowRelationshipDao,
             authRepository: AuthRepository,
-            @ApplicationContext context: Context
+            syncScheduler: SyncScheduler
         ): FeedRepository =
             FeedRepositoryImpl(
                 workoutPostDao, postLikeDao, savedPostDao, socialProfileDao,
                 userProfileDao, workoutDao, workoutPostMapper, feedCacheService,
-                feedCacheDao, followRelationshipDao, authRepository, context
+                feedCacheDao, followRelationshipDao, authRepository, syncScheduler
             )
 
         @Provides

@@ -4,13 +4,12 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.repository.AuthRepository
+import com.example.liftrix.domain.repository.SettingsRepository
 import com.example.liftrix.domain.service.AnalyticsService
-import com.example.liftrix.domain.service.SettingsPersistenceManager
 import com.example.liftrix.domain.service.SettingsValidator
 import com.example.liftrix.service.ImageProcessingService
 import com.example.liftrix.domain.usecase.auth.AuthCommandUseCase
 import com.example.liftrix.domain.usecase.settings.SettingsQueryUseCase
-import com.example.liftrix.domain.usecase.settings.SettingsCommandUseCase
 import com.example.liftrix.domain.usecase.profile.ProfileImageOperationsUseCase
 import com.example.liftrix.domain.usecase.profile.ProfileQueryUseCase
 import com.example.liftrix.domain.usecase.social.SocialProfileQueryUseCase
@@ -27,6 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
@@ -56,7 +56,7 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsQueryUseCase: SettingsQueryUseCase,
-    private val settingsCommandUseCase: SettingsCommandUseCase,
+    private val settingsRepository: SettingsRepository,
     private val profileQueryUseCase: ProfileQueryUseCase,
     private val socialProfileQueryUseCase: SocialProfileQueryUseCase,
     private val authCommandUseCase: AuthCommandUseCase,
@@ -65,7 +65,6 @@ class SettingsViewModel @Inject constructor(
     private val imageProcessingService: ImageProcessingService,
     private val authRepository: AuthRepository,
     private val analyticsService: AnalyticsService,
-    private val settingsPersistenceManager: SettingsPersistenceManager,
     private val settingsValidator: SettingsValidator,
     private val checkAdminPermissionsUseCase: CheckAdminPermissionsUseCase,
     @ApplicationContext private val context: Context
@@ -123,29 +122,16 @@ class SettingsViewModel @Inject constructor(
      */
     private suspend fun validateAndRepairSettings(userId: String) {
         Timber.d("Validating settings integrity for user $userId")
-        
-        val validationResult = settingsPersistenceManager.validateSettingsIntegrity(userId)
-        validationResult.fold(
-            onSuccess = { isValid: Boolean ->
-                if (!isValid) {
-                    Timber.w("Settings integrity validation failed, attempting repair")
-                    val repairResult = settingsPersistenceManager.repairCorruptedSettings(userId)
-                    repairResult.fold(
-                        onSuccess = {
-                            Timber.i("Settings successfully repaired for user $userId")
-                        },
-                        onFailure = { exception ->
-                            Timber.e(exception, "Failed to repair settings for user $userId")
-                        }
-                    )
-                } else {
-                    Timber.d("Settings integrity validated successfully for user $userId")
-                }
-            },
-            onFailure = { exception ->
-                Timber.e(exception, "Failed to validate settings integrity for user $userId")
+        try {
+            val settings = settingsRepository.getUserSettings(userId).firstOrNull()
+            if (settings == null) {
+                Timber.w("Settings not found during integrity validation for user $userId")
+            } else {
+                Timber.d("Settings integrity validated successfully for user $userId")
             }
-        )
+        } catch (exception: Exception) {
+            Timber.e(exception, "Failed to validate settings integrity for user $userId")
+        }
     }
 
     /**
@@ -321,12 +307,7 @@ class SettingsViewModel @Inject constructor(
                 // Update the UI state immediately with the new state
                 updateState { copy(effectiveThemeState = newEffectiveState) }
                 
-                // Use persistence manager for reliable settings update
-                val persistenceResult = settingsPersistenceManager.persistSetting(
-                    userId = userId,
-                    key = "dark_mode",
-                    value = newEffectiveState
-                )
+                val persistenceResult = settingsRepository.updateDarkMode(userId, newEffectiveState)
                 
                 persistenceResult.fold(
                     onSuccess = {
@@ -388,7 +369,7 @@ class SettingsViewModel @Inject constructor(
         
         when (settingType) {
             "dark_mode" -> {
-                val result = settingsCommandUseCase.updateDarkMode(userId, enabled)
+                val result = settingsRepository.updateDarkMode(userId, enabled)
                 result.fold(
                     onSuccess = {
                         Timber.d("Dark mode updated successfully via fallback")
@@ -409,7 +390,7 @@ class SettingsViewModel @Inject constructor(
                 )
             }
             "notifications_enabled" -> {
-                val result = settingsCommandUseCase.updateNotifications(userId, enabled)
+                val result = settingsRepository.updateNotifications(userId, enabled)
                 result.fold(
                     onSuccess = {
                         Timber.d("Notifications updated successfully via fallback")
@@ -439,11 +420,7 @@ class SettingsViewModel @Inject constructor(
             
             delay(1000L * attempt) // Exponential backoff
             
-            val retryResult = settingsPersistenceManager.persistSetting(
-                userId = userId,
-                key = key,
-                value = value
-            )
+            val retryResult = persistSetting(userId, key, value)
             
             retryResult.fold(
                 onSuccess = {
@@ -485,6 +462,15 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    private suspend fun persistSetting(userId: String, key: String, value: Any): Result<Unit> {
+        return when (key) {
+            "dark_mode" -> settingsRepository.updateDarkMode(userId, value as Boolean)
+            "notifications_enabled" -> settingsRepository.updateNotifications(userId, value as Boolean)
+            "weight_unit" -> settingsRepository.updateWeightUnit(userId, value as WeightUnit)
+            else -> Result.failure(IllegalArgumentException("Unsupported setting key: $key"))
+        }
+    }
+
     /**
      * Legacy method for updating dark mode directly
      * Use updateThemeFromToggle for proper system-aware toggling
@@ -507,12 +493,7 @@ class SettingsViewModel @Inject constructor(
                 // Update UI state
                 updateState { copy(effectiveThemeState = enabled) }
                 
-                // Use persistence manager for reliable settings update
-                val persistenceResult = settingsPersistenceManager.persistSetting(
-                    userId = userId,
-                    key = "dark_mode",
-                    value = enabled
-                )
+                val persistenceResult = settingsRepository.updateDarkMode(userId, enabled)
                 
                 persistenceResult.fold(
                     onSuccess = {
@@ -562,12 +543,7 @@ class SettingsViewModel @Inject constructor(
             try {
                 Timber.d("Updating notifications for user $userId to: $enabled")
                 
-                // Use persistence manager for reliable settings update
-                val persistenceResult = settingsPersistenceManager.persistSetting(
-                    userId = userId,
-                    key = "notifications_enabled",
-                    value = enabled
-                )
+                val persistenceResult = settingsRepository.updateNotifications(userId, enabled)
                 
                 persistenceResult.fold(
                     onSuccess = {
@@ -616,7 +592,7 @@ class SettingsViewModel @Inject constructor(
     private suspend fun fallbackToUseCaseNotifications(userId: String, enabled: Boolean) {
         Timber.d("Using fallback use case for notifications")
         
-        val result = settingsCommandUseCase.updateNotifications(userId, enabled)
+        val result = settingsRepository.updateNotifications(userId, enabled)
         result.fold(
             onSuccess = {
                 Timber.d("Notifications updated successfully via fallback")
@@ -646,12 +622,7 @@ class SettingsViewModel @Inject constructor(
             try {
                 Timber.d("Updating weight unit for user $userId to: ${weightUnit.symbol}")
                 
-                // Use persistence manager for reliable weight unit update
-                val persistenceResult = settingsPersistenceManager.persistSetting(
-                    userId = userId,
-                    key = "weight_unit",
-                    value = weightUnit
-                )
+                val persistenceResult = settingsRepository.updateWeightUnit(userId, weightUnit)
                 
                 persistenceResult.fold(
                     onSuccess = {
@@ -700,7 +671,7 @@ class SettingsViewModel @Inject constructor(
     private suspend fun fallbackToUseCaseWeightUnit(userId: String, weightUnit: WeightUnit) {
         Timber.d("Using fallback use case for weight unit")
 
-        val result = settingsCommandUseCase.updateWeightUnit(userId, weightUnit)
+        val result = settingsRepository.updateWeightUnit(userId, weightUnit)
         result.fold(
             onSuccess = {
                 Timber.d("Weight unit updated successfully via fallback")

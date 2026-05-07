@@ -56,8 +56,15 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.example.liftrix.BuildConfig
 import com.example.liftrix.ui.navigation.LiftrixRoute
-import com.example.liftrix.ui.common.LiveSessionBar
+import com.example.liftrix.feature.auth.navigation.AuthRoute
+import com.example.liftrix.feature.auth.navigation.GuestConversionRoute
+import com.example.liftrix.feature.auth.navigation.GuestDashboardRoute
+import com.example.liftrix.feature.auth.navigation.GuestModeChipRoute
+import com.example.liftrix.feature.auth.navigation.GuestModeSelectionRoute
+import com.example.liftrix.feature.auth.navigation.GuestSessionIndicatorRoute
+import com.example.liftrix.feature.auth.navigation.OnboardingRoute
 import com.example.liftrix.feature.chat.navigation.AIChatSettingsRoute
 import com.example.liftrix.feature.chat.navigation.ChatbotRoute
 import com.example.liftrix.feature.chat.navigation.CoachRoute
@@ -70,6 +77,7 @@ import com.example.liftrix.feature.social.navigation.FriendsRoute
 import com.example.liftrix.feature.social.navigation.GymBuddyRoute
 import com.example.liftrix.feature.social.navigation.PostCommentsRoute
 import com.example.liftrix.feature.social.navigation.ShareWorkoutRoute
+import com.example.liftrix.feature.social.navigation.SocialOnboardingRoute
 import com.example.liftrix.feature.social.navigation.TemplateBuddyShareRoute
 import com.example.liftrix.feature.social.navigation.UserSearchRoute
 import com.example.liftrix.feature.social.navigation.WorkoutShareInboxRoute
@@ -106,12 +114,14 @@ import com.example.liftrix.feature.settings.navigation.AdminBanManagementRoute
 import com.example.liftrix.feature.settings.navigation.CommunityGuidelinesRoute
 import com.example.liftrix.feature.settings.navigation.ContactSupportRoute
 import com.example.liftrix.feature.settings.navigation.ContentModerationPolicyRoute
+import com.example.liftrix.feature.settings.navigation.DashboardCustomizationRoute
 import com.example.liftrix.feature.settings.navigation.DataPortabilityRoute
 import com.example.liftrix.feature.settings.navigation.EmailChangeRoute
 import com.example.liftrix.feature.settings.navigation.HelpArticleRoute
 import com.example.liftrix.feature.settings.navigation.HelpCenterRoute
 import com.example.liftrix.feature.settings.navigation.NotificationSettingsRoute
 import com.example.liftrix.feature.settings.navigation.PasswordChangeRoute
+import com.example.liftrix.feature.settings.navigation.PrivacySettingsRoute
 import com.example.liftrix.feature.settings.navigation.PrivacyPolicyRoute
 import com.example.liftrix.feature.settings.navigation.RefundSubscriptionPolicyRoute
 import com.example.liftrix.feature.settings.navigation.SettingsRoute
@@ -121,7 +131,6 @@ import com.example.liftrix.feature.settings.navigation.UpgradeToPremiumRoute
 import com.example.liftrix.feature.settings.navigation.UsernameChangeRoute
 import com.example.liftrix.feature.settings.navigation.WidgetSettingsRoute
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
-import com.example.liftrix.ui.components.ConditionalWorkoutFab
 import com.example.liftrix.ui.components.WorkoutCreationModal
 import com.example.liftrix.ui.navigation.navigateToEditWorkout
 import com.example.liftrix.ui.navigation.navigateToWorkout
@@ -214,7 +223,7 @@ fun UnifiedNavigationContainer(
                 composable<LiftrixRoute.Home> {
                     Column {
                         // Guest session indicator for anonymous users
-                        com.example.liftrix.ui.guest.GuestSessionIndicator(
+                        GuestSessionIndicatorRoute(
                             onClick = {
                                 navController.navigateToGuestConversion(source = "nudge")
                             },
@@ -249,7 +258,7 @@ fun UnifiedNavigationContainer(
                             syncStatusContent = {
                                 val syncStatusViewModel = hiltViewModel<com.example.liftrix.ui.common.sync.SyncStatusViewModel>()
                                 val syncStatus by syncStatusViewModel.syncStatus.collectAsState(
-                                    initial = com.example.liftrix.sync.SyncStatus.Idle
+                                    initial = com.example.liftrix.domain.service.SyncStatus.Idle
                                 )
 
                                 com.example.liftrix.ui.common.sync.SyncStatusIndicator(
@@ -811,7 +820,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.Onboarding> {
-                    com.example.liftrix.ui.onboarding.navigation.OnboardingNavigation(
+                    OnboardingRoute(
                         userId = "", // Authentication user ID placeholder
                         onComplete = {
                             navController.clearBackStackAndNavigate(LiftrixRoute.Home)
@@ -824,7 +833,7 @@ fun UnifiedNavigationContainer(
                 
                 // Guest Mode Routes
                 composable<LiftrixRoute.GuestModeSelection> {
-                    com.example.liftrix.ui.guest.GuestModeSelectionScreen(
+                    GuestModeSelectionRoute(
                         onContinueAsGuest = {
                             // Handle anonymous sign-in and navigate to home
                             navController.clearBackStackAndNavigate(LiftrixRoute.Home)
@@ -839,7 +848,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.GuestDashboard> {
-                    com.example.liftrix.ui.guest.GuestDashboardScreen(
+                    GuestDashboardRoute(
                         onUpgrade = {
                             navController.navigateToGuestConversion(source = "manual")
                         },
@@ -854,7 +863,7 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.GuestConversion> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.GuestConversion>()
-                    com.example.liftrix.ui.guest.GuestConversionScreen(
+                    GuestConversionRoute(
                         source = route.source,
                         onCreateAccount = {
                             navController.navigateAndReplace(LiftrixRoute.AuthSignUp)
@@ -875,37 +884,23 @@ fun UnifiedNavigationContainer(
                 
                 // Authentication Routes
                 composable<LiftrixRoute.AuthSignUp> {
-                    // AuthSignUpScreen implementation placeholder
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Sign Up Screen")
-                            Button(
-                                onClick = { navController.clearBackStackAndNavigate(LiftrixRoute.Home) }
-                            ) {
-                                Text("Complete Sign Up")
-                            }
+                    AuthRoute(
+                        initialSignUpMode = true,
+                        googleClientId = BuildConfig.GOOGLE_CLIENT_ID,
+                        onAuthSuccess = {
+                            navController.clearBackStackAndNavigate(LiftrixRoute.Home)
                         }
-                    }
+                    )
                 }
                 
                 composable<LiftrixRoute.AuthSignIn> {
-                    // AuthSignInScreen implementation placeholder
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Sign In Screen")
-                            Button(
-                                onClick = { navController.clearBackStackAndNavigate(LiftrixRoute.Home) }
-                            ) {
-                                Text("Complete Sign In")
-                            }
+                    AuthRoute(
+                        initialSignUpMode = false,
+                        googleClientId = BuildConfig.GOOGLE_CLIENT_ID,
+                        onAuthSuccess = {
+                            navController.clearBackStackAndNavigate(LiftrixRoute.Home)
                         }
-                    }
+                    )
                 }
                 
                 // Workout Editing Routes
@@ -1061,6 +1056,33 @@ fun UnifiedNavigationContainer(
                     NotificationSettingsRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
+                        }
+                    )
+                }
+
+                composable<LiftrixRoute.DashboardCustomization> {
+                    DashboardCustomizationRoute(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+
+                composable<LiftrixRoute.PrivacySettings> {
+                    PrivacySettingsRoute(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+
+                composable<LiftrixRoute.SocialOnboarding> {
+                    SocialOnboardingRoute(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onComplete = {
+                            navController.clearBackStackAndNavigate(LiftrixRoute.Friends)
                         }
                     )
                 }
@@ -1676,7 +1698,7 @@ private fun NavigationAwareTopAppBar(
             }
             
             // Show guest mode chip for anonymous users
-            com.example.liftrix.ui.guest.GuestModeChip(
+            GuestModeChipRoute(
                 onClick = {
                     navController.navigateToGuestDashboard()
                 }

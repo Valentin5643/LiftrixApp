@@ -21,12 +21,12 @@ import java.time.format.DateTimeFormatter
 import java.util.UUID
 import javax.inject.Inject
 
-class ExportWorkoutsUseCase @Inject constructor(
+class ExportWorkoutsUseCaseImpl @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val dataExportDao: DataExportDao
-) {
+) : ExportWorkoutsUseCase {
     
-    suspend fun invoke(
+    override suspend fun invoke(
         userId: String,
         request: ExportRequest
     ): LiftrixResult<ExportResult> {
@@ -109,7 +109,7 @@ class ExportWorkoutsUseCase @Inject constructor(
     }
     }
     
-    fun getExportProgress(exportId: String): Flow<ExportProgress> = flow {
+    override fun getExportProgress(exportId: String): Flow<ExportProgress> = flow {
         // This would typically integrate with a background processing system
         // For now, emit basic progress updates
         emit(ExportProgress(exportId, 0, "Starting export..."))
@@ -117,7 +117,7 @@ class ExportWorkoutsUseCase @Inject constructor(
         emit(ExportProgress(exportId, 100, "Export completed"))
     }
     
-    suspend fun cancelExport(exportId: String, userId: String): LiftrixResult<Unit> = liftrixCatching(
+    override suspend fun cancelExport(exportId: String, userId: String): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
                 code = "CANCEL_EXPORT_FAILED",
@@ -494,57 +494,3 @@ class ExportWorkoutsUseCase @Inject constructor(
             .onFailure { Timber.w(it, "Unable to write export file at $writablePath") }
     }
 }
-
-data class ExportRequest(
-    val format: ExportFormat,
-    val dataTypes: Set<DataType>,
-    val dateRange: DateRange? = null
-)
-
-data class ExportResult(
-    val exportId: String,
-    val file: File,
-    val recordCount: Int,
-    val format: ExportFormat
-)
-
-data class ExportProgress(
-    val exportId: String,
-    val progressPercentage: Int,
-    val statusMessage: String
-)
-
-enum class ExportFormat {
-    JSON, CSV, FIT, TCX
-}
-
-enum class DataType {
-    WORKOUTS, EXERCISES, CUSTOM_EXERCISES, TEMPLATES
-}
-
-data class DateRange(
-    val start: LocalDate,
-    val end: LocalDate
-)
-
-data class WorkoutExportData(
-    val id: String,
-    val name: String,
-    val date: LocalDateTime,
-    val duration: Long?,
-    val exercises: List<ExerciseExportData>
-)
-
-data class ExerciseExportData(
-    val name: String,
-    val category: String?,
-    val sets: List<SetExportData>
-)
-
-data class SetExportData(
-    val reps: Int?,
-    val weight: Double?,
-    val distance: Double?,
-    val duration: Long?,
-    val completed: Boolean
-)

@@ -467,7 +467,8 @@ private fun CompactSyncIndicator(
             modifier = modifier.size(16.dp),
             tint = MaterialTheme.colorScheme.error
         )
-        is SyncStatus.Success -> Icon(
+        is SyncStatus.Success,
+        is SyncStatus.AnalyticsSuccess -> Icon(
             imageVector = Icons.Default.Refresh,
             contentDescription = "Synced",
             modifier = modifier.size(16.dp),

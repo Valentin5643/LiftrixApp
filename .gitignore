@@ -48,10 +48,8 @@ nuclear-clean.bat
 quick-test.bat
 run-error-mapping-test.bat
 
-*test*.kt
 *test*.js
 *test*.md
-*validation*.kt
 *compilation*.bat
 debug_*.sql
 fix_*.kt
@@ -178,9 +176,7 @@ nul
 .serena/
 .fastembed_cache
 build-cache/
-/build-logic/convention/build/generated-sources/kotlin-dsl-accessors/kotlin/gradle/kotlin/dsl/accessors/_004b304880ea820eda29cd37eb5b8a5d/Accessors1a3myc2xcjkjlhq7vkxcb1wim.kt
-/build-logic/convention/build/generated-sources/kotlin-dsl-accessors/kotlin/gradle/kotlin/dsl/accessors/_6b3b32fa407078ce50b4fde73f365ada/Accessors1a3myc2xcjkjlhq7vkxcb1wim.kt
-/build-logic/
+/build-logic/**/build/
 /feature/progress/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin
 /feature/progress/build/tmp/kotlin-classes/debug/META-INF/progress_debug.kotlin_module
 /feature/workout/build/kspCaches/debug/sealed

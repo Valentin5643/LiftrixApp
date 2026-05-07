@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.common.state
 
+import com.example.liftrix.domain.service.SessionStateCleanup
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,7 +20,7 @@ import javax.inject.Singleton
  * - Thread-safe operations
  */
 @Singleton
-class StateCleanupManager @Inject constructor() {
+class StateCleanupManager @Inject constructor() : SessionStateCleanup {
     
     private val registeredViewModels = mutableSetOf<StateCleanupAware>()
     private val lock = Any()
@@ -73,7 +74,7 @@ class StateCleanupManager @Inject constructor() {
      * 
      * @return Number of ViewModels that were successfully cleaned up
      */
-    fun cleanupAllState(): Int {
+    override fun cleanupAllState(): Int {
         var successCount = 0
         val viewModelsToCleanup: Set<StateCleanupAware>
         
@@ -103,7 +104,7 @@ class StateCleanupManager @Inject constructor() {
      * 
      * @return Number of currently registered ViewModels
      */
-    fun getRegisteredCount(): Int {
+    override fun getRegisteredCount(): Int {
         synchronized(lock) {
             return registeredViewModels.size
         }

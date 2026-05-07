@@ -57,7 +57,7 @@ import com.example.liftrix.domain.repository.workout.WorkoutSyncStatusRepository
 import com.example.liftrix.domain.service.AIMessageReportService
 import com.example.liftrix.domain.service.AbusePreventionServiceContract
 import com.example.liftrix.domain.service.RateLimitingServiceContract
-import com.example.liftrix.sync.ProgressStatsSyncRepository
+import com.example.liftrix.domain.sync.ProgressStatsSyncRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn

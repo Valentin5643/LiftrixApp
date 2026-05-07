@@ -132,19 +132,7 @@ fun OnboardingNavigation(
     
     NavHost(
         navController = navController,
-        startDestination = OnboardingRoutes.INTRO,
-        enterTransition = {
-            OnboardingAnimations.slideInForward()
-        },
-        exitTransition = {
-            OnboardingAnimations.slideOutForward()
-        },
-        popEnterTransition = {
-            OnboardingAnimations.slideInBackward()
-        },
-        popExitTransition = {
-            OnboardingAnimations.slideOutBackward()
-        }
+        startDestination = OnboardingRoutes.INTRO
     ) {
         onboardingGraph(
             viewModel = viewModel,
