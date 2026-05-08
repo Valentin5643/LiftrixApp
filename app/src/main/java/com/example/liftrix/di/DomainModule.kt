@@ -76,6 +76,12 @@ abstract class DomainModule {
         impl: com.example.liftrix.service.PRDetectionServiceImpl
     ): com.example.liftrix.domain.service.PRDetectionService
 
+    @dagger.Binds
+    @javax.inject.Singleton
+    abstract fun bindWorkoutCompletionNotifier(
+        impl: com.example.liftrix.service.GymBuddyWorkoutCompletionNotifier
+    ): com.example.liftrix.service.WorkoutCompletionNotifier
+
     // --- Analytics Services ---
 
     @dagger.Binds
@@ -462,6 +468,12 @@ abstract class DomainModule {
             )
         }
 
+        @dagger.Provides
+        @javax.inject.Singleton
+        fun provideWorkoutSessionManagerPort(
+            sessionManager: com.example.liftrix.service.UnifiedWorkoutSessionManager
+        ): com.example.liftrix.service.WorkoutSessionManagerPort = sessionManager
+
         // ========================================
         // UTILITIES
         // ========================================
@@ -476,7 +488,7 @@ abstract class DomainModule {
 
         @dagger.Provides
         @javax.inject.Singleton
-        fun provideStateCleanupManager(): com.example.liftrix.ui.common.state.StateCleanupManager {
+        fun provideStateCleanupManager(): com.example.liftrix.domain.service.SessionStateCleanup {
             return com.example.liftrix.ui.common.state.StateCleanupManager()
         }
 

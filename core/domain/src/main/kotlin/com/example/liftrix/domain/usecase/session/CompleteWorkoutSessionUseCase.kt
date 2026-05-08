@@ -14,7 +14,7 @@ import kotlinx.coroutines.delay
 import com.example.liftrix.domain.util.DomainLogger as Timber
 import javax.inject.Inject
 
-class CompleteWorkoutSessionUseCase(
+class CompleteWorkoutSessionUseCase @Inject constructor(
     private val workoutRepository: WorkoutRepository,
     private val feedRepository: FeedRepository,
     private val cacheManager: CacheManager,

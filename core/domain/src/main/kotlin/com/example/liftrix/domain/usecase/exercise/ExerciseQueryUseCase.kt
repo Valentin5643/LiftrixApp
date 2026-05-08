@@ -49,7 +49,7 @@ import kotlin.math.roundToInt
  * @property errorHandler Error handler for consistent error processing
  */
 @Singleton
-class ExerciseQueryUseCase(
+class ExerciseQueryUseCase @Inject constructor(
     private val exerciseLibraryRepository: ExerciseLibraryRepository,
     private val exerciseRepository: ExerciseRepository,
     private val customExerciseRepository: CustomExerciseRepository,

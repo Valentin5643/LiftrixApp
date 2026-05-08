@@ -723,9 +723,7 @@ private fun formatTime(seconds: Int): String {
 private fun calculateTotalVolume(exercises: List<SessionExercise>): Int {
     return exercises.sumOf { exercise ->
         exercise.sets.sumOf { set ->
-            val weight = set.actualWeight?.kilograms?.toInt() ?: 0
-            val reps = set.actualReps ?: 0
-            weight * reps
+            set.getVolume().toInt()
         }
     }
 }

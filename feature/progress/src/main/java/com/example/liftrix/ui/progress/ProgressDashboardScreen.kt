@@ -1112,20 +1112,6 @@ private fun CalorieSection(
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground
             )
-            
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
-            ) {
-                ProgressSecondaryActionButton(
-                    text = "Goals",
-                    onClick = { onEvent(CalorieTrackingEvent.NavigateToCalorieGoalSettings) }
-                )
-                
-                ProgressPrimaryActionButton(
-                    text = "View All",
-                    onClick = { onEvent(CalorieTrackingEvent.NavigateToDetailedCalorieAnalytics) }
-                )
-            }
         }
         
         if (calorieState.isAnyDataLoading()) {
@@ -1146,7 +1132,6 @@ private fun CalorieSection(
                             trend = calculateCalorieTrend(summaryData),
                             trendPercentage = summaryData.weeklyTrend,
                             isLoading = calorieState.calorieSummary is AsyncData.Loading,
-                            onClick = { onEvent(CalorieTrackingEvent.NavigateToDetailedCalorieAnalytics) },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }

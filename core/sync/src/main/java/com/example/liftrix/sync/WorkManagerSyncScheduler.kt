@@ -12,18 +12,20 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import timber.log.Timber
 import javax.inject.Inject
+import javax.inject.Provider
 import javax.inject.Singleton
 
 @Singleton
 class WorkManagerSyncScheduler @Inject constructor(
-    @ApplicationContext context: Context,
+    @ApplicationContext private val context: Context,
     private val syncCoordinator: SyncCoordinator,
-    private val syncManager: SyncManager,
+    private val syncManagerProvider: Provider<SyncManager>,
     private val realtimeSyncManager: RealtimeSyncManager,
     private val engagementRealtimeSyncService: EngagementRealtimeSyncService
 ) : SyncScheduler {
 
-    private val workManager: WorkManager = WorkManager.getInstance(context)
+    private val workManager: WorkManager
+        get() = WorkManager.getInstance(context)
 
     override fun schedulePeriodicSync(userId: String) {
         syncCoordinator.schedulePeriodicSync(userId)
@@ -190,6 +192,9 @@ class WorkManagerSyncScheduler @Inject constructor(
             Result.failure(e)
         }
     }
+
+    private val syncManager: SyncManager
+        get() = syncManagerProvider.get()
 
     private fun SyncStatus.toDomainSyncStatus(): com.example.liftrix.domain.service.SyncStatus =
         when (this) {

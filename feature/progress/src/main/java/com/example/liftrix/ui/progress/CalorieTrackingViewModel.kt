@@ -256,15 +256,6 @@ class CalorieTrackingViewModel @Inject constructor(
                     is CalorieTrackingEvent.ClearError -> {
                         clearError()
                     }
-                    is CalorieTrackingEvent.NavigateToCalorieGoalSettings -> {
-                        navigateToCalorieGoalSettings()
-                    }
-                    is CalorieTrackingEvent.NavigateToDetailedCalorieAnalytics -> {
-                        navigateToDetailedCalorieAnalytics()
-                    }
-                    is CalorieTrackingEvent.NavigateToCalorieHistory -> {
-                        navigateToCalorieHistory()
-                    }
                 }
             } catch (exception: Exception) {
                 Timber.e(exception, "Failed to handle event: ${event::class.simpleName}")
@@ -930,30 +921,6 @@ class CalorieTrackingViewModel @Inject constructor(
         }
     }
     
-    /**
-     * Navigates to calorie goal settings.
-     */
-    private fun navigateToCalorieGoalSettings() {
-        // Navigation logic would be implemented here
-        Timber.d("Navigate to calorie goal settings")
-    }
-    
-    /**
-     * Navigates to detailed calorie analytics.
-     */
-    private fun navigateToDetailedCalorieAnalytics() {
-        // Navigation logic would be implemented here
-        Timber.d("Navigate to detailed calorie analytics")
-    }
-    
-    /**
-     * Navigates to calorie history.
-     */
-    private fun navigateToCalorieHistory() {
-        // Navigation logic would be implemented here
-        Timber.d("Navigate to calorie history")
-    }
-
     /**
      * Creates initial unauthenticated state for calorie tracking.
      */

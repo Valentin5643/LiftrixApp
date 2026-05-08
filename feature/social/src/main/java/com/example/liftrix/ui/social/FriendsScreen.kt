@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -29,6 +31,8 @@ import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.Friend
 import androidx.compose.foundation.background
 import com.example.liftrix.ui.theme.LiftrixTheme
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 
 /**
  * Full friends list, search, requests, and privacy settings in dedicated screen
@@ -623,6 +627,7 @@ private fun FollowingItem(
         ) {
             // User Profile Image
             SocialProfileImage(
+                imageUrl = user.avatarUrl,
                 displayName = user.displayName,
                 modifier = Modifier.size(48.dp)
             )
@@ -708,6 +713,7 @@ private fun FollowerItem(
         ) {
             // User Profile Image
             SocialProfileImage(
+                imageUrl = user.avatarUrl,
                 displayName = user.displayName,
                 modifier = Modifier.size(48.dp)
             )
@@ -773,6 +779,7 @@ private fun FollowerItem(
 
 @Composable
 private fun SocialProfileImage(
+    imageUrl: String?,
     displayName: String,
     modifier: Modifier = Modifier
 ) {
@@ -782,12 +789,30 @@ private fun SocialProfileImage(
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = displayName.take(2).uppercase(),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold
-        )
+        if (!imageUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(imageUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = "$displayName profile picture",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Text(
+                text = displayName
+                    .split(' ')
+                    .take(2)
+                    .mapNotNull { it.firstOrNull() }
+                    .joinToString("")
+                    .ifBlank { displayName.take(2) }
+                    .uppercase(),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 

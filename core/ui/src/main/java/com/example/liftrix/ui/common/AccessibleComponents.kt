@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.sp
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.buttons.LiftrixButton
 import com.example.liftrix.ui.theme.LiftrixColorsV2
-import com.example.liftrix.ui.theme.AccessibilityColors.luminance
+import com.example.liftrix.ui.theme.DesignSystemAccessibilityColors.luminance
 import com.example.liftrix.ui.common.AccessibilityUtils.ensureMinimumTouchTarget
 
 /**

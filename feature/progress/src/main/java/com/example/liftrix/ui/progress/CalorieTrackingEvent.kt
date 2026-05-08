@@ -220,29 +220,6 @@ sealed class CalorieTrackingEvent : ViewModelEvent {
      */
     object ClearError : CalorieTrackingEvent()
     
-    /**
-     * Event for navigating to calorie goal settings.
-     * 
-     * Triggers navigation to the calorie goal configuration screen.
-     * This allows users to set and adjust their calorie burn goals.
-     */
-    object NavigateToCalorieGoalSettings : CalorieTrackingEvent()
-    
-    /**
-     * Event for navigating to detailed calorie analytics.
-     * 
-     * Triggers navigation to the detailed calorie analytics screen.
-     * This provides more comprehensive calorie tracking and analysis.
-     */
-    object NavigateToDetailedCalorieAnalytics : CalorieTrackingEvent()
-    
-    /**
-     * Event for navigating to calorie history.
-     * 
-     * Triggers navigation to the calorie history screen.
-     * This shows historical calorie burn data and trends.
-     */
-    object NavigateToCalorieHistory : CalorieTrackingEvent()
 }
 
 /**
@@ -265,10 +242,7 @@ fun CalorieTrackingEvent.requiresAuthentication(): Boolean = when (this) {
     
     is CalorieTrackingEvent.TimePeriodChanged,
     is CalorieTrackingEvent.ClearCachedData,
-    is CalorieTrackingEvent.ClearError,
-    is CalorieTrackingEvent.NavigateToCalorieGoalSettings,
-    is CalorieTrackingEvent.NavigateToDetailedCalorieAnalytics,
-    is CalorieTrackingEvent.NavigateToCalorieHistory -> false
+    is CalorieTrackingEvent.ClearError -> false
 }
 
 /**
@@ -287,10 +261,7 @@ fun CalorieTrackingEvent.isDataLoadingEvent(): Boolean = when (this) {
     
     is CalorieTrackingEvent.TimePeriodChanged,
     is CalorieTrackingEvent.ClearCachedData,
-    is CalorieTrackingEvent.ClearError,
-    is CalorieTrackingEvent.NavigateToCalorieGoalSettings,
-    is CalorieTrackingEvent.NavigateToDetailedCalorieAnalytics,
-    is CalorieTrackingEvent.NavigateToCalorieHistory -> false
+    is CalorieTrackingEvent.ClearError -> false
 }
 
 /**
@@ -332,10 +303,7 @@ fun CalorieTrackingEvent.canExecuteConcurrently(): Boolean = when (this) {
     is CalorieTrackingEvent.RetryFailedOperations,
     is CalorieTrackingEvent.ClearCachedData,
     is CalorieTrackingEvent.RefreshCalories,
-    is CalorieTrackingEvent.ClearError,
-    is CalorieTrackingEvent.NavigateToCalorieGoalSettings,
-    is CalorieTrackingEvent.NavigateToDetailedCalorieAnalytics,
-    is CalorieTrackingEvent.NavigateToCalorieHistory -> false
+    is CalorieTrackingEvent.ClearError -> false
 }
 
 /**
@@ -354,9 +322,6 @@ fun CalorieTrackingEvent.getDescription(): String = when (this) {
     is CalorieTrackingEvent.ClearCachedData -> "Clear cached calorie data"
     is CalorieTrackingEvent.RefreshCalories -> "Refresh calorie data"
     is CalorieTrackingEvent.ClearError -> "Clear error state"
-    is CalorieTrackingEvent.NavigateToCalorieGoalSettings -> "Navigate to calorie goal settings"
-    is CalorieTrackingEvent.NavigateToDetailedCalorieAnalytics -> "Navigate to detailed calorie analytics"
-    is CalorieTrackingEvent.NavigateToCalorieHistory -> "Navigate to calorie history"
 }
 
 /**

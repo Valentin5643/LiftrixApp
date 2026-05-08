@@ -15,15 +15,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/**
- * Theme switching utilities and animations for Liftrix
- * Provides fast theme transitions under 100ms with smooth animations
- */
-enum class ThemeVersion {
-    V1,
-    V2
-}
-
 object ThemeUtils {
     
     /**

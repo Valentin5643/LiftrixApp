@@ -16,7 +16,6 @@ import com.example.liftrix.data.local.dao.FeedCacheDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.mapper.WorkoutPostMapper
-import com.example.liftrix.data.paging.FeedRemoteMediator
 import com.example.liftrix.data.paging.StableFeedPagingSource
 import com.example.liftrix.domain.repository.social.FeedRepository
 import com.example.liftrix.domain.repository.AuthRepository

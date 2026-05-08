@@ -44,7 +44,7 @@ import javax.inject.Inject
  * - Delegates to ErrorHandler for error mapping
  * - Maintains backward compatibility with existing ViewModels
  */
-class WorkoutQueryUseCase(
+class WorkoutQueryUseCase @Inject constructor(
     private val workoutRepository: WorkoutRepository,
     private val workoutHistoryRepository: WorkoutHistoryRepository,
     private val previousSetRepository: PreviousSetRepository,

@@ -1049,9 +1049,6 @@ fun UnifiedNavigationContainer(
                     )
                 }
                 
-                // SocialFeed route removed - feed is now integrated into Home screen
-                // If you need to navigate to the feed, use LiftrixRoute.Home instead
-                
                 composable<LiftrixRoute.NotificationSettings> {
                     NotificationSettingsRoute(
                         onNavigateBack = {
@@ -1615,7 +1612,6 @@ private fun NavigationAwareTopAppBar(
         // Social System Routes (Added for social system completion)
         "ShareWorkout" to "Share Workout",
         "ProgressComparison" to "Progress Comparison",
-        "SocialFeed" to "Social Feed",
         "NotificationSettings" to "Notification Settings",
         "GymBuddy" to "Gym Buddy",
         "PostCreation" to "Create Post",

@@ -40,7 +40,7 @@ import javax.inject.Singleton
  * - By ID query: Get single template by ID (replaces GetWorkoutTemplateByIdUseCase)
  */
 @Singleton
-class TemplateQueryUseCase(
+class TemplateQueryUseCase @Inject constructor(
     private val templateRepository: TemplateRepository,
     private val errorHandler: ErrorHandler,
     private val templateShareRepository: TemplateShareRepository,

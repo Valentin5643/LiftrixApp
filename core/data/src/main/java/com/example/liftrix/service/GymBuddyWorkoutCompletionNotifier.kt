@@ -15,7 +15,7 @@ import javax.inject.Singleton
  * Sends real Gym Buddy workout-completion notifications from persisted workout data.
  */
 @Singleton
-class GymBuddyWorkoutCompletionNotifier(
+class GymBuddyWorkoutCompletionNotifier @Inject constructor(
     private val gymBuddyRepository: GymBuddyRepository,
     private val authRepository: AuthRepository,
     private val notificationTokenSource: WorkoutNotificationTokenSource,

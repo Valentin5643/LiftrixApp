@@ -201,18 +201,6 @@ fun NavController.navigateToProgressComparison(
 }
 
 /**
- * Navigate to social feed screen showing workout posts and social interactions
- * @deprecated Feed has been integrated into the Home screen. Use navigateToHome() instead.
- * 
- * @param initialTab Initial tab to display in the feed (default: "HOME")
- */
-@Deprecated("Feed has been integrated into the Home screen", ReplaceWith("navigateToHome()"))
-fun NavController.navigateToSocialFeed(initialTab: String = "HOME") {
-    // Feed is now integrated into the Home screen
-    navigate(LiftrixRoute.Home)
-}
-
-/**
  * Navigate to notification settings screen for managing social notifications
  */
 fun NavController.navigateToNotificationSettings() {

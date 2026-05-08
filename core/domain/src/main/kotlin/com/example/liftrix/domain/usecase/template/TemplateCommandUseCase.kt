@@ -54,7 +54,7 @@ import javax.inject.Singleton
  * - moveToFolder(): Move template to different folder
  */
 @Singleton
-class TemplateCommandUseCase(
+class TemplateCommandUseCase @Inject constructor(
     private val templateRepository: TemplateRepository,
     private val folderRepository: FolderRepository,
     private val authRepository: AuthRepository,

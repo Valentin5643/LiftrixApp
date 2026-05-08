@@ -187,28 +187,6 @@ sealed class LiftrixRoute {
     data object AnomalySettings : LiftrixRoute()
     
     /**
-     * Calorie analytics dashboard - detailed calorie insights and goal tracking
-     */
-    @Serializable
-    data object CalorieAnalytics : LiftrixRoute()
-    
-    /**
-     * Calorie goal settings screen for setting and managing daily calorie goals
-     */
-    @Serializable
-    data object CalorieGoalSettings : LiftrixRoute()
-    
-    /**
-     * Detailed calorie history screen showing historical calorie burn data
-     * 
-     * @param timePeriod Optional time period filter (week, month, quarter, year)
-     */
-    @Serializable
-    data class CalorieHistory(
-        val timePeriod: String? = null
-    ) : LiftrixRoute()
-    
-    /**
      * Edit workout routine screen for modifying saved workout routines
      * 
      * @param workoutId Unique identifier for the workout routine to edit
@@ -346,18 +324,6 @@ sealed class LiftrixRoute {
     data class ProgressComparison(
         val comparisonId: String,
         val shareMode: Boolean = false
-    ) : LiftrixRoute()
-    
-    /**
-     * Social feed screen showing workout posts and social interactions
-     * @deprecated Feed has been integrated into the Home screen. Use LiftrixRoute.Home instead.
-     * 
-     * @param initialTab Initial tab to display in the feed (default: "HOME")
-     */
-    @Deprecated("Feed has been integrated into the Home screen", ReplaceWith("LiftrixRoute.Home"))
-    @Serializable
-    data class SocialFeed(
-        val initialTab: String = "HOME"
     ) : LiftrixRoute()
     
     /**

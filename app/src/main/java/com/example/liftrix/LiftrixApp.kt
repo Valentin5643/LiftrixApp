@@ -31,7 +31,7 @@ import timber.log.Timber
 import javax.inject.Inject
 
 @HiltAndroidApp
-class LiftrixApp : Application() {
+class LiftrixApp : Application(), Configuration.Provider {
 
     @Inject
     lateinit var widgetPreferencesRepository: WidgetPreferencesRepository
@@ -56,6 +56,15 @@ class LiftrixApp : Application() {
 
     @Inject
     lateinit var startupRestoreGate: StartupRestoreGate
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setWorkerFactory(hiltWorkerFactory)
+            .setMinimumLoggingLevel(
+                if (BuildConfig.DEBUG) android.util.Log.DEBUG
+                else android.util.Log.INFO
+            )
+            .build()
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 

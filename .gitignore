@@ -189,3 +189,9 @@ build-cache/
 /feature/workout/build/
 /core/database/build/
 /core/data/build/
+/core/sync/build/tmp/compileDebugJavaWithJavac/compileTransaction/stash-dir/WorkManagerSyncScheduler_Factory.class.uniqueId0
+/core/analytics/build/outputs
+/core/network/build/outputs
+/core/ui/build/outputs
+/feature/auth/build/outputs
+feature/settings/build/outputs
