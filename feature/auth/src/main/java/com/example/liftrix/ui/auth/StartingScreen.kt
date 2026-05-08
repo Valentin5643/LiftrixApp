@@ -75,7 +75,13 @@ fun StartingScreen(
                 contentAlignment = Alignment.Center
             ) {
                 androidx.compose.foundation.Image(
-                    painter = painterResource(R.drawable.ic_liftrix_symbol),
+                    painter = painterResource(
+                        if (isDarkTheme) {
+                            R.drawable.ic_liftrix_symbol_light
+                        } else {
+                            R.drawable.ic_liftrix_symbol
+                        }
+                    ),
                     contentDescription = "Liftrix AI fitness symbol",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier

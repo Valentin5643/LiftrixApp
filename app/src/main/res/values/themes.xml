@@ -11,8 +11,8 @@
     </style>
 
     <style name="Theme.Liftrix.Starting" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/liftrix_teal</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_transparent</item>
+        <item name="windowSplashScreenBackground">@color/liftrix_white</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_liftrix_launcher_foreground</item>
         <item name="windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
         <item name="windowSplashScreenAnimationDuration">0</item>
         <item name="postSplashScreenTheme">@style/Theme.Liftrix</item>

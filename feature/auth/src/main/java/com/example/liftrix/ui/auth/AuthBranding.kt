@@ -5,7 +5,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,6 +23,7 @@ fun LiftrixBrandHeader(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     logoWidth: Dp = 180.dp,
+    logoHeight: Dp = logoWidth * 0.72f,
     isDarkTheme: Boolean = isSystemInDarkTheme()
 ) {
     Column(
@@ -36,8 +37,8 @@ fun LiftrixBrandHeader(
             contentDescription = "Liftrix",
             contentScale = ContentScale.Fit,
             modifier = Modifier
-                .widthIn(max = logoWidth)
-                .height(logoWidth)
+                .width(logoWidth)
+                .height(logoHeight)
         )
 
         if (subtitle != null) {

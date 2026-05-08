@@ -10,6 +10,7 @@ import com.example.liftrix.domain.model.analytics.DashboardConfiguration
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.progress.ProgressDashboardGateway
+import com.example.liftrix.domain.progress.ProgressDashboardWidgetData
 import com.example.liftrix.domain.progress.ProgressWidgetResolverPort
 import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.state.UiState
@@ -88,10 +89,10 @@ class DashboardViewModel @Inject constructor(
 ) {
 
     /**
-     * Current authenticated user state for data scoping.
+     * Current authenticated user id for data scoping.
      * Updated via Coordinator events for centralized authentication management.
      */
-    private val _currentUser = MutableStateFlow<com.example.liftrix.domain.model.User?>(null)
+    private val _currentUserId = MutableStateFlow<String?>(null)
 
     /**
      * Current time range for analytics data filtering.
@@ -200,34 +201,13 @@ class DashboardViewModel @Inject constructor(
             try {
                 when (event) {
                     is CoordinatorEvent.UserAuthChanged -> {
-                        val previousUserId = _currentUser.value?.uid
+                        val previousUserId = _currentUserId.value
                         
-                        // Update current user with proper validation
-                        _currentUser.value = event.userId?.let { userId ->
-                            if (userId.isNotBlank()) {
-                                // Create minimal User object for dashboard operations
-                                com.example.liftrix.domain.model.User(
-                                    uid = userId,
-                                    email = "temp@liftrix.app",
-                                    displayName = null,
-                                    photoUrl = null,
-                                    isAnonymous = false,
-                                    subscriptionTier = com.example.liftrix.domain.model.SubscriptionTier.FREE,
-                                    subscriptionStatus = com.example.liftrix.domain.model.SubscriptionStatus.ACTIVE,
-                                    subscriptionExpiresAt = null,
-                                    premiumFeaturesEnabled = false,
-                                    onboardingCompleted = true,
-                                    profileVersion = 1L,
-                                    createdAt = java.time.LocalDateTime.now(),
-                                    lastSignInAt = java.time.LocalDateTime.now(),
-                                    updatedAt = java.time.LocalDateTime.now()
-                                )
-                            } else null
-                        }
+                        _currentUserId.value = event.userId?.takeIf { it.isNotBlank() }
                         
                         // Load dashboard data when user changes
-                        if (previousUserId != _currentUser.value?.uid) {
-                            if (_currentUser.value != null) {
+                        if (previousUserId != _currentUserId.value) {
+                            if (_currentUserId.value != null) {
                                 handleEvent(DashboardEvent.LoadDashboard(forceRefresh = true))
                                 Timber.d("Dashboard: User auth changed to ${event.userId}, loading dashboard")
                             } else {
@@ -325,11 +305,11 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             // Combine user and time range changes for reactive updates
             combine(
-                _currentUser,
+                _currentUserId,
                 _currentTimeRange,
                 _realtimeUpdatesEnabled,
                 _networkState
-            ) { user, timeRange, realtimeEnabled, isOnline ->
+            ) { userId, timeRange, realtimeEnabled, isOnline ->
                 // Update state with reactive changes
                 updateState { currentState ->
                     when (currentState) {
@@ -344,7 +324,7 @@ class DashboardViewModel @Inject constructor(
                 }
                 
                 // Trigger data loading if conditions are met
-                if (user != null) {
+                if (userId != null) {
                     val currentData = (_uiState.value as? UiState.Success)?.data
                     if (currentData?.hasValidConfiguration() != true) {
                         loadDashboard(forceRefresh = false, showLoading = false)
@@ -361,8 +341,8 @@ class DashboardViewModel @Inject constructor(
      * @param showLoading Whether to show loading indicators during loading
      */
     private suspend fun loadDashboard(forceRefresh: Boolean, showLoading: Boolean) {
-        val user = _currentUser.value
-        if (user == null) {
+        val userId = _currentUserId.value
+        if (userId == null) {
             val error = LiftrixError.AuthenticationError(
                 errorMessage = "User not authenticated",
                 analyticsContext = mapOf("operation" to "loadDashboard")
@@ -378,7 +358,7 @@ class DashboardViewModel @Inject constructor(
         try {
             // Load dashboard configuration
             progressDashboardGateway.getDashboardConfiguration(
-                userId = user.uid
+                userId = userId
             ).collect { configResult ->
                 configResult.fold(
                 onSuccess = { configuration ->
@@ -438,6 +418,39 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
+    private fun setWidgetLoading(widgetId: String, isLoading: Boolean) {
+        updateState { currentState ->
+            when (currentState) {
+                is UiState.Success -> UiState.Success(
+                    currentState.data.withWidgetLoading(widgetId, isLoading)
+                )
+                else -> currentState
+            }
+        }
+    }
+
+    private fun setWidgetData(widgetId: String, data: ProgressDashboardWidgetData) {
+        updateState { currentState ->
+            when (currentState) {
+                is UiState.Success -> UiState.Success(
+                    currentState.data.withWidgetData(widgetId, data)
+                )
+                else -> currentState
+            }
+        }
+    }
+
+    private fun setWidgetError(widgetId: String, error: LiftrixError?) {
+        updateState { currentState ->
+            when (currentState) {
+                is UiState.Success -> UiState.Success(
+                    currentState.data.withWidgetError(widgetId, error)
+                )
+                else -> currentState
+            }
+        }
+    }
+
     /**
      * Loads widget data for visible widgets.
      * 
@@ -445,18 +458,10 @@ class DashboardViewModel @Inject constructor(
      * @param forceRefresh Whether to force refresh of widget data
      */
     private suspend fun loadVisibleWidgets(widgetIds: List<String>, forceRefresh: Boolean) {
-        val user = _currentUser.value ?: return
+        val userId = _currentUserId.value ?: return
 
         widgetIds.forEach { widgetId ->
-            // Set loading state for widget
-            updateState { currentState ->
-                when (currentState) {
-                    is UiState.Success -> UiState.Success(
-                        currentState.data.withWidgetLoading(widgetId, true)
-                    )
-                    else -> currentState
-                }
-            }
+            setWidgetLoading(widgetId, true)
 
             try {
                 // Convert widget ID to AnalyticsWidget
@@ -467,19 +472,12 @@ class DashboardViewModel @Inject constructor(
                 }
                 
                 // Load widget data
-                val widgetResult = progressDashboardGateway.getWidgetData(user.uid, widget)
+                val widgetResult = progressDashboardGateway.getWidgetData(userId, widget)
                 
                 widgetResult.fold(
                     onSuccess = { data ->
-                        updateState { currentState ->
-                            when (currentState) {
-                                is UiState.Success -> UiState.Success(
-                                    currentState.data.withWidgetData(widgetId, data)
-                                )
-                                else -> currentState
-                            }
-                        }
-                        
+                        setWidgetData(widgetId, data)
+
                         // Clear retry attempts on success
                         retryAttempts.remove(widgetId)
                         
@@ -491,15 +489,8 @@ class DashboardViewModel @Inject constructor(
                             analyticsContext = mapOf("widget" to widgetId)
                         )
                         
-                        updateState { currentState ->
-                            when (currentState) {
-                                is UiState.Success -> UiState.Success(
-                                    currentState.data.withWidgetError(widgetId, error)
-                                )
-                                else -> currentState
-                            }
-                        }
-                        
+                        setWidgetError(widgetId, error)
+
                         Timber.e("Failed to load widget data: $widgetId - ${error.message}")
                     }
                 )
@@ -509,15 +500,8 @@ class DashboardViewModel @Inject constructor(
                     analyticsContext = mapOf("widget" to widgetId)
                 )
                 
-                updateState { currentState ->
-                    when (currentState) {
-                        is UiState.Success -> UiState.Success(
-                            currentState.data.withWidgetError(widgetId, error)
-                        )
-                        else -> currentState
-                    }
-                }
-                
+                setWidgetError(widgetId, error)
+
                 Timber.e(exception, "Invalid widget type: $widgetId")
             }
         }
@@ -569,17 +553,9 @@ class DashboardViewModel @Inject constructor(
      * @param forceRefresh Whether to bypass cache for this widget
      */
     private suspend fun refreshWidget(widgetId: String, forceRefresh: Boolean) {
-        val user = _currentUser.value ?: return
+        val userId = _currentUserId.value ?: return
 
-        // Set loading state for widget
-        updateState { currentState ->
-            when (currentState) {
-                is UiState.Success -> UiState.Success(
-                    currentState.data.withWidgetLoading(widgetId, true)
-                )
-                else -> currentState
-            }
-        }
+        setWidgetLoading(widgetId, true)
 
         try {
             val widget = AnalyticsWidget.getById(widgetId)
@@ -588,21 +564,14 @@ class DashboardViewModel @Inject constructor(
                 return
             }
             val result = if (forceRefresh) {
-                progressDashboardGateway.refreshWidgetData(user.uid, widget)
+                progressDashboardGateway.refreshWidgetData(userId, widget)
             } else {
-                progressDashboardGateway.getWidgetData(user.uid, widget)
+                progressDashboardGateway.getWidgetData(userId, widget)
             }
             
             result.fold(
                 onSuccess = { data ->
-                    updateState { currentState ->
-                        when (currentState) {
-                            is UiState.Success -> UiState.Success(
-                                currentState.data.withWidgetData(widgetId, data)
-                            )
-                            else -> currentState
-                        }
-                    }
+                    setWidgetData(widgetId, data)
                     retryAttempts.remove(widgetId)
                     Timber.d("Widget refreshed successfully: $widgetId")
                 },
@@ -612,14 +581,7 @@ class DashboardViewModel @Inject constructor(
                         analyticsContext = mapOf("widget" to widgetId)
                     )
                     
-                    updateState { currentState ->
-                        when (currentState) {
-                            is UiState.Success -> UiState.Success(
-                                currentState.data.withWidgetError(widgetId, error)
-                            )
-                            else -> currentState
-                        }
-                    }
+                    setWidgetError(widgetId, error)
                     Timber.e("Failed to refresh widget: $widgetId - ${error.message}")
                 }
             )
@@ -629,14 +591,7 @@ class DashboardViewModel @Inject constructor(
                 analyticsContext = mapOf("widget" to widgetId)
             )
             
-            updateState { currentState ->
-                when (currentState) {
-                    is UiState.Success -> UiState.Success(
-                        currentState.data.withWidgetError(widgetId, error)
-                    )
-                    else -> currentState
-                }
-            }
+            setWidgetError(widgetId, error)
             Timber.e(exception, "Invalid widget type for refresh: $widgetId")
         }
     }
@@ -680,8 +635,7 @@ class DashboardViewModel @Inject constructor(
         
         if (shouldPersist) {
             // Persist the reordering
-            val user = _currentUser.value
-            if (user != null && currentData.preferences != null) {
+            if (_currentUserId.value != null && currentData.preferences != null) {
                 val updatedPreferences = currentData.preferences.copy(
                     visibleWidgets = activeWidgets.toSet()
                 )
@@ -950,14 +904,7 @@ class DashboardViewModel @Inject constructor(
                         "attempts" to currentAttempts.toString()
                     )
                 )
-                updateState { currentState ->
-                    when (currentState) {
-                        is UiState.Success -> UiState.Success(
-                            currentState.data.withWidgetError(widgetId, error)
-                        )
-                        else -> currentState
-                    }
-                }
+                setWidgetError(widgetId, error)
                 return
             }
             

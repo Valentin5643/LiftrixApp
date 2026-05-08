@@ -1,16 +1,16 @@
 -- Merging decision tree log ---
 manifest
-ADDED from C:\Users\User635.WIFI\LiftrixApp\feature\profile\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest11297555542010524971.xml:2:13-83
-INJECTED from C:\Users\User635.WIFI\LiftrixApp\feature\profile\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest11297555542010524971.xml:2:13-83
+ADDED from C:\Users\User635.WIFI\LiftrixApp\feature\profile\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest13804925900206551696.xml:2:13-83
+INJECTED from C:\Users\User635.WIFI\LiftrixApp\feature\profile\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest13804925900206551696.xml:2:13-83
 	package
-		INJECTED from C:\Users\User635.WIFI\LiftrixApp\feature\profile\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest11297555542010524971.xml
+		INJECTED from C:\Users\User635.WIFI\LiftrixApp\feature\profile\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest13804925900206551696.xml
 	xmlns:android
-		ADDED from C:\Users\User635.WIFI\LiftrixApp\feature\profile\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest11297555542010524971.xml:2:23-81
+		ADDED from C:\Users\User635.WIFI\LiftrixApp\feature\profile\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest13804925900206551696.xml:2:23-81
 uses-sdk
-INJECTED from C:\Users\User635.WIFI\LiftrixApp\feature\profile\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest11297555542010524971.xml reason: use-sdk injection requested
-INJECTED from C:\Users\User635.WIFI\LiftrixApp\feature\profile\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest11297555542010524971.xml
-INJECTED from C:\Users\User635.WIFI\LiftrixApp\feature\profile\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest11297555542010524971.xml
+INJECTED from C:\Users\User635.WIFI\LiftrixApp\feature\profile\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest13804925900206551696.xml reason: use-sdk injection requested
+INJECTED from C:\Users\User635.WIFI\LiftrixApp\feature\profile\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest13804925900206551696.xml
+INJECTED from C:\Users\User635.WIFI\LiftrixApp\feature\profile\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest13804925900206551696.xml
 	android:targetSdkVersion
-		INJECTED from C:\Users\User635.WIFI\LiftrixApp\feature\profile\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest11297555542010524971.xml
+		INJECTED from C:\Users\User635.WIFI\LiftrixApp\feature\profile\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest13804925900206551696.xml
 	android:minSdkVersion
-		INJECTED from C:\Users\User635.WIFI\LiftrixApp\feature\profile\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest11297555542010524971.xml
+		INJECTED from C:\Users\User635.WIFI\LiftrixApp\feature\profile\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest13804925900206551696.xml
