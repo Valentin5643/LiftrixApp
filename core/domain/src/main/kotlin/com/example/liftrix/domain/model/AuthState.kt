@@ -19,7 +19,6 @@ sealed class AuthEvent {
     ) : AuthEvent()
     data class ForgotPassword(val email: String) : AuthEvent()
     data object GoogleSignIn : AuthEvent()
-    data object AnonymousSignIn : AuthEvent()
     data object SignOut : AuthEvent()
     data object ClearError : AuthEvent()
 }

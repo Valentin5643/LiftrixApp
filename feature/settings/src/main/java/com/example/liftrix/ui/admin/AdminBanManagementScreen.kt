@@ -46,6 +46,7 @@ import java.util.*
 @Composable
 fun AdminBanManagementScreen(
     onNavigateBack: () -> Unit,
+    showTopBar: Boolean = true,
     viewModel: AdminBanViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -62,7 +63,8 @@ fun AdminBanManagementScreen(
     
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (showTopBar) {
+                TopAppBar(
                 title = { Text("User Ban Management") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
@@ -88,7 +90,8 @@ fun AdminBanManagementScreen(
                         )
                     }
                 }
-            )
+                )
+            }
         }
     ) { paddingValues ->
         Column(

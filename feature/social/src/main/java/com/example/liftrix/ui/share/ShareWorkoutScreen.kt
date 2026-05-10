@@ -74,24 +74,27 @@ fun ShareWorkoutScreen(
     onNavigateBack: () -> Unit,
     onShareToPlatform: (SocialPlatform, String?) -> Unit,
     onGenerateQRCode: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showTopBar: Boolean = true
 ) {
     var customMessage by remember { mutableStateOf("") }
     var selectedPlatform by remember { mutableStateOf<SocialPlatform?>(null) }
     
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Share Workout") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back"
-                        )
+            if (showTopBar) {
+                TopAppBar(
+                    title = { Text("Share Workout") },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowBack,
+                                contentDescription = "Back"
+                            )
+                        }
                     }
-                }
-            )
+                )
+            }
         },
         floatingActionButton = {
             if (selectedPlatform != null) {

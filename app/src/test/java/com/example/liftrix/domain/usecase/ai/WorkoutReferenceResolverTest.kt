@@ -102,6 +102,35 @@ class WorkoutReferenceResolverTest {
         assertEquals("preview-1", resolved.source.sourceId)
     }
 
+    @Test
+    fun `resolves last workout phrase to most recently used template`() = runTest {
+        every { templateQueryUseCase("user-1") } returns flowOf(
+            listOf(
+                template(
+                    id = "template-a",
+                    name = "Older Push",
+                    updatedAt = Instant.parse("2026-04-01T00:00:00Z")
+                ),
+                template(
+                    id = "template-b",
+                    name = "Latest Legs",
+                    updatedAt = Instant.parse("2026-05-01T00:00:00Z")
+                )
+            )
+        )
+
+        val result = resolver(
+            WorkoutReferenceRequest(
+                userId = "user-1",
+                message = "Make my last workout easier"
+            )
+        ).getOrThrow()
+
+        val resolved = assertIs<WorkoutReferenceResolution.ResolvedTemplate>(result)
+        assertEquals("template-b", resolved.template.id.value)
+        assertEquals(WorkoutReferenceMatchType.RECENT_TEMPLATE, resolved.matchedBy)
+    }
+
     private fun template(
         id: String,
         name: String,

@@ -53,6 +53,7 @@ sealed class ValidationResult {
 fun EmailChangeScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
+    showTopBar: Boolean = true,
     viewModel: AccountManagementViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -103,26 +104,28 @@ fun EmailChangeScreen(
     
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Change Email",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(
-                        onClick = onNavigateBack,
-                        enabled = !uiState.isUpdatingEmail
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back"
+            if (showTopBar) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "Change Email",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
                         )
+                    },
+                    navigationIcon = {
+                        IconButton(
+                            onClick = onNavigateBack,
+                            enabled = !uiState.isUpdatingEmail
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowBack,
+                                contentDescription = "Back"
+                            )
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     ) { innerPadding ->
         Box(

@@ -49,7 +49,7 @@ private val Context.widgetDataStore: DataStore<Preferences> by preferencesDataSt
 /**
  * Extension property to create onboarding temporary data DataStore instance.
  * This creates a separate DataStore instance specifically for temporary onboarding data
- * that survives authentication transitions (guest → authenticated user).
+ * that survives account creation and sign-in transitions.
  */
 private val Context.onboardingDataStore: DataStore<Preferences> by preferencesDataStore(name = "liftrix_onboarding_temp")
 
@@ -245,9 +245,6 @@ abstract class DataModule {
 
         @Provides
         fun provideMetDataDao(database: LiftrixDatabase): MetDataDao = database.metDataDao()
-
-        @Provides
-        fun provideGuestSessionDao(database: LiftrixDatabase): GuestSessionDao = database.guestSessionDao()
 
         @Provides
         fun provideConsentDao(database: LiftrixDatabase): ConsentDao = database.consentDao()

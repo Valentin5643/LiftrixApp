@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.onboarding.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,6 +33,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -43,6 +46,7 @@ import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.UserProfile
 import com.example.liftrix.domain.usecase.ValidationResult
 import com.example.liftrix.domain.usecase.ValidateProfileInputUseCase
+import com.example.liftrix.feature.auth.R
 import com.example.liftrix.ui.onboarding.model.OnboardingStep
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -151,11 +155,16 @@ private fun EquipmentSelectionHelperText() {
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = "🏋️",
-            style = MaterialTheme.typography.displaySmall,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
+        Image(
+            painter = painterResource(id = R.drawable.onboarding_equipment),
+            contentDescription = "Equipment onboarding illustration",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(148.dp)
+                .semantics {
+                    contentDescription = "Equipment onboarding illustration"
+                }
         )
         
         Text(

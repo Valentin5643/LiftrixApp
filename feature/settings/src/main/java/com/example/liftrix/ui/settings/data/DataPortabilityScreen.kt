@@ -38,6 +38,7 @@ import com.example.liftrix.ui.components.actions.SecondaryActionButton
 fun DataPortabilityScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
+    showTopBar: Boolean = true,
     viewModel: DataPortabilityViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -108,7 +109,8 @@ fun DataPortabilityScreen(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
+            if (showTopBar) {
+                TopAppBar(
                 title = { 
                     Text(
                         text = "Data Portability",
@@ -124,7 +126,8 @@ fun DataPortabilityScreen(
                         )
                     }
                 }
-            )
+                )
+            }
         }
     ) { paddingValues ->
         LazyColumn(

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardColors
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -98,6 +99,7 @@ fun UnifiedWorkoutCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     leadingIcon: ImageVector? = null,
+    colors: CardColors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     actions: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -106,7 +108,7 @@ fun UnifiedWorkoutCard(
         onClick = onClick ?: {},
         enabled = onClick != null,
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = colors
     ) {
         androidx.compose.foundation.layout.Column(
             modifier = Modifier.padding(LiftrixSpacing.cardPadding)

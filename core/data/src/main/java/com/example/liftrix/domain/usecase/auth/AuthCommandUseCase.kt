@@ -17,6 +17,7 @@ import com.example.liftrix.domain.service.OnboardingDataStore
 import com.example.liftrix.domain.service.SessionStateCleanup
 import com.example.liftrix.domain.sync.SyncScheduler
 import com.example.liftrix.domain.usecase.profile.ProfileCommandUseCase
+import com.example.liftrix.domain.usecase.social.ApplyOfficialOnboardingFollowsUseCase
 import com.example.liftrix.domain.usecase.social.SocialProfileCommandUseCase
 import com.example.liftrix.domain.model.onboarding.UserProfileData
 import kotlinx.coroutines.Dispatchers
@@ -54,6 +55,7 @@ class AuthCommandUseCaseImpl @Inject constructor(
     private val socialProfileRepository: SocialProfileRepository,
     private val profileCommandUseCase: ProfileCommandUseCase,
     private val socialProfileCommandUseCase: SocialProfileCommandUseCase,
+    private val applyOfficialOnboardingFollowsUseCase: ApplyOfficialOnboardingFollowsUseCase,
     private val syncScheduler: SyncScheduler,
     private val onboardingDataStore: OnboardingDataStore,
     private val analyticsService: AnalyticsService,
@@ -107,8 +109,8 @@ class AuthCommandUseCaseImpl @Inject constructor(
         // Ensure UserAccount exists for backward compatibility
         handleUserAccountCreation(user, email)
 
-        // Sync onboarding profile after successful login
-        syncOnboardingProfileAfterLogin(UserId(user.uid))
+        // Transfer any pre-auth onboarding data, then sync the resulting profile.
+        transferOnboardingDataAfterLogin(UserId(user.uid))
 
         // Restore follow relationships
         restoreFollowRelationshipsAfterLogin(UserId(user.uid))
@@ -312,6 +314,9 @@ class AuthCommandUseCaseImpl @Inject constructor(
             }
         )
 
+        // Apply any onboarding data collected before account creation to this new user.
+        transferOnboardingDataAfterLogin(UserId(user.uid))
+
         // Allow time for all local DB writes to complete
         delay(500)
 
@@ -325,31 +330,6 @@ class AuthCommandUseCaseImpl @Inject constructor(
 
         Timber.i("Signup flow completed successfully")
         user
-    }
-
-    // ============== SIGN IN ANONYMOUSLY ==============
-
-    /**
-     * Sign in anonymously (guest mode).
-     *
-     * Replaces: SignInAnonymouslyUseCase
-     *
-     * @return LiftrixResult containing anonymous user or error
-     */
-    override suspend fun signInAnonymously(): LiftrixResult<User> = liftrixCatching(
-        errorMapper = { throwable ->
-            LiftrixError.AuthenticationError(
-                errorMessage = "Anonymous sign in failed: ${throwable.message}",
-                errorCode = "SIGN_IN_ANONYMOUS_FAILED",
-                analyticsContext = mapOf("operation" to "SIGN_IN_ANONYMOUS")
-            )
-        }
-    ) {
-        val result = authRepository.signInAnonymously()
-        result.fold(
-            onSuccess = { it },
-            onFailure = { throw it }
-        )
     }
 
     // ============== SIGN OUT (SIMPLE) ==============
@@ -707,9 +687,26 @@ class AuthCommandUseCaseImpl @Inject constructor(
      * Create UserProfile for Google user.
      */
     private suspend fun createUserProfileForGoogleUser(user: User, account: UserAccount) {
-        val userProfile = UserProfile(
+        val now = LocalDateTime.now()
+        val existingProfile = profileRepository.getUserProfile(user.uid).getOrNull()
+        val displayName = existingProfile?.displayName
+            ?.takeIf { it.isNotBlank() && it != "User" }
+            ?: user.displayName
+            ?: account.displayName
+            ?: account.username
+            ?: "User"
+        val profileImageUrl = existingProfile?.profileImageUrl ?: user.photoUrl
+
+        val userProfile = existingProfile?.copy(
+            displayName = displayName,
+            profileImageUrl = profileImageUrl,
+            profileImageUpdatedAt = existingProfile.profileImageUpdatedAt ?: user.photoUrl?.let { now },
+            hasCustomProfileImage = existingProfile.hasCustomProfileImage || user.photoUrl != null,
+            lastActiveAt = now,
+            updatedAt = now
+        ) ?: UserProfile(
             userId = user.uid,
-            displayName = user.displayName ?: account.displayName ?: account.username ?: "User",
+            displayName = displayName,
             bio = null,
             age = null,
             weight = null,
@@ -718,18 +715,18 @@ class AuthCommandUseCaseImpl @Inject constructor(
             fitnessGoals = emptyList(),
             goalsPriority = null,
             isPublic = true,
-            lastActiveAt = LocalDateTime.now(),
+            lastActiveAt = now,
             totalWorkouts = 0,
             currentStreak = 0,
             longestStreak = 0,
-            memberSince = account.accountCreatedAt ?: LocalDateTime.now(),
-            profileCompletionPercentage = 70,
+            memberSince = account.accountCreatedAt ?: now,
+            profileCompletionPercentage = 0,
             achievements = emptyList(),
             completedAt = null,
-            updatedAt = LocalDateTime.now(),
+            updatedAt = now,
             profileVersion = 1L,
-            profileImageUrl = user.photoUrl,
-            profileImageUpdatedAt = user.photoUrl?.let { LocalDateTime.now() },
+            profileImageUrl = profileImageUrl,
+            profileImageUpdatedAt = user.photoUrl?.let { now },
             hasCustomProfileImage = user.photoUrl != null
         )
 
@@ -852,13 +849,26 @@ class AuthCommandUseCaseImpl @Inject constructor(
 
                     transferResult.fold(
                         onSuccess = { pendingData ->
-                            val profileData = pendingData?.let(UserProfileData::fromSnapshot)
-                            if (profileData != null && profileData.isCompleteForSaving()) {
-                                val userProfile = profileData.toDomainModel()
+                            val userProfile = pendingData?.let { buildMergedOnboardingProfile(userId, it) }
+                            if (userProfile != null) {
 
-                                profileRepository.saveProfile(userProfile).fold(
+                                profileCommandUseCase.saveProfile(
+                                    profile = userProfile,
+                                    strictValidation = false
+                                ).fold(
                                     onSuccess = {
                                         Timber.d("🔧 ONBOARDING-FIX: Successfully saved transferred profile")
+                                        applyOfficialOnboardingFollowsUseCase(
+                                            userId = userId.value,
+                                            onboardingData = pendingData
+                                        ).fold(
+                                            onSuccess = { followedAccountIds ->
+                                                Timber.d("Applied official onboarding follows for user ${userId.value}: ${followedAccountIds.size}")
+                                            },
+                                            onFailure = { error ->
+                                                Timber.w(error, "Failed to apply official onboarding follows for user ${userId.value}")
+                                            }
+                                        )
                                         onboardingDataStore.clearPendingOnboardingData()
                                         profileRepository.queueSync(userId.value)
                                         profileRepository.syncNow(userId.value)
@@ -867,6 +877,8 @@ class AuthCommandUseCaseImpl @Inject constructor(
                                         Timber.e("🔧 ONBOARDING-FIX: Failed to save transferred profile: ${error.message}")
                                     }
                                 )
+                            } else {
+                                Timber.w("Pending onboarding data was missing or incomplete; skipping transfer")
                             }
                         },
                         onFailure = { error ->
@@ -882,6 +894,61 @@ class AuthCommandUseCaseImpl @Inject constructor(
                 syncExistingProfileIfNeeded(userId)
             }
         }
+    }
+
+    /**
+     * Merge pre-auth onboarding fields into the authenticated user's profile.
+     * This preserves identity, social, image, and workout stats that may already exist.
+     */
+    private suspend fun buildMergedOnboardingProfile(
+        userId: UserId,
+        pendingData: com.example.liftrix.domain.model.onboarding.OnboardingDataSnapshot
+    ): UserProfile? {
+        val profileData = UserProfileData.fromSnapshot(pendingData)
+        if (!profileData.isCompleteForSaving()) {
+            return null
+        }
+
+        val onboardingProfile = profileData.toDomainModel()
+        val existingProfile = profileRepository.getUserProfile(userId.value).getOrNull()
+        val account = userAccountRepository.getAccountInfoSuspend(userId.value).getOrNull()
+        val now = LocalDateTime.now()
+        val displayName = existingProfile?.displayName
+            ?.takeIf { it.isNotBlank() && it != "User" }
+            ?: account?.displayName?.takeIf { it.isNotBlank() }
+            ?: account?.username?.takeIf { it.isNotBlank() }
+            ?: account?.email?.substringBefore("@")?.takeIf { it.isNotBlank() }
+            ?: "User"
+
+        val baseProfile = existingProfile ?: onboardingProfile.copy(
+            userId = userId.value,
+            displayName = displayName,
+            bio = null,
+            isPublic = true,
+            lastActiveAt = now,
+            totalWorkouts = 0,
+            currentStreak = 0,
+            longestStreak = 0,
+            memberSince = account?.accountCreatedAt ?: now,
+            achievements = emptyList(),
+            profileImageUrl = null,
+            profileImageUpdatedAt = null,
+            hasCustomProfileImage = false
+        )
+
+        return baseProfile.copy(
+            userId = userId.value,
+            displayName = displayName,
+            age = onboardingProfile.age,
+            weight = onboardingProfile.weight,
+            availableEquipment = onboardingProfile.availableEquipment,
+            otherEquipment = onboardingProfile.otherEquipment,
+            fitnessGoals = onboardingProfile.fitnessGoals,
+            goalsPriority = onboardingProfile.goalsPriority,
+            completedAt = now,
+            updatedAt = now,
+            lastActiveAt = baseProfile.lastActiveAt ?: now
+        )
     }
 
     /**

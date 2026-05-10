@@ -66,6 +66,7 @@ import timber.log.Timber
 fun ContactSupportScreen(
     onNavigateBack: () -> Unit,
     onNavigateToTicket: (String) -> Unit,
+    showTopBar: Boolean = true,
     viewModel: SupportViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -119,7 +120,8 @@ fun ContactSupportScreen(
     
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (showTopBar) {
+                TopAppBar(
                 title = { 
                     Text(
                         text = "Contact Support",
@@ -149,7 +151,8 @@ fun ContactSupportScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
-            )
+                )
+            }
         }
     ) { paddingValues ->
         when (uiState) {

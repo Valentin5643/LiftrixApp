@@ -27,6 +27,7 @@ import com.example.liftrix.ui.common.state.UiState
 @Composable
 fun AIChatSettingsScreen(
     onNavigateBack: () -> Unit,
+    showTopBar: Boolean = true,
     viewModel: AIChatSettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -42,12 +43,14 @@ fun AIChatSettingsScreen(
     
     Scaffold(
         topBar = {
-            AIChatSettingsTopBar(
-                onNavigateBack = onNavigateBack,
-                language = uiState.preferences?.preferredLanguage ?: "en"
-            )
+            if (showTopBar) {
+                AIChatSettingsTopBar(
+                    onNavigateBack = onNavigateBack,
+                    language = uiState.preferences?.preferredLanguage ?: "en"
+                )
+            }
         },
-        containerColor = LiftrixColorsV2.surface
+        containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
         Box(
             modifier = Modifier
@@ -195,9 +198,9 @@ private fun AIChatSettingsTopBar(
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = LiftrixColorsV2.surface,
-            titleContentColor = LiftrixColorsV2.onSurface,
-            navigationIconContentColor = LiftrixColorsV2.onSurface
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            navigationIconContentColor = MaterialTheme.colorScheme.onSurface
         )
     )
 }
@@ -305,7 +308,7 @@ private fun LoadingState(
         Text(
             text = "Loading settings...",
             style = MaterialTheme.typography.bodyMedium,
-            color = LiftrixColorsV2.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

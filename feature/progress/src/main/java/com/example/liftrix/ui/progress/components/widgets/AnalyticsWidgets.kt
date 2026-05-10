@@ -75,7 +75,7 @@ fun VolumeAnalyticsWidget(
 ) {
     if (useFolderStyle) {
         FolderStyleWidget(
-            title = "Volume Analytics",
+            title = "Volume Chart",
             icon = Icons.Default.Analytics,
             onClick = onClick,
             modifier = modifier,

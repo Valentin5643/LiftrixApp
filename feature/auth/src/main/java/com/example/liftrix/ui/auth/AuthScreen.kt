@@ -2,6 +2,7 @@ package com.example.liftrix.ui.auth
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -167,7 +168,7 @@ fun AuthScreen(
 
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundPrimary
+        color = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundTertiary
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
@@ -182,7 +183,6 @@ fun AuthScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 LiftrixBrandHeader(
-                    subtitle = if (isSignUpMode) "Create your AI fitness profile" else "Welcome back",
                     logoWidth = 132.dp,
                     isDarkTheme = isDarkTheme
                 )
@@ -201,7 +201,8 @@ fun AuthScreen(
                                 pendingSignUpData = Triple(email, password, username)
                                 showConsentDialog = true
                             },
-                            isLoading = authState is AuthState.Loading
+                            isLoading = authState is AuthState.Loading,
+                            isDarkThemeOverride = isDarkTheme
                         )
                     } else {
                         SignInForm(
@@ -217,7 +218,8 @@ fun AuthScreen(
                             errorMessage = (authState as? AuthState.Error)?.message,
                             onClearError = {
                                 viewModel.handleEvent(AuthEvent.ClearError)
-                            }
+                            },
+                            isDarkThemeOverride = isDarkTheme
                         )
                     }
                     
@@ -281,6 +283,10 @@ fun AuthScreen(
                             .fillMaxWidth()
                             .height(52.dp),
                         shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = if (isDarkTheme) LiftrixColorsV2.Dark.Outline else LiftrixColorsV2.Light.Outline
+                        ),
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary
                         )
@@ -300,26 +306,9 @@ fun AuthScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Guest Sign-In
-                    TextButton(
-                        onClick = {
-                            viewModel.handleEvent(AuthEvent.AnonymousSignIn)
-                        },
-                        enabled = authState !is AuthState.Loading,
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = "Continue as guest",
-                            color = textSecondary
-                        )
-                    }
-
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Toggle between sign in and sign up - moved below Google/Guest
+                    // Toggle between sign in and sign up
                     if (!isSignUpMode) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),

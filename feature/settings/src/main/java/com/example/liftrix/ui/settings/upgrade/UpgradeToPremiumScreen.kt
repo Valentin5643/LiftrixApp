@@ -55,6 +55,7 @@ fun UpgradeToPremiumScreen(
     onNavigateBack: () -> Unit,
     onContactSupport: () -> Unit = {},
     modifier: Modifier = Modifier,
+    showTopBar: Boolean = true,
     viewModel: UpgradeViewModel = hiltViewModel()
 ) {
     // Performance monitoring for upgrade screen
@@ -76,27 +77,28 @@ fun UpgradeToPremiumScreen(
                     contentDescription = "Upgrade to Premium screen with features and pricing plans"
                 }
         ) {
-            // Top App Bar
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Upgrade to Premium",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = stableOnNavigateBack) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back to settings"
+            if (showTopBar) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "Upgrade to Premium",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
                         )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = stableOnNavigateBack) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowBack,
+                                contentDescription = "Back to settings"
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
                 )
-            )
+            }
             
             // Content with performance tracking
             PerformanceOptimizations.MemoryEfficientComponents.TrackRecomposition(

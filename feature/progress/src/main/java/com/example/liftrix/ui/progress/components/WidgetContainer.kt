@@ -1009,6 +1009,21 @@ internal fun WidgetRenderer(
                 aspectRatio = aspectRatio
             )
         }
+
+        AnalyticsWidget.WorkoutDuration,
+        AnalyticsWidget.RecentAchievements,
+        AnalyticsWidget.ConsistencyScore,
+        AnalyticsWidget.ExerciseRanking,
+        AnalyticsWidget.ProgressiveOverload -> {
+            val metricData = (widgetData as? com.example.liftrix.domain.model.analytics.MetricWidgetData)
+            CompactMetricWidget(
+                widget = widget,
+                data = metricData,
+                onRefresh = {},
+                onClick = onClick,
+                modifier = modifier
+            )
+        }
         
         else -> {
             // Default fallback to CompactMetricWidget

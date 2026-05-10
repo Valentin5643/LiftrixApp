@@ -3,7 +3,9 @@ package com.example.liftrix.feature.workout.ui
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -20,6 +22,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.Weight
 import com.example.liftrix.domain.model.WeightUnit
+import com.example.liftrix.domain.service.WeightUnitManager
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 
 object AccessibilityUtils {
     private val MinimumTouchTargetSize = 48.dp
@@ -56,23 +63,31 @@ fun WeightDisplay(
     unit: WeightUnit = WeightUnit.KILOGRAMS,
     modifier: Modifier = Modifier
 ) {
+    val weightUnitManager = rememberWeightUnitManager()
     Text(
-        text = "${weight.value} ${unit.displayName}",
+        text = weightUnitManager?.formatWeightCompact(weight.kilograms, WeightUnit.KILOGRAMS)
+            ?: weight.format(unit),
         modifier = modifier
     )
 }
 
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface WorkoutWeightUnitEntryPoint {
+    fun weightUnitManager(): WeightUnitManager
+}
+
 @Composable
-fun rememberWeightUnitManager(): WorkoutWeightUnitManager = WorkoutWeightUnitManager()
-
-class WorkoutWeightUnitManager {
-    fun convertForDisplay(value: Double, storedUnit: WeightUnit): Double =
-        storedUnit.convertFromKilograms(value)
-
-    fun formatWeightCompact(value: Double, storedUnit: WeightUnit): String =
-        storedUnit.formatWeight(value, precision = 1)
-
-    fun getCurrentUnitSymbol(): String = WeightUnit.KILOGRAMS.symbol
+fun rememberWeightUnitManager(): WeightUnitManager? {
+    val applicationContext = LocalContext.current.applicationContext
+    return remember(applicationContext) {
+        runCatching {
+            EntryPointAccessors.fromApplication(
+                applicationContext,
+                WorkoutWeightUnitEntryPoint::class.java
+            ).weightUnitManager()
+        }.getOrNull()
+    }
 }
 
 @Composable
@@ -82,6 +97,10 @@ fun rememberFormattedWeight(
     showUnit: Boolean = true,
     precision: Int = 1
 ): String {
-    val formatted = "%.${precision}f".format(weight.value)
-    return if (showUnit) "$formatted ${targetUnit.displayName}" else formatted
+    val weightUnitManager = rememberWeightUnitManager()
+    val formatted = weightUnitManager?.convertForDisplay(weight.value, WeightUnit.KILOGRAMS)
+        ?: weight.getValue(targetUnit)
+    val formattedText = "%.${precision}f".format(formatted)
+    val displayUnit = weightUnitManager?.getCurrentUnitDisplayName() ?: targetUnit.displayName
+    return if (showUnit) "$formattedText $displayUnit" else formattedText
 }

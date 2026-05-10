@@ -2,12 +2,12 @@
   
 # 💪 Liftrix
 
-### Enterprise-Grade Fitness Tracking Platform with AI Coaching & Social Engagement
+### Android Fitness Tracking App with AI Coaching & Social Engagement
 
 [![Android](https://img.shields.io/badge/Platform-Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Language-Kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Min SDK](https://img.shields.io/badge/Min%20SDK-24-brightgreen?style=for-the-badge)](https://developer.android.com/studio/releases/platforms#7.0)
-[![Target SDK](https://img.shields.io/badge/Target%20SDK-34-brightgreen?style=for-the-badge)](https://developer.android.com/studio/releases/platforms)
+[![Min SDK](https://img.shields.io/badge/Min%20SDK-26-brightgreen?style=for-the-badge)](https://developer.android.com/studio/releases/platforms#8.0)
+[![Target SDK](https://img.shields.io/badge/Target%20SDK-35-brightgreen?style=for-the-badge)](https://developer.android.com/studio/releases/platforms)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=flat-square&logo=jetpack-compose)](https://developer.android.com/jetpack/compose)
@@ -27,16 +27,16 @@
 
 ## ✨ Overview
 
-**Liftrix** is a comprehensive Android fitness platform that combines personal workout tracking with social engagement and AI-powered insights. Built with enterprise-grade architecture patterns, it delivers a premium fitness experience through offline-first design and real-time synchronization.
+**Liftrix** is an Android fitness app that combines workout tracking, progress analytics, social engagement and AI-powered coaching. It uses a modular, testable architecture with offline-first persistence and Firebase-backed synchronization.
 
 ### 🎯 Key Highlights
 
-- **🏗️ Clean Architecture**: 85+ use cases, 16 repositories, strict SOLID principles
+- **🏗️ Clean Architecture**: layered UI, ViewModel, use case, repository and data boundaries
 - **📱 Modern UI**: 100% Jetpack Compose with Material 3 design system
 - **🔄 Offline-First**: Room database as source of truth with Firebase sync
 - **🤖 AI Integration**: Gemini 2.5 Flash Lite for intelligent coaching
 - **👥 Social Features**: Privacy-first feed system with engagement tracking
-- **📊 Advanced Analytics**: 15 specialized widgets with 60fps chart rendering
+- **📊 Advanced Analytics**: progress widgets and charts optimized for fluid rendering
 - **🔐 Security**: User-scoped data isolation and privacy controls
 
 ---
@@ -51,7 +51,7 @@
 - 📋 Template-based workout creation
 - ⏱️ Real-time session tracking
 - 📈 Progressive overload support
-- 🎯 200+ exercise library
+- 🎯 100 exercise local library
 - ✏️ Custom exercise creation
 - 🔄 Drag-to-reorder exercises
 
@@ -171,13 +171,13 @@ UI Layer (Jetpack Compose)
     ↓ StateFlow<UiState<T>>
 ViewModel Layer (MVI Pattern)
     ↓ LiftrixResult<T>
-Use Case Layer (85+ Operations)
+Use Case Layer
     ↓ Domain Models
-Repository Layer (16 Interfaces)
+Repository Layer
     ↓ Flow<Entity>
-DAO Layer (28 DAOs)
+DAO Layer
     ↓ SQL Queries
-Room Database (29 Entities)
+Room Database
     ↓ Background Sync
 Firebase Services (8 Integrated)
 ```
@@ -188,7 +188,7 @@ Firebase Services (8 Integrated)
 - **🔒 User Scoping**: Mandatory userId filtering for data security
 - **🔄 Offline-First**: Room as single source of truth
 - **⚡ Type-Safe Navigation**: Serializable routes with compile-time safety
-- **💉 Dependency Injection**: 22 Hilt modules for clean separation
+- **💉 Dependency Injection**: Hilt modules for clean separation
 
 ---
 
@@ -229,9 +229,9 @@ Firebase Services (8 Integrated)
 |----------|-------------|
 | **UI Framework** | Jetpack Compose, Material 3, Navigation Compose |
 | **Architecture** | MVVM, MVI, Clean Architecture, Repository Pattern |
-| **Database** | Room (29 entities), Firestore (offline-first) |
+| **Database** | Room, Firestore-backed synchronization |
 | **Networking** | Firebase Services, Retrofit, OkHttp |
-| **DI Framework** | Hilt (22 modules), Dagger |
+| **DI Framework** | Hilt, Dagger |
 | **Async** | Kotlin Coroutines, Flow, StateFlow |
 | **Testing** | JUnit, MockK, Turbine, Compose Testing |
 | **Background** | WorkManager, Firebase Cloud Messaging |
@@ -249,32 +249,32 @@ Firebase Services (8 Integrated)
 <tr>
 <td>UI Rendering</td>
 <td>60fps</td>
-<td>✅ Achieved</td>
+<td>Optimized in tested screens</td>
 </tr>
 <tr>
 <td>Database Queries</td>
 <td><100ms</td>
-<td>✅ Optimized</td>
+<td>Requires device/methodology when reported</td>
 </tr>
 <tr>
 <td>Sync Operations</td>
 <td><5s</td>
-<td>✅ Efficient</td>
+<td>Scenario-dependent</td>
 </tr>
 <tr>
 <td>Component Interactions</td>
 <td>150ms</td>
-<td>✅ Responsive</td>
+<td>Target</td>
 </tr>
 <tr>
 <td>Memory Usage</td>
 <td>Adaptive</td>
-<td>✅ Memory-aware</td>
+<td>Memory-aware</td>
 </tr>
 <tr>
 <td>Accessibility</td>
 <td>WCAG 2.1 AA</td>
-<td>✅ Compliant</td>
+<td>Requires final accessibility pass</td>
 </tr>
 </table>
 

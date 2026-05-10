@@ -828,11 +828,14 @@ class FeedRepositoryImpl @Inject constructor(
      */
     private data class WorkoutExerciseJson(
         val name: String? = null,
+        val libraryExerciseName: String? = null,
         val sets: List<WorkoutSetJson>? = emptyList(),
         val libraryExercise: LibraryExerciseJson? = null
     ) {
-        // Helper to get effective name from either direct name or libraryExercise.name
-        val effectiveName: String get() = name ?: libraryExercise?.name ?: "Unknown Exercise"
+        // Helper to get effective name from current, canonical, and legacy formats.
+        val effectiveName: String
+            get() = libraryExerciseName ?: name ?: libraryExercise?.libraryExerciseName
+                ?: libraryExercise?.name ?: "Unknown Exercise"
 
         // Helper to get effective sets with fallback to libraryExercise sets
         val effectiveSets: List<WorkoutSetJson> get() =
@@ -841,6 +844,7 @@ class FeedRepositoryImpl @Inject constructor(
 
     private data class LibraryExerciseJson(
         val name: String? = null,
+        val libraryExerciseName: String? = null,
         val id: String? = null,
         val sets: List<WorkoutSetJson>? = null
     )

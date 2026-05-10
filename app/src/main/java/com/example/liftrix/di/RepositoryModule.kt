@@ -7,7 +7,6 @@ import com.example.liftrix.data.repository.ProgressStatsRepositoryImpl
 import com.example.liftrix.data.repository.SocialRepositoryImpl
 import com.example.liftrix.data.repository.ExerciseLibraryRepositoryImpl
 import com.example.liftrix.data.repository.FolderRepositoryImpl
-import com.example.liftrix.data.repository.GuestSessionRepositoryImpl
 import com.example.liftrix.data.repository.AnomalyDetectionRepositoryImpl
 import com.example.liftrix.data.repository.MetDataRepositoryImpl
 import com.example.liftrix.data.repository.WidgetPreferencesRepositoryImpl
@@ -33,7 +32,6 @@ import com.example.liftrix.domain.repository.ProgressStatsRepository
 import com.example.liftrix.domain.repository.SocialRepository
 import com.example.liftrix.domain.repository.ExerciseLibraryRepository
 import com.example.liftrix.domain.repository.FolderRepository
-import com.example.liftrix.domain.repository.GuestSessionRepository
 import com.example.liftrix.domain.repository.AnomalyDetectionRepository
 import com.example.liftrix.domain.repository.MetDataRepository
 import com.example.liftrix.domain.repository.WidgetPreferencesRepository
@@ -118,12 +116,6 @@ abstract class RepositoryModule {
     abstract fun bindExerciseLibraryRepository(
         exerciseLibraryRepositoryImpl: ExerciseLibraryRepositoryImpl
     ): ExerciseLibraryRepository
-
-    @Binds
-    @Singleton
-    abstract fun bindGuestSessionRepository(
-        guestSessionRepositoryImpl: GuestSessionRepositoryImpl
-    ): GuestSessionRepository
 
     @Binds
     @Singleton

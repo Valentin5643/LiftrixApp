@@ -390,6 +390,11 @@ sealed class AnalyticsWidgetEvent : ViewModelEvent {
      * ```
      */
     data object NavigateToFrequencyDetail : AnalyticsWidgetEvent()
+
+    /**
+     * Event for navigating to exercise ranking detail screen.
+     */
+    data object NavigateToExerciseRankingDetail : AnalyticsWidgetEvent()
 }
 
 /**

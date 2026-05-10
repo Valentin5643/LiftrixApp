@@ -62,15 +62,18 @@ class InitializeUserThemeUseCase @Inject constructor(
                 
                 Timber.i("InitializeUserThemeUseCase: Theme initialized successfully for user $userId, darkMode: ${userSettings.darkMode}")
             } else {
-                // User might not have settings yet (new account), use system default
-                Timber.d("InitializeUserThemeUseCase: No saved settings for user $userId, using system default")
-                themeManager.switchTheme(ThemeMode.SYSTEM)
+                // Logout clears the settings DataStore, and login restore may not have repopulated it yet.
+                // Preserve the app-level theme preference so auth transitions do not flash system dark/light.
+                Timber.d(
+                    "InitializeUserThemeUseCase: No saved settings for user $userId, preserving current theme mode: ${themeManager.themeMode.value}"
+                )
+                themeManager.applyCurrentThemeToPlatform()
             }
             
         } catch (e: Exception) {
             Timber.e(e, "InitializeUserThemeUseCase: Exception while initializing theme for user $userId")
-            // Fallback to system theme if there's any error
-            themeManager.switchTheme(ThemeMode.SYSTEM)
+            // Preserve the last known app theme during transient settings/auth failures.
+            themeManager.applyCurrentThemeToPlatform()
             throw e
         }
     }

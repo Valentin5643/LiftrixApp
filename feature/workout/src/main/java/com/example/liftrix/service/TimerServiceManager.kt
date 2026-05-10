@@ -189,6 +189,15 @@ class TimerServiceManager @Inject constructor(
             service.skipRest()
         }
     }
+
+    /**
+     * Adjusts the active or paused rest timer by the provided number of seconds.
+     */
+    fun adjustRestBySeconds(deltaSeconds: Int): Result<Unit> {
+        return executeServiceOperation("adjustRestBySeconds") { service ->
+            service.adjustRestBySeconds(deltaSeconds)
+        }
+    }
     
     /**
      * Stops all timers and ends the service

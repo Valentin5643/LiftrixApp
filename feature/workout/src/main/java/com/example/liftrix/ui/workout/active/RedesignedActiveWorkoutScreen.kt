@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.workout.active
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -7,6 +8,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,14 +22,26 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.example.liftrix.domain.model.ExerciseCategory
+import com.example.liftrix.domain.model.Weight
+import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.domain.model.SessionExercise
+import com.example.liftrix.domain.service.WeightUnitManager
+import com.example.liftrix.feature.workout.R
+import com.example.liftrix.feature.workout.ui.rememberWeightUnitManager
 import androidx.compose.material3.MaterialTheme
 import com.example.liftrix.ui.theme.LiftrixColorsV2
+import com.example.liftrix.ui.components.animations.CompletionFeedback
+import com.example.liftrix.ui.components.animations.CompletionFeedbackType
+import com.example.liftrix.ui.workout.active.components.RestTimerDisplay
+import com.example.liftrix.ui.workout.active.components.getRestTimeFromState
 import com.example.liftrix.ui.workout.components.*
 import com.example.liftrix.ui.workout.components.SaveQuickWorkoutAsTemplateDialog
 import com.example.liftrix.ui.workout.components.ExerciseCardContext
+import com.example.liftrix.ui.workout.plate.PlateCalculatorBottomSheet
 import kotlinx.coroutines.delay
 import timber.log.Timber
+import java.util.Locale
 
 /**
  * Redesigned Active Workout Screen matching reference UI
@@ -50,7 +64,6 @@ fun RedesignedActiveWorkoutScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val currentSession by viewModel.currentSession.collectAsStateWithLifecycle()
-    val previousSetData by viewModel.previousSetData.collectAsStateWithLifecycle()
     
     // Initialize session on first composition based on parameters
     LaunchedEffect(Unit) {
@@ -142,9 +155,16 @@ private fun ActiveWorkoutContent(
     onNavigateToExerciseLibrary: (() -> Unit)?
 ) {
     val session = uiState.session
+    val weightUnitManager = rememberWeightUnitManager()
+    val observedWeightUnit = weightUnitManager?.currentUnit?.collectAsStateWithLifecycle()
+    val currentWeightUnit = observedWeightUnit?.value ?: WeightUnit.KILOGRAMS
     val exerciseMenuStates = remember { mutableStateMapOf<String, Boolean>() }
     val exerciseNotes = remember { mutableStateMapOf<String, String>() }
     var showReorderDialog by remember { mutableStateOf(false) }
+    val timerState by viewModel.timerState.collectAsStateWithLifecycle()
+    var lastRestCompletionSignal by remember { mutableStateOf<Long?>(null) }
+    var showRestCompleteFeedback by remember { mutableStateOf(false) }
+    var showPlateCalculator by remember { mutableStateOf(false) }
     
     // Anomaly detection states
     var showAnomalyDialog by remember { mutableStateOf(false) }
@@ -159,6 +179,16 @@ private fun ActiveWorkoutContent(
         while (session.sessionStatus == com.example.liftrix.domain.model.UnifiedWorkoutSession.SessionStatus.ACTIVE) {
             delay(1000)
             elapsedTime++
+        }
+    }
+
+    LaunchedEffect(timerState.restCompletionSignal) {
+        val completionSignal = timerState.restCompletionSignal
+        if (completionSignal != null && completionSignal != lastRestCompletionSignal) {
+            lastRestCompletionSignal = completionSignal
+            showRestCompleteFeedback = true
+            delay(1200)
+            showRestCompleteFeedback = false
         }
     }
     
@@ -181,7 +211,20 @@ private fun ActiveWorkoutContent(
                 ),
                 modifier = Modifier.weight(1f)
             )
-            
+
+            IconButton(
+                onClick = { showPlateCalculator = true },
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.FitnessCenter,
+                    contentDescription = "Open plate calculator",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Spacer(modifier = Modifier.width(4.dp))
+
             
             // Timer
             Text(
@@ -255,7 +298,10 @@ private fun ActiveWorkoutContent(
                         )
                     )
                     Text(
-                        text = "${calculateTotalVolume(session.exercises)} kg",
+                        text = weightUnitManager?.formatWeightCompact(
+                            calculateTotalVolume(session.exercises).toDouble(),
+                            WeightUnit.KILOGRAMS
+                        ) ?: "${calculateTotalVolume(session.exercises)} kg",
                         style = TextStyle(
                             color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 18.sp,
@@ -290,6 +336,43 @@ private fun ActiveWorkoutContent(
                 )
             }
         }
+
+        CompletionFeedback(
+            completed = showRestCompleteFeedback,
+            feedbackType = CompletionFeedbackType.SET_COMPLETE,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        ) {
+            AnimatedVisibility(visible = showRestCompleteFeedback) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = "Rest complete",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            }
+        }
+
+        RestTimerDisplay(
+            timerState = timerState,
+            formattedTime = getRestTimeFromState(timerState),
+            onPause = viewModel::pauseRestTimer,
+            onResume = viewModel::resumeRestTimer,
+            onSkip = viewModel::skipRestTimer,
+            onAddTime = { viewModel.adjustRestTimerBy(15) },
+            onSubtractTime = { viewModel.adjustRestTimerBy(-15) },
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        )
         
         // Exercises list
         LazyColumn(
@@ -309,16 +392,23 @@ private fun ActiveWorkoutContent(
                 RedesignedExerciseCard(
                     exerciseName = exercise.name,
                     exerciseSubtitle = exercise.primaryMuscle.name,
+                    leadingIconResId = muscleGroupIconResId(exercise.primaryMuscle),
+                    leadingIconContentDescription = muscleGroupIconContentDescription(exercise.primaryMuscle),
                     sets = exercise.sets.mapIndexed { setIndex, set ->
                         RedesignedSetData(
-                            weight = set.actualWeight?.kilograms?.toString() 
-                                ?: set.targetWeight?.kilograms?.toString() ?: "",
+                            weight = set.actualWeight?.kilograms
+                                ?.let { formatWeightInputValue(it, currentWeightUnit, weightUnitManager) }
+                                ?: set.targetWeight?.kilograms
+                                    ?.let { formatWeightInputValue(it, currentWeightUnit, weightUnitManager) }
+                                ?: "",
                             reps = set.actualReps?.toString() 
                                 ?: set.targetReps?.toString() ?: "",
                             previousValue = viewModel.getPreviousValueForSet(
                                 exerciseId = exercise.exerciseId.value,
                                 setNumber = setIndex + 1
-                            ),
+                            )?.let { previousValue ->
+                                weightUnitManager?.formatWeightText(previousValue) ?: previousValue
+                            },
                             isCompleted = set.completedAt != null,
                             setId = "${exercise.exerciseId.value}_${setIndex}",
                             hasWeightAnomaly = false,
@@ -334,7 +424,7 @@ private fun ActiveWorkoutContent(
                         if (setIndex < exercise.sets.size) {
                             val updatedSet = exercise.sets[setIndex].copy(
                                 actualWeight = setData.weight.toDoubleOrNull()?.let {
-                                    com.example.liftrix.domain.model.Weight.fromKilograms(it)
+                                    Weight.fromValue(it, currentWeightUnit)
                                 },
                                 actualReps = setData.reps.toIntOrNull(),
                                 completedAt = if (setData.isCompleted) {
@@ -354,6 +444,7 @@ private fun ActiveWorkoutContent(
                     onMenuClick = { showMenu = true },
                     onNotesClick = { showNotesDialog = true },
                     context = ExerciseCardContext.ACTIVE_WORKOUT,
+                    weightUnit = currentWeightUnit,
                     onAnomalyDetected = { value, setIdx ->
                         // Prepare anomaly dialog data
                         anomalyDetails = Triple(
@@ -362,8 +453,12 @@ private fun ActiveWorkoutContent(
                             exercise.sets.getOrNull(setIdx)?.let { set ->
                                 buildString {
                                     val prevWeight = set.targetWeight?.kilograms ?: 0
+                                    val displayPrevWeight = weightUnitManager?.formatWeightCompact(
+                                        prevWeight.toDouble(),
+                                        WeightUnit.KILOGRAMS
+                                    ) ?: "$prevWeight kg"
                                     val prevReps = set.targetReps ?: 0
-                                    append("$prevWeight kg x $prevReps")
+                                    append("$displayPrevWeight x $prevReps")
                                 }
                             }
                         )
@@ -561,6 +656,12 @@ private fun ActiveWorkoutContent(
                 }
             )
         }
+
+        PlateCalculatorBottomSheet(
+            isVisible = showPlateCalculator,
+            weightUnit = currentWeightUnit,
+            onDismiss = { showPlateCalculator = false }
+        )
     }
 }
 
@@ -725,5 +826,55 @@ private fun calculateTotalVolume(exercises: List<SessionExercise>): Int {
         exercise.sets.sumOf { set ->
             set.getVolume().toInt()
         }
+    }
+}
+
+private fun muscleGroupIconResId(muscleGroup: ExerciseCategory): Int? {
+    return when (muscleGroup) {
+        ExerciseCategory.SHOULDERS -> R.drawable.muscle_shoulders
+        ExerciseCategory.CHEST -> R.drawable.muscle_chest
+        ExerciseCategory.BACK -> R.drawable.muscle_back
+        ExerciseCategory.BICEPS -> R.drawable.muscle_biceps
+        ExerciseCategory.TRICEPS -> R.drawable.muscle_triceps
+        ExerciseCategory.LEGS,
+        ExerciseCategory.QUADRICEPS -> R.drawable.muscle_legs
+        ExerciseCategory.GLUTES -> R.drawable.muscle_glutes
+        ExerciseCategory.ABS,
+        ExerciseCategory.CORE -> R.drawable.muscle_core
+        ExerciseCategory.CALVES -> R.drawable.muscle_calves
+        else -> null
+    }
+}
+
+private fun muscleGroupIconContentDescription(muscleGroup: ExerciseCategory): String {
+    return when (muscleGroup) {
+        ExerciseCategory.SHOULDERS -> "Shoulders muscle icon"
+        ExerciseCategory.CHEST -> "Chest muscle icon"
+        ExerciseCategory.BACK -> "Back muscle icon"
+        ExerciseCategory.BICEPS -> "Biceps muscle icon"
+        ExerciseCategory.TRICEPS -> "Triceps muscle icon"
+        ExerciseCategory.LEGS,
+        ExerciseCategory.QUADRICEPS -> "Legs muscle icon"
+        ExerciseCategory.GLUTES -> "Glutes muscle icon"
+        ExerciseCategory.ABS,
+        ExerciseCategory.CORE -> "Core muscle icon"
+        ExerciseCategory.CALVES -> "Calves muscle icon"
+        else -> "Exercise"
+    }
+}
+
+private fun formatWeightInputValue(
+    kilograms: Double,
+    targetUnit: WeightUnit,
+    weightUnitManager: WeightUnitManager?
+): String {
+    val displayValue = weightUnitManager?.convertForDisplay(kilograms, WeightUnit.KILOGRAMS)
+        ?: targetUnit.convertFromKilograms(kilograms)
+    return when {
+        displayValue == displayValue.toInt().toDouble() -> displayValue.toInt().toString()
+        (displayValue * 10).toInt().toDouble() == displayValue * 10 -> {
+            String.format(Locale.US, "%.1f", displayValue)
+        }
+        else -> String.format(Locale.US, "%.2f", displayValue)
     }
 }

@@ -1,15 +1,16 @@
 package com.example.liftrix.ui.auth
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -24,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -33,7 +33,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.feature.auth.R
@@ -52,6 +51,32 @@ fun StartingScreen(
         modifier = modifier.fillMaxSize(),
         color = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundPrimary
     ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Image(
+                painter = painterResource(
+                    id = if (isDarkTheme) {
+                        R.drawable.get_started_background_dark
+                    } else {
+                        R.drawable.get_started_background_light
+                    }
+                ),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        if (isDarkTheme) {
+                            Color.Black.copy(alpha = 0.22f)
+                        } else {
+                            Color.White.copy(alpha = 0.08f)
+                        }
+                    )
+            )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -61,36 +86,12 @@ fun StartingScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             LiftrixBrandHeader(
-                subtitle = "AI-Powered Gym Companion",
                 logoWidth = 184.dp,
                 isDarkTheme = isDarkTheme,
                 modifier = Modifier.padding(top = 24.dp)
             )
 
-            // Center Section: Fitness Illustration
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                androidx.compose.foundation.Image(
-                    painter = painterResource(
-                        if (isDarkTheme) {
-                            R.drawable.ic_liftrix_symbol_light
-                        } else {
-                            R.drawable.ic_liftrix_symbol
-                        }
-                    ),
-                    contentDescription = "Liftrix AI fitness symbol",
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .size(240.dp)
-                        .semantics {
-                            contentDescription = "Liftrix AI fitness symbol"
-                        }
-                )
-            }
+            Spacer(modifier = Modifier.weight(1f))
 
             // Bottom Section: Call to Action Buttons
             Column(
@@ -134,6 +135,7 @@ fun StartingScreen(
                 
                 Spacer(modifier = Modifier.height(32.dp))
             }
+        }
         }
     }
 }

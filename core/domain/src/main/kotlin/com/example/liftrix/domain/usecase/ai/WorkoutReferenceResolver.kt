@@ -177,7 +177,22 @@ class WorkoutReferenceResolver @Inject constructor(
             "that workout",
             "current workout",
             "selected workout",
-            "recent workout"
+            "recent workout",
+            "last workout",
+            "latest workout",
+            "previous workout",
+            "this plan",
+            "current plan",
+            "recent plan",
+            "last plan",
+            "latest plan",
+            "previous plan",
+            "this routine",
+            "current routine",
+            "recent routine",
+            "last routine",
+            "latest routine",
+            "previous routine"
         )
     }
 }

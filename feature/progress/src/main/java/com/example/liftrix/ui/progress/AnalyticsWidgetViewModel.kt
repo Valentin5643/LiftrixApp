@@ -37,6 +37,7 @@ data class NavigationCallbacks(
     val onNavigateToOneRmDetail: () -> Unit = {},
     val onNavigateToMuscleGroupDetail: () -> Unit = {},
     val onNavigateToFrequencyDetail: () -> Unit = {},
+    val onNavigateToExerciseRankingDetail: () -> Unit = {},
     val onNavigateToDashboardCustomization: () -> Unit = {}
 )
 
@@ -48,6 +49,7 @@ sealed class NavigationEvent {
     data object NavigateToOneRmDetail : NavigationEvent()
     data object NavigateToMuscleGroupDetail : NavigationEvent()
     data object NavigateToFrequencyDetail : NavigationEvent()
+    data object NavigateToExerciseRankingDetail : NavigationEvent()
 }
 
 /**
@@ -191,6 +193,7 @@ class AnalyticsWidgetViewModel @Inject constructor(
             AnalyticsWidgetEvent.NavigateToOneRmDetail -> handleNavigateToOneRmDetail()
             AnalyticsWidgetEvent.NavigateToMuscleGroupDetail -> handleNavigateToMuscleGroupDetail()
             AnalyticsWidgetEvent.NavigateToFrequencyDetail -> handleNavigateToFrequencyDetail()
+            AnalyticsWidgetEvent.NavigateToExerciseRankingDetail -> handleNavigateToExerciseRankingDetail()
             is AnalyticsWidgetEvent.WidgetReordered -> handleWidgetReordered(event.fromIndex, event.toIndex)
         }
     }
@@ -1186,7 +1189,8 @@ class AnalyticsWidgetViewModel @Inject constructor(
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeTrends,
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeCalendar,
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeLoadProgression,
-            com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeAnalytics -> {
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeAnalytics,
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.ProgressiveOverload -> {
                 AnalyticsWidgetEvent.NavigateToVolumeDetail
             }
             
@@ -1196,7 +1200,8 @@ class AnalyticsWidgetViewModel @Inject constructor(
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.PersonalRecords,
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.StrengthAnalytics,
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.MonthlySummary,
-            com.example.liftrix.domain.model.analytics.AnalyticsWidget.ProgressChart -> {
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.ProgressChart,
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.RecentAchievements -> {
                 AnalyticsWidgetEvent.NavigateToOneRmDetail
             }
             
@@ -1207,8 +1212,14 @@ class AnalyticsWidgetViewModel @Inject constructor(
             
             // Frequency widgets → Workout Frequency Detail
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutFrequency,
-            com.example.liftrix.domain.model.analytics.AnalyticsWidget.FrequencyChart -> {
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.FrequencyChart,
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutDuration,
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.ConsistencyScore -> {
                 AnalyticsWidgetEvent.NavigateToFrequencyDetail
+            }
+
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.ExerciseRanking -> {
+                AnalyticsWidgetEvent.NavigateToExerciseRankingDetail
             }
             
             // Recovery widgets → Frequency Detail (recovery patterns are related to workout frequency)
@@ -1250,7 +1261,8 @@ class AnalyticsWidgetViewModel @Inject constructor(
         val callbacksValid = callbacks.onNavigateToOneRmDetail != {} &&
                             callbacks.onNavigateToVolumeDetail != {} &&
                             callbacks.onNavigateToMuscleGroupDetail != {} &&
-                            callbacks.onNavigateToFrequencyDetail != {}
+                            callbacks.onNavigateToFrequencyDetail != {} &&
+                            callbacks.onNavigateToExerciseRankingDetail != {}
         
         if (!callbacksValid) {
             Timber.w("Some navigation callbacks appear to be empty lambda functions")
@@ -1301,6 +1313,17 @@ class AnalyticsWidgetViewModel @Inject constructor(
         Timber.d("Navigating to workout frequency detail screen")
         navigationCallbacks?.onNavigateToFrequencyDetail?.invoke()
             ?: Timber.w("Navigation callbacks not set - cannot navigate to frequency detail")
+    }
+
+    /**
+     * Handles navigation to exercise ranking detail screen.
+     */
+    private fun handleNavigateToExerciseRankingDetail() {
+        Timber.d("Navigating to exercise ranking detail screen")
+        navigationCallbacks?.onNavigateToExerciseRankingDetail?.invoke()
+            ?: viewModelScope.launch {
+                _navigationEvents.emit(NavigationEvent.NavigateToExerciseRankingDetail)
+            }
     }
     
     /**

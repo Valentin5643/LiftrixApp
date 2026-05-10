@@ -98,7 +98,7 @@ fun WorkoutDetailsScreen(
                             text = "Exercises (${state.exercises.size})",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
-                            color = LiftrixColorsV2.Dark.TextPrimary,
+                            color = MaterialTheme.colorScheme.onBackground,
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
                     }
@@ -168,7 +168,7 @@ private fun WorkoutHeaderCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = LiftrixColorsV2.Dark.Surface
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -346,7 +346,7 @@ private fun ExerciseDetailCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = LiftrixColorsV2.Dark.SurfaceVariant
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
         Column(
@@ -362,18 +362,18 @@ private fun ExerciseDetailCard(
                     Text(
                         text = "#$exerciseNumber",
                         fontSize = 12.sp,
-                        color = LiftrixColorsV2.Dark.TextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                     Text(
                         text = exercise.libraryExercise.name,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = LiftrixColorsV2.Dark.TextPrimary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = exercise.libraryExercise.primaryMuscleGroup.name,
                         fontSize = 13.sp,
-                        color = LiftrixColorsV2.Dark.TextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
                 
@@ -403,7 +403,7 @@ private fun ExerciseDetailCard(
                         Text(
                             text = "volume",
                             fontSize = 11.sp,
-                            color = LiftrixColorsV2.Dark.TextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                         )
                         if (totalPRsInExercise > 0) {
                             Icon(
@@ -433,14 +433,14 @@ private fun ExerciseDetailCard(
                     text = "Set",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
-                    color = LiftrixColorsV2.Dark.TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.width(40.dp)
                 )
                 Text(
                     text = "Previous",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
-                    color = LiftrixColorsV2.Dark.TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.weight(1f),
                     textAlign = TextAlign.Center
                 )
@@ -448,7 +448,7 @@ private fun ExerciseDetailCard(
                     text = "Weight",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
-                    color = LiftrixColorsV2.Dark.TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.weight(1f),
                     textAlign = TextAlign.Center
                 )
@@ -456,7 +456,7 @@ private fun ExerciseDetailCard(
                     text = "Reps",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
-                    color = LiftrixColorsV2.Dark.TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.weight(1f),
                     textAlign = TextAlign.Center
                 )
@@ -464,14 +464,14 @@ private fun ExerciseDetailCard(
                     text = "Rest",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
-                    color = LiftrixColorsV2.Dark.TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.weight(1f),
                     textAlign = TextAlign.End
                 )
             }
             
             Spacer(modifier = Modifier.height(8.dp))
-            Divider(color = LiftrixColorsV2.Dark.TextSecondary.copy(alpha = 0.2f))
+            Divider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(modifier = Modifier.height(8.dp))
             
             setsWithPRData.forEachIndexed { index, setWithPRData ->
@@ -491,7 +491,7 @@ private fun ExerciseDetailCard(
             exercise.notes?.let { notes ->
                 if (notes.isNotBlank()) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    Divider(color = LiftrixColorsV2.Dark.TextSecondary.copy(alpha = 0.2f))
+                    Divider(color = MaterialTheme.colorScheme.outlineVariant)
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -499,13 +499,13 @@ private fun ExerciseDetailCard(
                         Icon(
                             Icons.Default.Notes,
                             contentDescription = "Notes",
-                            tint = LiftrixColorsV2.Dark.TextSecondary,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
                             text = notes,
                             fontSize = 13.sp,
-                            color = LiftrixColorsV2.Dark.TextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -522,6 +522,8 @@ private fun SetRow(
     previousSetData: com.example.liftrix.domain.usecase.workout.PreviousSetData?,
     restTime: Duration?
 ) {
+    val weightUnitManager = rememberWeightUnitManager()
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -540,9 +542,9 @@ private fun SetRow(
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     color = if (set.completedAt != null) {
-                        LiftrixColorsV2.Dark.TextPrimary
+                        MaterialTheme.colorScheme.onSurfaceVariant
                     } else {
-                        LiftrixColorsV2.Dark.TextSecondary
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     }
                 )
                 if (isPersonalRecord) {
@@ -557,16 +559,19 @@ private fun SetRow(
         }
         
         // Previous
+        val previousText = previousSetData?.formatForDisplay()?.let { previousValue ->
+            weightUnitManager?.formatWeightText(previousValue) ?: previousValue
+        } ?: "-"
+
         Text(
-            text = previousSetData?.formatForDisplay() ?: "-",
+            text = previousText,
             fontSize = 13.sp,
-            color = LiftrixColorsV2.Dark.TextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Center
         )
         
         // Actual Weight - Use reactive weight display
-        val weightUnitManager = rememberWeightUnitManager()
         val weightText = set.weight?.kilograms?.let { weightValue ->
             weightUnitManager?.formatWeightCompact(weightValue, WeightUnit.KILOGRAMS) ?: "${weightValue.toInt()}kg"
         } ?: "-"
@@ -576,9 +581,9 @@ private fun SetRow(
             fontSize = 14.sp,
             fontWeight = if (set.completedAt != null) FontWeight.Medium else FontWeight.Normal,
             color = if (set.completedAt != null) {
-                LiftrixColorsV2.Dark.TextPrimary
+                MaterialTheme.colorScheme.onSurfaceVariant
             } else {
-                LiftrixColorsV2.Dark.TextSecondary
+                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             },
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Center
@@ -590,9 +595,9 @@ private fun SetRow(
             fontSize = 14.sp,
             fontWeight = if (set.completedAt != null) FontWeight.Medium else FontWeight.Normal,
             color = if (set.completedAt != null) {
-                LiftrixColorsV2.Dark.TextPrimary
+                MaterialTheme.colorScheme.onSurfaceVariant
             } else {
-                LiftrixColorsV2.Dark.TextSecondary
+                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             },
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Center
@@ -602,7 +607,7 @@ private fun SetRow(
         Text(
             text = restTime?.let { formatRestTime(it) } ?: "-",
             fontSize = 13.sp,
-            color = LiftrixColorsV2.Dark.TextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.End
         )
@@ -615,7 +620,7 @@ private fun NotesCard(notes: String) {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = LiftrixColorsV2.Dark.SurfaceVariant
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
         Column(
@@ -628,21 +633,21 @@ private fun NotesCard(notes: String) {
                 Icon(
                     Icons.Default.Notes,
                     contentDescription = "Workout notes",
-                    tint = LiftrixColorsV2.Dark.TextSecondary,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.size(18.dp)
                 )
                 Text(
                     text = "Workout Notes",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    color = LiftrixColorsV2.Dark.TextPrimary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = notes,
                 fontSize = 14.sp,
-                color = LiftrixColorsV2.Dark.TextPrimary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -661,7 +666,7 @@ private fun ActionButtonsRow(
             onClick = onEditWorkout,
             modifier = Modifier.weight(1f),
             colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = LiftrixColorsV2.Dark.TextPrimary
+                contentColor = MaterialTheme.colorScheme.onSurface
             )
         ) {
             Icon(
@@ -742,13 +747,13 @@ private fun ErrorContent(
             text = "Unable to load workout",
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
-            color = LiftrixColorsV2.Dark.TextPrimary
+            color = MaterialTheme.colorScheme.onBackground
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = message,
             fontSize = 14.sp,
-            color = LiftrixColorsV2.Dark.TextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(24.dp))

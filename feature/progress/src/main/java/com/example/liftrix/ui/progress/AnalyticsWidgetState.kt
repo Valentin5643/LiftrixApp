@@ -498,79 +498,11 @@ fun AnalyticsWidgetState.withActiveWidgets(
         val userLevel = preferences.userLevel
         timber.log.Timber.i("No widgets resolved from preferences, creating level-appropriate defaults for $userLevel")
         
-        // Use the same logic as ProgressWidgetResolverPort to create appropriate defaults
-        val allWidgets = AnalyticsWidget.getAllWidgets()
-        when (userLevel) {
-            com.example.liftrix.domain.model.analytics.UserLevel.BEGINNER -> {
-                // 4 essential widgets for building workout habits
-                allWidgets
-                    .filter { it.priority == com.example.liftrix.domain.model.analytics.WidgetPriority.ESSENTIAL }
-                    .sortedWith(compareBy({ it.complexity }, { it.getLayoutPriority() }))
-                    .take(4)
-                    .ifEmpty {
-                        // Fallback: select simplest widgets if no essential ones
-                        allWidgets
-                            .filter { it.complexity == com.example.liftrix.domain.model.analytics.WidgetComplexity.SIMPLE }
-                            .sortedBy { it.getLayoutPriority() }
-                            .take(4)
-                    }
-            }
-            com.example.liftrix.domain.model.analytics.UserLevel.INTERMEDIATE -> {
-                // 7 widgets: essential + some trend analysis
-                val essential = allWidgets.filter { it.priority == com.example.liftrix.domain.model.analytics.WidgetPriority.ESSENTIAL }
-                val trends = allWidgets.filter { 
-                    it.category == com.example.liftrix.domain.model.analytics.WidgetCategory.CHARTS && 
-                    it.complexity != com.example.liftrix.domain.model.analytics.WidgetComplexity.COMPLEX 
-                }
-                val metrics = allWidgets.filter { 
-                    it.category == com.example.liftrix.domain.model.analytics.WidgetCategory.METRICS && 
-                    it.priority == com.example.liftrix.domain.model.analytics.WidgetPriority.STANDARD 
-                }
-                
-                (essential + trends + metrics)
-                    .distinctBy { it.id }
-                    .sortedBy { it.getLayoutPriority() }
-                    .take(7)
-            }
-            com.example.liftrix.domain.model.analytics.UserLevel.ADVANCED -> {
-                // 10 widgets: comprehensive analytics with balanced selection across categories
-                val byCategory = allWidgets.groupBy { it.category }
-                val selected = mutableListOf<AnalyticsWidget>()
-                
-                // Ensure essential widgets are included
-                val essential = allWidgets.filter { it.priority == com.example.liftrix.domain.model.analytics.WidgetPriority.ESSENTIAL }
-                selected.addAll(essential.take(3))
-                
-                // Add widgets from each category
-                byCategory.forEach { (category, categoryWidgets) ->
-                    val remaining = 10 - selected.size
-                    if (remaining > 0) {
-                        val toAdd = categoryWidgets
-                            .filter { !selected.contains(it) }
-                            .sortedWith(compareBy({ it.complexity }, { it.getLayoutPriority() }))
-                            .take(minOf(remaining / byCategory.size + 1, 3))
-                        selected.addAll(toAdd)
-                    }
-                }
-                
-                selected.take(10).sortedBy { it.getLayoutPriority() }
-            }
-        }
+        defaultProgressWidgets()
     } else if (resolvedWidgets.isEmpty()) {
         // No preferences at all - use beginner defaults
         timber.log.Timber.i("No preferences available, using beginner defaults")
-        val allWidgets = AnalyticsWidget.getAllWidgets()
-        allWidgets
-            .filter { it.priority == com.example.liftrix.domain.model.analytics.WidgetPriority.ESSENTIAL }
-            .sortedWith(compareBy({ it.complexity }, { it.getLayoutPriority() }))
-            .take(4)
-            .ifEmpty {
-                // Final fallback: select simplest widgets if no essential ones
-                allWidgets
-                    .filter { it.complexity == com.example.liftrix.domain.model.analytics.WidgetComplexity.SIMPLE }
-                    .sortedBy { it.getLayoutPriority() }
-                    .take(4)
-            }
+        defaultProgressWidgets()
     } else {
         resolvedWidgets
     }
@@ -579,6 +511,12 @@ fun AnalyticsWidgetState.withActiveWidgets(
     
     return copy(activeWidgets = finalWidgets)
 }
+
+private fun defaultProgressWidgets(): List<AnalyticsWidget> = listOf(
+    AnalyticsWidget.StrengthAnalytics,
+    AnalyticsWidget.VolumeAnalytics,
+    AnalyticsWidget.MuscleGroupDistribution
+)
 
 /**
  * Creates a new state with resolved widgets from ProgressWidgetResolverPort.

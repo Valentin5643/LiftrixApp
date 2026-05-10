@@ -23,7 +23,7 @@ fun LiftrixBrandHeader(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     logoWidth: Dp = 180.dp,
-    logoHeight: Dp = logoWidth * 0.72f,
+    logoHeight: Dp = logoWidth,
     isDarkTheme: Boolean = isSystemInDarkTheme()
 ) {
     Column(
@@ -32,7 +32,7 @@ fun LiftrixBrandHeader(
     ) {
         Image(
             painter = painterResource(
-                id = if (isDarkTheme) R.drawable.logo_liftrix_light else R.drawable.logo_liftrix_dark
+                id = R.drawable.ic_liftrix_symbol
             ),
             contentDescription = "Liftrix",
             contentScale = ContentScale.Fit,

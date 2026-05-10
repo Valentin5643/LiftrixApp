@@ -78,7 +78,6 @@ data class WidgetPreferences(
             return setOf(
                 AnalyticsWidget.StrengthAnalytics.id,
                 AnalyticsWidget.VolumeAnalytics.id,
-                AnalyticsWidget.FrequencyChart.id,
                 AnalyticsWidget.MuscleGroupDistribution.id
             )
         }
@@ -91,7 +90,6 @@ data class WidgetPreferences(
             return listOf(
                 AnalyticsWidget.StrengthAnalytics.id,
                 AnalyticsWidget.VolumeAnalytics.id,
-                AnalyticsWidget.FrequencyChart.id,
                 AnalyticsWidget.MuscleGroupDistribution.id
             )
         }
@@ -103,31 +101,14 @@ data class WidgetPreferences(
          * In practice, WidgetResolver should be used directly instead of this method.
          */
         private fun getWidgetsFromConfiguration(config: DashboardConfiguration): List<AnalyticsWidget> {
-            val allWidgets = AnalyticsWidget.getAllWidgets()
-            
-            return when (config) {
-                is DashboardConfiguration.Beginner -> {
-                    // 4 widgets for beginners
-                    allWidgets
-                        .sortedWith(compareBy({ it.complexity }, { it.getLayoutPriority() }))
-                        .take(4)
-                }
-                is DashboardConfiguration.Intermediate -> {
-                    // 7 widgets for intermediate users
-                    allWidgets
-                        .sortedBy { it.getLayoutPriority() }
-                        .take(7)
-                }
-                is DashboardConfiguration.Advanced -> {
-                    // All widgets for advanced users
-                    allWidgets.sortedBy { it.getLayoutPriority() }
-                }
-                is DashboardConfiguration.Custom -> {
-                    // Custom configuration allows all widgets
-                    allWidgets.sortedBy { it.getLayoutPriority() }
-                }
-            }
+            return getDefaultProgressWidgets()
         }
+
+        private fun getDefaultProgressWidgets(): List<AnalyticsWidget> = listOf(
+            AnalyticsWidget.StrengthAnalytics,
+            AnalyticsWidget.VolumeAnalytics,
+            AnalyticsWidget.MuscleGroupDistribution
+        )
         
         /**
          * Create default widget sizes based on widget types
@@ -387,4 +368,3 @@ data class WidgetPreferences(
         return widgetSizes[widgetName] ?: WidgetDisplaySize.STANDARD
     }
 }
-

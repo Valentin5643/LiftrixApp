@@ -4,8 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -24,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -34,8 +37,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import com.example.liftrix.domain.usecase.ValidationResult
 import com.example.liftrix.domain.usecase.ValidateProfileInputUseCase
+import com.example.liftrix.feature.auth.R
 import com.example.liftrix.ui.onboarding.accessibility.AccessibilityUtils
 import com.example.liftrix.ui.onboarding.accessibility.AccessibilityUtils.accessibleTextInput
 import com.example.liftrix.ui.onboarding.accessibility.AccessibilityUtils.enhancedAccessibilitySemantics
@@ -153,14 +158,15 @@ private fun AgeInputHelperText() {
             ),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = "🎂",
-            style = MaterialTheme.typography.displaySmall,
-            textAlign = TextAlign.Center,
+        Image(
+            painter = painterResource(id = R.drawable.onboarding_age),
+            contentDescription = "Age onboarding illustration",
+            contentScale = ContentScale.Fit,
             modifier = Modifier
                 .fillMaxWidth()
+                .height(148.dp)
                 .enhancedAccessibilitySemantics(
-                    contentDescription = "Birthday cake emoji"
+                    contentDescription = "Age onboarding illustration"
                 )
         )
         

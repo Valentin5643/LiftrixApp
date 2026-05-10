@@ -206,7 +206,7 @@ class AuthRepositoryImpl @Inject constructor(
             Timber.tag("FreshLoginRestoreDebug").d(
                 "operation=GOOGLE_LOGIN_START firebaseCurrentUserId=${firebaseAuth.currentUser?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
             )
-            // ONBOARDING FIX: Clear any potential stale auth state from guest session
+            // ONBOARDING FIX: Clear any potential stale anonymous auth state
             val wasAnonymous = firebaseAuth.currentUser?.isAnonymous == true
             if (wasAnonymous) {
                 Timber.d("Converting anonymous user to Google authenticated user")
@@ -300,26 +300,6 @@ class AuthRepositoryImpl @Inject constructor(
             Timber.w(profileError, "Profile operations failed for Google user ${user.uid}, but authentication will still succeed")
             // Schedule background profile creation as fallback
             scheduleBackgroundProfileCreation(user)
-        }
-    }
-
-    override suspend fun signInAnonymously(): LiftrixResult<User> {
-        return liftrixCatching(
-            errorMapper = { throwable -> FirebaseErrorMapper.handleFirebaseError(throwable) }
-        ) {
-            val authResult = firebaseAuth.signInAnonymously().await()
-            val firebaseUser = authResult.user
-                ?: throw RuntimeException("Anonymous sign in failed: User is null")
-
-            val user = UserMapper.fromFirebaseUser(firebaseUser)
-            
-            // Create anonymous user profile in Firestore
-            createUserProfile(user).getOrThrow()
-            
-            // Trigger bidirectional sync on anonymous sign-in
-            triggerLoginSync(user.uid)
-            
-            user
         }
     }
 

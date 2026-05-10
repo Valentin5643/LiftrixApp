@@ -58,11 +58,11 @@ fun LanguageSettingsCard(
                     },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = LiftrixColorsV2.onSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
             
-            Divider(color = LiftrixColorsV2.outline.copy(alpha = 0.3f))
+            Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
             
             // Language Selection
             Column(
@@ -76,7 +76,7 @@ fun LanguageSettingsCard(
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
-                    color = LiftrixColorsV2.onSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 
                 // English Option
@@ -103,7 +103,7 @@ fun LanguageSettingsCard(
                         Text(
                             text = "English",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = LiftrixColorsV2.onSurface
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = when (preferredLanguage) {
@@ -111,7 +111,7 @@ fun LanguageSettingsCard(
                                 else -> "English - default language"
                             },
                             style = MaterialTheme.typography.bodySmall,
-                            color = LiftrixColorsV2.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -140,7 +140,7 @@ fun LanguageSettingsCard(
                         Text(
                             text = "Română",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = LiftrixColorsV2.onSurface
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = when (preferredLanguage) {
@@ -148,13 +148,13 @@ fun LanguageSettingsCard(
                                 else -> "Romanian - for Romanian users"
                             },
                             style = MaterialTheme.typography.bodySmall,
-                            color = LiftrixColorsV2.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
             
-            Divider(color = LiftrixColorsV2.outline.copy(alpha = 0.3f))
+            Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
             
             // Auto-detect Setting
             Row(
@@ -172,7 +172,7 @@ fun LanguageSettingsCard(
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color = LiftrixColorsV2.onSurface
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = when (preferredLanguage) {
@@ -180,7 +180,7 @@ fun LanguageSettingsCard(
                             else -> "Automatically detect language from message"
                         },
                         style = MaterialTheme.typography.bodySmall,
-                        color = LiftrixColorsV2.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Switch(
@@ -189,8 +189,8 @@ fun LanguageSettingsCard(
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = LiftrixColorsV2.primary,
                         checkedTrackColor = LiftrixColorsV2.primary.copy(alpha = 0.5f),
-                        uncheckedThumbColor = LiftrixColorsV2.outline,
-                        uncheckedTrackColor = LiftrixColorsV2.surfaceVariant
+                        uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 )
             }
@@ -209,7 +209,7 @@ fun LanguageSettingsCard(
                             else -> "💡 The AI will automatically detect if you write in Romanian and respond accordingly, regardless of the language setting."
                         },
                         style = MaterialTheme.typography.bodySmall,
-                        color = LiftrixColorsV2.onSurface,
+                        color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(LiftrixSpacing.small)
                     )
                 }

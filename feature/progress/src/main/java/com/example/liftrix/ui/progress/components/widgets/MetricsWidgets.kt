@@ -316,8 +316,11 @@ fun CompactMetricWidget(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
+                    val displayValue = listOf(widgetData.primaryValue, widgetData.unit)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" ")
                     Text(
-                        text = "${widgetData.primaryValue} ${widgetData.unit}",
+                        text = displayValue,
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary

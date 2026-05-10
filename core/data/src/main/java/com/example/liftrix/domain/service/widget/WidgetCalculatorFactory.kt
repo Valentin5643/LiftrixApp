@@ -91,16 +91,19 @@ class WidgetCalculatorFactory @Inject constructor(
             AnalyticsWidget.StrengthAnalytics -> strengthProgressCalculator
 
             // Duration widgets
-            AnalyticsWidget.ProgressChart -> workoutDurationCalculator
+            AnalyticsWidget.ProgressChart,
+            AnalyticsWidget.WorkoutDuration -> workoutDurationCalculator
 
             // Personal records widgets
-            AnalyticsWidget.PersonalRecords -> personalRecordsCalculator
+            AnalyticsWidget.PersonalRecords,
+            AnalyticsWidget.RecentAchievements -> personalRecordsCalculator
 
             // Muscle group widgets
             AnalyticsWidget.MuscleGroupDistribution -> muscleGroupChartCalculator
 
             // Consistency/streak widgets (deprecated but kept for compatibility)
             AnalyticsWidget.WorkoutStreak,
+            AnalyticsWidget.ConsistencyScore,
             AnalyticsWidget.AverageDuration -> consistencyScoreCalculator
 
             // 1RM progression widgets
@@ -108,6 +111,10 @@ class WidgetCalculatorFactory @Inject constructor(
 
             // Recovery widgets
             AnalyticsWidget.RecoveryMetrics -> recoveryMetricsCalculator
+
+            AnalyticsWidget.ExerciseRanking -> exerciseRankingCalculator
+
+            AnalyticsWidget.ProgressiveOverload -> progressiveOverloadCalculator
 
             // Hidden/deprecated widgets that still need basic data
             AnalyticsWidget.WorkoutFrequency,

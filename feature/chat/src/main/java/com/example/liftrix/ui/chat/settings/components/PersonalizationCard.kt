@@ -67,11 +67,11 @@ fun PersonalizationCard(
                     },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = LiftrixColorsV2.onSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
             
-            Divider(color = LiftrixColorsV2.outline.copy(alpha = 0.3f))
+            Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
             
             // Response Style Selection
             Column(
@@ -85,7 +85,7 @@ fun PersonalizationCard(
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
-                    color = LiftrixColorsV2.onSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 
                 // Concise option
@@ -134,7 +134,7 @@ fun PersonalizationCard(
                 )
             }
             
-            Divider(color = LiftrixColorsV2.outline.copy(alpha = 0.3f))
+            Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
             
             // User Context Prompt
             Column(
@@ -147,7 +147,7 @@ fun PersonalizationCard(
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
-                    color = LiftrixColorsV2.onSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 
                 OutlinedTextField(
@@ -177,7 +177,7 @@ fun PersonalizationCard(
                     maxLines = 5,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = LiftrixColorsV2.primary,
-                        unfocusedBorderColor = LiftrixColorsV2.outline
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
                     )
                 )
                 
@@ -187,11 +187,11 @@ fun PersonalizationCard(
                         else -> "💡 This text will be included in all conversations to personalize AI responses."
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = LiftrixColorsV2.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             
-            Divider(color = LiftrixColorsV2.outline.copy(alpha = 0.3f))
+            Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
             
             // Context Inclusion Settings
             Column(
@@ -204,7 +204,7 @@ fun PersonalizationCard(
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
-                    color = LiftrixColorsV2.onSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 
                 // Workout History Toggle
@@ -271,12 +271,12 @@ private fun ResponseStyleOption(
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyMedium,
-                color = LiftrixColorsV2.onSurface
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
-                color = LiftrixColorsV2.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -302,12 +302,12 @@ private fun SettingToggle(
                 text = title,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
-                color = LiftrixColorsV2.onSurface
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
-                color = LiftrixColorsV2.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         Switch(
@@ -316,8 +316,8 @@ private fun SettingToggle(
             colors = SwitchDefaults.colors(
                 checkedThumbColor = LiftrixColorsV2.primary,
                 checkedTrackColor = LiftrixColorsV2.primary.copy(alpha = 0.5f),
-                uncheckedThumbColor = LiftrixColorsV2.outline,
-                uncheckedTrackColor = LiftrixColorsV2.surfaceVariant
+                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
             )
         )
     }

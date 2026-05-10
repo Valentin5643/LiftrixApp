@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.auth.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -41,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -58,9 +60,10 @@ import com.example.liftrix.ui.theme.LiftrixColorsV2
 fun SignUpForm(
     onSignUp: (email: String, password: String, username: String) -> Unit,
     isLoading: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isDarkThemeOverride: Boolean? = null
 ) {
-    val isDarkTheme = isSystemInDarkTheme()
+    val isDarkTheme = isDarkThemeOverride ?: isSystemInDarkTheme()
     
     var username by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -83,8 +86,8 @@ fun SignUpForm(
     val textPrimary = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary
     val textSecondary = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
     val textTertiary = if (isDarkTheme) LiftrixColorsV2.Dark.TextTertiary else LiftrixColorsV2.Light.TextTertiary
-    val outlineColor = if (isDarkTheme) LiftrixColorsV2.Dark.OutlineVariant else LiftrixColorsV2.Light.OutlineVariant
-    val inputContainerColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundTertiary else LiftrixColorsV2.Light.BackgroundPrimary
+    val outlineColor = if (isDarkTheme) LiftrixColorsV2.Dark.OutlineVariant else LiftrixColorsV2.Light.Outline
+    val inputContainerColor = Color.Transparent
     
     // Validate form whenever inputs change
     LaunchedEffect(username, email, password, confirmPassword, agreeToTerms) {
@@ -106,9 +109,13 @@ fun SignUpForm(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundSecondary else LiftrixColorsV2.Light.BackgroundSecondary
+                containerColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundSecondary else LiftrixColorsV2.Light.BackgroundElevated
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 2.dp else 5.dp),
+            border = BorderStroke(
+                width = 1.dp,
+                color = if (isDarkTheme) LiftrixColorsV2.Dark.OutlineVariant else LiftrixColorsV2.Light.Outline
+            ),
             shape = RoundedCornerShape(20.dp)
         ) {
             Column(

@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,9 +29,14 @@ import com.example.liftrix.domain.model.social.MediaItem
 import com.example.liftrix.domain.model.social.MediaType
 import com.example.liftrix.domain.model.social.WorkoutPost
 import com.example.liftrix.domain.model.WeightUnit
+import com.example.liftrix.domain.service.WeightUnitManager
 import com.example.liftrix.ui.components.DynamicProfileImage
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.theme.LiftrixSpacing
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.*
@@ -97,7 +103,7 @@ fun WorkoutPostCard(
                 Text(
                     text = post.caption,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = LiftrixColorsV2.onSurface,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -136,7 +142,7 @@ fun WorkoutPostCard(
         HorizontalDivider(
             modifier = Modifier.fillMaxWidth(),
             thickness = 0.5.dp,
-            color = LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.1f)
+            color = MaterialTheme.colorScheme.outlineVariant
         )
     }
 }
@@ -184,14 +190,14 @@ private fun PostHeader(
                 Text(
                     text = post.authorDisplayName,
                     style = MaterialTheme.typography.titleSmall,
-                    color = LiftrixColorsV2.onSurface,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold
                 )
                 
                 Text(
                     text = formatTimestamp(post.createdAt),
                     style = MaterialTheme.typography.bodySmall,
-                    color = LiftrixColorsV2.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -220,7 +226,7 @@ private fun PostHeader(
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = "More options",
-                tint = LiftrixColorsV2.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         
@@ -274,6 +280,9 @@ private fun WorkoutSummaryCard(
     onWorkoutClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val weightUnitManager = rememberFeedWeightUnitManager()
+    weightUnitManager?.currentUnit?.collectAsState()
+
     Column(
         modifier = modifier
     ) {
@@ -294,8 +303,9 @@ private fun WorkoutSummaryCard(
             
             // Volume
             val volumeText = post.totalVolume?.let { volume ->
-                WeightUnit.getSystemDefault().formatWeight(volume, precision = 0)
-            } ?: "0 lbs".also { 
+                weightUnitManager?.formatWeight(volume, WeightUnit.KILOGRAMS, precision = 0)
+                    ?: WeightUnit.KILOGRAMS.formatWeight(volume, precision = 0)
+            } ?: "0 kg".also {
                 Timber.w("UI-MAPPER-DEBUG: post.totalVolume is null! Post ID: ${post.id}, workout ID: ${post.workoutId}")
             }
             
@@ -320,7 +330,7 @@ private fun WorkoutSummaryCard(
                 Icon(
                     imageVector = Icons.Outlined.ContentCopy,
                     contentDescription = "Copy workout",
-                    tint = LiftrixColorsV2.onSurfaceVariant,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -334,6 +344,25 @@ private fun WorkoutSummaryCard(
                 modifier = Modifier.fillMaxWidth()
             )
         }
+    }
+}
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+private interface FeedWeightUnitEntryPoint {
+    fun weightUnitManager(): WeightUnitManager
+}
+
+@Composable
+private fun rememberFeedWeightUnitManager(): WeightUnitManager? {
+    val applicationContext = LocalContext.current.applicationContext
+    return remember(applicationContext) {
+        runCatching {
+            EntryPointAccessors.fromApplication(
+                applicationContext,
+                FeedWeightUnitEntryPoint::class.java
+            ).weightUnitManager()
+        }.getOrNull()
     }
 }
 
@@ -351,7 +380,7 @@ private fun WorkoutMetric(
         Text(
             text = value,
             style = MaterialTheme.typography.headlineMedium,
-            color = LiftrixColorsV2.onSurface,
+            color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Bold
         )
         
@@ -359,7 +388,7 @@ private fun WorkoutMetric(
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
-            color = LiftrixColorsV2.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -418,13 +447,13 @@ private fun MediaItem(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .size(48.dp),
-                color = LiftrixColorsV2.surface.copy(alpha = 0.8f),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
                 shape = CircleShape
             ) {
                 Icon(
                     imageVector = Icons.Filled.PlayArrow,
                     contentDescription = "Play video",
-                    tint = LiftrixColorsV2.onSurface,
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(12.dp)
@@ -486,7 +515,7 @@ private fun EngagementBar(
             Icon(
                 imageVector = if (isSaved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
                 contentDescription = if (isSaved) "Unsave" else "Save",
-                tint = if (isSaved) LiftrixColorsV2.primary else LiftrixColorsV2.onSurfaceVariant
+                tint = if (isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -509,7 +538,7 @@ private fun EngagementButton(
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = if (isActive) LiftrixColorsV2.primary else LiftrixColorsV2.onSurfaceVariant,
+            tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp)
         )
         
@@ -517,7 +546,7 @@ private fun EngagementButton(
             Text(
                 text = formatCount(count),
                 style = MaterialTheme.typography.labelMedium,
-                color = LiftrixColorsV2.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -571,7 +600,7 @@ private fun ExerciseList(
         Text(
             text = "Exercises",
             style = MaterialTheme.typography.labelMedium,
-            color = LiftrixColorsV2.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.Medium,
             modifier = Modifier.padding(bottom = 4.dp)
         )
@@ -632,15 +661,15 @@ private fun ExerciseChip(
         },
         colors = AssistChipDefaults.assistChipColors(
             containerColor = if (exercise.isCustomExercise) 
-                LiftrixColorsV2.primaryContainer.copy(alpha = 0.3f)
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
             else 
-                LiftrixColorsV2.surfaceVariant,
-            labelColor = LiftrixColorsV2.onSurface
+                MaterialTheme.colorScheme.surfaceVariant,
+            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
         ),
         border = if (exercise.isCustomExercise) 
             BorderStroke(
                 width = 1.dp,
-                color = LiftrixColorsV2.primary.copy(alpha = 0.5f)
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
             )
         else 
             null,
@@ -660,12 +689,12 @@ private fun ExerciseCountChip(
             Text(
                 text = "+$remainingCount more",
                 style = MaterialTheme.typography.bodySmall,
-                color = LiftrixColorsV2.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         },
         colors = AssistChipDefaults.assistChipColors(
-            containerColor = LiftrixColorsV2.surfaceVariant.copy(alpha = 0.5f),
-            labelColor = LiftrixColorsV2.onSurfaceVariant
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
         ),
         modifier = modifier
     )

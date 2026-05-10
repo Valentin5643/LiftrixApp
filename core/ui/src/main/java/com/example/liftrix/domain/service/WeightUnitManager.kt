@@ -3,6 +3,7 @@ package com.example.liftrix.domain.service
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
+import com.example.liftrix.core.formatting.WeightTextConverter
 import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.domain.repository.SettingsRepository
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
@@ -160,6 +161,14 @@ class WeightUnitManager @Inject constructor(
                 "${"%.0f".format(displayValue)} ${displayUnit.symbol}"
             }
         }
+    }
+
+    /**
+     * Converts every explicit weight expression in free text into the current display unit.
+     * Text without a recognized weight unit is returned unchanged.
+     */
+    fun formatWeightText(text: String, precision: Int = 1): String {
+        return WeightTextConverter.convertText(text, _currentUnit.value, precision)
     }
     
     /**

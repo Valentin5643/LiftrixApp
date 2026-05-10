@@ -76,12 +76,9 @@ fun PublicProfileScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    // Use LiftrixColorsV2 design system
-    val backgroundColor = LiftrixColorsV2.Dark.BackgroundPrimary
-    val cardBackgroundColor = LiftrixColorsV2.Dark.BackgroundSecondary
+    // Use the active Material color scheme so public profiles remain readable in light and dark themes.
+    val backgroundColor = MaterialTheme.colorScheme.background
     val primaryTeal = LiftrixColorsV2.Teal
-    val textPrimary = LiftrixColorsV2.Dark.TextPrimary
-    val textSecondary = LiftrixColorsV2.Dark.TextSecondary
 
     LaunchedEffect(userId) {
         viewModel.handleEvent(PublicProfileEvent.LoadProfile(userId))
@@ -168,7 +165,7 @@ fun PublicProfileScreen(
                 .padding(20.dp)
                 .size(56.dp),
             containerColor = primaryTeal,
-            contentColor = backgroundColor,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
             shape = CircleShape
         ) {
             Icon(
@@ -262,10 +259,9 @@ fun ModernProfileContent(
         onSaveClick: (String) -> Unit,
         onPostClick: (String) -> Unit
     ) {
-        val cardBackgroundColor = LiftrixColorsV2.Dark.BackgroundSecondary
         val primaryTeal = LiftrixColorsV2.Teal
-        val textPrimary = LiftrixColorsV2.Dark.TextPrimary
-        val textSecondary = LiftrixColorsV2.Dark.TextSecondary
+        val textPrimary = MaterialTheme.colorScheme.onBackground
+        val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
 
         Column(
             modifier = Modifier
@@ -325,7 +321,7 @@ fun ModernProfileContent(
                             Text(
                                 text = (profile.displayName ?: profile.username).take(2)
                                     .uppercase(),
-                                color = LiftrixColorsV2.Dark.BackgroundPrimary,
+                                color = MaterialTheme.colorScheme.onPrimary,
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -350,7 +346,7 @@ fun ModernProfileContent(
                             Text(
                                 text = level.name.lowercase().replaceFirstChar { it.uppercase() },
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                                color = LiftrixColorsV2.Dark.BackgroundPrimary,
+                                color = MaterialTheme.colorScheme.onPrimary,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium
                             )
@@ -561,7 +557,7 @@ private fun SocialWorkoutPostCard(
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(
-            containerColor = LiftrixColorsV2.Dark.BackgroundSecondary
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
         shape = RoundedCornerShape(12.dp)
     ) {
@@ -573,7 +569,7 @@ private fun SocialWorkoutPostCard(
                 Text(
                     text = post.caption,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = LiftrixColorsV2.Dark.TextPrimary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -605,21 +601,21 @@ private fun SocialWorkoutPostCard(
                     Icon(
                         imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                         contentDescription = "Like workout",
-                        tint = if (isLiked) MaterialTheme.colorScheme.error else LiftrixColorsV2.Dark.TextSecondary
+                        tint = if (isLiked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = onCommentClick) {
                     Icon(
                         imageVector = Icons.Default.Comment,
                         contentDescription = "Open comments",
-                        tint = LiftrixColorsV2.Dark.TextSecondary
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = onSaveClick) {
                     Icon(
                         imageVector = if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                         contentDescription = "Save workout",
-                        tint = if (isSaved) LiftrixColorsV2.Teal else LiftrixColorsV2.Dark.TextSecondary
+                        tint = if (isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -640,12 +636,12 @@ private fun SocialPostMetric(
             imageVector = icon,
             contentDescription = null,
             modifier = Modifier.size(16.dp),
-            tint = LiftrixColorsV2.Dark.TextSecondary
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
             text = text,
             style = MaterialTheme.typography.labelMedium,
-            color = LiftrixColorsV2.Dark.TextSecondary
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

@@ -51,6 +51,7 @@ fun PostCreationScreen(
     workoutId: String,
     onNavigateBack: () -> Unit,
     onPostCreated: (String) -> Unit,
+    showTopBar: Boolean = true,
     viewModel: PostCreationViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -67,15 +68,53 @@ fun PostCreationScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Share Workout") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
-                    }
-                },
-                actions = {
-                    TextButton(
+            if (showTopBar) {
+                TopAppBar(
+                    title = { Text("Share Workout") },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+                    },
+                    actions = {
+                        SharePostButton(
+                            isLoading = uiState is UiState.Loading,
+                            onClick = {
+                                viewModel.handleEvent(
+                                    PostCreationEvent.CreatePost(
+                                        workoutId = workoutId,
+                                        caption = caption,
+                                        mediaUris = selectedMedia,
+                                        privacy = privacy
+                                    )
+                                )
+                            }
+                        )
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface
+                    )
+                )
+            }
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
+        ) {
+            if (!showTopBar) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    SharePostButton(
+                        isLoading = uiState is UiState.Loading,
                         onClick = {
                             viewModel.handleEvent(
                                 PostCreationEvent.CreatePost(
@@ -85,40 +124,11 @@ fun PostCreationScreen(
                                     privacy = privacy
                                 )
                             )
-                        },
-                        enabled = uiState !is UiState.Loading
-                    ) {
-                        when (uiState) {
-                            is UiState.Loading -> {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            else -> {
-                                Text(
-                                    "Share",
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-        ) {
+                    )
+                }
+            }
+
             // Loading/Progress State
             if (uiState is UiState.Loading) {
                 LinearProgressIndicator(
@@ -354,6 +364,31 @@ fun PostCreationScreen(
                 ).show()
             }
             else -> {}
+        }
+    }
+}
+
+@Composable
+private fun SharePostButton(
+    isLoading: Boolean,
+    onClick: () -> Unit
+) {
+    TextButton(
+        onClick = onClick,
+        enabled = !isLoading
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.primary
+            )
+        } else {
+            Text(
+                text = "Share",
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }

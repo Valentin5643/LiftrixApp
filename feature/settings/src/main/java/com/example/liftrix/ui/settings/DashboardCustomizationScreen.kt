@@ -48,6 +48,7 @@ import com.example.liftrix.ui.theme.LiftrixTheme
 fun DashboardCustomizationScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
+    showTopBar: Boolean = true,
     viewModel: WidgetSettingsViewModel = hiltViewModel()
 ) {
     // Performance monitoring for dashboard customization screen
@@ -72,8 +73,8 @@ fun DashboardCustomizationScreen(
                     contentDescription = "Dashboard customization screen for personalizing widget layout and settings"
                 }
         ) {
-            // Top App Bar with save actions
-            TopAppBar(
+            if (showTopBar) {
+                TopAppBar(
                 title = {
                     Text(
                         text = "Customize Dashboard",
@@ -95,7 +96,8 @@ fun DashboardCustomizationScreen(
                         onEvent = stableOnEvent
                     )
                 }
-            )
+                )
+            }
             
             // Main customization content
             PerformanceOptimizations.MemoryEfficientComponents.TrackRecomposition(

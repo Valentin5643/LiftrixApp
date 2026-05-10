@@ -37,6 +37,9 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.example.liftrix.domain.model.SessionExercise
 import com.example.liftrix.domain.model.Weight
+import com.example.liftrix.domain.model.WeightUnit
+import com.example.liftrix.domain.service.WeightUnitManager
+import com.example.liftrix.feature.workout.ui.rememberWeightUnitManager
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.theme.LiftrixSpacing
 import kotlinx.coroutines.delay
@@ -61,6 +64,8 @@ fun PostWorkoutSummaryScreen(
     viewModel: PostWorkoutSummaryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val weightUnitManager = rememberWeightUnitManager()
+    weightUnitManager?.currentUnit?.collectAsState()
     var showDetails by remember { mutableStateOf(false) }
     var showShareOptions by remember { mutableStateOf(false) }
     
@@ -116,7 +121,7 @@ fun PostWorkoutSummaryScreen(
                                 totalSets = state.totalSets,
                                 totalReps = state.totalReps,
                                 prsCount = state.prsCount,
-                                caloriesBurned = state.caloriesBurned
+                                weightUnitManager = weightUnitManager
                             )
                         }
                     }
@@ -125,7 +130,8 @@ fun PostWorkoutSummaryScreen(
                     if (state.personalRecords.isNotEmpty()) {
                         item {
                             PersonalRecordsSection(
-                                records = state.personalRecords
+                                records = state.personalRecords,
+                                weightUnitManager = weightUnitManager
                             )
                         }
                     }
@@ -323,8 +329,12 @@ private fun KeyMetricsGrid(
     totalSets: Int,
     totalReps: Int,
     prsCount: Int,
-    caloriesBurned: Int?
+    weightUnitManager: WeightUnitManager?
 ) {
+    val volumeText = weightUnitManager?.formatWeightCompact(totalVolume.toDouble(), WeightUnit.KILOGRAMS)
+        ?: WeightUnit.KILOGRAMS.formatWeight(totalVolume.toDouble(), precision = 0)
+    val volumeParts = volumeText.split(" ", limit = 2)
+
     // Compact dark theme 2x2 grid matching reference design
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -336,8 +346,8 @@ private fun KeyMetricsGrid(
             // Total Volume card - Dark with subtle accent
             DarkMetricCard(
                 icon = Icons.Default.FitnessCenter,
-                value = String.format("%.2f", totalVolume / 1000.0),
-                unit = "tons",
+                value = volumeParts.firstOrNull() ?: "0",
+                unit = volumeParts.getOrNull(1) ?: WeightUnit.KILOGRAMS.symbol,
                 label = "Total Volume",
                 iconTint = LiftrixColorsV2.Teal,
                 modifier = Modifier.weight(1f)
@@ -366,15 +376,18 @@ private fun KeyMetricsGrid(
                 iconTint = Color(0xFFE91E63),
                 modifier = Modifier.weight(1f)
             )
-            // Calories Burned card - Dark with subtle accent
-            DarkMetricCard(
-                icon = Icons.Default.LocalFireDepartment,
-                value = (caloriesBurned ?: 0).toString(),
-                unit = "cal",
-                label = "Calories Burned",
-                iconTint = Color(0xFFFF6D00),
-                modifier = Modifier.weight(1f)
-            )
+            if (prsCount > 0) {
+                DarkMetricCard(
+                    icon = Icons.Default.EmojiEvents,
+                    value = prsCount.toString(),
+                    unit = "PRs",
+                    label = "Personal Records",
+                    iconTint = LiftrixColorsV2.Dark.Warning,
+                    modifier = Modifier.weight(1f)
+                )
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
+            }
         }
     }
 }
@@ -451,7 +464,8 @@ private fun DarkMetricCard(
 
 @Composable
 private fun PersonalRecordsSection(
-    records: List<PersonalRecord>
+    records: List<PersonalRecord>,
+    weightUnitManager: WeightUnitManager?
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -485,7 +499,10 @@ private fun PersonalRecordsSection(
             Spacer(modifier = Modifier.height(12.dp))
             
             records.forEach { record ->
-                PRItem(record = record)
+                PRItem(
+                    record = record,
+                    weightUnitManager = weightUnitManager
+                )
                 if (record != records.last()) {
                     Spacer(modifier = Modifier.height(8.dp))
                 }
@@ -495,7 +512,10 @@ private fun PersonalRecordsSection(
 }
 
 @Composable
-private fun PRItem(record: PersonalRecord) {
+private fun PRItem(
+    record: PersonalRecord,
+    weightUnitManager: WeightUnitManager?
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -515,7 +535,7 @@ private fun PRItem(record: PersonalRecord) {
             )
         }
         Text(
-            text = record.value,
+            text = weightUnitManager?.formatWeightText(record.value) ?: record.value,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             color = LiftrixColorsV2.Dark.Warning

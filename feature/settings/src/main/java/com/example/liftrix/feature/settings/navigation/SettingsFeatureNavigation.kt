@@ -82,37 +82,37 @@ fun SettingsRoute(
 
 @Composable
 fun WidgetSettingsRoute(onNavigateBack: () -> Unit) {
-    WidgetSettingsScreen(onNavigateBack = onNavigateBack)
+    WidgetSettingsScreen(onNavigateBack = onNavigateBack, showTopBar = false)
 }
 
 @Composable
 fun NotificationSettingsRoute(onNavigateBack: () -> Unit) {
-    NotificationSettingsScreen(onNavigateBack = onNavigateBack)
+    NotificationSettingsScreen(onNavigateBack = onNavigateBack, showTopBar = false)
 }
 
 @Composable
 fun DashboardCustomizationRoute(onNavigateBack: () -> Unit) {
-    DashboardCustomizationScreen(onNavigateBack = onNavigateBack)
+    DashboardCustomizationScreen(onNavigateBack = onNavigateBack, showTopBar = false)
 }
 
 @Composable
 fun PrivacySettingsRoute(onNavigateBack: () -> Unit) {
-    PrivacySettingsScreen(onNavigateBack = onNavigateBack)
+    PrivacySettingsScreen(onNavigateBack = onNavigateBack, showTopBar = false)
 }
 
 @Composable
 fun EmailChangeRoute(onNavigateBack: () -> Unit) {
-    EmailChangeScreen(onNavigateBack = onNavigateBack)
+    EmailChangeScreen(onNavigateBack = onNavigateBack, showTopBar = false)
 }
 
 @Composable
 fun PasswordChangeRoute(onNavigateBack: () -> Unit) {
-    PasswordChangeScreen(onNavigateBack = onNavigateBack)
+    PasswordChangeScreen(onNavigateBack = onNavigateBack, showTopBar = false)
 }
 
 @Composable
 fun UsernameChangeRoute(onNavigateBack: () -> Unit) {
-    UsernameChangeScreen(onNavigateBack = onNavigateBack)
+    UsernameChangeScreen(onNavigateBack = onNavigateBack, showTopBar = false)
 }
 
 @Composable
@@ -122,7 +122,8 @@ fun AccountDeletionRoute(
 ) {
     AccountDeletionFlow(
         onNavigateBack = onNavigateBack,
-        onDeletionCompleted = onDeletionCompleted
+        onDeletionCompleted = onDeletionCompleted,
+        showTopBar = false
     )
 }
 
@@ -135,7 +136,8 @@ fun HelpCenterRoute(
     HelpScreen(
         onNavigateBack = onNavigateBack,
         onNavigateToArticle = onNavigateToArticle,
-        onNavigateToSupport = onNavigateToSupport
+        onNavigateToSupport = onNavigateToSupport,
+        showTopBar = false
     )
 }
 
@@ -146,7 +148,8 @@ fun HelpArticleRoute(
 ) {
     HelpArticleScreen(
         articleId = articleId,
-        onNavigateBack = onNavigateBack
+        onNavigateBack = onNavigateBack,
+        showTopBar = false
     )
 }
 
@@ -157,7 +160,8 @@ fun ContactSupportRoute(
 ) {
     ContactSupportScreen(
         onNavigateBack = onNavigateBack,
-        onNavigateToTicket = onNavigateToTicket
+        onNavigateToTicket = onNavigateToTicket,
+        showTopBar = false
     )
 }
 
@@ -168,7 +172,8 @@ fun SupportTicketRoute(
 ) {
     SupportTicketScreen(
         ticketId = ticketId,
-        onNavigateBack = onNavigateBack
+        onNavigateBack = onNavigateBack,
+        showTopBar = false
     )
 }
 
@@ -183,48 +188,49 @@ fun AboutRoute(
         onNavigateBack = onNavigateBack,
         onNavigateToPrivacy = onNavigateToPrivacy,
         onNavigateToTerms = onNavigateToTerms,
-        onNavigateToLicenses = onNavigateToLicenses
+        onNavigateToLicenses = onNavigateToLicenses,
+        showTopBar = false
     )
 }
 
 @Composable
 fun PrivacyPolicyRoute(onNavigateBack: () -> Unit) {
-    PrivacyPolicyScreen(onNavigateBack = onNavigateBack)
+    PrivacyPolicyScreen(onNavigateBack = onNavigateBack, showTopBar = false)
 }
 
 @Composable
 fun TermsOfServiceRoute(onNavigateBack: () -> Unit) {
-    TermsOfServiceScreen(onNavigateBack = onNavigateBack)
+    TermsOfServiceScreen(onNavigateBack = onNavigateBack, showTopBar = false)
 }
 
 @Composable
 fun AIDisclaimerRoute(onNavigateBack: () -> Unit) {
-    AIDisclaimerScreen(onNavigateBack = onNavigateBack)
+    AIDisclaimerScreen(onNavigateBack = onNavigateBack, showTopBar = false)
 }
 
 @Composable
 fun CommunityGuidelinesRoute(onNavigateBack: () -> Unit) {
-    CommunityGuidelinesScreen(onNavigateBack = onNavigateBack)
+    CommunityGuidelinesScreen(onNavigateBack = onNavigateBack, showTopBar = false)
 }
 
 @Composable
 fun ContentModerationPolicyRoute(onNavigateBack: () -> Unit) {
-    ContentModerationPolicyScreen(onNavigateBack = onNavigateBack)
+    ContentModerationPolicyScreen(onNavigateBack = onNavigateBack, showTopBar = false)
 }
 
 @Composable
 fun RefundSubscriptionPolicyRoute(onNavigateBack: () -> Unit) {
-    RefundSubscriptionPolicyScreen(onNavigateBack = onNavigateBack)
+    RefundSubscriptionPolicyScreen(onNavigateBack = onNavigateBack, showTopBar = false)
 }
 
 @Composable
 fun DataPortabilityRoute(onNavigateBack: () -> Unit) {
-    DataPortabilityScreen(onNavigateBack = onNavigateBack)
+    DataPortabilityScreen(onNavigateBack = onNavigateBack, showTopBar = false)
 }
 
 @Composable
 fun AdminBanManagementRoute(onNavigateBack: () -> Unit) {
-    AdminBanManagementScreen(onNavigateBack = onNavigateBack)
+    AdminBanManagementScreen(onNavigateBack = onNavigateBack, showTopBar = false)
 }
 
 @Composable
@@ -234,6 +240,7 @@ fun UpgradeToPremiumRoute(
 ) {
     UpgradeToPremiumScreen(
         onNavigateBack = onNavigateBack,
-        onContactSupport = onContactSupport
+        onContactSupport = onContactSupport,
+        showTopBar = false
     )
 }

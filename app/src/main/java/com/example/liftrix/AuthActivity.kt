@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -28,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.domain.model.AuthEvent
 import com.example.liftrix.domain.model.AuthState
+import com.example.liftrix.ui.branding.LiftrixLaunchAnimation
 import com.example.liftrix.ui.auth.AuthScreen
 import com.example.liftrix.ui.auth.AuthViewModel
 import com.example.liftrix.ui.auth.StartingScreen
@@ -41,6 +41,7 @@ import timber.log.Timber
 class AuthActivity : ComponentActivity() {
     
     override fun onCreate(savedInstanceState: Bundle?) {
+        com.example.liftrix.ui.theme.ThemeManager.getInstance(this).applyCurrentThemeToPlatform()
         installSplashScreen()
         super.onCreate(savedInstanceState)
         
@@ -174,7 +175,7 @@ private fun LoadingScreen(message: String = "Loading...") {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            CircularProgressIndicator()
+            LiftrixLaunchAnimation()
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = message,
@@ -201,7 +202,7 @@ private fun AuthFlowScreen(
     when {
         showOnboarding -> {
             com.example.liftrix.ui.onboarding.navigation.OnboardingNavigation(
-                userId = authenticatedUserId ?: "guest-user", // Use authenticated ID if available, otherwise guest
+                userId = authenticatedUserId ?: "pre-auth-user",
                 onComplete = {
                     showOnboarding = false
                     isSignUpMode = true

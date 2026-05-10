@@ -63,7 +63,8 @@ class WorkoutTimerService : Service() {
         val timerState: TimerState = TimerState.Stopped,
         val isRunning: Boolean = false,
         val sessionDurationSeconds: Long = 0,
-        val restRemainingSeconds: Int = 0
+        val restRemainingSeconds: Int = 0,
+        val restCompletionSignal: Long? = null
     )
 
     private val _serviceState = MutableStateFlow(TimerServiceState())
@@ -75,6 +76,7 @@ class WorkoutTimerService : Service() {
     private var pausedAtSeconds: Long = 0
     private var currentRestTimer: RestTimer? = null
     private var longWorkoutNotificationShown = false
+    private var restCompletionSignalCounter = 0L
 
     @Inject
     lateinit var notificationManager: NotificationManager
@@ -246,17 +248,11 @@ class WorkoutTimerService : Service() {
             when (_serviceState.value.timerState) {
                 is TimerState.RestActive, is TimerState.RestPaused -> {
                     timerJob?.cancel()
-                    sessionStartTime?.let { startTime ->
-                        _serviceState.value = _serviceState.value.copy(
-                            timerState = TimerState.SessionRunning(startTime, pausedAtSeconds),
-                            isRunning = true,
-                            restRemainingSeconds = 0
-                        )
-                        startSessionTimer()
-                        updateNotification()
-                        Timber.d("Rest timer skipped")
-                        Result.success(Unit)
-                    } ?: Result.failure(IllegalStateException("No session to return to"))
+                    completeRestTimer(emitCompletionSignal = false).also { result ->
+                        if (result.isSuccess) {
+                            Timber.d("Rest timer skipped")
+                        }
+                    }
                 }
                 else -> {
                     Result.failure(IllegalStateException("No rest timer to skip"))
@@ -264,6 +260,55 @@ class WorkoutTimerService : Service() {
             }
         } catch (e: Exception) {
             Timber.e(e, "Failed to skip rest timer")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Adjusts the active or paused rest timer by the provided number of seconds.
+     */
+    fun adjustRestBySeconds(deltaSeconds: Int): Result<Unit> {
+        return try {
+            when (val currentState = _serviceState.value.timerState) {
+                is TimerState.RestActive -> {
+                    val adjustedSeconds = (currentState.remainingSeconds + deltaSeconds)
+                        .coerceIn(0, RestTimer.MAX_DURATION_SECONDS)
+                    timerJob?.cancel()
+
+                    val result = if (adjustedSeconds == 0) {
+                        completeRestTimer(emitCompletionSignal = true)
+                    } else {
+                        startRestTimer(currentState.restTimer, adjustedSeconds)
+                        updateNotification()
+                        Result.success(Unit)
+                    }
+                    Timber.d("Adjusted active rest timer by $deltaSeconds seconds to $adjustedSeconds")
+                    result
+                }
+                is TimerState.RestPaused -> {
+                    val adjustedSeconds = (currentState.remainingSeconds + deltaSeconds)
+                        .coerceIn(0, RestTimer.MAX_DURATION_SECONDS)
+
+                    val result = if (adjustedSeconds == 0) {
+                        completeRestTimer(emitCompletionSignal = true)
+                    } else {
+                        _serviceState.value = _serviceState.value.copy(
+                            timerState = TimerState.RestPaused(currentState.restTimer, adjustedSeconds),
+                            isRunning = false,
+                            restRemainingSeconds = adjustedSeconds
+                        )
+                        updateNotification()
+                        Result.success(Unit)
+                    }
+                    Timber.d("Adjusted paused rest timer by $deltaSeconds seconds to $adjustedSeconds")
+                    result
+                }
+                else -> {
+                    Result.failure(IllegalStateException("No rest timer to adjust"))
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to adjust rest timer")
             Result.failure(e)
         }
     }
@@ -278,6 +323,7 @@ class WorkoutTimerService : Service() {
             pausedAtSeconds = 0
             currentRestTimer = null
             longWorkoutNotificationShown = false
+            restCompletionSignalCounter = 0L
             _serviceState.value = TimerServiceState()
             stopForeground(STOP_FOREGROUND_REMOVE)
             // Clear any long workout notifications
@@ -332,18 +378,31 @@ class WorkoutTimerService : Service() {
                 remainingSeconds--
             }
 
-            // Rest timer completed - return to session timer
-            sessionStartTime?.let { startTime ->
-                _serviceState.value = _serviceState.value.copy(
-                    timerState = TimerState.SessionRunning(startTime, pausedAtSeconds),
-                    isRunning = true,
-                    restRemainingSeconds = 0
-                )
-                startSessionTimer()
-                updateNotification()
-                Timber.d("Rest timer completed, returning to session")
-            }
+            completeRestTimer(emitCompletionSignal = true)
+            Timber.d("Rest timer completed, returning to session")
         }
+    }
+
+    private fun completeRestTimer(emitCompletionSignal: Boolean): Result<Unit> {
+        return sessionStartTime?.let { startTime ->
+            val completionSignal = if (emitCompletionSignal) {
+                restCompletionSignalCounter += 1
+                restCompletionSignalCounter
+            } else {
+                _serviceState.value.restCompletionSignal
+            }
+
+            _serviceState.value = _serviceState.value.copy(
+                timerState = TimerState.SessionRunning(startTime, pausedAtSeconds),
+                isRunning = true,
+                restRemainingSeconds = 0,
+                restCompletionSignal = completionSignal
+            )
+            currentRestTimer = null
+            startSessionTimer()
+            updateNotification()
+            Result.success(Unit)
+        } ?: Result.failure(IllegalStateException("No session to return to"))
     }
 
     private fun createNotificationChannel() {

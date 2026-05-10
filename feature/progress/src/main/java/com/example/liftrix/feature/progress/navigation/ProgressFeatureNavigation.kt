@@ -33,6 +33,7 @@ fun ProgressDashboardRoute(
     onNavigateToOneRmDetail: () -> Unit,
     onNavigateToMuscleGroupDetail: () -> Unit,
     onNavigateToFrequencyDetail: () -> Unit,
+    onNavigateToExerciseRankingDetail: () -> Unit,
     onNavigateToDashboardCustomization: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -42,6 +43,7 @@ fun ProgressDashboardRoute(
         onNavigateToOneRmDetail = onNavigateToOneRmDetail,
         onNavigateToMuscleGroupDetail = onNavigateToMuscleGroupDetail,
         onNavigateToFrequencyDetail = onNavigateToFrequencyDetail,
+        onNavigateToExerciseRankingDetail = onNavigateToExerciseRankingDetail,
         onNavigateToDashboardCustomization = onNavigateToDashboardCustomization
     )
 }

@@ -202,32 +202,6 @@ sealed class LiftrixRoute {
     @Serializable
     data class EditSession(val sessionId: String) : LiftrixRoute()
     
-    // Guest Mode Routes
-    
-    /**
-     * Guest mode selection screen shown during onboarding
-     */
-    @Serializable
-    data object GuestModeSelection : LiftrixRoute()
-    
-    /**
-     * Guest session dashboard showing current limitations and conversion prompts
-     */
-    @Serializable
-    data object GuestDashboard : LiftrixRoute()
-    
-    /**
-     * Guest-to-registered conversion flow screen
-     * 
-     * @param source The source screen that triggered the conversion (e.g., "limit_reached", "nudge", "manual")
-     * @param returnTo Optional route to return to after successful conversion
-     */
-    @Serializable
-    data class GuestConversion(
-        val source: String = "manual",
-        val returnTo: String? = null
-    ) : LiftrixRoute()
-    
     // Authentication Routes
     
     /**

@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.feed
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -8,7 +9,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -17,6 +20,7 @@ import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.WorkoutPost
+import com.example.liftrix.feature.home.R
 import com.example.liftrix.ui.common.components.ErrorDisplay
 import com.example.liftrix.ui.common.components.LoadingIndicator
 import com.example.liftrix.ui.common.FeedItemShimmer
@@ -287,6 +291,19 @@ private fun EmptyFeedState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        if (feedType == FeedTab.HOME) {
+            Image(
+                painter = painterResource(id = R.drawable.empty_following_feed),
+                contentDescription = "Empty following feed illustration",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .width(220.dp)
+                    .height(160.dp)
+            )
+
+            Spacer(modifier = Modifier.height(LiftrixSpacing.large))
+        }
+
         Text(
             text = when (feedType) {
                 FeedTab.HOME -> "No posts from people you follow"

@@ -328,7 +328,7 @@ private fun OnboardingFooter(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(24.dp)
+            .padding(start = 24.dp, top = 16.dp, end = 24.dp, bottom = 44.dp)
             .enhancedAccessibilitySemantics(
                 contentDescription = "Navigation footer with continue button",
 

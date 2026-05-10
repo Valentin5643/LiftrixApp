@@ -185,8 +185,8 @@ fun DataManagementCard(
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = MaterialTheme.colorScheme.primary,
                         checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        uncheckedThumbColor = LiftrixColorsV2.outline,
-                        uncheckedTrackColor = LiftrixColorsV2.surfaceVariant
+                        uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 )
             }
@@ -194,7 +194,7 @@ fun DataManagementCard(
             // Auto-clear info
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = LiftrixColorsV2.surfaceVariant.copy(alpha = 0.5f)
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                 ),
                 modifier = Modifier.fillMaxWidth()
             ) {

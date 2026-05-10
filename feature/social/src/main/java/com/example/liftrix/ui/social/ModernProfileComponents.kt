@@ -38,7 +38,7 @@ fun ModernCard(
             ),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = LiftrixColorsV2.Dark.BackgroundSecondary
+            containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
         Column(
@@ -49,7 +49,7 @@ fun ModernCard(
         ) {
             Text(
                 text = title,
-                color = LiftrixColorsV2.Dark.TextPrimary,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -71,7 +71,7 @@ fun ModernStatCard(
             .aspectRatio(1f),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = LiftrixColorsV2.Dark.BackgroundPrimary
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
         Column(
@@ -90,7 +90,7 @@ fun ModernStatCard(
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = value,
-                color = LiftrixColorsV2.Dark.TextPrimary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
@@ -98,7 +98,7 @@ fun ModernStatCard(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = label,
-                color = LiftrixColorsV2.Dark.TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center,
@@ -130,13 +130,13 @@ fun ModernStatItem(
             Column {
                 Text(
                     text = value,
-                    color = LiftrixColorsV2.Dark.TextPrimary,
+                    color = MaterialTheme.colorScheme.onBackground,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = label,
-                    color = LiftrixColorsV2.Dark.TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp
                 )
             }
@@ -165,7 +165,7 @@ fun ModernConnectionActions(
                         .height(48.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = primaryTeal,
-                        contentColor = LiftrixColorsV2.Dark.BackgroundPrimary
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -190,9 +190,9 @@ fun ModernConnectionActions(
                         .fillMaxWidth()
                         .height(48.dp),
                     colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = LiftrixColorsV2.Dark.TextSecondary
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                     ),
-                    border = BorderStroke(1.dp, LiftrixColorsV2.Dark.TextSecondary),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(
@@ -243,7 +243,7 @@ fun ModernConnectionActions(
                         .height(48.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = primaryTeal,
-                        contentColor = LiftrixColorsV2.Dark.BackgroundPrimary
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {

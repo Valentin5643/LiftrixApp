@@ -14,8 +14,6 @@ interface AuthCommandUseCase {
         username: String
     ): LiftrixResult<User>
 
-    suspend fun signInAnonymously(): LiftrixResult<User>
-
     suspend fun signOut(): LiftrixResult<Unit>
 
     suspend fun signOutEnhanced(): LiftrixResult<Unit>

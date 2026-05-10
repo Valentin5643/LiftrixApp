@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.auth.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -46,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -64,7 +66,8 @@ fun SignInForm(
     isLoading: Boolean = false,
     modifier: Modifier = Modifier,
     errorMessage: String? = null,
-    onClearError: () -> Unit = { }
+    onClearError: () -> Unit = { },
+    isDarkThemeOverride: Boolean? = null
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -80,13 +83,13 @@ fun SignInForm(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     
-    val isDarkTheme = isSystemInDarkTheme()
+    val isDarkTheme = isDarkThemeOverride ?: isSystemInDarkTheme()
     val textFieldShape = RoundedCornerShape(14.dp)
     val textPrimary = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary
     val textSecondary = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
     val textTertiary = if (isDarkTheme) LiftrixColorsV2.Dark.TextTertiary else LiftrixColorsV2.Light.TextTertiary
-    val outlineColor = if (isDarkTheme) LiftrixColorsV2.Dark.OutlineVariant else LiftrixColorsV2.Light.OutlineVariant
-    val inputContainerColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundTertiary else LiftrixColorsV2.Light.BackgroundPrimary
+    val outlineColor = if (isDarkTheme) LiftrixColorsV2.Dark.OutlineVariant else LiftrixColorsV2.Light.Outline
+    val inputContainerColor = Color.Transparent
     
     // Validate form whenever inputs change
     LaunchedEffect(email, password) {
@@ -104,9 +107,13 @@ fun SignInForm(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundSecondary else LiftrixColorsV2.Light.BackgroundSecondary
+                containerColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundSecondary else LiftrixColorsV2.Light.BackgroundElevated
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 2.dp else 5.dp),
+            border = BorderStroke(
+                width = 1.dp,
+                color = if (isDarkTheme) LiftrixColorsV2.Dark.OutlineVariant else LiftrixColorsV2.Light.Outline
+            ),
             shape = RoundedCornerShape(20.dp)
         ) {
             Column(

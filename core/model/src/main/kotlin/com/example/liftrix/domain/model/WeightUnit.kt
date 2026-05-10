@@ -44,7 +44,11 @@ enum class WeightUnit(
         }
 
         fun fromSymbol(symbol: String): WeightUnit? {
-            return values().find { it.symbol.equals(symbol, ignoreCase = true) }
+            return when (symbol.trim().lowercase(Locale.US)) {
+                "kg", "kgs", "kilogram", "kilograms" -> KILOGRAMS
+                "lb", "lbs", "pound", "pounds" -> POUNDS
+                else -> values().find { it.symbol.equals(symbol, ignoreCase = true) }
+            }
         }
     }
 }

@@ -53,6 +53,13 @@ class WorkoutPostMapper @Inject constructor(
             Timber.w(e, "Failed to extract exercise details for workout post ${entity.id}")
             emptyList()
         }
+        val defaultImageExercises = try {
+            extractDefaultImageExercises(entity.userId, entity.workoutId)
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to extract default image exercise metadata for workout post ${entity.id}")
+            emptyList()
+        }
+        val mediaItems = createMediaItemsFromUrls(entity.mediaUrls, entity.mediaThumbnails)
         
         // Debug the entity values before mapping to domain
         Timber.d("MAPPER-DEBUG: Converting entity to domain - ID=${entity.id}, totalVolume=${entity.totalVolume}, workoutId=${entity.workoutId}")
@@ -67,7 +74,10 @@ class WorkoutPostMapper @Inject constructor(
             caption = entity.caption ?: "",
             mediaUrls = parseStringList(entity.mediaUrls),
             mediaThumbnails = parseStringList(entity.mediaThumbnails),
-            mediaItems = createMediaItemsFromUrls(entity.mediaUrls, entity.mediaThumbnails),
+            mediaItems = WorkoutPostDefaultImageMapper.mediaItemsForPost(
+                userMediaItems = mediaItems,
+                exercises = defaultImageExercises
+            ),
             workoutDuration = entity.workoutDuration,
             totalVolume = entity.totalVolume,
             exercisesCount = entity.exercisesCount,
@@ -276,11 +286,18 @@ class WorkoutPostMapper @Inject constructor(
      */
     private data class SimpleWorkoutExercise(
         val name: String? = null,
+        val libraryExerciseName: String? = null,
+        val equipment: String? = null,
         val sets: List<SimpleWorkoutSet>? = emptyList(),
         val libraryExercise: LibraryExerciseJson? = null
     ) {
-        // Helper to get effective name from either direct name or libraryExercise.name
-        val effectiveName: String get() = name ?: libraryExercise?.name ?: "Unknown Exercise"
+        // Helper to get effective name from current, canonical, and legacy formats.
+        val effectiveName: String
+            get() = libraryExerciseName ?: name ?: libraryExercise?.libraryExerciseName
+                ?: libraryExercise?.name ?: "Unknown Exercise"
+
+        val effectiveEquipment: String?
+            get() = equipment ?: libraryExercise?.equipment
         
         // Helper to get effective sets with fallback to libraryExercise sets
         val effectiveSets: List<SimpleWorkoutSet> get() = 
@@ -289,7 +306,9 @@ class WorkoutPostMapper @Inject constructor(
     
     private data class LibraryExerciseJson(
         val name: String? = null,
+        val libraryExerciseName: String? = null,
         val id: String? = null,
+        val equipment: String? = null,
         val sets: List<SimpleWorkoutSet>? = null
     )
     
@@ -303,6 +322,7 @@ class WorkoutPostMapper @Inject constructor(
         val weight: Double? = null,
         val weightKg: Double? = null,
         val weightLbs: Double? = null,
+        val repsCount: Int? = null,
         val reps: Int? = null
     ) {
         // Helper to get the effective weight with fallback to legacy fields
@@ -312,14 +332,40 @@ class WorkoutPostMapper @Inject constructor(
             weightLbs?.let { it / 2.20462 }
             
         // Helper to get the effective reps with fallback to legacy fields  
-        val effectiveReps: Int? get() = actualReps ?: targetReps ?: reps
+        val effectiveReps: Int? get() = actualReps ?: targetReps ?: reps ?: repsCount
     }
     
     /**
      * Parse exercises from workout JSON using shared defensive parser
      */
     private fun parseExercisesFromWorkoutJson(exercisesJson: String, gson: Gson): List<SimpleWorkoutExercise> {
-        return ExerciseJsonParser.parseExercises(exercisesJson, SimpleWorkoutExercise::class.java)
+        return try {
+            val element = com.google.gson.JsonParser.parseString(exercisesJson)
+            if (element.isJsonObject && element.asJsonObject.has("exercises")) {
+                ExerciseJsonParser.parseExercisesElement(
+                    element.asJsonObject.get("exercises"),
+                    gson,
+                    SimpleWorkoutExercise::class.java
+                )
+            } else {
+                ExerciseJsonParser.parseExercises(exercisesJson, SimpleWorkoutExercise::class.java)
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to parse workout exercises JSON for social post")
+            emptyList()
+        }
+    }
+
+    private suspend fun extractDefaultImageExercises(userId: String, workoutId: String): List<DefaultImageExercise> {
+        val workout = workoutDao.getWorkoutByIdForUser(workoutId, userId) ?: return emptyList()
+        val exercises = parseExercisesFromWorkoutJson(workout.exercisesJson, Gson())
+
+        return exercises.map { exercise ->
+            DefaultImageExercise(
+                name = exercise.effectiveName,
+                equipment = exercise.effectiveEquipment
+            )
+        }
     }
     
     /**

@@ -335,7 +335,7 @@ class OnboardingViewModel @Inject constructor(
             val profileData = currentState.profileData
             
             // ONBOARDING DATA PERSISTENCE FIX: Store data temporarily instead of saving directly
-            // This approach ensures data survives guest→authenticated user transitions
+            // This approach ensures data survives pre-authentication to authenticated user transitions
             Timber.d("Storing onboarding data temporarily for user: ${profileData.userId}")
             
             val storeResult = onboardingDataStore.storeOnboardingData(profileData.toSnapshot())
@@ -764,7 +764,7 @@ class OnboardingViewModel @Inject constructor(
     /**
      * Transfer pending onboarding data to an authenticated user profile.
      * This method is called after successful authentication to ensure onboarding data
-     * survives the guest→authenticated user transition.
+     * survives the pre-authentication to authenticated user transition.
      */
     suspend fun transferPendingOnboardingData(authenticatedUserId: String): Result<Boolean> {
         return try {

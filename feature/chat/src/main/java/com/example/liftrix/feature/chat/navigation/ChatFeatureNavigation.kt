@@ -26,5 +26,5 @@ fun ChatbotRoute(
 
 @Composable
 fun AIChatSettingsRoute(onNavigateBack: () -> Unit) {
-    AIChatSettingsScreen(onNavigateBack = onNavigateBack)
+    AIChatSettingsScreen(onNavigateBack = onNavigateBack, showTopBar = false)
 }

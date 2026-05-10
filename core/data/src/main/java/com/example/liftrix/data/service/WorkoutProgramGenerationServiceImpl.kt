@@ -128,7 +128,7 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
                 )
                 is DebugAppCheckTokenNotRegisteredException -> LiftrixError.BusinessLogicError(
                     code = "APP_CHECK_DEBUG_TOKEN_NOT_REGISTERED",
-                    errorMessage = throwable.message ?: "Debug App Check token is not registered.",
+                    errorMessage = aiUnavailableForAppCheckMessage(),
                     analyticsContext = mapOf("user_id" to userId, "stage" to stage)
                 )
                 else -> LiftrixError.NetworkError(
@@ -277,7 +277,8 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
     }
 
     private fun logDebugAppCheckTokenInstructions(error: Throwable) {
-        Timber.e(error, "Debug App Check token is not registered in Firebase Console for this Firebase app/project.")
+        Timber.e(error, "$APP_CHECK_DEBUG_SETUP_MARKER Debug App Check token is not registered in Firebase Console for this Firebase app/project.")
+        Timber.e("$APP_CHECK_DEBUG_SETUP_MARKER If Firebase generated a token, the next useful Logcat line contains: Enter this debug secret into the allow list in the Firebase Console")
         Timber.e("Find the generated token in Logcat by searching for:")
         Timber.e("Enter this debug secret into the allow list in the Firebase Console")
         Timber.e("Register it at Firebase Console > App Check > com.example.liftrix > Manage debug tokens.")

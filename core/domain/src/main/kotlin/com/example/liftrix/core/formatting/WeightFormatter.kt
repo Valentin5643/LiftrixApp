@@ -2,6 +2,7 @@ package com.example.liftrix.core.formatting
 
 import com.example.liftrix.domain.model.Weight
 import com.example.liftrix.domain.model.WeightUnit
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -57,21 +58,73 @@ class WeightFormatter @Inject constructor() {
         }
     }
 
-    fun parseWeight(weightString: String, unit: WeightUnit): Weight? {
-        return try {
-            val cleanedString = weightString
-                .replace(unit.symbol, "")
-                .replace(unit.displayName, "")
-                .trim()
+    fun formatWeightText(text: String, targetUnit: WeightUnit, precision: Int = 1): String {
+        return WeightTextConverter.convertText(text, targetUnit, precision)
+    }
 
-            val value = cleanedString.toDoubleOrNull()
-            if (value != null && value >= 0.0) {
-                Weight.fromValue(value, unit)
-            } else {
-                null
-            }
+    fun parseWeight(weightString: String, unit: WeightUnit): Weight? {
+        val parsed = WeightTextConverter.parseFirst(weightString)
+        if (parsed != null && parsed.value >= 0.0) {
+            return Weight.fromValue(parsed.value, parsed.unit)
+        }
+
+        return try {
+            val value = weightString.trim().toDoubleOrNull()
+            if (value != null && value >= 0.0) Weight.fromValue(value, unit) else null
         } catch (e: Exception) {
             null
+        }
+    }
+}
+
+object WeightTextConverter {
+    private const val KG_TO_LBS = 2.20462
+
+    private val weightPattern = Regex(
+        pattern = """(?<![\p{L}\p{N}.])([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s*(kg|kgs|kilogram|kilograms|lb|lbs|pound|pounds)\b""",
+        options = setOf(RegexOption.IGNORE_CASE)
+    )
+
+    data class ParsedWeight(
+        val value: Double,
+        val unit: WeightUnit,
+        val valueText: String,
+        val unitText: String
+    )
+
+    fun parseFirst(text: String): ParsedWeight? {
+        return weightPattern.find(text)?.toParsedWeight()
+    }
+
+    fun convertText(text: String, targetUnit: WeightUnit, precision: Int = 1): String {
+        return weightPattern.replace(text) { match ->
+            val parsed = match.toParsedWeight() ?: return@replace match.value
+            if (parsed.value < 0.0 || parsed.unit == targetUnit) {
+                match.value
+            } else {
+                val convertedValue = when (targetUnit) {
+                    WeightUnit.KILOGRAMS -> parsed.value / KG_TO_LBS
+                    WeightUnit.POUNDS -> parsed.value * KG_TO_LBS
+                }
+                "${formatValue(convertedValue, precision)} ${targetUnit.symbol}"
+            }
+        }
+    }
+
+    private fun MatchResult.toParsedWeight(): ParsedWeight? {
+        val valueText = groups[1]?.value ?: return null
+        val unitText = groups[2]?.value ?: return null
+        val value = valueText.toDoubleOrNull() ?: return null
+        val unit = WeightUnit.fromSymbol(unitText) ?: return null
+        return ParsedWeight(value, unit, valueText, unitText)
+    }
+
+    private fun formatValue(value: Double, precision: Int): String {
+        val normalized = if (kotlin.math.abs(value) < 0.0000001) 0.0 else value
+        return if (normalized == normalized.toLong().toDouble()) {
+            normalized.toLong().toString()
+        } else {
+            "%.${precision}f".format(Locale.US, normalized)
         }
     }
 }

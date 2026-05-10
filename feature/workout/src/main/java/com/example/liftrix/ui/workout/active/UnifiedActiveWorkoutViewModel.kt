@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.UnifiedWorkoutSession
 import com.example.liftrix.domain.model.ExerciseId
 import com.example.liftrix.domain.model.ExerciseLibrary
+import com.example.liftrix.domain.model.RestTimer
 import com.example.liftrix.domain.model.SessionExercise
 import com.example.liftrix.domain.model.SessionSet
 import com.example.liftrix.domain.model.WorkoutSessionId
@@ -13,7 +14,9 @@ import com.example.liftrix.domain.repository.template.TemplateRepository
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.model.common.LiftrixResult
 import java.time.Instant
+import com.example.liftrix.service.TimerServiceManager
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
+import com.example.liftrix.service.WorkoutTimerService
 import com.example.liftrix.domain.usecase.session.SessionOperationsUseCase
 import com.example.liftrix.domain.usecase.template.TemplateCommandUseCase
 import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
@@ -48,18 +51,27 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val sessionOperationsUseCase: SessionOperationsUseCase,
     private val templateCommandUseCase: TemplateCommandUseCase,
-    private val workoutQueryUseCase: WorkoutQueryUseCase
+    private val workoutQueryUseCase: WorkoutQueryUseCase,
+    private val timerServiceManager: TimerServiceManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<UnifiedActiveWorkoutUiState>(
         UnifiedActiveWorkoutUiState.Loading
     )
     val uiState: StateFlow<UnifiedActiveWorkoutUiState> = _uiState.asStateFlow()
+    val timerState: StateFlow<WorkoutTimerService.TimerServiceState> = timerServiceManager.timerState
+    private var pendingRestTimer: RestTimer? = null
     
     init {
+        timerServiceManager.bindService().onFailure { error ->
+            Timber.w(error, "Unable to bind workout timer service")
+        }
+
         viewModelScope.launch {
-            _uiState.collect { state ->
-                if (state is UnifiedActiveWorkoutUiState.Success) {
+            timerServiceManager.connectionState.collect { state ->
+                if (state is TimerServiceManager.ConnectionState.Connected) {
+                    ensureSessionTimerStarted()
+                    startPendingRestTimerIfNeeded()
                 }
             }
         }
@@ -105,6 +117,10 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                             if (session.sessionStatus == UnifiedWorkoutSession.SessionStatus.ACTIVE &&
                                 _previousSetData.value.isEmpty() && session.exercises.isNotEmpty()) {
                                 loadPreviousSetData()
+                            }
+
+                            if (session.sessionStatus == UnifiedWorkoutSession.SessionStatus.ACTIVE) {
+                                ensureSessionTimerStarted()
                             }
                             
                             // Don't override WorkoutCompleted state when session is completed
@@ -229,6 +245,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
     private suspend fun completeSessionDirectly() {
         val success = sessionManager.completeSession()
         if (success) {
+            timerServiceManager.stopTimer()
             Timber.i("Workout completion initiated")
             
             // Wait for the save to complete and get the saved workout ID
@@ -275,6 +292,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
             try {
                 val currentSession = sessionManager.currentSession.value
                 Timber.d("[WORKOUT-DEBUG] discardWorkout requested sessionId=${currentSession?.id?.value} userId=${currentSession?.userId} status=${currentSession?.sessionStatus}")
+                timerServiceManager.stopTimer()
                 sessionManager.discardSession()
                 Timber.i("Workout discarded")
             } catch (e: Exception) {
@@ -353,18 +371,115 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                 }
 
                 val updatedSets = exercise.sets.toMutableList()
+                val previousSet = updatedSets[setIndex]
                 updatedSets[setIndex] = updatedSet
                 val updatedExercise = exercise.copy(sets = updatedSets)
+                val updatedSession = currentSession.copy(
+                    exercises = currentSession.exercises.map { sessionExercise ->
+                        if (sessionExercise.exerciseId.value == exerciseId) updatedExercise else sessionExercise
+                    }
+                )
                 
                 // 🔥 SETS-DEBUG: Log set update in ViewModel
                 Timber.d("[SETS-DEBUG-VM] Updating set ${setNumber} in exercise '${exercise.name}': reps=${updatedSet.actualReps}, weight=${updatedSet.actualWeight}")
                 Timber.d("[SETS-DEBUG-VM] Exercise now has ${updatedSets.size} sets total")
                 
                 sessionManager.updateExerciseInSession(ExerciseId(exerciseId), updatedExercise)
+
+                maybeStartRestTimer(
+                    previousSet = previousSet,
+                    updatedSet = updatedSet,
+                    exercise = exercise,
+                    updatedSession = updatedSession
+                )
             } catch (e: Exception) {
                 Timber.e(e, "Failed to update set in exercise: $exerciseId")
                 _uiState.value = UnifiedActiveWorkoutUiState.Error("Failed to update set")
             }
+        }
+    }
+
+    fun pauseRestTimer() {
+        timerServiceManager.pauseTimer().onFailure { error ->
+            Timber.w(error, "Failed to pause rest timer")
+        }
+    }
+
+    fun resumeRestTimer() {
+        timerServiceManager.resumeTimer().onFailure { error ->
+            Timber.w(error, "Failed to resume rest timer")
+        }
+    }
+
+    fun skipRestTimer() {
+        timerServiceManager.skipRest().onFailure { error ->
+            Timber.w(error, "Failed to skip rest timer")
+        }
+    }
+
+    fun adjustRestTimerBy(deltaSeconds: Int) {
+        timerServiceManager.adjustRestBySeconds(deltaSeconds).onFailure { error ->
+            Timber.w(error, "Failed to adjust rest timer")
+        }
+    }
+
+    private fun ensureSessionTimerStarted() {
+        val session = sessionManager.currentSession.value ?: return
+        if (session.sessionStatus != UnifiedWorkoutSession.SessionStatus.ACTIVE) return
+
+        if (timerServiceManager.getCurrentTimerState().timerState is WorkoutTimerService.TimerState.Stopped) {
+            timerServiceManager.startSession().onFailure { error ->
+                Timber.w(error, "Failed to start workout session timer")
+            }
+        }
+    }
+
+    private fun maybeStartRestTimer(
+        previousSet: SessionSet,
+        updatedSet: SessionSet,
+        exercise: SessionExercise,
+        updatedSession: UnifiedWorkoutSession
+    ) {
+        val becameComplete = previousSet.completedAt == null && updatedSet.completedAt != null
+        if (!becameComplete) return
+        if (updatedSession.exercises.all { sessionExercise ->
+                sessionExercise.sets.all { set -> set.completedAt != null }
+            }
+        ) {
+            return
+        }
+
+        val durationSeconds = exercise.restTimeSeconds ?: SessionExercise.DEFAULT_REST_TIME_SECONDS
+        if (durationSeconds <= 0) return
+
+        startRestTimerWhenReady(RestTimer(durationSeconds = durationSeconds))
+    }
+
+    private fun startRestTimerWhenReady(restTimer: RestTimer) {
+        if (!timerServiceManager.isServiceBound()) {
+            pendingRestTimer = restTimer
+            timerServiceManager.bindService().onFailure { error ->
+                Timber.w(error, "Failed to bind timer service for pending rest timer")
+            }
+            return
+        }
+
+        timerServiceManager.startRestTimer(restTimer).onFailure { error ->
+            pendingRestTimer = restTimer
+            Timber.w(error, "Failed to start rest timer; queued until service reconnects")
+            timerServiceManager.bindService().onFailure { bindError ->
+                Timber.w(bindError, "Failed to rebind timer service for rest timer")
+            }
+        }
+    }
+
+    private fun startPendingRestTimerIfNeeded() {
+        val restTimer = pendingRestTimer ?: return
+        pendingRestTimer = null
+
+        timerServiceManager.startRestTimer(restTimer).onFailure { error ->
+            pendingRestTimer = restTimer
+            Timber.w(error, "Failed to start pending rest timer")
         }
     }
 
@@ -1172,6 +1287,11 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    override fun onCleared() {
+        timerServiceManager.unbindService()
+        super.onCleared()
     }
 }
 

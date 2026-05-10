@@ -38,6 +38,7 @@ import com.example.liftrix.ui.common.state.UiState
 fun HelpArticleScreen(
     articleId: String,
     onNavigateBack: () -> Unit,
+    showTopBar: Boolean = true,
     viewModel: HelpViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -51,7 +52,8 @@ fun HelpArticleScreen(
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
-        TopAppBar(
+        if (showTopBar) {
+            TopAppBar(
             title = { Text("Help Article") },
             navigationIcon = {
                 IconButton(onClick = onNavigateBack) {
@@ -99,7 +101,8 @@ fun HelpArticleScreen(
                     }
                 }
             }
-        )
+            )
+        }
         
         when (val state = uiState) {
             UiState.Loading -> {

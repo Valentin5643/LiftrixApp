@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -33,6 +32,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import com.example.liftrix.ui.branding.LiftrixLaunchAnimation
 import com.example.liftrix.ui.navigation.UnifiedNavigationContainer
 import com.example.liftrix.ui.theme.LiftrixTheme
 import com.example.liftrix.ui.theme.ThemeManager
@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
     lateinit var profileImageCache: ProfileImageCache
     
     override fun onCreate(savedInstanceState: Bundle?) {
+        ThemeManager.getInstance(this).applyCurrentThemeToPlatform()
         installSplashScreen()
         super.onCreate(savedInstanceState)
         
@@ -147,7 +148,7 @@ fun LoadingScreen() {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            CircularProgressIndicator()
+            LiftrixLaunchAnimation()
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "Loading Liftrix...",

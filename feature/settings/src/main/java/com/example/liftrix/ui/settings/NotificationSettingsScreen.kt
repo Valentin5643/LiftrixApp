@@ -52,6 +52,7 @@ fun NotificationSettingsScreen(
     onNavigateToHistory: () -> Unit = {},
     onNavigateToMutedUsers: () -> Unit = {},
     modifier: Modifier = Modifier,
+    showTopBar: Boolean = true,
     viewModel: NotificationSettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -69,8 +70,8 @@ fun NotificationSettingsScreen(
                 contentDescription = "Notification settings screen with comprehensive controls"
             }
     ) {
-        // Top App Bar
-        TopAppBar(
+        if (showTopBar) {
+            TopAppBar(
             title = {
                 Text(
                     text = "Notifications",
@@ -97,7 +98,8 @@ fun NotificationSettingsScreen(
                     )
                 }
             }
-        )
+            )
+        }
         
         // Content
         when {

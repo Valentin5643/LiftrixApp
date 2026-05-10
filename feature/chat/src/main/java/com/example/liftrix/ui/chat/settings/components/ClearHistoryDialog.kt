@@ -35,7 +35,7 @@ fun ClearHistoryDialog(
         Card(
             modifier = modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = LiftrixColorsV2.surface
+                containerColor = MaterialTheme.colorScheme.surface
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
@@ -65,7 +65,7 @@ fun ClearHistoryDialog(
                     },
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = LiftrixColorsV2.onSurface,
+                    color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -77,7 +77,7 @@ fun ClearHistoryDialog(
                         else -> "This action will permanently delete all $totalMessages messages from your chat history. This operation cannot be undone."
                     },
                     style = MaterialTheme.typography.bodyMedium,
-                    color = LiftrixColorsV2.onSurface,
+                    color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -113,7 +113,7 @@ fun ClearHistoryDialog(
                     }
                 }
                 
-                Divider(color = LiftrixColorsV2.outline.copy(alpha = 0.3f))
+                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                 
                 // Confirmation Input
                 Column(
@@ -126,7 +126,7 @@ fun ClearHistoryDialog(
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color = LiftrixColorsV2.onSurface
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     
                     Card(
@@ -172,13 +172,13 @@ fun ClearHistoryDialog(
                         } else null,
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = if (isConfirmationValid) LiftrixColorsV2.primary else LiftrixColorsV2.outline,
-                            unfocusedBorderColor = LiftrixColorsV2.outline
+                            focusedBorderColor = if (isConfirmationValid) LiftrixColorsV2.primary else MaterialTheme.colorScheme.outline,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
                         )
                     )
                 }
                 
-                Divider(color = LiftrixColorsV2.outline.copy(alpha = 0.3f))
+                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                 
                 // Action Buttons
                 Row(
@@ -190,7 +190,7 @@ fun ClearHistoryDialog(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = LiftrixColorsV2.onSurface
+                            contentColor = MaterialTheme.colorScheme.onSurface
                         )
                     ) {
                         Text(
@@ -209,8 +209,8 @@ fun ClearHistoryDialog(
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.error,
                             contentColor = MaterialTheme.colorScheme.onPrimary,
-                            disabledContainerColor = LiftrixColorsV2.surfaceVariant,
-                            disabledContentColor = LiftrixColorsV2.onSurfaceVariant
+                            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     ) {
                         Text(
@@ -230,7 +230,7 @@ fun ClearHistoryDialog(
                         else -> "💡 You can export your history before clearing to create a backup."
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = LiftrixColorsV2.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )

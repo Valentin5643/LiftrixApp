@@ -8,7 +8,6 @@ import com.example.liftrix.domain.model.ConsentChoices
 import com.example.liftrix.domain.service.ConsentManagementService
 import com.example.liftrix.domain.usecase.auth.AuthCommandUseCase
 import com.example.liftrix.domain.repository.AuthRepository
-import com.example.liftrix.domain.usecase.guest.ManageGuestSessionUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +20,6 @@ import javax.inject.Inject
 class AuthViewModel @Inject constructor(
     private val authCommandUseCase: AuthCommandUseCase,
     private val authRepository: AuthRepository,
-    private val manageGuestSessionUseCase: ManageGuestSessionUseCase,
     private val consentManagementService: ConsentManagementService
 ) : ViewModel() {
 
@@ -95,7 +93,6 @@ class AuthViewModel @Inject constructor(
                 // Mark operation as in progress when Google Sign-In starts
                 isAuthOperationInProgress = true
             }
-            is AuthEvent.AnonymousSignIn -> signInAnonymously()
             is AuthEvent.SignOut -> signOut()
             is AuthEvent.ClearError -> clearError()
         }
@@ -233,41 +230,6 @@ class AuthViewModel @Inject constructor(
                     val errorMessage = getErrorMessage(exception)
                     _authState.value = AuthState.Error(errorMessage, exception)
                     Timber.e(exception, "Google sign in failed")
-                    // Add small delay to ensure error state is properly set before allowing observer updates
-                    kotlinx.coroutines.delay(100)
-                    isAuthOperationInProgress = false
-                }
-            )
-        }
-    }
-
-    private fun signInAnonymously() {
-        viewModelScope.launch {
-            isAuthOperationInProgress = true
-            _authState.value = AuthState.Loading
-
-            val result = authCommandUseCase.signInAnonymously()
-            result.fold(
-                onSuccess = { user ->
-                    // Initialize guest session tracking for anonymous users
-                    if (user.isAnonymous) {
-                        manageGuestSessionUseCase.getOrCreateGuestSession(user.uid)
-                            .onSuccess { guestSession ->
-                                Timber.d("Guest session initialized for user: ${user.uid}, workouts remaining: ${guestSession.getWorkoutsRemaining()}")
-                            }
-                            .onFailure { error ->
-                                Timber.w("Failed to initialize guest session for ${user.uid}: ${error.message}")
-                                // Don't fail authentication, just log the warning
-                            }
-                    }
-                    _authState.value = AuthState.Authenticated(user)
-                    Timber.d("Anonymous sign in successful for user: ${user.uid}")
-                    isAuthOperationInProgress = false
-                },
-                onFailure = { exception ->
-                    val errorMessage = getErrorMessage(exception)
-                    _authState.value = AuthState.Error(errorMessage, exception)
-                    Timber.e(exception, "Anonymous sign in failed")
                     // Add small delay to ensure error state is properly set before allowing observer updates
                     kotlinx.coroutines.delay(100)
                     isAuthOperationInProgress = false

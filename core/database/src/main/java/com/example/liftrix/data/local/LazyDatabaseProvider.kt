@@ -122,7 +122,6 @@ class LazyDatabaseProvider @Inject constructor(
     private var _workoutAnomalyDao: WorkoutAnomalyDao? = null
     private var _anomalyDetectionSettingsDao: AnomalyDetectionSettingsDao? = null
     private var _metDataDao: MetDataDao? = null
-    private var _guestSessionDao: GuestSessionDao? = null
     private var _friendDao: FriendDao? = null
 
     /**

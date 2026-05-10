@@ -34,6 +34,7 @@ import java.time.format.DateTimeFormatter
 fun SupportTicketScreen(
     ticketId: String,
     onNavigateBack: () -> Unit,
+    showTopBar: Boolean = true,
     viewModel: SupportViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -46,14 +47,16 @@ fun SupportTicketScreen(
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
-        TopAppBar(
-            title = { Text("Support Ticket") },
-            navigationIcon = {
-                IconButton(onClick = onNavigateBack) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+        if (showTopBar) {
+            TopAppBar(
+                title = { Text("Support Ticket") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
                 }
-            }
-        )
+            )
+        }
         
         val currentState = uiState
         when (currentState) {

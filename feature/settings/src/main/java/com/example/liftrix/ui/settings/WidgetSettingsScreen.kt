@@ -55,6 +55,7 @@ import com.example.liftrix.ui.theme.LiftrixTheme
 fun WidgetSettingsScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
+    showTopBar: Boolean = true,
     viewModel: WidgetSettingsViewModel = hiltViewModel()
 ) {
     // Performance monitoring for widget settings screen
@@ -76,8 +77,8 @@ fun WidgetSettingsScreen(
                     contentDescription = "Widget settings screen for customizing dashboard widgets"
                 }
         ) {
-            // Top App Bar
-            TopAppBar(
+            if (showTopBar) {
+                TopAppBar(
                 title = {
                     Text(
                         text = "Widget Settings",
@@ -124,7 +125,8 @@ fun WidgetSettingsScreen(
                         )
                     }
                 }
-            )
+                )
+            }
             
             // Main content with performance tracking
             PerformanceOptimizations.MemoryEfficientComponents.TrackRecomposition(
@@ -193,6 +195,16 @@ private fun WidgetSettingsContent(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        item {
+            WidgetSettingsActionRow(
+                hasUnsavedChanges = data.hasUnsavedChanges,
+                isLoading = data.isLoading,
+                onSave = { stableOnEvent(WidgetSettingsEvent.SavePreferences) },
+                onFixMigration = { stableOnEvent(WidgetSettingsEvent.FixWidgetMigration) },
+                onReset = { stableOnEvent(WidgetSettingsEvent.ResetToDefaults) }
+            )
+        }
+
         // User Experience Level Selector
         item {
             UserLevelSection(
@@ -300,6 +312,62 @@ private fun WidgetSettingsContent(
         // Bottom padding for better scrolling experience
         item {
             Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun WidgetSettingsActionRow(
+    hasUnsavedChanges: Boolean,
+    isLoading: Boolean,
+    onSave: () -> Unit,
+    onFixMigration: () -> Unit,
+    onReset: () -> Unit
+) {
+    ElevatedLiftrixCard(
+        modifier = Modifier.fillMaxWidth(),
+        contentDescription = "Widget settings actions"
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = onSave,
+                enabled = hasUnsavedChanges && !isLoading,
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Save,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Save")
+            }
+
+            IconButton(
+                onClick = onFixMigration,
+                enabled = !isLoading
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Build,
+                    contentDescription = "Fix widget preferences"
+                )
+            }
+
+            IconButton(
+                onClick = onReset,
+                enabled = !isLoading
+            ) {
+                Icon(
+                    imageVector = Icons.Default.RestartAlt,
+                    contentDescription = "Reset to defaults"
+                )
+            }
         }
     }
 }

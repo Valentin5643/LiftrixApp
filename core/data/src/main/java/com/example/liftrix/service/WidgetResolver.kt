@@ -142,33 +142,11 @@ class WidgetResolver @Inject constructor() {
      * @return List of widgets appropriate for the user level
      */
     fun resolveStandardWidgets(userLevel: UserLevel): List<AnalyticsWidget> {
-        val allWidgets = AnalyticsWidget.getActiveWidgets()
-        
-        val selectedWidgets = when (userLevel) {
-            UserLevel.BEGINNER -> {
-                // 4 widgets for beginners
-                allWidgets
-                    .sortedWith(compareBy(
-                        { it.complexity.ordinal },
-                        { it.getLayoutPriority() }
-                    ))
-                    .take(4)
-            }
-            UserLevel.INTERMEDIATE -> {
-                // 7 widgets for intermediate users
-                allWidgets
-                    .sortedWith(compareBy(
-                        { it.priority?.configurationLevel ?: 2 },
-                        { it.getLayoutPriority() }
-                    ))
-                    .take(7)
-            }
-            UserLevel.ADVANCED -> {
-                // All 12 widgets for advanced users
-                allWidgets
-                    .sortedBy { it.getLayoutPriority() }
-            }
-        }
+        val selectedWidgets = listOf(
+            AnalyticsWidget.StrengthAnalytics,
+            AnalyticsWidget.VolumeAnalytics,
+            AnalyticsWidget.MuscleGroupDistribution
+        )
         
         // Log selection for debugging
         Timber.d("WidgetResolver: Resolved ${selectedWidgets.size} widgets for $userLevel level: ${selectedWidgets.map { it.displayName }}")

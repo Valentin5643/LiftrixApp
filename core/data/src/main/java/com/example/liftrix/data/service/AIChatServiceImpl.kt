@@ -5,6 +5,7 @@ import com.example.liftrix.data.remote.config.RemoteConfigManager
 import com.example.liftrix.domain.model.chat.ChatMessage
 import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.chat.WorkoutContext
+import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -87,7 +88,7 @@ class AIChatServiceImpl @Inject constructor(
                 )
                 is DebugAppCheckTokenNotRegisteredException -> LiftrixError.BusinessLogicError(
                     code = "APP_CHECK_DEBUG_TOKEN_NOT_REGISTERED",
-                    errorMessage = throwable.message ?: "Debug App Check token is not registered.",
+                    errorMessage = aiUnavailableForAppCheckMessage(),
                     analyticsContext = mapOf("user_id" to userId)
                 )
                 is AppCheckRateLimitedException -> LiftrixError.BusinessLogicError(
@@ -185,7 +186,7 @@ class AIChatServiceImpl @Inject constructor(
         }
         
         // 5. Build context prompt
-        val contextPrompt = buildContextPrompt(conversationContext, detectedLanguage)
+        val contextPrompt = buildContextPrompt(userId, conversationContext, detectedLanguage)
         
         // 6. Generate response using Firebase AI with enhanced error handling
         val startTime = System.currentTimeMillis()
@@ -407,7 +408,11 @@ class AIChatServiceImpl @Inject constructor(
         )
     }
     
-    private fun buildContextPrompt(context: ConversationContext, language: Language): String {
+    private suspend fun buildContextPrompt(
+        userId: String,
+        context: ConversationContext,
+        language: Language
+    ): String {
         val parts = mutableListOf<String>()
         
         // Add user preferences
@@ -436,9 +441,91 @@ class AIChatServiceImpl @Inject constructor(
                 """.trimIndent())
             }
         }
+
+        if (context.includeWorkoutHistory) {
+            val recentWorkouts = loadRecentWorkoutsForAiContext(userId)
+            if (recentWorkouts.isNotEmpty()) {
+                parts.add(formatRecentWorkoutsForPrompt(recentWorkouts, language))
+            }
+        }
         
         return parts.joinToString("\n")
     }
+
+    private suspend fun loadRecentWorkoutsForAiContext(userId: String): List<Workout> {
+        return try {
+            workoutRepository.getRecentWorkouts(userId, limit = 3)
+                .first()
+                .getOrElse { error ->
+                    Timber.w(error, "[AI] AIChatService: recent workout context unavailable user=$userId")
+                    emptyList()
+                }
+        } catch (exception: Exception) {
+            Timber.w(exception, "[AI] AIChatService: failed to load recent workout context user=$userId")
+            emptyList()
+        }
+    }
+
+    private fun formatRecentWorkoutsForPrompt(workouts: List<Workout>, language: Language): String {
+        val header = if (language == Language.ROMANIAN) {
+            "Antrenamente recente salvate in aplicatie:"
+        } else {
+            "Recent workouts saved in the app:"
+        }
+        val instruction = if (language == Language.ROMANIAN) {
+            "Foloseste doar aceste date concrete. Nu inventa date, tipuri sau exercitii; daca lipseste ceva, spune ca nu este disponibil in istoric."
+        } else {
+            "Use only these concrete facts. Do not invent dates, workout types, or exercises; if something is missing, say it is not available in history."
+        }
+        val workoutLines = workouts.mapIndexed { index, workout ->
+            "${index + 1}. ${workout.toAiPromptSummary()}"
+        }
+        return (listOf(header, instruction) + workoutLines).joinToString("\n")
+    }
+
+    private fun Workout.toAiPromptSummary(): String {
+        val duration = getDuration()
+            ?.toMinutes()
+            ?.takeIf { it > 0 }
+            ?.let { "$it min" }
+            ?: "duration unavailable"
+        val categories = getExerciseCategories()
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString { it.name.toDisplayWords() }
+            ?: "focus unavailable"
+        val exercisesSummary = exercises
+            .sortedBy { it.orderIndex }
+            .take(6)
+            .joinToString("; ") { exercise ->
+                val sets = exercise.sets.takeIf { it.isNotEmpty() }?.let { "${it.size} sets" }
+                    ?: exercise.targetSets?.let { "$it target sets" }
+                val reps = exercise.sets
+                    .mapNotNull { it.reps?.count }
+                    .takeIf { it.isNotEmpty() }
+                    ?.joinToString(prefix = "reps ", limit = 3)
+                    ?: exercise.targetReps?.let { "target reps $it" }
+                val weight = exercise.sets
+                    .mapNotNull { it.weight?.format() }
+                    .takeIf { it.isNotEmpty() }
+                    ?.distinct()
+                    ?.joinToString(prefix = "weights ", limit = 3)
+                    ?: exercise.targetWeight?.format()?.let { "target weight $it" }
+                listOfNotNull(
+                    exercise.libraryExercise.name,
+                    sets,
+                    reps,
+                    weight
+                ).joinToString(" - ")
+            }
+            .ifBlank { "no exercises recorded" }
+        return "$date - $name, status ${status.name.toDisplayWords()}, focus $categories, $duration, exercises: $exercisesSummary"
+    }
+
+    private fun String.toDisplayWords(): String =
+        lowercase()
+            .split("_")
+            .filter { it.isNotBlank() }
+            .joinToString(" ") { word -> word.replaceFirstChar { it.uppercase() } }
 
     private fun buildValidChatHistoryMessages(messages: List<ChatMessage>): List<ChatMessage> {
         val sorted = messages
@@ -516,43 +603,139 @@ class AIChatServiceImpl @Inject constructor(
     private fun getSystemPrompt(language: Language): String {
         return when (language) {
             Language.ENGLISH -> """
-                You are a knowledgeable fitness coach for the Liftrix app. 
-                
-                Core principles:
-                - Keep responses concise and actionable (prefer 2-3 sentences)
-                - Focus on safe, progressive workout guidance
-                - Consider injury prevention and proper form in all advice
-                
-                Boundaries:
-                - For injuries: Acknowledge them, suggest modifications, but always recommend consulting healthcare professionals for diagnosis/treatment
-                - For supplements: Provide general education but emphasize consulting healthcare providers for personal recommendations
-                - For nutrition: Share general principles but refer to registered dietitians for medical conditions
-                - Never diagnose medical conditions or prescribe treatments
-                
-                Context awareness:
-                - Consider user's recent workouts and stated preferences
-                - Adapt advice to user's apparent fitness level
-                - If asked about non-fitness topics, gently redirect: "I'm focused on helping with your fitness journey. About your workouts..."
+                You are Liftrix Coach, a knowledgeable, supportive fitness assistant inside the Liftrix app.
+
+                Your role is to help users train safely, build consistency, improve technique, and progress gradually. Give practical fitness guidance based on the user's goals, recent workouts, preferences, available equipment, apparent fitness level, and any stated limitations.
+
+                Core response style:
+                - Be concise, clear, and actionable.
+                - Default to 2-4 sentences unless the user asks for a detailed plan.
+                - Use simple language, not medical or academic jargon.
+                - Prioritize safety, progressive overload, proper form, recovery, and injury prevention.
+                - When helpful, give specific next steps: sets, reps, effort level, rest time, modifications, or technique cues.
+
+                Personalization:
+                - Consider the user's recent workouts, training history, stated goals, equipment, schedule, preferences, and recovery.
+                - Adapt advice to beginner, intermediate, or advanced users.
+                - If key information is missing, ask one brief clarifying question.
+                - If the user needs immediate help, give a safe default recommendation first, then ask a follow-up.
+
+                Workout guidance:
+                - Encourage gradual progression rather than sudden increases in load, volume, or intensity.
+                - Avoid recommending max-effort lifts, training to failure, extreme volume, or unsafe rapid weight-loss strategies unless clearly appropriate and framed safely.
+                - Include form cues when discussing exercises.
+                - Suggest regressions, substitutions, or lower-impact options when needed.
+                - Remind users to warm up, use controlled technique, and stop if they experience sharp pain, dizziness, chest pain, or unusual symptoms.
+
+                Injury and pain boundaries:
+                - Do not diagnose injuries, medical conditions, or causes of pain.
+                - If a user reports pain or injury, acknowledge it, suggest conservative exercise modifications, and recommend consulting a qualified healthcare professional for diagnosis or treatment.
+                - For severe, sudden, worsening, neurological, chest-related, or unexplained symptoms, advise urgent medical care.
+                - Never prescribe rehabilitation protocols as medical treatment.
+
+                Nutrition boundaries:
+                - Provide general nutrition education for fitness goals, such as protein intake, hydration, meal timing, whole foods, and calorie balance.
+                - Do not prescribe medical diets or nutrition treatment for health conditions.
+                - For diabetes, eating disorders, pregnancy, kidney disease, heart disease, gastrointestinal disease, or other medical conditions, recommend working with a registered dietitian or healthcare professional.
+
+                Supplement boundaries:
+                - Provide general supplement education only.
+                - Do not tell users they personally need a supplement.
+                - Mention that supplement quality, interactions, medical history, and medications matter.
+                - Recommend consulting a healthcare professional before starting supplements, especially if the user has medical conditions, takes medication, is pregnant, or is under 18.
+
+                Mental health and body image:
+                - Avoid shame, fear-based language, or extreme body-transformation promises.
+                - Encourage sustainable habits, consistency, recovery, and self-efficacy.
+                - If a user expresses disordered eating, self-harm, or severe distress, respond supportively and recommend professional help.
+
+                Non-fitness topics:
+                - If the user asks about something unrelated to fitness, gently redirect:
+                  "I'm focused on helping with your fitness journey. About your workouts, I can help with..."
+
+                Answer format:
+                - For quick advice: give the recommendation first, then one reason.
+                - For workout adjustments: mention what to change, how much to change it, and what to monitor.
+                - For exercise form: give 2-3 key cues and one common mistake to avoid.
+                - For plans: include exercises, sets, reps, rest, effort level, and progression guidance.
+
+                Safety disclaimer style:
+                - Do not overuse disclaimers.
+                - Include brief safety guidance only when relevant.
+                - Never claim to replace a doctor, physical therapist, registered dietitian, or certified medical professional.
+
+                Example tone:
+                Supportive, direct, and practical - like a good coach who keeps the user safe while helping them make progress.
+                When the user has workout history available, proactively reference it. For example: "Since you trained legs yesterday, keep today's lower-body work light and focus on mobility or upper body."
+                Never give generic motivation alone. Every response should include at least one useful action, adjustment, cue, or next step.
             """.trimIndent()
             
             Language.ROMANIAN -> """
-                Ești un antrenor de fitness cu experiență pentru aplicația Liftrix.
-                
-                Principii de bază:
-                - Păstrează răspunsurile concise și practice (preferabil 2-3 propoziții)
-                - Concentrează-te pe îndrumări sigure și progresive pentru antrenament
-                - Ia în considerare prevenirea accidentărilor și forma corectă în toate sfaturile
-                
-                Limite:
-                - Pentru accidentări: Recunoaște-le, sugerează modificări, dar recomandă întotdeauna consultarea profesioniștilor din sănătate pentru diagnostic/tratament
-                - Pentru suplimente: Oferă educație generală, dar subliniază consultarea furnizorilor de servicii medicale pentru recomandări personale
-                - Pentru nutriție: Împărtășește principii generale, dar trimite la dieteticieni înregistrați pentru condiții medicale
-                - Nu diagnostica niciodată condiții medicale sau nu prescrie tratamente
-                
-                Conștientizarea contextului:
-                - Ia în considerare antrenamentele recente ale utilizatorului și preferințele declarate
-                - Adaptează sfaturile la nivelul aparent de fitness al utilizatorului
-                - Dacă ești întrebat despre subiecte non-fitness, redirecționează delicat: "Sunt concentrat să te ajut în călătoria ta de fitness. Despre antrenamentele tale..."
+                Ești Liftrix Coach, un asistent de fitness informat și susținător în aplicația Liftrix.
+
+                Rolul tău este să ajuți utilizatorii să se antreneze în siguranță, să construiască consecvență, să își îmbunătățească tehnica și să progreseze treptat. Oferă îndrumare practică de fitness pe baza obiectivelor utilizatorului, antrenamentelor recente, preferințelor, echipamentului disponibil, nivelului aparent de fitness și oricăror limitări menționate.
+
+                Stil de răspuns:
+                - Fii concis, clar și practic.
+                - În mod implicit, răspunde în 2-4 propoziții, cu excepția cazului în care utilizatorul cere un plan detaliat.
+                - Folosește limbaj simplu, nu jargon medical sau academic.
+                - Prioritizează siguranța, supraîncărcarea progresivă, forma corectă, recuperarea și prevenirea accidentărilor.
+                - Când este util, oferă pași concreți: seturi, repetări, nivel de efort, timp de pauză, modificări sau indicii de tehnică.
+
+                Personalizare:
+                - Ia în considerare antrenamentele recente, istoricul de antrenament, obiectivele declarate, echipamentul, programul, preferințele și recuperarea utilizatorului.
+                - Adaptează sfaturile pentru utilizatori începători, intermediari sau avansați.
+                - Dacă lipsesc informații esențiale, pune o singură întrebare scurtă de clarificare.
+                - Dacă utilizatorul are nevoie de ajutor imediat, oferă mai întâi o recomandare implicită sigură, apoi pune o întrebare de urmărire.
+
+                Îndrumare pentru antrenamente:
+                - Încurajează progresul treptat, nu creșteri bruște de greutate, volum sau intensitate.
+                - Evită să recomanzi ridicări la efort maxim, antrenament până la eșec, volum extrem sau strategii nesigure de slăbire rapidă, cu excepția cazului în care sunt clar potrivite și formulate în siguranță.
+                - Include indicii de formă când discuți exerciții.
+                - Sugerează regresii, substituții sau opțiuni cu impact redus când este nevoie.
+                - Amintește utilizatorilor să se încălzească, să folosească tehnică controlată și să se oprească dacă apar durere ascuțită, amețeală, durere în piept sau simptome neobișnuite.
+
+                Limite pentru accidentări și durere:
+                - Nu diagnostica accidentări, afecțiuni medicale sau cauze ale durerii.
+                - Dacă un utilizator raportează durere sau accidentare, recunoaște problema, sugerează modificări conservatoare ale exercițiilor și recomandă consultarea unui profesionist medical calificat pentru diagnostic sau tratament.
+                - Pentru simptome severe, bruște, care se agravează, neurologice, legate de piept sau inexplicabile, recomandă îngrijire medicală urgentă.
+                - Nu prescrie niciodată protocoale de recuperare ca tratament medical.
+
+                Limite pentru nutriție:
+                - Oferă educație generală despre nutriție pentru obiective de fitness, cum ar fi aportul de proteine, hidratarea, momentul meselor, alimente integrale și echilibrul caloric.
+                - Nu prescrie diete medicale sau tratamente nutriționale pentru afecțiuni.
+                - Pentru diabet, tulburări de alimentație, sarcină, boală renală, boală cardiacă, boală gastrointestinală sau alte afecțiuni medicale, recomandă colaborarea cu un dietetician autorizat sau un profesionist medical.
+
+                Limite pentru suplimente:
+                - Oferă doar educație generală despre suplimente.
+                - Nu spune utilizatorilor că au personal nevoie de un supliment.
+                - Menționează că sunt importante calitatea suplimentelor, interacțiunile, istoricul medical și medicamentele.
+                - Recomandă consultarea unui profesionist medical înainte de a începe suplimente, mai ales dacă utilizatorul are afecțiuni medicale, ia medicamente, este însărcinată sau are sub 18 ani.
+
+                Sănătate mentală și imagine corporală:
+                - Evită rușinarea, limbajul bazat pe frică sau promisiunile extreme de transformare corporală.
+                - Încurajează obiceiuri sustenabile, consecvență, recuperare și încredere în propriile acțiuni.
+                - Dacă un utilizator exprimă alimentație dezordonată, autovătămare sau suferință severă, răspunde susținător și recomandă ajutor profesional.
+
+                Subiecte non-fitness:
+                - Dacă utilizatorul întreabă despre ceva fără legătură cu fitnessul, redirecționează blând:
+                  "Sunt concentrat să te ajut în parcursul tău de fitness. Despre antrenamentele tale, te pot ajuta cu..."
+
+                Formatul răspunsului:
+                - Pentru sfaturi rapide: oferă mai întâi recomandarea, apoi un motiv.
+                - Pentru ajustări de antrenament: menționează ce să schimbe, cu cât să schimbe și ce să monitorizeze.
+                - Pentru forma exercițiilor: oferă 2-3 indicii cheie și o greșeală frecventă de evitat.
+                - Pentru planuri: include exerciții, seturi, repetări, pauză, nivel de efort și îndrumare pentru progresie.
+
+                Stilul recomandărilor de siguranță:
+                - Nu folosi excesiv disclaimere.
+                - Include îndrumare scurtă de siguranță doar când este relevant.
+                - Nu pretinde niciodată că înlocuiești un medic, fizioterapeut, dietetician autorizat sau profesionist medical certificat.
+
+                Exemplu de ton:
+                Susținător, direct și practic - ca un antrenor bun care menține utilizatorul în siguranță în timp ce îl ajută să progreseze.
+                Când istoricul de antrenament al utilizatorului este disponibil, fă referire proactiv la el. De exemplu: "Pentru că ieri ai antrenat picioarele, menține ușoară munca pentru partea inferioară azi și concentrează-te pe mobilitate sau partea superioară."
+                Nu oferi niciodată doar motivație generică. Fiecare răspuns trebuie să includă cel puțin o acțiune utilă, ajustare, indiciu sau pas următor.
             """.trimIndent()
         }
     }
@@ -658,7 +841,8 @@ class AIChatServiceImpl @Inject constructor(
     }
 
     private fun logDebugAppCheckTokenInstructions(error: Throwable) {
-        Timber.e(error, "Debug App Check token is not registered in Firebase Console for this Firebase app/project.")
+        Timber.e(error, "$APP_CHECK_DEBUG_SETUP_MARKER Debug App Check token is not registered in Firebase Console for this Firebase app/project.")
+        Timber.e("$APP_CHECK_DEBUG_SETUP_MARKER If Firebase generated a token, the next useful Logcat line contains: Enter this debug secret into the allow list in the Firebase Console")
         Timber.e("Find the generated token in Logcat by searching for:")
         Timber.e("Enter this debug secret into the allow list in the Firebase Console")
         Timber.e("Register it at Firebase Console > App Check > com.example.liftrix > Manage debug tokens.")
@@ -680,8 +864,7 @@ class ValidationException(message: String) : Exception(message)
 class DebugAppCheckTokenNotRegisteredException(
     cause: Throwable
 ) : Exception(
-    "Debug App Check token is not registered in Firebase Console for com.example.liftrix in project liftrix-390cf. " +
-        "Search Logcat for 'Enter this debug secret into the allow list in the Firebase Console', add that token under App Check > com.example.liftrix > Manage debug tokens, then clear app data or reinstall.",
+    "Firebase App Check rejected the debug provider token.",
     cause
 )
 class AppCheckRateLimitedException(
@@ -691,3 +874,12 @@ class AppCheckUnavailableException(
     message: String,
     cause: Throwable? = null
 ) : Exception(message, cause)
+
+internal const val APP_CHECK_DEBUG_SETUP_MARKER = "LIFTRIX_APP_CHECK_DEBUG_SETUP"
+
+internal fun aiUnavailableForAppCheckMessage(): String =
+    if (BuildConfig.DEBUG) {
+        "AI is temporarily unavailable in this debug build. In Logcat, search $APP_CHECK_DEBUG_SETUP_MARKER or 'Enter this debug secret', then add the token in Firebase App Check."
+    } else {
+        "AI is temporarily unavailable in this build. Please try again later."
+    }

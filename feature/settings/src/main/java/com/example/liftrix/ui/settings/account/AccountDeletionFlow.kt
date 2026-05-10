@@ -66,6 +66,7 @@ fun AccountDeletionFlow(
     onNavigateBack: () -> Unit,
     onDeletionCompleted: () -> Unit,
     modifier: Modifier = Modifier,
+    showTopBar: Boolean = true,
     viewModel: AccountManagementViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -102,7 +103,8 @@ fun AccountDeletionFlow(
     
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (showTopBar) {
+                TopAppBar(
                 title = {
                     Text(
                         text = when (currentStep) {
@@ -142,7 +144,8 @@ fun AccountDeletionFlow(
                         }
                     }
                 }
-            )
+                )
+            }
         }
     ) { innerPadding ->
         Box(

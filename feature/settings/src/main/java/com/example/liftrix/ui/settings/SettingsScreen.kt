@@ -540,8 +540,12 @@ private fun GeneralSettings(
         }
         
         SettingsToggleItem(
-            title = "Metric System (kg)",
-            subtitle = "Use kilograms instead of pounds for weight display",
+            title = "Weight Unit (kg/lbs)",
+            subtitle = if (uiState.currentWeightUnit == WeightUnit.KILOGRAMS) {
+                "Current display unit: kilograms"
+            } else {
+                "Current display unit: pounds"
+            },
             isChecked = uiState.currentWeightUnit == WeightUnit.KILOGRAMS,
             onToggle = onWeightUnitToggle,
             enabled = !uiState.isUpdatingSettings

@@ -3,6 +3,7 @@ package com.example.liftrix.ui.workout.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -28,8 +29,10 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -67,6 +70,8 @@ fun RedesignedExerciseCard(
     onAnomalyDetected: ((String, Int) -> Unit)? = null,
     context: ExerciseCardContext = ExerciseCardContext.ACTIVE_WORKOUT,
     weightUnit: WeightUnit = WeightUnit.getSystemDefault(),
+    leadingIconResId: Int? = null,
+    leadingIconContentDescription: String = "Exercise",
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -85,12 +90,21 @@ fun RedesignedExerciseCard(
                 modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.FitnessCenter,
-                    contentDescription = "Exercise",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(20.dp)
-                )
+                if (leadingIconResId != null) {
+                    Image(
+                        painter = painterResource(id = leadingIconResId),
+                        contentDescription = leadingIconContentDescription,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.size(44.dp)
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.FitnessCenter,
+                        contentDescription = leadingIconContentDescription,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.width(8.dp))
                 Column {
                     Text(
@@ -339,7 +353,10 @@ private fun RedesignedSetRow(
                 if (newValue.isNotEmpty() && newValue.toDoubleOrNull() != null) {
                     val weightValue = newValue.toDouble()
                     // Parse previous value format: "50 x 10" where 50 is weight, 10 is reps
-                    val previousWeight = setData.previousValue?.split(" x ")?.firstOrNull()?.trim()?.toDoubleOrNull()
+                    val previousWeight = setData.previousValue
+                        ?.split(" x ")
+                        ?.firstOrNull()
+                        ?.let { parseLeadingNumber(it) }
                     
                     // Check if we have a valid previous weight (not 0 or null)
                     if (previousWeight != null && previousWeight > 0) {
@@ -377,7 +394,10 @@ private fun RedesignedSetRow(
                     }
                     
                     // Parse previous value format: "50 x 10" where 50 is weight, 10 is reps
-                    val previousReps = setData.previousValue?.split(" x ")?.lastOrNull()?.trim()?.toIntOrNull()
+                    val previousReps = setData.previousValue
+                        ?.split(" x ")
+                        ?.lastOrNull()
+                        ?.let { parseLeadingNumber(it)?.toInt() }
                     
                     if (previousReps != null && previousReps > 0) {
                         val ratio = repsValue.toFloat() / previousReps
@@ -415,6 +435,13 @@ private fun RedesignedSetRow(
             Box(modifier = Modifier.size(24.dp))
         }
     }
+}
+
+private fun parseLeadingNumber(text: String): Double? {
+    return Regex("""[+-]?(?:\d+(?:\.\d+)?|\.\d+)""")
+        .find(text)
+        ?.value
+        ?.toDoubleOrNull()
 }
 
 /**

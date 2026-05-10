@@ -17,6 +17,7 @@ import com.example.liftrix.service.CacheWarmingService
 import com.example.liftrix.sync.SyncCoordinator
 import com.example.liftrix.sync.StartupRestoreGate
 import com.example.liftrix.domain.usecase.settings.InitializeUserThemeUseCase
+import com.example.liftrix.ui.theme.ThemeManager
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -104,6 +105,8 @@ class LiftrixApp : Application(), Configuration.Provider {
 
         // Initialize Timber for logging
         Timber.plant(Timber.DebugTree())
+
+        ThemeManager.getInstance(this).applyCurrentThemeToPlatform()
 
         // Mark/log App Check readiness and perform a single non-forced verification.
         initializeFirebaseAppCheck(verifyToken = true)

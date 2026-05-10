@@ -83,12 +83,6 @@ class PostWorkoutSummaryViewModel @Inject constructor(
                         exercise.sets.sumOf { set -> set.reps?.count ?: 0 }
                     }
                     
-                    // Calculate calories (simplified calculation)
-                    val caloriesBurned = estimateCaloriesBurned(
-                        duration = workout.getDuration() ?: Duration.ZERO,
-                        totalVolume = totalVolume
-                    )
-                    
                     // Create exercise summaries
                     val exerciseSummaries = workout.exercises.map { exercise ->
                         val repsRange = exercise.sets
@@ -118,7 +112,6 @@ class PostWorkoutSummaryViewModel @Inject constructor(
                         totalSets = totalSets,
                         totalReps = totalReps,
                         prsCount = personalRecords.size,
-                        caloriesBurned = caloriesBurned,
                         personalRecords = personalRecords,
                         exercises = exerciseSummaries,
                         workoutImageUrl = workoutImageUrl
@@ -271,17 +264,6 @@ class PostWorkoutSummaryViewModel @Inject constructor(
                 weight * reps
             }
         }
-    }
-    
-    private fun estimateCaloriesBurned(duration: Duration, totalVolume: Int): Int {
-        // Simplified calorie calculation
-        // Base rate: 5 calories per minute
-        // Adjustment for intensity based on volume
-        val minutes = duration.toMinutes().toInt()
-        val baseCalories = minutes * 5
-        val volumeBonus = (totalVolume / 1000) * 2 // 2 calories per ton lifted
-        
-        return baseCalories + volumeBonus
     }
     
     private suspend fun generateWorkoutImage(workout: com.example.liftrix.domain.model.Workout): String? {
@@ -475,7 +457,6 @@ sealed class PostWorkoutUiState {
         val totalSets: Int,
         val totalReps: Int,
         val prsCount: Int,
-        val caloriesBurned: Int?,
         val personalRecords: List<PersonalRecord>,
         val exercises: List<ExerciseSummary>,
         val workoutImageUrl: String?

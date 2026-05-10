@@ -27,6 +27,7 @@ fun CoachScreen(
         onNavigateBack = { 
             // Since this is a main tab, there's nowhere to navigate back to
             // The user can switch tabs using the bottom navigation
-        }
+        },
+        showTopBar = false
     )
 } 

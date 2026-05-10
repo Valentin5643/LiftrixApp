@@ -44,6 +44,7 @@ import timber.log.Timber
 @Composable
 fun PrivacyPolicyScreen(
     onNavigateBack: () -> Unit,
+    showTopBar: Boolean = true,
     viewModel: LegalDocumentViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -54,7 +55,8 @@ fun PrivacyPolicyScreen(
     
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (showTopBar) {
+                TopAppBar(
                 title = { 
                     Text(
                         text = "Privacy Policy",
@@ -92,7 +94,8 @@ fun PrivacyPolicyScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
-            )
+                )
+            }
         }
     ) { paddingValues ->
         val currentUiState = uiState
@@ -158,6 +161,7 @@ fun PrivacyPolicyScreen(
 @Composable
 fun TermsOfServiceScreen(
     onNavigateBack: () -> Unit,
+    showTopBar: Boolean = true,
     viewModel: LegalDocumentViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -168,7 +172,8 @@ fun TermsOfServiceScreen(
     
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (showTopBar) {
+                TopAppBar(
                 title = { 
                     Text(
                         text = "Terms of Service",
@@ -206,7 +211,8 @@ fun TermsOfServiceScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
-            )
+                )
+            }
         }
     ) { paddingValues ->
         val currentUiState = uiState
@@ -587,6 +593,7 @@ private fun PrivacyPolicyScreenPreview() {
 @Composable
 fun AIDisclaimerScreen(
     onNavigateBack: () -> Unit,
+    showTopBar: Boolean = true,
     viewModel: LegalDocumentViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -597,7 +604,8 @@ fun AIDisclaimerScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (showTopBar) {
+                TopAppBar(
                 title = {
                     Text(
                         text = "AI Disclaimer",
@@ -635,7 +643,8 @@ fun AIDisclaimerScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
-            )
+                )
+            }
         }
     ) { paddingValues ->
         val currentUiState = uiState
@@ -692,6 +701,7 @@ fun AIDisclaimerScreen(
 @Composable
 fun CommunityGuidelinesScreen(
     onNavigateBack: () -> Unit,
+    showTopBar: Boolean = true,
     viewModel: LegalDocumentViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -702,7 +712,8 @@ fun CommunityGuidelinesScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (showTopBar) {
+                TopAppBar(
                 title = {
                     Text(
                         text = "Community Guidelines",
@@ -740,7 +751,8 @@ fun CommunityGuidelinesScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
-            )
+                )
+            }
         }
     ) { paddingValues ->
         val currentUiState = uiState
@@ -797,6 +809,7 @@ fun CommunityGuidelinesScreen(
 @Composable
 fun ContentModerationPolicyScreen(
     onNavigateBack: () -> Unit,
+    showTopBar: Boolean = true,
     viewModel: LegalDocumentViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -807,7 +820,8 @@ fun ContentModerationPolicyScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (showTopBar) {
+                TopAppBar(
                 title = {
                     Text(
                         text = "Content Moderation Policy",
@@ -845,7 +859,8 @@ fun ContentModerationPolicyScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
-            )
+                )
+            }
         }
     ) { paddingValues ->
         val currentUiState = uiState
@@ -902,6 +917,7 @@ fun ContentModerationPolicyScreen(
 @Composable
 fun RefundSubscriptionPolicyScreen(
     onNavigateBack: () -> Unit,
+    showTopBar: Boolean = true,
     viewModel: LegalDocumentViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -912,7 +928,8 @@ fun RefundSubscriptionPolicyScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (showTopBar) {
+                TopAppBar(
                 title = {
                     Text(
                         text = "Refund & Subscription Policy",
@@ -950,7 +967,8 @@ fun RefundSubscriptionPolicyScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
-            )
+                )
+            }
         }
     ) { paddingValues ->
         val currentUiState = uiState

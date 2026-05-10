@@ -157,6 +157,7 @@ fun ProgressDashboardScreen(
     onNavigateToOneRmDetail: () -> Unit = {},
     onNavigateToMuscleGroupDetail: () -> Unit = {},
     onNavigateToFrequencyDetail: () -> Unit = {},
+    onNavigateToExerciseRankingDetail: () -> Unit = {},
     onNavigateToDashboardCustomization: () -> Unit = {}
 ) {
     // Validate ViewModels for debugging (only in debug builds)
@@ -194,6 +195,7 @@ fun ProgressDashboardScreen(
             onNavigateToOneRmDetail = onNavigateToOneRmDetail,
             onNavigateToMuscleGroupDetail = onNavigateToMuscleGroupDetail,
             onNavigateToFrequencyDetail = onNavigateToFrequencyDetail,
+            onNavigateToExerciseRankingDetail = onNavigateToExerciseRankingDetail,
             onNavigateToDashboardCustomization = onNavigateToDashboardCustomization
         )
     }
@@ -217,6 +219,9 @@ fun ProgressDashboardScreen(
                 }
                 is NavigationEvent.NavigateToFrequencyDetail -> {
                     onNavigateToFrequencyDetail()
+                }
+                is NavigationEvent.NavigateToExerciseRankingDetail -> {
+                    onNavigateToExerciseRankingDetail()
                 }
             }
         }
@@ -1148,28 +1153,29 @@ private fun CalorieSection(
  * Helper function to create default widget data - Clean zero-state display (FR-004)
  */
 private fun createDefaultWidgetData(widget: com.example.liftrix.domain.model.analytics.AnalyticsWidget): WidgetData {
-    // Clean zero-state display with appropriate units per FR-004
-    val (defaultValue, defaultUnit) = when (widget) {
-        com.example.liftrix.domain.model.analytics.AnalyticsWidget.TotalVolume -> "0" to WeightUnit.getSystemDefault().symbol
-        com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutStreak -> "0" to "days"
-        com.example.liftrix.domain.model.analytics.AnalyticsWidget.AverageDuration -> "0" to "min"
-        com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutFrequency -> "0" to "workouts"
-        com.example.liftrix.domain.model.analytics.AnalyticsWidget.StrengthProgress -> "0" to WeightUnit.getSystemDefault().symbol
-        com.example.liftrix.domain.model.analytics.AnalyticsWidget.PersonalRecords -> "0" to "records"
-        com.example.liftrix.domain.model.analytics.AnalyticsWidget.OneRMProgression -> "0" to WeightUnit.getSystemDefault().symbol
-        com.example.liftrix.domain.model.analytics.AnalyticsWidget.MuscleGroupDistribution -> "0" to "%"
-        com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeLoadProgression -> "0" to WeightUnit.getSystemDefault().symbol
-        com.example.liftrix.domain.model.analytics.AnalyticsWidget.RecoveryMetrics -> "0" to "h"
-        else -> "0" to ""
+    val (defaultValue, defaultUnit, secondaryValue) = when (widget) {
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.RecentAchievements,
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.PersonalRecords -> Triple("No achievements yet", "", "Personal records will appear after logged progress")
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.ConsistencyScore,
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.ProgressiveOverload -> Triple("Not enough data yet", "", "Complete more workouts to unlock this insight")
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.ExerciseRanking -> Triple("No rankings yet", "", "Exercise rankings appear after logged workouts")
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutDuration,
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.AverageDuration,
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutFrequency,
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutStreak -> Triple("No workouts yet", "", "Log workouts to populate this widget")
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.TotalVolume,
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeAnalytics,
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeLoadProgression -> Triple("No volume yet", "", "Log sets to see volume trends")
+        else -> Triple("Not enough data yet", "", "This widget will update as more progress data is available")
     }
     
     return MetricWidgetData(
         widgetType = widget,
         lastUpdated = kotlinx.datetime.Clock.System.now(),
         primaryValue = defaultValue,
-        secondaryValue = null, // Remove repetitive messaging
+        secondaryValue = secondaryValue,
         unit = defaultUnit,
-        trend = com.example.liftrix.domain.model.analytics.TrendDirection.STABLE
+        trend = com.example.liftrix.domain.model.analytics.TrendDirection.UNKNOWN
     )
 }
 

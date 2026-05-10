@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -59,11 +60,6 @@ import androidx.navigation.toRoute
 import com.example.liftrix.BuildConfig
 import com.example.liftrix.ui.navigation.LiftrixRoute
 import com.example.liftrix.feature.auth.navigation.AuthRoute
-import com.example.liftrix.feature.auth.navigation.GuestConversionRoute
-import com.example.liftrix.feature.auth.navigation.GuestDashboardRoute
-import com.example.liftrix.feature.auth.navigation.GuestModeChipRoute
-import com.example.liftrix.feature.auth.navigation.GuestModeSelectionRoute
-import com.example.liftrix.feature.auth.navigation.GuestSessionIndicatorRoute
 import com.example.liftrix.feature.auth.navigation.OnboardingRoute
 import com.example.liftrix.feature.chat.navigation.AIChatSettingsRoute
 import com.example.liftrix.feature.chat.navigation.ChatbotRoute
@@ -142,8 +138,6 @@ import com.example.liftrix.ui.navigation.navigateToAnomalyDashboard
 import com.example.liftrix.ui.navigation.navigateToActiveWorkout
 import com.example.liftrix.ui.navigation.navigateToExerciseSelection
 import com.example.liftrix.ui.navigation.navigateToImageCrop
-import com.example.liftrix.ui.navigation.navigateToGuestDashboard
-import com.example.liftrix.ui.navigation.navigateToGuestConversion
 import com.example.liftrix.ui.navigation.navigateToAuthSignUp
 import com.example.liftrix.ui.navigation.navigateToAuthSignIn
 import com.example.liftrix.ui.navigation.navigateToPublicProfile
@@ -222,14 +216,6 @@ fun UnifiedNavigationContainer(
             ) {
                 composable<LiftrixRoute.Home> {
                     Column {
-                        // Guest session indicator for anonymous users
-                        GuestSessionIndicatorRoute(
-                            onClick = {
-                                navController.navigateToGuestConversion(source = "nudge")
-                            },
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                        )
-                        
                         HomeRoute(
                             onNavigateToWorkout = { _ ->
                                 navController.navigateToWorkout()
@@ -306,6 +292,9 @@ fun UnifiedNavigationContainer(
                         },
                         onNavigateToFrequencyDetail = {
                             navController.navigate(LiftrixRoute.WorkoutFrequencyDetail)
+                        },
+                        onNavigateToExerciseRankingDetail = {
+                            navController.navigate(LiftrixRoute.ExerciseRankingDetail)
                         },
                         onNavigateToDashboardCustomization = {
                             navController.navigate(LiftrixRoute.DashboardCustomization)
@@ -831,57 +820,6 @@ fun UnifiedNavigationContainer(
                     )
                 }
                 
-                // Guest Mode Routes
-                composable<LiftrixRoute.GuestModeSelection> {
-                    GuestModeSelectionRoute(
-                        onContinueAsGuest = {
-                            // Handle anonymous sign-in and navigate to home
-                            navController.clearBackStackAndNavigate(LiftrixRoute.Home)
-                        },
-                        onCreateAccount = {
-                            navController.navigateToAuthSignUp()
-                        },
-                        onSignIn = {
-                            navController.navigateToAuthSignIn()
-                        }
-                    )
-                }
-                
-                composable<LiftrixRoute.GuestDashboard> {
-                    GuestDashboardRoute(
-                        onUpgrade = {
-                            navController.navigateToGuestConversion(source = "manual")
-                        },
-                        onStartWorkout = {
-                            navController.navigateToActiveWorkout(isBlankWorkout = true)
-                        },
-                        onNavigateBack = {
-                            navController.popBackStackSafely()
-                        }
-                    )
-                }
-                
-                composable<LiftrixRoute.GuestConversion> { backStackEntry ->
-                    val route = backStackEntry.toRoute<LiftrixRoute.GuestConversion>()
-                    GuestConversionRoute(
-                        source = route.source,
-                        onCreateAccount = {
-                            navController.navigateAndReplace(LiftrixRoute.AuthSignUp)
-                        },
-                        onSignIn = {
-                            navController.navigateAndReplace(LiftrixRoute.AuthSignIn)
-                        },
-                        onMaybeLater = {
-                            if (route.returnTo != null) {
-                                // Type-safe navigation conversion placeholder
-                                navController.popBackStackSafely()
-                            } else {
-                                navController.popBackStackSafely()
-                            }
-                        }
-                    )
-                }
-                
                 // Authentication Routes
                 composable<LiftrixRoute.AuthSignUp> {
                     AuthRoute(
@@ -1304,10 +1242,6 @@ fun UnifiedNavigationContainer(
             showWorkoutCreationModal = false
             navController.navigateToActiveWorkout(isBlankWorkout = true)
         },
-        onGuestUpgrade = {
-            showWorkoutCreationModal = false
-            navController.navigateToGuestConversion(source = "limit_reached")
-        }
     )
     
     // Handle stop session dialog
@@ -1384,7 +1318,7 @@ private fun BottomNavigationBar(
         add(BottomNavItem(LiftrixRoute.Home, "Home", Icons.Default.Home))
         add(BottomNavItem(LiftrixRoute.Workout, "Workout", Icons.Default.FitnessCenter))
         add(BottomNavItem(LiftrixRoute.Progress, "Progress", Icons.Default.TrendingUp))
-        add(BottomNavItem(LiftrixRoute.AIChatbot(), "AI", Icons.Default.Psychology))
+        add(BottomNavItem(LiftrixRoute.Coach, "AI", Icons.Default.Psychology))
     }
     
     NavigationBar {
@@ -1586,6 +1520,26 @@ private fun NavigationAwareTopAppBar(
     val routeTitles = mapOf(
         "Settings" to "Settings",
         "WidgetSettings" to "Widget Settings",
+        "DashboardCustomization" to "Dashboard",
+        "EmailChange" to "Change Email",
+        "PasswordChange" to "Change Password",
+        "UsernameChange" to "Change Username",
+        "AccountDeletion" to "Delete Account",
+        "HelpCenter" to "Help",
+        "HelpArticle" to "Help",
+        "ContactSupport" to "Support",
+        "SupportTicket" to "Support",
+        "About" to "About",
+        "PrivacyPolicy" to "Privacy Policy",
+        "TermsOfService" to "Terms",
+        "AIDisclaimer" to "AI Disclaimer",
+        "CommunityGuidelines" to "Guidelines",
+        "ContentModerationPolicy" to "Moderation Policy",
+        "RefundSubscriptionPolicy" to "Refund Policy",
+        "DataPortability" to "Data Portability",
+        "AIChatSettings" to "AI Settings",
+        "AdminBanManagement" to "Ban Management",
+        "UpgradeToPremium" to "Premium",
         "Friends" to "Friends", 
         "ActiveWorkout" to "Active Workout",
         "TemplateCreation" to "Create Template",
@@ -1620,15 +1574,20 @@ private fun NavigationAwareTopAppBar(
         "FollowingList" to "Following",
         "PublicProfile" to "Profile"
     )
+    val mainTabTitles = mapOf(
+        "Home" to "Liftrix",
+        "Workout" to "Workout",
+        "Progress" to "Progress",
+        "Coach" to "AI Coach"
+    )
     
     // Check if current route is a main tab (should show global top bar)
-    val isMainTab = currentRoute?.contains("Home") == true ||
-                   currentRoute?.contains("Workout") == true ||
-                   currentRoute?.contains("Progress") == true ||
-                   currentRoute?.contains("Coach") == true
+    val isMainTab = mainTabTitles.keys.any { key ->
+        currentRoute == key || currentRoute?.endsWith(".$key") == true
+    }
     
     // Check if current route should show back navigation
-    val shouldShowBackNavigation = routeTitles.keys.any { 
+    val shouldShowBackNavigation = !isMainTab && routeTitles.keys.any { 
         currentRoute?.contains(it) == true 
     }
     
@@ -1637,9 +1596,14 @@ private fun NavigationAwareTopAppBar(
             val title = when {
                 shouldShowBackNavigation -> {
                     // Find matching title for current route
-                    routeTitles.entries.find { (key, _) -> 
+                    routeTitles.entries.sortedByDescending { it.key.length }.find { (key, _) -> 
                         currentRoute?.contains(key) == true 
                     }?.value ?: "Back"
+                }
+                isMainTab -> {
+                    mainTabTitles.entries.find { (key, _) ->
+                        currentRoute == key || currentRoute?.endsWith(".$key") == true
+                    }?.value.orEmpty()
                 }
                 else -> ""
             }
@@ -1647,8 +1611,10 @@ private fun NavigationAwareTopAppBar(
             if (title.isNotEmpty()) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         },
@@ -1692,13 +1658,6 @@ private fun NavigationAwareTopAppBar(
                     )
                 }
             }
-            
-            // Show guest mode chip for anonymous users
-            GuestModeChipRoute(
-                onClick = {
-                    navController.navigateToGuestDashboard()
-                }
-            )
             
             // Show social button on all screens EXCEPT when already in social
             if (currentRoute?.contains("Friends") != true) {

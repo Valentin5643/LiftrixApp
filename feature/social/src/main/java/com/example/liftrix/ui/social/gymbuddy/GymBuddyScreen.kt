@@ -13,7 +13,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -24,6 +25,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.domain.model.social.GymBuddy
 import com.example.liftrix.domain.model.social.QRCodeData
 import com.example.liftrix.domain.model.social.QRUserProfile
+import com.example.liftrix.feature.social.R
 import com.example.liftrix.ui.theme.LiftrixTheme
 
 /**
@@ -692,7 +694,6 @@ private fun EmptyBuddiesState(
     modifier: Modifier = Modifier
 ) {
     EmptyStateContent(
-        icon = Icons.Default.FitnessCenter,
         title = "No gym buddies yet",
         description = "Connect with your workout partners using QR codes to build your gym buddy network!",
         modifier = modifier
@@ -704,7 +705,6 @@ private fun EmptyBuddiesState(
  */
 @Composable
 private fun EmptyStateContent(
-    icon: ImageVector,
     title: String,
     description: String,
     modifier: Modifier = Modifier
@@ -714,11 +714,13 @@ private fun EmptyStateContent(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = title,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-            modifier = Modifier.size(64.dp)
+        Image(
+            painter = painterResource(id = R.drawable.empty_gym_buddy),
+            contentDescription = "Empty gym buddy illustration",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .width(220.dp)
+                .height(160.dp)
         )
 
         Spacer(modifier = Modifier.height(16.dp))

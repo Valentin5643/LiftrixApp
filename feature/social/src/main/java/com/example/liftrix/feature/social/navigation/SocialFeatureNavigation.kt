@@ -85,7 +85,8 @@ fun ShareWorkoutRoute(
         onGenerateQRCode = {
             viewModel.generateQRCode(shareUrl)
         },
-        modifier = modifier
+        modifier = modifier,
+        showTopBar = false
     )
 }
 

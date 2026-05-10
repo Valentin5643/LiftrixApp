@@ -356,33 +356,6 @@ fun NavController.navigateToExerciseRankingDetail() {
 
 
 /**
- * Navigate to guest mode selection screen
- */
-fun NavController.navigateToGuestModeSelection() {
-    navigate(LiftrixRoute.GuestModeSelection)
-}
-
-/**
- * Navigate to guest dashboard
- */
-fun NavController.navigateToGuestDashboard() {
-    navigate(LiftrixRoute.GuestDashboard)
-}
-
-/**
- * Navigate to guest conversion screen
- * 
- * @param source The source that triggered the conversion
- * @param returnTo Optional route to return to after conversion
- */
-fun NavController.navigateToGuestConversion(
-    source: String = "manual",
-    returnTo: String? = null
-) {
-    navigate(LiftrixRoute.GuestConversion(source, returnTo))
-}
-
-/**
  * Navigate to sign-up screen
  */
 fun NavController.navigateToAuthSignUp() {
@@ -691,8 +664,6 @@ fun NavController.getCurrentLiftrixRoute(): LiftrixRoute? {
         isCurrentRoute(LiftrixRoute.DashboardCustomization::class) -> LiftrixRoute.DashboardCustomization
         isCurrentRoute(LiftrixRoute.AnomalyDashboard::class) -> LiftrixRoute.AnomalyDashboard
         isCurrentRoute(LiftrixRoute.AnomalySettings::class) -> LiftrixRoute.AnomalySettings
-        isCurrentRoute(LiftrixRoute.GuestModeSelection::class) -> LiftrixRoute.GuestModeSelection
-        isCurrentRoute(LiftrixRoute.GuestDashboard::class) -> LiftrixRoute.GuestDashboard
         isCurrentRoute(LiftrixRoute.AuthSignUp::class) -> LiftrixRoute.AuthSignUp
         isCurrentRoute(LiftrixRoute.AuthSignIn::class) -> LiftrixRoute.AuthSignIn
         isCurrentRoute(LiftrixRoute.ProfileEdit::class) -> LiftrixRoute.ProfileEdit

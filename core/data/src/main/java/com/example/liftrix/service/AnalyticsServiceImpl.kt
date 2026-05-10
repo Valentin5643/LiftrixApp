@@ -131,14 +131,7 @@ class AnalyticsServiceImpl @Inject constructor(
             val dataAge = calculateDataAge(userId)
             
             if (!widgetManager.shouldShowWidget(widget, hasWorkoutData, dataAge)) {
-                val noDataWidget = MetricWidgetData(
-                    widgetType = widget,
-                    lastUpdated = Clock.System.now(),
-                    primaryValue = DEFAULT_WIDGET_VALUE,
-                    unit = "",
-                    trend = TrendDirection.STABLE,
-                    isLoading = false
-                )
+                val noDataWidget = createNoDataWidgetData(widget)
                 // Cache the no-data result using multi-tier cache
                 widgetCacheManager.putWidgetData(userId, widget, noDataWidget)
                 return@liftrixCatching noDataWidget
@@ -150,26 +143,27 @@ class AnalyticsServiceImpl @Inject constructor(
                 AnalyticsWidget.WorkoutFrequency -> loadWorkoutFrequencyData(userId)
                 AnalyticsWidget.WorkoutStreak -> loadConsistencyStreakData(userId)
                 AnalyticsWidget.StrengthProgress -> loadStrengthProgressData(userId)
+                AnalyticsWidget.StrengthAnalytics -> loadStrengthAnalyticsData(userId)
                 AnalyticsWidget.VolumeChart -> loadRealVolumeChartData(userId)
+                AnalyticsWidget.VolumeAnalytics -> loadVolumeAnalyticsData(userId)
                 AnalyticsWidget.ProgressChart -> loadRealProgressChartData(userId)
                 AnalyticsWidget.FrequencyChart -> loadRealFrequencyChartData(userId)
                 AnalyticsWidget.VolumeTrends -> loadVolumeTrendsData(userId)
                 AnalyticsWidget.RecoveryMetrics -> loadRecoveryMetricsData(userId)
                 AnalyticsWidget.MonthlySummary -> loadPerformanceAnalysisData(userId)
                 AnalyticsWidget.AverageDuration -> loadAverageDurationData(userId)
+                AnalyticsWidget.WorkoutDuration -> loadWorkoutDurationSummaryData(userId)
+                AnalyticsWidget.RecentAchievements -> loadRecentAchievementsData(userId)
+                AnalyticsWidget.ConsistencyScore -> loadConsistencyScoreData(userId)
+                AnalyticsWidget.ExerciseRanking -> loadExerciseRankingSummaryData(userId)
+                AnalyticsWidget.ProgressiveOverload -> loadProgressiveOverloadData(userId)
                 AnalyticsWidget.VolumeLoadProgression -> loadRealVolumeChartData(userId)
                 AnalyticsWidget.PersonalRecords -> loadProgressChartData(userId)
                 AnalyticsWidget.OneRMProgression -> loadOneRMProgressionData(userId)
                 // Removed duplicate widget mapping
                 AnalyticsWidget.MuscleGroupDistribution -> loadMuscleGroupDistributionData(userId)
                 // Remove invalid widget reference - RecoveryPatterns doesn't exist
-                else -> MetricWidgetData(
-                    widgetType = widget,
-                    lastUpdated = Clock.System.now(),
-                    primaryValue = DEFAULT_WIDGET_VALUE,
-                    unit = "",
-                    trend = TrendDirection.STABLE
-                )
+                else -> createNoDataWidgetData(widget)
             }
             
             // Cache the result using multi-tier cache with complexity-based TTL
@@ -418,6 +412,70 @@ class AnalyticsServiceImpl @Inject constructor(
      * Private helper methods for loading specific widget data
      */
     
+    private suspend fun getRawWidgetData(
+        userId: String,
+        widget: AnalyticsWidget
+    ): Map<String, Any> {
+        return getWidgetDataUseCase.getWidgetData(userId, widget)
+            .getOrNull()
+            ?.data
+            .orEmpty()
+    }
+
+    private fun Map<String, Any>.numberValue(key: String): Int {
+        return when (val value = this[key]) {
+            is Number -> value.toInt()
+            is String -> value.toIntOrNull() ?: 0
+            else -> 0
+        }
+    }
+
+    private fun Map<String, Any>.floatValue(key: String): Float {
+        return when (val value = this[key]) {
+            is Number -> value.toFloat()
+            is String -> value.toFloatOrNull() ?: 0f
+            else -> 0f
+        }
+    }
+
+    private fun createNoDataWidgetData(widget: AnalyticsWidget): MetricWidgetData {
+        val (primaryValue, secondaryValue) = when (widget) {
+            AnalyticsWidget.RecentAchievements,
+            AnalyticsWidget.PersonalRecords -> "No achievements yet" to "Personal records will appear after logged progress"
+            AnalyticsWidget.ConsistencyScore -> "Not enough data yet" to "Complete more workouts to score consistency"
+            AnalyticsWidget.ProgressiveOverload -> "Not enough data yet" to "Log volume over time to analyze overload"
+            AnalyticsWidget.ExerciseRanking -> "No rankings yet" to "Exercise rankings appear after logged workouts"
+            AnalyticsWidget.WorkoutDuration,
+            AnalyticsWidget.AverageDuration -> "No workouts yet" to "Workout duration appears after your first session"
+            AnalyticsWidget.VolumeAnalytics,
+            AnalyticsWidget.VolumeChart,
+            AnalyticsWidget.VolumeTrends,
+            AnalyticsWidget.VolumeLoadProgression,
+            AnalyticsWidget.TotalVolume -> "No volume yet" to "Log workouts with sets to see volume"
+            AnalyticsWidget.FrequencyChart,
+            AnalyticsWidget.WorkoutFrequency,
+            AnalyticsWidget.WorkoutStreak,
+            AnalyticsWidget.RecoveryMetrics -> "No workouts yet" to "Frequency and recovery insights need workout history"
+            AnalyticsWidget.StrengthAnalytics,
+            AnalyticsWidget.StrengthProgress,
+            AnalyticsWidget.OneRMProgression,
+            AnalyticsWidget.ProgressChart,
+            AnalyticsWidget.MonthlySummary -> "Not enough data yet" to "Strength trends need more logged workouts"
+            AnalyticsWidget.MuscleGroupDistribution -> "No muscle data yet" to "Muscle group balance appears after logged exercises"
+            else -> "No data yet" to DEFAULT_WIDGET_SUBTITLE
+        }
+
+        return MetricWidgetData(
+            widgetType = widget,
+            lastUpdated = Clock.System.now(),
+            primaryValue = primaryValue,
+            secondaryValue = secondaryValue,
+            unit = "",
+            trend = TrendDirection.UNKNOWN,
+            isLoading = false
+        )
+    }
+
     private suspend fun loadTotalVolumeData(userId: String): WidgetData {
         return try {
             // Get recent volume data from analytics engine
@@ -603,6 +661,174 @@ class AnalyticsServiceImpl @Inject constructor(
             trend = TrendDirection.UP,
             isLoading = false
         )
+    }
+
+    private suspend fun loadStrengthAnalyticsData(userId: String): WidgetData {
+        return (loadStrengthProgressData(userId) as? MetricWidgetData)?.copy(
+            widgetType = AnalyticsWidget.StrengthAnalytics,
+            secondaryValue = "Strength trend"
+        ) ?: createNoDataWidgetData(AnalyticsWidget.StrengthAnalytics)
+    }
+
+    private suspend fun loadVolumeAnalyticsData(userId: String): WidgetData {
+        val volumeData = loadRealVolumeChartData(userId)
+        return when (volumeData) {
+            is ChartWidgetData -> MetricWidgetData(
+                widgetType = AnalyticsWidget.VolumeAnalytics,
+                lastUpdated = volumeData.lastUpdated,
+                primaryValue = if (volumeData.dataPoints.isNotEmpty()) {
+                    "${volumeData.summary.peak.toInt()}"
+                } else {
+                    "No workouts yet"
+                },
+                unit = if (volumeData.dataPoints.isNotEmpty()) volumeData.summary.unit else "",
+                secondaryValue = if (volumeData.dataPoints.isNotEmpty()) volumeData.timeRange else "Log workouts to see volume trends",
+                trend = volumeData.summary.trend,
+                trendPercentage = volumeData.summary.changePercentage,
+                comparisonPeriod = volumeData.timeRange,
+                isLoading = volumeData.isLoading,
+                error = volumeData.error
+            )
+            is MetricWidgetData -> volumeData.copy(widgetType = AnalyticsWidget.VolumeAnalytics)
+            else -> createNoDataWidgetData(AnalyticsWidget.VolumeAnalytics)
+        }
+    }
+
+    private suspend fun loadWorkoutDurationSummaryData(userId: String): WidgetData {
+        return try {
+            val rawData = getRawWidgetData(userId, AnalyticsWidget.WorkoutDuration)
+            val averageDuration = rawData.numberValue("averageDuration")
+            val totalTime = rawData.numberValue("totalTime")
+
+            if (totalTime <= 0) {
+                createNoDataWidgetData(AnalyticsWidget.WorkoutDuration)
+            } else {
+                MetricWidgetData(
+                    widgetType = AnalyticsWidget.WorkoutDuration,
+                    lastUpdated = Clock.System.now(),
+                    primaryValue = "$averageDuration min",
+                    unit = "",
+                    secondaryValue = "$totalTime min total",
+                    trend = TrendDirection.STABLE,
+                    comparisonPeriod = "Last 30 days",
+                    isLoading = false
+                )
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Error loading workout duration summary data")
+            createNoDataWidgetData(AnalyticsWidget.WorkoutDuration)
+        }
+    }
+
+    private suspend fun loadRecentAchievementsData(userId: String): WidgetData {
+        return try {
+            val rawData = getRawWidgetData(userId, AnalyticsWidget.RecentAchievements)
+            val totalAchievements = rawData.numberValue("totalPRs")
+            val recentAchievements = rawData.numberValue("recentPRs")
+
+            if (totalAchievements <= 0) {
+                createNoDataWidgetData(AnalyticsWidget.RecentAchievements)
+            } else {
+                MetricWidgetData(
+                    widgetType = AnalyticsWidget.RecentAchievements,
+                    lastUpdated = Clock.System.now(),
+                    primaryValue = "$recentAchievements recent",
+                    unit = "",
+                    secondaryValue = "$totalAchievements total achievements",
+                    trend = TrendDirection.UP,
+                    comparisonPeriod = "Last 30 days",
+                    isLoading = false
+                )
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Error loading recent achievements data")
+            createNoDataWidgetData(AnalyticsWidget.RecentAchievements)
+        }
+    }
+
+    private suspend fun loadConsistencyScoreData(userId: String): WidgetData {
+        return try {
+            val rawData = getRawWidgetData(userId, AnalyticsWidget.ConsistencyScore)
+            val totalWorkouts = rawData.numberValue("totalWorkouts")
+            val activeDays = rawData.numberValue("activeDays")
+            val consistencyScore = rawData.numberValue("consistencyScore")
+
+            if (totalWorkouts < 2) {
+                createNoDataWidgetData(AnalyticsWidget.ConsistencyScore)
+            } else {
+                MetricWidgetData(
+                    widgetType = AnalyticsWidget.ConsistencyScore,
+                    lastUpdated = Clock.System.now(),
+                    primaryValue = "$consistencyScore%",
+                    unit = "",
+                    secondaryValue = "$activeDays active days",
+                    trend = TrendDirection.STABLE,
+                    comparisonPeriod = "Last 30 days",
+                    isLoading = false
+                )
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Error loading consistency score data")
+            createNoDataWidgetData(AnalyticsWidget.ConsistencyScore)
+        }
+    }
+
+    private suspend fun loadExerciseRankingSummaryData(userId: String): WidgetData {
+        return try {
+            val rawData = getRawWidgetData(userId, AnalyticsWidget.ExerciseRanking)
+            val totalWorkouts = rawData.numberValue("totalWorkouts")
+
+            if (totalWorkouts <= 0) {
+                createNoDataWidgetData(AnalyticsWidget.ExerciseRanking)
+            } else {
+                MetricWidgetData(
+                    widgetType = AnalyticsWidget.ExerciseRanking,
+                    lastUpdated = Clock.System.now(),
+                    primaryValue = "$totalWorkouts workouts",
+                    unit = "",
+                    secondaryValue = "Open exercise rankings",
+                    trend = TrendDirection.STABLE,
+                    comparisonPeriod = "Last 30 days",
+                    isLoading = false
+                )
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Error loading exercise ranking summary data")
+            createNoDataWidgetData(AnalyticsWidget.ExerciseRanking)
+        }
+    }
+
+    private suspend fun loadProgressiveOverloadData(userId: String): WidgetData {
+        return try {
+            val rawData = getRawWidgetData(userId, AnalyticsWidget.ProgressiveOverload)
+            val totalVolume = rawData.numberValue("totalVolume")
+            val volumeGrowth = rawData.floatValue("volumeGrowth")
+            val progressionRate = rawData["progressionRate"] as? String ?: "stable"
+
+            if (totalVolume <= 0) {
+                createNoDataWidgetData(AnalyticsWidget.ProgressiveOverload)
+            } else {
+                val trend = when {
+                    volumeGrowth > 0f -> TrendDirection.UP
+                    volumeGrowth < 0f -> TrendDirection.DOWN
+                    else -> TrendDirection.STABLE
+                }
+                MetricWidgetData(
+                    widgetType = AnalyticsWidget.ProgressiveOverload,
+                    lastUpdated = Clock.System.now(),
+                    primaryValue = "${volumeGrowth.toInt()}%",
+                    unit = "",
+                    secondaryValue = progressionRate.replaceFirstChar { it.uppercase() },
+                    trend = trend,
+                    trendPercentage = kotlin.math.abs(volumeGrowth),
+                    comparisonPeriod = "Last 30 days",
+                    isLoading = false
+                )
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Error loading progressive overload data")
+            createNoDataWidgetData(AnalyticsWidget.ProgressiveOverload)
+        }
     }
     
     

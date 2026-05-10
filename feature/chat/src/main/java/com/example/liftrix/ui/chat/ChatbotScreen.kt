@@ -7,6 +7,7 @@ import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -27,15 +28,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-import com.example.liftrix.ui.theme.LiftrixColorsV2
+import com.example.liftrix.feature.chat.R
 import com.example.liftrix.ui.theme.LiftrixSpacing
 import com.example.liftrix.ui.chat.components.AIChatDisclaimerBanner
 import com.example.liftrix.ui.chat.components.TypingIndicator
@@ -72,6 +76,7 @@ fun ChatbotScreen(
     conversationId: String? = null,
     initialWorkoutContext: String? = null,
     onNavigateBack: () -> Unit,
+    showTopBar: Boolean = true,
     viewModel: ChatbotViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -79,12 +84,14 @@ fun ChatbotScreen(
 
     Scaffold(
         topBar = {
-            ChatbotTopBar(
-                onNavigateBack = onNavigateBack,
-                usageLimits = uiState.usageLimits,
-                currentLanguage = uiState.currentLanguage,
-                onLanguageToggle = { viewModel.handleEvent(ChatbotEvent.ToggleLanguage(it)) }
-            )
+            if (showTopBar) {
+                ChatbotTopBar(
+                    onNavigateBack = onNavigateBack,
+                    usageLimits = uiState.usageLimits,
+                    currentLanguage = uiState.currentLanguage,
+                    onLanguageToggle = { viewModel.handleEvent(ChatbotEvent.ToggleLanguage(it)) }
+                )
+            }
         },
         bottomBar = {
             ChatInputBar(
@@ -122,8 +129,23 @@ fun ChatbotScreen(
                 onReportMessage = { messageId, messageContent, reason, notes ->
                     viewModel.handleEvent(ChatbotEvent.ReportAIMessage(messageId, messageContent, reason, notes))
                 },
-                modifier = Modifier.fillMaxSize()
+                onPromptSelected = { prompt ->
+                    viewModel.handleEvent(ChatbotEvent.UpdateInput(prompt))
+                },
+                modifier = Modifier
+                    .fillMaxSize()
             )
+
+            if (!showTopBar) {
+                ChatControlsRow(
+                    usageLimits = uiState.usageLimits,
+                    currentLanguage = uiState.currentLanguage,
+                    onLanguageToggle = { viewModel.handleEvent(ChatbotEvent.ToggleLanguage(it)) },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(LiftrixSpacing.medium)
+                )
+            }
 
             // AI Disclaimer Banner (session-scoped)
             AnimatedVisibility(
@@ -164,6 +186,50 @@ fun ChatbotScreen(
                         .padding(LiftrixSpacing.medium)
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ChatControlsRow(
+    usageLimits: UsageLimits?,
+    currentLanguage: Language,
+    onLanguageToggle: (Language) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.small),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        usageLimits?.let { limits ->
+            if (limits.dailyMessagesRemaining < 20) {
+                Text(
+                    text = if (currentLanguage == Language.ROMANIAN)
+                        "${limits.dailyMessagesRemaining} ramase azi"
+                    else
+                        "${limits.dailyMessagesRemaining} left today",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (limits.dailyMessagesRemaining < 5)
+                        MaterialTheme.colorScheme.error
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        TextButton(
+            onClick = {
+                val newLanguage = if (currentLanguage == Language.ENGLISH)
+                    Language.ROMANIAN else Language.ENGLISH
+                onLanguageToggle(newLanguage)
+            }
+        ) {
+            Text(
+                text = if (currentLanguage == Language.ENGLISH) "RO" else "EN",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
@@ -226,7 +292,7 @@ private fun ChatbotTopBar(
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = LiftrixColorsV2.surface
+            containerColor = MaterialTheme.colorScheme.surface
         )
     )
 }
@@ -243,6 +309,7 @@ private fun MessageList(
     onOverwriteGeneratedProgram: () -> Unit,
     onDismissGeneratedProgram: () -> Unit,
     onReportMessage: (messageId: String, messageContent: String, reason: AIReportReason, notes: String?) -> Unit,
+    onPromptSelected: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
@@ -261,6 +328,15 @@ private fun MessageList(
         contentPadding = PaddingValues(LiftrixSpacing.medium),
         verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.small)
     ) {
+        if (messages.isEmpty() && generatedProgram == null && !isTyping) {
+            item(key = "empty_ai_coach_state") {
+                AiCoachEmptyState(
+                    onPromptSelected = onPromptSelected,
+                    modifier = Modifier.fillParentMaxSize()
+                )
+            }
+        }
+
         items(
             items = messages,
             key = { it.id }
@@ -303,6 +379,60 @@ private fun MessageList(
 }
 
 @Composable
+private fun AiCoachEmptyState(
+    onPromptSelected: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val prompts = listOf(
+        "Create a workout plan",
+        "Improve my form",
+        "What should I train today?"
+    )
+
+    Column(
+        modifier = modifier.padding(horizontal = LiftrixSpacing.medium),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.ai_coach_empty),
+            contentDescription = "AI Coach empty state illustration",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.size(164.dp)
+        )
+
+        Spacer(modifier = Modifier.height(LiftrixSpacing.medium))
+
+        Text(
+            text = "Your AI Coach is ready.",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(LiftrixSpacing.small))
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            prompts.forEach { prompt ->
+                AssistChip(
+                    onClick = { onPromptSelected(prompt) },
+                    label = {
+                        Text(
+                            text = prompt,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun GeneratedProgramPreviewCard(
     result: WorkoutGenerationResult,
     isSaving: Boolean,
@@ -314,7 +444,7 @@ private fun GeneratedProgramPreviewCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = LiftrixColorsV2.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         modifier = modifier.fillMaxWidth()
     ) {
         Column(
@@ -325,7 +455,7 @@ private fun GeneratedProgramPreviewCard(
                 text = result.program.workoutName,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = LiftrixColorsV2.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
                 text = if (currentLanguage == Language.ROMANIAN) {
@@ -342,14 +472,14 @@ private fun GeneratedProgramPreviewCard(
                     }
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.75f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
             )
 
             result.sourceReference?.let { source ->
                 Text(
                     text = "Source: ${source.sourceName}",
                     style = MaterialTheme.typography.labelMedium,
-                    color = LiftrixColorsV2.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -359,7 +489,7 @@ private fun GeneratedProgramPreviewCard(
                         Text(
                             text = "${change.type.name.lowercase().replace('_', ' ')}: ${change.before} -> ${change.after}. ${change.reason}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = LiftrixColorsV2.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -371,7 +501,7 @@ private fun GeneratedProgramPreviewCard(
                         text = "${day.dayName} - ${day.estimatedDurationMinutes} min",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
-                        color = LiftrixColorsV2.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     day.exercises.forEach { exercise ->
                         GeneratedExerciseRow(exercise = exercise)
@@ -433,7 +563,7 @@ private fun GeneratedExerciseRow(exercise: GeneratedWorkoutExercise) {
     Text(
         text = "${exercise.exerciseName}: ${exercise.sets} x ${exercise.prescriptionText()}, ${exercise.restSeconds}s rest",
         style = MaterialTheme.typography.bodySmall,
-        color = LiftrixColorsV2.onSurfaceVariant
+        color = MaterialTheme.colorScheme.onSurfaceVariant
     )
 }
 
@@ -460,9 +590,9 @@ private fun MessageBubble(
     ) {
         Surface(
             color = if (isUserMessage)
-                LiftrixColorsV2.primary
+                MaterialTheme.colorScheme.primary
             else
-                LiftrixColorsV2.surfaceVariant,
+                MaterialTheme.colorScheme.surfaceVariant,
             shape = RoundedCornerShape(
                 topStart = 16.dp,
                 topEnd = 16.dp,
@@ -477,9 +607,9 @@ private fun MessageBubble(
                 Text(
                     text = message.content,
                     color = if (isUserMessage)
-                        LiftrixColorsV2.onPrimary
+                        MaterialTheme.colorScheme.onPrimary
                     else
-                        LiftrixColorsV2.onSurfaceVariant,
+                        MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium
                 )
 
@@ -492,9 +622,9 @@ private fun MessageBubble(
                         text = formatTimestamp(message.createdAt),
                         style = MaterialTheme.typography.labelSmall,
                         color = if (isUserMessage)
-                            LiftrixColorsV2.onPrimary.copy(alpha = 0.7f)
+                            MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
                         else
-                            LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.7f)
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
 
                     message.tokenCount?.let { tokens ->
@@ -502,9 +632,9 @@ private fun MessageBubble(
                             text = "$tokens tokens",
                             style = MaterialTheme.typography.labelSmall,
                             color = if (isUserMessage)
-                                LiftrixColorsV2.onPrimary.copy(alpha = 0.7f)
+                                MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
                             else
-                                LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.7f)
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                         )
                     }
 
@@ -517,7 +647,7 @@ private fun MessageBubble(
                             modifier = Modifier
                                 .size(16.dp)
                                 .clickable { showReportDialog = true },
-                            tint = LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.7f)
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                         )
                     }
                 }
@@ -549,7 +679,7 @@ private fun ChatInputBar(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        color = LiftrixColorsV2.surface,
+        color = MaterialTheme.colorScheme.surface,
         modifier = modifier
     ) {
         Row(
@@ -567,7 +697,7 @@ private fun ChatInputBar(
                             "Întreabă despre antrenamentul tău..."
                         else
                             "Ask about your workout...",
-                        color = LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
                 },
                 enabled = enabled,
@@ -584,31 +714,31 @@ private fun ChatInputBar(
                 ),
                 shape = RoundedCornerShape(24.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = LiftrixColorsV2.primary,
-                    unfocusedBorderColor = LiftrixColorsV2.outline
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
                 ),
                 modifier = Modifier.weight(1f)
             )
-            
-            Spacer(modifier = Modifier.width(LiftrixSpacing.small))
-            
-            FilledIconButton(
-                onClick = { 
-                    if (text.isNotBlank()) {
+
+            if (text.isNotBlank()) {
+                Spacer(modifier = Modifier.width(LiftrixSpacing.small))
+
+                FilledIconButton(
+                    onClick = {
                         onSend(text)
-                    }
-                },
-                enabled = enabled && text.isNotBlank(),
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = LiftrixColorsV2.primary,
-                    contentColor = LiftrixColorsV2.onPrimary
-                )
-            ) {
-                Icon(
-                    Icons.Default.Send,
-                    contentDescription = if (currentLanguage == Language.ROMANIAN) 
-                        "Trimite mesaj" else "Send message"
-                )
+                    },
+                    enabled = enabled,
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Icon(
+                        Icons.Default.Send,
+                        contentDescription = if (currentLanguage == Language.ROMANIAN)
+                            "Trimite mesaj" else "Send message"
+                    )
+                }
             }
         }
     }

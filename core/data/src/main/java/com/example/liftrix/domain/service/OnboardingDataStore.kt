@@ -19,9 +19,8 @@ import javax.inject.Singleton
 /**
  * Temporary storage service for onboarding data that survives authentication transitions.
  * 
- * This service addresses the critical issue where onboarding data is lost when a guest user
- * signs in with Google, causing the profile to be associated with the guest user ID but then
- * lost when the user switches to their authenticated Google user ID.
+ * This service addresses the critical issue where onboarding data is lost when a user
+ * completes onboarding before choosing a final authentication method.
  * 
  * Design Pattern:
  * 1. During onboarding, store data temporarily in encrypted DataStore
@@ -57,7 +56,7 @@ class OnboardingDataStoreImpl @Inject constructor(
     
     /**
      * Store onboarding data temporarily during the authentication flow.
-     * This data will survive the guest→authenticated user transition.
+     * This data will survive the pre-authentication to authenticated user transition.
      */
     override suspend fun storeOnboardingData(profileData: OnboardingDataSnapshot): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->

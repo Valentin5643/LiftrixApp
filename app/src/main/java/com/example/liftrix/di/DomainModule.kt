@@ -36,12 +36,6 @@ abstract class DomainModule {
 
     @dagger.Binds
     @javax.inject.Singleton
-    abstract fun bindManageGuestSessionUseCase(
-        impl: com.example.liftrix.domain.usecase.guest.ManageGuestSessionUseCaseImpl
-    ): com.example.liftrix.domain.usecase.guest.ManageGuestSessionUseCase
-
-    @dagger.Binds
-    @javax.inject.Singleton
     abstract fun bindConsentManagementService(
         impl: com.example.liftrix.domain.service.ConsentManagementServiceImpl
     ): com.example.liftrix.domain.service.ConsentManagementService

@@ -172,7 +172,8 @@ fun PostCreationRoute(
     PostCreationScreen(
         workoutId = workoutId,
         onNavigateBack = onNavigateBack,
-        onPostCreated = onPostCreated
+        onPostCreated = onPostCreated,
+        showTopBar = false
     )
 }
 

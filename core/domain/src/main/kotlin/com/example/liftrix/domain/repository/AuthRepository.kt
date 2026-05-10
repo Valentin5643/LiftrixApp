@@ -15,8 +15,6 @@ interface AuthRepository {
     
     suspend fun signInWithGoogle(idToken: String): LiftrixResult<User>
     
-    suspend fun signInAnonymously(): LiftrixResult<User>
-    
     suspend fun signOut(): LiftrixResult<Unit>
     
     suspend fun sendPasswordResetEmail(email: String): LiftrixResult<Unit>

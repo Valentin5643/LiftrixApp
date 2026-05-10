@@ -22,16 +22,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RestaurantMenu
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,6 +52,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -57,6 +64,13 @@ import com.example.liftrix.ui.components.animations.CompletionCheckmark
 import com.example.liftrix.ui.components.animations.CompletionFeedback
 import com.example.liftrix.ui.components.animations.CompletionFeedbackType
 import com.example.liftrix.ui.theme.LiftrixTheme
+
+const val REST_TIMER_DISPLAY_TAG = "rest_timer_display"
+const val REST_TIMER_COUNTDOWN_TAG = "rest_timer_countdown"
+const val REST_TIMER_PAUSE_RESUME_TAG = "rest_timer_pause_resume"
+const val REST_TIMER_SKIP_TAG = "rest_timer_skip"
+const val REST_TIMER_ADD_TIME_TAG = "rest_timer_add_time"
+const val REST_TIMER_SUBTRACT_TIME_TAG = "rest_timer_subtract_time"
 
 /**
  * Rest timer display component that shows countdown timer during rest periods.
@@ -77,6 +91,11 @@ import com.example.liftrix.ui.theme.LiftrixTheme
 fun RestTimerDisplay(
     timerState: WorkoutTimerService.TimerServiceState,
     formattedTime: String,
+    onPause: () -> Unit = {},
+    onResume: () -> Unit = {},
+    onSkip: () -> Unit = {},
+    onAddTime: () -> Unit = {},
+    onSubtractTime: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isRestActive = timerState.timerState is WorkoutTimerService.TimerState.RestActive ||
@@ -92,7 +111,7 @@ fun RestTimerDisplay(
             targetOffsetY = { -it },
             animationSpec = tween(300)
         ) + fadeOut(animationSpec = tween(300)),
-        modifier = modifier
+        modifier = modifier.testTag(REST_TIMER_DISPLAY_TAG)
     ) {
         when (val state = timerState.timerState) {
             is WorkoutTimerService.TimerState.RestActive -> {
@@ -100,7 +119,12 @@ fun RestTimerDisplay(
                     restTimer = state.restTimer,
                     remainingSeconds = state.remainingSeconds,
                     formattedTime = formattedTime,
-                    isPaused = false
+                    isPaused = false,
+                    onPause = onPause,
+                    onResume = onResume,
+                    onSkip = onSkip,
+                    onAddTime = onAddTime,
+                    onSubtractTime = onSubtractTime
                 )
             }
             is WorkoutTimerService.TimerState.RestPaused -> {
@@ -108,7 +132,12 @@ fun RestTimerDisplay(
                     restTimer = state.restTimer,
                     remainingSeconds = state.remainingSeconds,
                     formattedTime = formattedTime,
-                    isPaused = true
+                    isPaused = true,
+                    onPause = onPause,
+                    onResume = onResume,
+                    onSkip = onSkip,
+                    onAddTime = onAddTime,
+                    onSubtractTime = onSubtractTime
                 )
             }
             else -> {
@@ -124,6 +153,11 @@ private fun RestTimerCard(
     remainingSeconds: Int,
     formattedTime: String,
     isPaused: Boolean,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onSkip: () -> Unit,
+    onAddTime: () -> Unit,
+    onSubtractTime: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val progress by animateFloatAsState(
@@ -168,13 +202,13 @@ private fun RestTimerCard(
     ) {
         Card(
             modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
             colors = CardDefaults.cardColors(containerColor = containerColor)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp),
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Rest timer header with completion checkmark
@@ -185,7 +219,7 @@ private fun RestTimerCard(
                     if (isRestCompleted) {
                         CompletionCheckmark(
                             completed = true,
-                            size = 20.dp,
+                            size = 18.dp,
                             color = contentColor
                         )
                     } else {
@@ -196,45 +230,45 @@ private fun RestTimerCard(
                                 isPaused -> "Rest paused"
                                 else -> "Rest timer"
                             },
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(18.dp),
                             tint = contentColor.copy(alpha = 0.8f)
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = when {
                             isRestCompleted -> "Rest Complete!"
                             isPaused -> "Rest Paused"
                             else -> "Rest Timer"
                         },
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         color = contentColor.copy(alpha = 0.8f),
                         fontWeight = FontWeight.SemiBold
                     )
                 }
                 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 
                 // Circular progress with countdown
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(120.dp)
+                    modifier = Modifier.size(88.dp)
                 ) {
                     // Background circle
                     CircularProgressIndicator(
                         progress = { 1f },
-                        modifier = Modifier.size(120.dp),
+                        modifier = Modifier.size(88.dp),
                         color = contentColor.copy(alpha = 0.2f),
-                        strokeWidth = 8.dp,
+                        strokeWidth = 6.dp,
                         strokeCap = StrokeCap.Round
                     )
                     
                     // Progress indicator
                     CircularProgressIndicator(
                         progress = { progress },
-                        modifier = Modifier.size(120.dp),
+                        modifier = Modifier.size(88.dp),
                         color = contentColor,
-                        strokeWidth = 8.dp,
+                        strokeWidth = 6.dp,
                         strokeCap = StrokeCap.Round
                     )
                     
@@ -251,17 +285,18 @@ private fun RestTimerCard(
                     ) { displayText ->
                         Text(
                             text = displayText,
-                            style = MaterialTheme.typography.headlineMedium.copy(
+                            style = MaterialTheme.typography.titleLarge.copy(
                                 fontFamily = if (isRestCompleted) FontFamily.Default else FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold
                             ),
                             textAlign = TextAlign.Center,
-                            color = contentColor
+                            color = contentColor,
+                            modifier = Modifier.testTag(REST_TIMER_COUNTDOWN_TAG)
                         )
                     }
                 }
                 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 
                 // Rest type indicator
                 Row(
@@ -269,7 +304,7 @@ private fun RestTimerCard(
                     modifier = Modifier
                         .clip(CircleShape)
                         .background(contentColor.copy(alpha = 0.15f))
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Filled.RestaurantMenu,
@@ -278,10 +313,10 @@ private fun RestTimerCard(
                             restTimer.isCardioTimer() -> "Cardio rest"
                             else -> "Rest break"
                         },
-                        modifier = Modifier.size(14.dp),
+                        modifier = Modifier.size(12.dp),
                         tint = contentColor.copy(alpha = 0.7f)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = when {
                             restTimer.isStrengthTimer() -> "Strength Rest"
@@ -292,6 +327,93 @@ private fun RestTimerCard(
                         color = contentColor.copy(alpha = 0.7f)
                     )
                 }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RestTimerControlButton(
+                        onClick = onSubtractTime,
+                        contentDescription = "Subtract 15 seconds",
+                        testTag = REST_TIMER_SUBTRACT_TIME_TAG,
+                        contentColor = contentColor
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Remove,
+                            contentDescription = null
+                        )
+                    }
+
+                    RestTimerControlButton(
+                        onClick = if (isPaused) onResume else onPause,
+                        contentDescription = if (isPaused) "Resume rest timer" else "Pause rest timer",
+                        testTag = REST_TIMER_PAUSE_RESUME_TAG,
+                        contentColor = contentColor
+                    ) {
+                        Icon(
+                            imageVector = if (isPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                            contentDescription = null
+                        )
+                    }
+
+                    RestTimerControlButton(
+                        onClick = onSkip,
+                        contentDescription = "Skip rest timer",
+                        testTag = REST_TIMER_SKIP_TAG,
+                        contentColor = contentColor
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.SkipNext,
+                            contentDescription = null
+                        )
+                    }
+
+                    RestTimerControlButton(
+                        onClick = onAddTime,
+                        contentDescription = "Add 15 seconds",
+                        testTag = REST_TIMER_ADD_TIME_TAG,
+                        contentColor = contentColor
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = null
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RestTimerControlButton(
+    onClick: () -> Unit,
+    contentDescription: String,
+    testTag: String,
+    contentColor: androidx.compose.ui.graphics.Color,
+    icon: @Composable () -> Unit
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .sizeIn(minWidth = 44.dp, minHeight = 44.dp)
+            .testTag(testTag)
+            .semantics { this.contentDescription = contentDescription }
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(contentColor.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.material3.LocalContentColor provides contentColor
+            ) {
+                icon()
             }
         }
     }

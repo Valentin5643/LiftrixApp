@@ -2,6 +2,7 @@ package com.example.liftrix.ui.theme
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -313,6 +314,10 @@ class ThemeManager private constructor(private val context: Context) {
     
     private val _themeVersion = MutableStateFlow(loadThemeVersion())
     val themeVersion: StateFlow<ThemeVersion> = _themeVersion.asStateFlow()
+
+    init {
+        applyCurrentThemeToPlatform()
+    }
     
     /**
      * Get the effective theme state (what's actually displayed)
@@ -336,10 +341,32 @@ class ThemeManager private constructor(private val context: Context) {
      * When toggling in SYSTEM mode, switches to explicit LIGHT/DARK based on current state
      */
     fun switchTheme(mode: ThemeMode) {
+        if (_themeMode.value == mode) {
+            applyCurrentThemeToPlatform()
+            return
+        }
+
         _themeMode.value = mode
         sharedPreferences.edit()
             .putString(KEY_THEME_MODE, mode.name)
             .apply()
+        applyCurrentThemeToPlatform()
+    }
+
+    /**
+     * Applies the persisted theme mode to AppCompat before Android splash/window resources resolve.
+     */
+    fun applyCurrentThemeToPlatform() {
+        val nightMode = when (_themeMode.value) {
+            ThemeMode.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+            ThemeMode.DARK -> AppCompatDelegate.MODE_NIGHT_YES
+            ThemeMode.SYSTEM,
+            ThemeMode.TIME_BASED -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+        }
+
+        if (AppCompatDelegate.getDefaultNightMode() != nightMode) {
+            AppCompatDelegate.setDefaultNightMode(nightMode)
+        }
     }
     
     /**

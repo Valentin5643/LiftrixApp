@@ -52,9 +52,11 @@ import com.example.liftrix.domain.model.validation.ValidationResult
 import com.example.liftrix.domain.model.UnifiedWorkoutSession
 import com.example.liftrix.domain.model.SessionExercise
 import com.example.liftrix.domain.model.SessionSet
+import com.example.liftrix.feature.workout.ui.rememberWeightUnitManager
 import com.example.liftrix.ui.icons.LiftrixIcon
 import com.example.liftrix.ui.icons.LiftrixIcons
 import com.example.liftrix.ui.theme.LiftrixColors
+import java.util.Locale
 
 /**
  * Edit Session Screen - For editing completed workout sessions
@@ -382,6 +384,8 @@ private fun SessionDurationEditor(
 
 @Composable
 private fun SessionMetricsCard(session: UnifiedWorkoutSession) {
+    val weightUnitManager = rememberWeightUnitManager()
+
     UnifiedWorkoutCard(
         title = "Session Metrics",
         subtitle = "Performance summary"
@@ -393,7 +397,10 @@ private fun SessionMetricsCard(session: UnifiedWorkoutSession) {
             // Total volume
             MetricItem(
                 label = "Volume",
-                value = "${calculateSessionVolume(session)} ${WeightUnit.getSystemDefault().symbol}"
+                value = weightUnitManager?.formatWeightCompact(
+                    calculateSessionVolume(session).toDouble(),
+                    WeightUnit.KILOGRAMS
+                ) ?: "${calculateSessionVolume(session)} ${WeightUnit.KILOGRAMS.symbol}"
             )
             
             // Total sets
@@ -464,8 +471,17 @@ private fun EditableSetRow(
     set: SessionSet,
     onSetUpdate: (SessionSet) -> Unit
 ) {
-    var weightText by remember(set.actualWeight, set.targetWeight) { 
-        mutableStateOf((set.actualWeight ?: set.targetWeight)?.toPounds()?.toString() ?: "") 
+    val weightUnitManager = rememberWeightUnitManager()
+    val observedWeightUnit = weightUnitManager?.currentUnit?.collectAsStateWithLifecycle()
+    val currentWeightUnit = observedWeightUnit?.value ?: WeightUnit.KILOGRAMS
+
+    var weightText by remember(set.actualWeight, set.targetWeight, currentWeightUnit) {
+        mutableStateOf(
+            (set.actualWeight ?: set.targetWeight)
+                ?.getValue(currentWeightUnit)
+                ?.let { formatWeightInputValue(it) }
+                ?: ""
+        )
     }
     var repsText by remember(set.actualReps, set.targetReps) { 
         mutableStateOf((set.actualReps ?: set.targetReps)?.toString() ?: "") 
@@ -509,12 +525,14 @@ private fun EditableSetRow(
                     onValueChange = { newWeight ->
                         weightText = newWeight
                         if (weightValidation is ValidationResult.Success) {
-                            val weight = newWeight.toDoubleOrNull()?.let { Weight.fromPounds(it) }
+                            val weight = newWeight.toDoubleOrNull()?.let {
+                                Weight.fromValue(it, currentWeightUnit)
+                            }
                             onSetUpdate(set.copy(actualWeight = weight))
                         }
                     },
                     label = "Weight",
-                    suffix = WeightUnit.getSystemDefault().symbol,
+                    suffix = currentWeightUnit.symbol,
                     validationResult = weightValidation,
                     modifier = Modifier.weight(1f),
                     isRequired = false,
@@ -690,8 +708,16 @@ private fun calculateSessionVolume(session: UnifiedWorkoutSession): Int {
         exercise.sets.sumOf { set ->
             val weight = set.actualWeight ?: set.targetWeight
             val reps = set.actualReps ?: set.targetReps ?: 0
-            weight?.toPounds()?.toInt()?.times(reps) ?: 0
+            weight?.kilograms?.toInt()?.times(reps) ?: 0
         }
+    }
+}
+
+private fun formatWeightInputValue(value: Double): String {
+    return when {
+        value == value.toInt().toDouble() -> value.toInt().toString()
+        (value * 10).toInt().toDouble() == value * 10 -> String.format(Locale.US, "%.1f", value)
+        else -> String.format(Locale.US, "%.2f", value)
     }
 }
 

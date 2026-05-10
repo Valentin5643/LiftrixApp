@@ -101,7 +101,8 @@ class GetWidgetDataUseCase @Inject constructor(
             val endDate = today
             
             val data = when (widgetType) {
-                AnalyticsWidget.VolumeChart -> {
+                AnalyticsWidget.VolumeChart,
+                AnalyticsWidget.VolumeAnalytics -> {
                     val volumeData = progressStatsRepository.getWorkoutVolumeData(userId, startDate, endDate).first()
                     val totalVolume = volumeData.sumOf { it.totalVolume.toDouble() }.toFloat()
                     val weeklyAverage = if (volumeData.isNotEmpty()) totalVolume / 4 else 0f // Rough 4-week average
@@ -133,7 +134,8 @@ class GetWidgetDataUseCase @Inject constructor(
                         "chartData" to frequencyData.map { it.workoutCount }
                     )
                 }
-                AnalyticsWidget.StrengthProgress -> {
+                AnalyticsWidget.StrengthProgress,
+                AnalyticsWidget.StrengthAnalytics -> {
                     val progressSummary = progressStatsRepository.getProgressSummary(userId, startDate, endDate).first()
                     val monthRange = TimeRange.lastMonth()
                     val progressMetrics = progressStatsRepository.getProgressMetrics(userId, monthRange).first()
@@ -145,7 +147,8 @@ class GetWidgetDataUseCase @Inject constructor(
                         "strengthScore" to (progressSummary.totalVolume * 0.1).toInt() // Simple strength score calculation
                     )
                 }
-                AnalyticsWidget.ProgressChart -> {
+                AnalyticsWidget.ProgressChart,
+                AnalyticsWidget.WorkoutDuration -> {
                     val durationData = progressStatsRepository.getWorkoutDurationData(userId, startDate, endDate).first()
                     val averageDuration = if (durationData.isNotEmpty()) {
                         durationData.map { it.durationMinutes }.average().toInt()
@@ -159,7 +162,8 @@ class GetWidgetDataUseCase @Inject constructor(
                         "chartData" to durationData.map { it.durationMinutes }
                     )
                 }
-                AnalyticsWidget.PersonalRecords -> {
+                AnalyticsWidget.PersonalRecords,
+                AnalyticsWidget.RecentAchievements -> {
                     // Get recent workout data to find personal records (simplified)
                     val progressSummary = progressStatsRepository.getProgressSummary(userId, startDate, endDate).first()
                     
@@ -206,6 +210,55 @@ class GetWidgetDataUseCase @Inject constructor(
                         "currentStreak" to progressSummary.currentStreak,
                         "longestStreak" to progressSummary.longestStreak,
                         "streakType" to "days"
+                    )
+                }
+                AnalyticsWidget.ConsistencyScore -> {
+                    val frequencyData = progressStatsRepository.getWorkoutFrequencyData(userId, startDate, endDate).first()
+                    val totalWorkouts = frequencyData.sumOf { it.workoutCount }
+                    val activeDays = frequencyData.count { it.workoutCount > 0 }
+                    val consistencyScore = if (frequencyData.isNotEmpty()) {
+                        ((activeDays.toFloat() / frequencyData.size.toFloat()) * 100f).toInt()
+                    } else {
+                        0
+                    }
+
+                    mapOf(
+                        "consistencyScore" to consistencyScore,
+                        "totalWorkouts" to totalWorkouts,
+                        "activeDays" to activeDays,
+                        "chartData" to frequencyData.map { it.workoutCount }
+                    )
+                }
+                AnalyticsWidget.ExerciseRanking -> {
+                    val progressSummary = progressStatsRepository.getProgressSummary(userId, startDate, endDate).first()
+
+                    mapOf(
+                        "totalWorkouts" to progressSummary.totalWorkouts,
+                        "subtitle" to "Exercise ranking data",
+                        "trend" to "stable"
+                    )
+                }
+                AnalyticsWidget.ProgressiveOverload -> {
+                    val volumeData = progressStatsRepository.getWorkoutVolumeData(userId, startDate, endDate).first()
+                    val recentVolume = volumeData.takeLast(7).sumOf { it.totalVolume.toDouble() }
+                    val previousVolume = volumeData.dropLast(7).takeLast(7).sumOf { it.totalVolume.toDouble() }
+                    val volumeGrowth = if (previousVolume > 0.0) {
+                        ((recentVolume - previousVolume) / previousVolume * 100.0).toFloat()
+                    } else {
+                        0f
+                    }
+                    val progressionRate = when {
+                        volumeGrowth > 10f -> "excellent"
+                        volumeGrowth > 5f -> "good"
+                        volumeGrowth > 0f -> "slow"
+                        else -> "stable"
+                    }
+
+                    mapOf(
+                        "volumeGrowth" to volumeGrowth,
+                        "progressionRate" to progressionRate,
+                        "totalVolume" to volumeData.sumOf { it.totalVolume.toInt() },
+                        "chartData" to volumeData.map { it.totalVolume.toInt() }
                     )
                 }
                 // Handle all other widget types with real summary data

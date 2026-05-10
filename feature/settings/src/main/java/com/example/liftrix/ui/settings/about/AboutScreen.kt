@@ -57,14 +57,16 @@ fun AboutScreen(
     onNavigateBack: () -> Unit,
     onNavigateToPrivacy: () -> Unit,
     onNavigateToTerms: () -> Unit,
-    onNavigateToLicenses: () -> Unit
+    onNavigateToLicenses: () -> Unit,
+    showTopBar: Boolean = true
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (showTopBar) {
+                TopAppBar(
                 title = { 
                     Text(
                         text = "About",
@@ -83,7 +85,8 @@ fun AboutScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
-            )
+                )
+            }
         }
     ) { paddingValues ->
         LazyColumn(
