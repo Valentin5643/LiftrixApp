@@ -16,6 +16,23 @@ android {
     }
 }
 
+val cleanKspByRounds by tasks.registering(org.gradle.api.tasks.Delete::class) {
+    delete(
+        fileTree(layout.buildDirectory.dir("generated/ksp")) {
+            include("**/java/byRounds/**")
+        }
+    )
+    mustRunAfter(
+        tasks.matching {
+            it.name.startsWith("ksp")
+        }
+    )
+}
+
+tasks.withType<org.gradle.api.tasks.compile.JavaCompile>().configureEach {
+    dependsOn(cleanKspByRounds)
+}
+
 dependencies {
     api(project(":core:model"))
     api(project(":core:domain"))

@@ -264,13 +264,24 @@ class PrivacySettingsViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                socialProfileCommandUseCase.updatePrivacySettings(updatedSettings)
-                updateState {
-                    it.copy(
-                        isUpdatingSettings = false,
-                        successMessage = "Settings updated successfully"
-                    )
-                }
+                socialProfileCommandUseCase.updatePrivacySettings(updatedSettings).fold(
+                    onSuccess = {
+                        updateState {
+                            it.copy(
+                                isUpdatingSettings = false,
+                                successMessage = "Settings updated successfully"
+                            )
+                        }
+                    },
+                    onFailure = { error ->
+                        updateState {
+                            it.copy(
+                                isUpdatingSettings = false,
+                                errorMessage = "Failed to update settings: ${error.message}"
+                            )
+                        }
+                    }
+                )
             } catch (e: Exception) {
                 logError(e, "updateSetting")
                 updateState {

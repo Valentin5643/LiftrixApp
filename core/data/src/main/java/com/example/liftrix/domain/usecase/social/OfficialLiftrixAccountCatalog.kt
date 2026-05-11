@@ -24,6 +24,8 @@ object OfficialLiftrixAccountCatalog {
             handle = "liftrixcoach",
             displayName = "Liftrix Coach",
             bio = "Official Liftrix coaching cues for stronger, safer training.",
+            profilePhotoUrl = "file:///android_asset/official_profiles/coach.png",
+            postImageUrl = "file:///android_asset/official_posts/coach.png",
             posts = listOf(
                 OfficialPost("Warm-Up Primer", "Five minutes of easy movement plus two ramp-up sets makes the first working set feel better.", listOf("Dynamic Warm-Up", "Ramp-Up Sets"), 25, 1200.0),
                 OfficialPost("Form First", "Leave one rep in reserve when a new exercise still feels technical.", listOf("Technique Practice", "Controlled Reps"), 30, 1800.0),
@@ -37,6 +39,8 @@ object OfficialLiftrixAccountCatalog {
             handle = "liftrixchallenge",
             displayName = "Liftrix Challenge",
             bio = "Official weekly challenges for consistency and variety.",
+            profilePhotoUrl = "file:///android_asset/official_profiles/challenge.png",
+            postImageUrl = "file:///android_asset/official_posts/challenge.png",
             posts = listOf(
                 OfficialPost("Push-Up Ladder", "This week: 5, 8, 11, 14, 17 push-ups across five short sets.", listOf("Push-Up", "Plank"), 20, 0.0),
                 OfficialPost("Step Streak", "Stack three ten-minute walks today and log the consistency win.", listOf("Brisk Walk", "Calf Raise"), 30, 0.0),
@@ -50,6 +54,8 @@ object OfficialLiftrixAccountCatalog {
             handle = "liftrixbeginner",
             displayName = "Liftrix Beginner",
             bio = "Official beginner-friendly training ideas and first-program guidance.",
+            profilePhotoUrl = "file:///android_asset/official_profiles/beginner.png",
+            postImageUrl = "file:///android_asset/official_posts/beginner.png",
             posts = listOf(
                 OfficialPost("First Full Body", "Start simple: squat, push, pull, hinge, carry.", listOf("Goblet Squat", "Push-Up", "Dumbbell Row"), 35, 2600.0),
                 OfficialPost("Bodyweight Starter", "Use slow reps and clean range before making bodyweight work harder.", listOf("Squat", "Incline Push-Up", "Glute Bridge"), 30, 0.0),
@@ -63,6 +69,8 @@ object OfficialLiftrixAccountCatalog {
             handle = "liftrixpowerlifting",
             displayName = "Liftrix Powerlifting",
             bio = "Official squat, bench, and deadlift technique reminders.",
+            profilePhotoUrl = "file:///android_asset/official_profiles/powerlifting.png",
+            postImageUrl = "file:///android_asset/official_posts/powerlifting.png",
             posts = listOf(
                 OfficialPost("Squat Setup", "Brace before the walkout, then make every warm-up rep look the same.", listOf("Back Squat", "Paused Squat"), 45, 7200.0),
                 OfficialPost("Deadlift Brace", "Pull slack from the bar before the plates leave the floor.", listOf("Deadlift", "Lat Pulldown"), 50, 8600.0),
@@ -76,6 +84,8 @@ object OfficialLiftrixAccountCatalog {
             handle = "liftrixcalisthenics",
             displayName = "Liftrix Calisthenics",
             bio = "Official bodyweight progressions for control and strength.",
+            profilePhotoUrl = "file:///android_asset/official_profiles/calisthenics.png",
+            postImageUrl = "file:///android_asset/official_posts/calisthenics.png",
             posts = listOf(
                 OfficialPost("Push-Up Progression", "Find the angle that lets every rep finish with a locked plank.", listOf("Incline Push-Up", "Push-Up"), 30, 0.0),
                 OfficialPost("Hollow Hold", "Short clean holds beat long loose holds for core tension.", listOf("Hollow Body Hold", "Dead Bug"), 15, 0.0),
@@ -148,6 +158,8 @@ data class OfficialAccount(
     val handle: String,
     val displayName: String,
     val bio: String,
+    val profilePhotoUrl: String,
+    val postImageUrl: String,
     val posts: List<OfficialPost>,
     val verified: Boolean = true
 )

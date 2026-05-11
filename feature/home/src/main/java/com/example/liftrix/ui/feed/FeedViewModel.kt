@@ -61,8 +61,7 @@ class FeedViewModel @Inject constructor(
                 )
                 _uiState.value = _uiState.value.copy(currentUserId = userId)
 
-                // Skip seeding to show natural empty state
-                // seedSampleData(userId)
+                seedSampleData(userId)
             } catch (e: Exception) {
                 Timber.e(e, "Failed to get current user ID")
             }
@@ -92,6 +91,8 @@ class FeedViewModel @Inject constructor(
                 )
                 if (userId != null) {
                     Timber.d("🔍 WORKOUT-POSTS-DEBUG: FeedViewModel loading ${tab.name} feed for user $userId")
+
+                    seedSampleData(userId)
 
                     val feedFlow = when (tab) {
                         FeedTab.HOME -> feedPort.getHomeFeed(
@@ -380,6 +381,7 @@ class FeedViewModel @Inject constructor(
                 onFailure = { null }
             )
             if (userId != null) {
+                seedSampleData(userId)
                 // Clear engagement state before refresh to ensure fresh state
                 _likedPosts.value = emptySet()
                 _savedPosts.value = emptySet()

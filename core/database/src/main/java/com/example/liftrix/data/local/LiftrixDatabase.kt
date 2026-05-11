@@ -3,8 +3,6 @@ package com.example.liftrix.data.local
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
-import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.liftrix.data.local.converter.DateTimeConverters
 import com.example.liftrix.data.local.converter.UserProfileConverters
 import com.example.liftrix.data.local.converter.WorkoutConverters
@@ -306,68 +304,4 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun accountRestrictionDao(): AccountRestrictionDao
     abstract fun moderationActionDao(): ModerationActionDao
     abstract fun templateShareEventDao(): TemplateShareEventDao
-
-    companion object {
-        val MIGRATION_3_4 = object : Migration(3, 4) {
-            override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL(
-                    "CREATE INDEX IF NOT EXISTS idx_workout_posts_trending " +
-                        "ON workout_posts(visibility, prs_count DESC, like_count DESC)"
-                )
-                database.execSQL(
-                    "CREATE INDEX IF NOT EXISTS idx_social_profiles_dirty_sync " +
-                        "ON social_profiles(user_id, is_dirty, last_modified)"
-                )
-                database.execSQL(
-                    "CREATE INDEX IF NOT EXISTS idx_follow_relationships_mutual " +
-                        "ON follow_relationships(follower_id, following_id, status)"
-                )
-            }
-        }
-
-        val MIGRATION_7_8 = object : Migration(7, 8) {
-            override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL(
-                    """
-                    CREATE TABLE IF NOT EXISTS template_share_events (
-                        id TEXT NOT NULL PRIMARY KEY,
-                        sender_id TEXT NOT NULL,
-                        receiver_id TEXT,
-                        template_id TEXT NOT NULL,
-                        delivery_mode TEXT NOT NULL,
-                        status TEXT NOT NULL,
-                        created_at INTEGER NOT NULL,
-                        expires_at INTEGER NOT NULL,
-                        accepted_at INTEGER,
-                        is_synced INTEGER NOT NULL DEFAULT 0,
-                        is_dirty INTEGER NOT NULL DEFAULT 1,
-                        last_modified INTEGER NOT NULL DEFAULT 0
-                    )
-                    """.trimIndent()
-                )
-                database.execSQL(
-                    "CREATE INDEX IF NOT EXISTS idx_template_share_sender_receiver_status " +
-                        "ON template_share_events(sender_id, receiver_id, status)"
-                )
-                database.execSQL(
-                    "CREATE INDEX IF NOT EXISTS idx_template_share_sender_status " +
-                        "ON template_share_events(sender_id, status)"
-                )
-                database.execSQL(
-                    "CREATE INDEX IF NOT EXISTS idx_template_share_receiver_status " +
-                        "ON template_share_events(receiver_id, status)"
-                )
-            }
-        }
-
-        val MIGRATION_8_9 = object : Migration(8, 9) {
-            override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL("DROP INDEX IF EXISTS index_workout_templates_name_user_id")
-                database.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_workout_templates_name_user_id " +
-                        "ON workout_templates(name, user_id)"
-                )
-            }
-        }
-    }
 }

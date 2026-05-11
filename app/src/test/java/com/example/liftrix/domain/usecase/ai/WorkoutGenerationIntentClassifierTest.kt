@@ -35,6 +35,7 @@ class WorkoutGenerationIntentClassifierTest {
     @Test
     fun `classifies source-aware workout modification requests`() {
         assertEquals(ChatIntent.ModifyWorkout, classifier.classify("Make this workout easier"))
+        assertEquals(ChatIntent.ModifyWorkout, classifier.classify("Make my last workout easier"))
         assertEquals(ChatIntent.ModifyWorkout, classifier.classify("Increase intensity in my plan"))
         assertEquals(ChatIntent.ModifyWorkout, classifier.classify("Adjust this routine for hypertrophy"))
     }

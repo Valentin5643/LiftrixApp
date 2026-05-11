@@ -76,8 +76,25 @@ class WorkoutDetailsViewModel @Inject constructor(
             )
 
             // If not found as current user's workout, it might be another user's workout
-            // For now, we can only view our own workouts due to repository constraints
-            // This is a limitation that would need repository-level changes to support
+            // Official Liftrix seed posts use fixed public owners, so resolve those owners explicitly.
+            if (workout == null) {
+                for (officialOwnerId in OFFICIAL_LIFTRIX_ACCOUNT_IDS) {
+                    workoutQueryUseCase.getById(WorkoutId(workoutId), officialOwnerId).fold(
+                        onSuccess = { officialWorkout ->
+                            if (officialWorkout != null) {
+                                workout = officialWorkout
+                                workoutOwnerId = officialWorkout.userId
+                                return@fold
+                            }
+                        },
+                        onFailure = { error ->
+                            Timber.d("Could not load official workout for owner $officialOwnerId: $error")
+                        }
+                    )
+                    if (workout != null) break
+                }
+            }
+
             if (workout == null) {
                 _uiState.value = WorkoutDetailsUiState.Error(
                     message = "Workout not found or you don't have permission to view it"
@@ -87,8 +104,8 @@ class WorkoutDetailsViewModel @Inject constructor(
 
             val isOwnWorkout = workout.userId == currentUserId
 
-            // Check privacy if not own workout (currently this won't happen due to repository constraints)
-            if (!isOwnWorkout) {
+            // Check privacy for non-official workouts that are not owned by the viewer.
+            if (!isOwnWorkout && workoutOwnerId !in OFFICIAL_LIFTRIX_ACCOUNT_IDS) {
                 val canView = privacyEnforcementService.canViewWorkout(
                     workoutOwnerId = workout.userId,
                     viewerId = currentUserId
@@ -280,6 +297,16 @@ class WorkoutDetailsViewModel @Inject constructor(
             is LiftrixError.BusinessLogicError -> errorMessage
             else -> "Unable to load workout details"
         }
+    }
+
+    private companion object {
+        private val OFFICIAL_LIFTRIX_ACCOUNT_IDS = setOf(
+            "official_liftrix_coach",
+            "official_liftrix_challenge",
+            "official_liftrix_beginner",
+            "official_liftrix_powerlifting",
+            "official_liftrix_calisthenics"
+        )
     }
 }
 

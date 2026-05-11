@@ -65,7 +65,7 @@ fun DynamicProfileImage(
         if (storagePath.isNullOrBlank()) {
             Timber.d("[DYNAMIC_PROFILE_IMAGE] No storage path provided for $debugContext")
             imageState = ImageState.ShowInitials
-        } else if (storagePath.startsWith("http://") || storagePath.startsWith("https://")) {
+        } else if (storagePath.isDirectImageUri()) {
             imageState = ImageState.HasUrl(storagePath)
         } else if (urlResolver == null) {
             Timber.w("[DYNAMIC_PROFILE_IMAGE] No URL resolver available from CompositionLocal for $debugContext")
@@ -162,9 +162,21 @@ private sealed class ImageState {
  */
 fun String?.isStoragePath(): Boolean {
     return this?.let { 
-        !it.startsWith("http://") && !it.startsWith("https://") && it.contains("/")
+        !it.isDirectImageUri() && it.contains("/")
     } ?: false
 }
+
+/**
+ * URLs and local Android URI schemes that image loaders can consume directly.
+ * Anything else with a slash is treated as a Firebase Storage path.
+ */
+fun String.isDirectImageUri(): Boolean =
+    startsWith("http://") ||
+        startsWith("https://") ||
+        startsWith("file://") ||
+        startsWith("content://") ||
+        startsWith("android.resource://") ||
+        startsWith("data:")
 
 /**
  * Legacy compatibility function - converts old URLs to storage paths if possible.

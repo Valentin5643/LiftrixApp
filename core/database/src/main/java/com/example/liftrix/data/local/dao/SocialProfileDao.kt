@@ -209,7 +209,11 @@ interface SocialProfileDao {
 
     @Query("""
         UPDATE social_profiles 
-        SET is_private = :isPrivate, updated_at = :updatedAt
+        SET is_private = :isPrivate,
+            updated_at = :updatedAt,
+            last_modified = :updatedAt,
+            is_dirty = 1,
+            is_synced = 0
         WHERE user_id = :userId
     """)
     suspend fun updatePrivacySetting(userId: String, isPrivate: Boolean, updatedAt: Long): Int

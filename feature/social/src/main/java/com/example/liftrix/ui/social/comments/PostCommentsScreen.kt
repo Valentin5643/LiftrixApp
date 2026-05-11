@@ -16,7 +16,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -30,7 +29,6 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import coil.compose.AsyncImage
 import com.example.liftrix.domain.model.social.PostComment
-import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.theme.LiftrixSpacing
 import com.example.liftrix.ui.common.components.LoadingIndicator
 import com.example.liftrix.ui.common.components.EmptyState
@@ -77,7 +75,7 @@ fun PostCommentsScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(LiftrixColorsV2.surface)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // Top App Bar
         TopAppBar(
@@ -86,7 +84,7 @@ fun PostCommentsScreen(
                     text = "Comments",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = LiftrixColorsV2.onSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             },
             navigationIcon = {
@@ -94,13 +92,14 @@ fun PostCommentsScreen(
                     Icon(
                         Icons.Default.ArrowBack,
                         contentDescription = "Back",
-                        tint = LiftrixColorsV2.onSurface
+                        tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = LiftrixColorsV2.surface,
-                titleContentColor = LiftrixColorsV2.onSurface
+                containerColor = MaterialTheme.colorScheme.surface,
+                titleContentColor = MaterialTheme.colorScheme.onSurface,
+                navigationIconContentColor = MaterialTheme.colorScheme.onSurface
             )
         )
 
@@ -151,7 +150,7 @@ fun PostCommentsScreen(
         // Reply indicator
         replyingTo?.let { replyComment ->
             Surface(
-                color = LiftrixColorsV2.primaryContainer,
+                color = MaterialTheme.colorScheme.primaryContainer,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = LiftrixSpacing.medium, vertical = LiftrixSpacing.small)
@@ -165,7 +164,7 @@ fun PostCommentsScreen(
                     Icon(
                         Icons.Default.Reply,
                         contentDescription = "Replying",
-                        tint = LiftrixColorsV2.onPrimaryContainer,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.size(16.dp)
                     )
 
@@ -174,7 +173,7 @@ fun PostCommentsScreen(
                     Text(
                         text = "Replying to ${replyComment.authorDisplayName}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = LiftrixColorsV2.onPrimaryContainer,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.weight(1f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -189,7 +188,7 @@ fun PostCommentsScreen(
                         Icon(
                             Icons.Default.Close,
                             contentDescription = "Cancel reply",
-                            tint = LiftrixColorsV2.onPrimaryContainer,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -306,7 +305,7 @@ private fun CommentsContent(
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(24.dp),
                                         strokeWidth = 2.dp,
-                                        color = LiftrixColorsV2.primary
+                                        color = MaterialTheme.colorScheme.primary
                                     )
                                 }
                             }
@@ -353,7 +352,7 @@ private fun CommentItem(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(LiftrixColorsV2.surfaceVariant),
+                .background(MaterialTheme.colorScheme.surfaceVariant),
             contentScale = ContentScale.Crop
         )
 
@@ -362,7 +361,7 @@ private fun CommentItem(
         Column(modifier = Modifier.weight(1f)) {
             // Comment bubble
             Surface(
-                color = LiftrixColorsV2.surfaceVariant,
+                color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Column(
@@ -373,7 +372,7 @@ private fun CommentItem(
                         text = comment.authorDisplayName,
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = LiftrixColorsV2.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -382,7 +381,7 @@ private fun CommentItem(
                     Text(
                         text = comment.content,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = LiftrixColorsV2.onSurface
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -398,14 +397,14 @@ private fun CommentItem(
                 Text(
                     text = formatCommentTimestamp(comment.createdAt),
                     style = MaterialTheme.typography.labelSmall,
-                    color = LiftrixColorsV2.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 // Like button
                 Text(
                     text = if (comment.isLikedByViewer) "Unlike" else "Like",
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (comment.isLikedByViewer) LiftrixColorsV2.primary else LiftrixColorsV2.onSurfaceVariant,
+                    color = if (comment.isLikedByViewer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = if (comment.isLikedByViewer) FontWeight.SemiBold else FontWeight.Normal,
                     modifier = Modifier.clickable { onLikeClick() }
                 )
@@ -414,7 +413,7 @@ private fun CommentItem(
                 Text(
                     text = "Reply",
                     style = MaterialTheme.typography.labelSmall,
-                    color = LiftrixColorsV2.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.clickable { onReplyClick() }
                 )
 
@@ -423,7 +422,7 @@ private fun CommentItem(
                     Text(
                         text = "Report",
                         style = MaterialTheme.typography.labelSmall,
-                        color = LiftrixColorsV2.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.clickable { onReportClick() }
                     )
                 }
@@ -433,7 +432,7 @@ private fun CommentItem(
                     Text(
                         text = "${comment.likeCount} ${if (comment.likeCount == 1) "like" else "likes"}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = LiftrixColorsV2.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -450,7 +449,7 @@ private fun CommentInput(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        color = LiftrixColorsV2.surfaceVariant,
+        color = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(24.dp),
         modifier = modifier
     ) {
@@ -478,10 +477,15 @@ private fun CommentInput(
                     onSend = { onSubmit() }
                 ),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = LiftrixColorsV2.surface,
-                    unfocusedContainerColor = LiftrixColorsV2.surface,
-                    focusedBorderColor = LiftrixColorsV2.outline.copy(alpha = 0.5f),
-                    unfocusedBorderColor = LiftrixColorsV2.outline.copy(alpha = 0.3f)
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    disabledContainerColor = MaterialTheme.colorScheme.surface,
+                    focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant
                 ),
                 shape = RoundedCornerShape(20.dp),
                 maxLines = 4,
@@ -495,15 +499,17 @@ private fun CommentInput(
                 onClick = onSubmit,
                 enabled = text.isNotBlank() && !isPosting,
                 colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = if (text.isNotBlank() && !isPosting) LiftrixColorsV2.primary else LiftrixColorsV2.outline,
-                    contentColor = if (text.isNotBlank() && !isPosting) LiftrixColorsV2.onPrimary else LiftrixColorsV2.onSurfaceVariant
+                    containerColor = if (text.isNotBlank() && !isPosting) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (text.isNotBlank() && !isPosting) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             ) {
                 if (isPosting) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp,
-                        color = LiftrixColorsV2.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
                     Icon(

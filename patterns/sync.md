@@ -106,4 +106,4 @@ Treat backend deployment freshness as `Needs verification` unless the task verif
 ## Unclear but Preserved Guidance
 
 - Some source/docs refer to both interface-based `SyncableEntity` and field-only metadata. Do not normalize this without a source audit and migration plan.
-- `fallbackToDestructiveMigration()` is configured with database version 9. Treat schema changes as production-risk work requiring explicit migration review.
+- Room is at database version 9 without destructive fallback. Treat schema changes as production-risk work requiring explicit migration review.

@@ -9,6 +9,7 @@ c*.iml
 /.idea/assetWizardSettings.xml
 .DS_Store
 /build
+**/build/
 /captures
 .externalNativeBuild
 .cxx
@@ -21,6 +22,8 @@ local.properties
 /scripts
 /serviceAccountKey.json
 /node_modules
+**/node_modules/
+/.firebase/
 /.kotlin/errors/
 /.kotlin/sessions/
 /buildSrc/build/
@@ -94,6 +97,7 @@ firebase-key.json
 **/google-services.json
 firebase-debug.log
 .firebaserc
+.firebase/
 
 # Compiled bytecode
 *.class
@@ -195,3 +199,5 @@ build-cache/
 /core/ui/build/outputs
 /feature/auth/build/outputs
 feature/settings/build/outputs
+**/tmp/compileDebugJavaWithJavac
+**/tmp/kotlin-classes/

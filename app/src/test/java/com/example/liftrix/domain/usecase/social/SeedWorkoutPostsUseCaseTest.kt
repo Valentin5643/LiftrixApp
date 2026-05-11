@@ -49,8 +49,10 @@ class SeedWorkoutPostsUseCaseTest {
     @Test
     fun `invoke seeds deterministic official profiles workouts and posts`() = runTest {
         val socialProfileSlot = slot<SocialProfileEntity>()
+        val workoutSlot = slot<WorkoutEntity>()
         val postSlot = slot<WorkoutPostEntity>()
         coEvery { socialProfileDao.insertProfile(capture(socialProfileSlot)) } returns 1L
+        coEvery { workoutDao.insertWorkout(capture(workoutSlot)) } returns 1L
         coEvery { workoutPostDao.insertPost(capture(postSlot)) } returns Unit
 
         val result = useCase("new-user")
@@ -62,8 +64,13 @@ class SeedWorkoutPostsUseCaseTest {
         coVerify(exactly = 25) { workoutDao.insertWorkout(any<WorkoutEntity>()) }
         coVerify(exactly = 25) { workoutPostDao.insertPost(any()) }
         assertTrue(socialProfileSlot.captured.isVerified)
+        assertTrue(workoutSlot.captured.exercisesJson.contains("\"schemaVersion\":1"))
+        assertTrue(workoutSlot.captured.exercisesJson.contains("\"sets\":["))
+        assertTrue(workoutSlot.captured.exercisesJson.contains("\"repsCount\""))
         assertEquals("PUBLIC", postSlot.captured.visibility)
         assertTrue(postSlot.captured.workoutDuration in 15..50)
+        assertTrue(postSlot.captured.mediaUrls.orEmpty().contains("file:///android_asset/official_posts/"))
+        assertTrue(postSlot.captured.mediaThumbnails.orEmpty().contains("file:///android_asset/official_posts/"))
         assertTrue(postSlot.captured.isSynced)
     }
 

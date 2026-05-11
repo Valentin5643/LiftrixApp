@@ -45,6 +45,8 @@ fun UserSearchResultCard(
     onConnectClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val hasInterests = user.sharedEquipment.isNotEmpty() || user.sharedGoals.isNotEmpty()
+
     Card(
         onClick = onUserClick,
         modifier = modifier
@@ -56,19 +58,20 @@ fun UserSearchResultCard(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
         ),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp,
-            pressedElevation = 4.dp
+            defaultElevation = 1.dp,
+            pressedElevation = 2.dp
         )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // User header with avatar and basic info
             UserHeader(
                 user = user,
+                onConnectClick = onConnectClick,
                 modifier = Modifier.fillMaxWidth()
             )
             
@@ -82,18 +85,19 @@ fun UserSearchResultCard(
             }
             
             // Shared interests and stats
-            UserInterests(
-                user = user,
-                modifier = Modifier.fillMaxWidth()
-            )
+            if (hasInterests) {
+                UserInterests(
+                    user = user,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
             
-            // Connection action
-            ConnectionAction(
-                connectionStatus = user.connectionStatus,
-                mutualConnections = user.mutualConnections,
-                onConnectClick = onConnectClick,
-                modifier = Modifier.fillMaxWidth()
-            )
+            if (user.mutualConnections > 0) {
+                MutualConnections(
+                    mutualConnections = user.mutualConnections,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }
@@ -104,53 +108,79 @@ fun UserSearchResultCard(
 @Composable
 private fun UserHeader(
     user: UserSearchResult,
+    onConnectClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.Top
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         // Profile image or avatar
         ProfileAvatar(
             imageUrl = user.profileImageUrl,
             displayName = user.displayName,
-            modifier = Modifier.size(56.dp)
+            modifier = Modifier.size(44.dp)
         )
         
         // User info
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
             // Display name
             Text(
                 text = user.displayName,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             
-            // Member info and fitness level
+            // Workout count and optional member date
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Default.CalendarToday,
-                    contentDescription = "Member since",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    imageVector = Icons.Default.FitnessCenter,
+                    contentDescription = "Workouts",
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(14.dp)
                 )
                 
                 Text(
-                    text = "Member since ${formatMemberSinceDate(user.memberSince)}",
+                    text = "${user.totalWorkouts} workouts",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-                
-                user.fitnessLevel?.let { level ->
+
+                user.memberSince?.let { memberSince ->
+                    Icon(
+                        imageVector = Icons.Default.CalendarToday,
+                        contentDescription = "Member since",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.size(13.dp)
+                    )
+
+                    Text(
+                        text = formatMemberSinceDate(memberSince),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            user.fitnessLevel?.let { level ->
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Badge(
                         containerColor = getFitnessLevelColor(level),
                         contentColor = MaterialTheme.colorScheme.onPrimary
@@ -162,27 +192,12 @@ private fun UserHeader(
                     }
                 }
             }
-            
-            // Workout count
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.FitnessCenter,
-                    contentDescription = "Workouts",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-                
-                Text(
-                    text = "${user.totalWorkouts} workouts",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
         }
+
+        ConnectionButton(
+            connectionStatus = user.connectionStatus,
+            onConnectClick = onConnectClick
+        )
     }
 }
 
@@ -258,7 +273,7 @@ private fun UserInterests(
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         // Shared equipment
         if (user.sharedEquipment.isNotEmpty()) {
@@ -338,152 +353,140 @@ private fun InterestRow(
 }
 
 /**
- * Connection action button based on current status
+ * Mutual connections context.
  */
 @Composable
-private fun ConnectionAction(
-    connectionStatus: ConnectionStatus,
+private fun MutualConnections(
     mutualConnections: Int,
-    onConnectClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Mutual connections info
-        if (mutualConnections > 0) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
+        Icon(
+            imageVector = Icons.Default.People,
+            contentDescription = "Mutual connections",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier.size(14.dp)
+        )
+
+        Spacer(modifier = Modifier.width(4.dp))
+
+        Text(
+            text = "$mutualConnections mutual connections",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+        )
+    }
+}
+
+/**
+ * Connection action button based on current status.
+ */
+@Composable
+private fun ConnectionButton(
+    connectionStatus: ConnectionStatus,
+    onConnectClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    when (connectionStatus) {
+        ConnectionStatus.NONE -> {
+            Button(
+                onClick = onConnectClick,
+                modifier = modifier,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.People,
-                    contentDescription = "Mutual connections",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    modifier = Modifier.size(14.dp)
+                    imageVector = Icons.Default.PersonAdd,
+                    contentDescription = "Follow",
+                    modifier = Modifier.size(15.dp)
                 )
-                
-                Text(
-                    text = "$mutualConnections mutual connections",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                )
-            }
-        } else {
-            Spacer(modifier = Modifier.width(1.dp))
-        }
-        
-        // Follow button
-        when (connectionStatus) {
-            ConnectionStatus.NONE -> {
-                Button(
-                    onClick = onConnectClick,
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PersonAdd,
-                        contentDescription = "Follow",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Follow")
-                }
-            }
-            ConnectionStatus.PENDING_SENT -> {
-                OutlinedButton(
-                    onClick = onConnectClick,
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Schedule,
-                        contentDescription = "Request sent",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Requested")
-                }
-            }
-            ConnectionStatus.PENDING_RECEIVED -> {
-                Button(
-                    onClick = onConnectClick,
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = "Accept follow",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Accept")
-                }
-            }
-            ConnectionStatus.CONNECTED -> {
-                OutlinedButton(
-                    onClick = onConnectClick,
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = "Following",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Following")
-                }
-            }
-            ConnectionStatus.MUTUAL_FOLLOW -> {
-                OutlinedButton(
-                    onClick = onConnectClick,
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = "Following",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Following")
-                }
-            }
-            ConnectionStatus.GYM_BUDDY -> {
-                OutlinedButton(
-                    onClick = { /* Handle view profile */ },
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Star,
-                        contentDescription = "Gym buddy",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Gym Buddy")
-                }
-            }
-            ConnectionStatus.BLOCKED -> {
-                OutlinedButton(
-                    onClick = { },
-                    enabled = false,
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Block,
-                        contentDescription = "Blocked",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Blocked")
-                }
-            }
-            ConnectionStatus.SELF -> {
-                // No action button when viewing own result in search
-                // User shouldn't see themselves in search results normally
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Follow", style = MaterialTheme.typography.labelMedium)
             }
         }
+        ConnectionStatus.PENDING_SENT -> {
+            OutlinedButton(
+                onClick = onConnectClick,
+                modifier = modifier,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Schedule,
+                    contentDescription = "Request sent",
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Requested", style = MaterialTheme.typography.labelMedium)
+            }
+        }
+        ConnectionStatus.PENDING_RECEIVED -> {
+            Button(
+                onClick = onConnectClick,
+                modifier = modifier,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Accept follow",
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Accept", style = MaterialTheme.typography.labelMedium)
+            }
+        }
+        ConnectionStatus.CONNECTED,
+        ConnectionStatus.MUTUAL_FOLLOW -> {
+            OutlinedButton(
+                onClick = onConnectClick,
+                modifier = modifier,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Following",
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Following", style = MaterialTheme.typography.labelMedium)
+            }
+        }
+        ConnectionStatus.GYM_BUDDY -> {
+            OutlinedButton(
+                onClick = { },
+                modifier = modifier,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = "Gym buddy",
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Buddy", style = MaterialTheme.typography.labelMedium)
+            }
+        }
+        ConnectionStatus.BLOCKED -> {
+            OutlinedButton(
+                onClick = { },
+                modifier = modifier,
+                enabled = false,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Block,
+                    contentDescription = "Blocked",
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Blocked", style = MaterialTheme.typography.labelMedium)
+            }
+        }
+        ConnectionStatus.SELF -> Unit
     }
 }
 

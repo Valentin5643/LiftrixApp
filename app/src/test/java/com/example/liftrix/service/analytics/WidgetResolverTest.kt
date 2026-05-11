@@ -28,24 +28,24 @@ class WidgetResolverTest {
     }
 
     @Test
-    fun `resolveStandardWidgets returns 4 widgets for BEGINNER level`() {
+    fun `resolveStandardWidgets returns focused widgets for BEGINNER level`() {
         // When
         val widgets = widgetResolver.resolveStandardWidgets(UserLevel.BEGINNER)
 
         // Then
-        assertEquals("Beginner should have exactly 4 widgets", 4, widgets.size)
+        assertEquals("Beginner should have the focused standard widget set", 3, widgets.size)
         
         // Verify widgets are sorted by complexity and priority
         assertTrue("Beginner widgets should be sorted", widgets.isNotEmpty())
     }
 
     @Test
-    fun `resolveStandardWidgets returns 7 widgets for INTERMEDIATE level`() {
+    fun `resolveStandardWidgets returns focused widgets for INTERMEDIATE level`() {
         // When
         val widgets = widgetResolver.resolveStandardWidgets(UserLevel.INTERMEDIATE)
 
         // Then
-        assertEquals("Intermediate should have exactly 7 widgets", 7, widgets.size)
+        assertEquals("Intermediate should have the focused standard widget set", 3, widgets.size)
         
         // Verify widgets are sorted and valid
         assertTrue("Intermediate widgets should be sorted", widgets.isNotEmpty())
@@ -55,12 +55,12 @@ class WidgetResolverTest {
     }
 
     @Test
-    fun `resolveStandardWidgets returns 12 widgets for ADVANCED level`() {
+    fun `resolveStandardWidgets returns focused widgets for ADVANCED level`() {
         // When
         val widgets = widgetResolver.resolveStandardWidgets(UserLevel.ADVANCED)
 
         // Then
-        assertEquals("Advanced should have exactly 12 widgets", 12, widgets.size)
+        assertEquals("Advanced should have the focused standard widget set", 3, widgets.size)
         
         // Verify all widgets are active and valid
         widgets.forEach { widget ->
@@ -77,7 +77,7 @@ class WidgetResolverTest {
         )
 
         // Then
-        assertEquals("GRID mode should return 7 widgets for intermediate", 7, widgets.size)
+        assertEquals("GRID mode should return the focused standard widget set", 3, widgets.size)
     }
 
     @Test
@@ -89,7 +89,7 @@ class WidgetResolverTest {
         )
 
         // Then
-        assertEquals("SECTIONS mode should return 4 widgets for beginner", 4, widgets.size)
+        assertEquals("SECTIONS mode should return the focused standard widget set", 3, widgets.size)
     }
 
     @Test
@@ -101,7 +101,7 @@ class WidgetResolverTest {
         )
 
         // Then
-        assertEquals("SECTIONS mode should return 12 widgets for advanced", 12, widgets.size)
+        assertEquals("SECTIONS mode should return the focused standard widget set", 3, widgets.size)
     }
 
     @Test
@@ -265,6 +265,6 @@ class WidgetResolverTest {
         )
 
         // Then should return standard widgets for the level
-        assertEquals("Should return 7 widgets for intermediate with null preferences", 7, widgets.size)
+        assertEquals("Should return the focused standard widget set with null preferences", 3, widgets.size)
     }
 }

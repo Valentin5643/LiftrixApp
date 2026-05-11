@@ -212,10 +212,11 @@ object TestFirebaseErrorMapper {
     fun shouldRetryFirebaseOperation(error: com.example.liftrix.domain.model.error.LiftrixError): Boolean {
         return error.isRecoverable && when (error) {
             is com.example.liftrix.domain.model.error.LiftrixError.NetworkError -> {
-                error.httpStatusCode == null || 
-                error.httpStatusCode == 408 || 
-                error.httpStatusCode == 429 || 
-                error.httpStatusCode >= 500
+                val httpStatusCode = error.httpStatusCode
+                httpStatusCode == null ||
+                    httpStatusCode == 408 ||
+                    httpStatusCode == 429 ||
+                    httpStatusCode >= 500
             }
             is com.example.liftrix.domain.model.error.LiftrixError.DatabaseError -> {
                 error.analyticsContext["firestore_code"] in listOf(

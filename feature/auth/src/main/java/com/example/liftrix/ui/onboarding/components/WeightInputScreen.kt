@@ -47,7 +47,6 @@ import com.example.liftrix.ui.onboarding.OnboardingState
 import com.example.liftrix.domain.model.onboarding.WeightUnit
 import com.example.liftrix.ui.onboarding.model.OnboardingStep
 import com.example.liftrix.ui.theme.LiftrixColorsV2
-import androidx.compose.foundation.isSystemInDarkTheme
 import kotlin.math.round
 
 /**
@@ -164,7 +163,7 @@ private fun WeightInputHelperText() {
         Text(
             text = "Weight helps us track your progress over time and provide more accurate workout recommendations.",
             style = MaterialTheme.typography.bodyMedium,
-            color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
@@ -201,14 +200,14 @@ private fun WeightInputField(
             Text(
                 text = "Enter your weight",
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         },
         supportingText = {
             Text(
                 text = "This information is optional",
                 style = MaterialTheme.typography.bodySmall,
-                color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         },
         trailingIcon = {
@@ -259,7 +258,7 @@ private fun UnitSelector(
         Text(
             text = "Unit",
             style = MaterialTheme.typography.titleMedium,
-            color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
+            color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Medium
         )
         
@@ -322,7 +321,7 @@ private fun ConversionDisplay(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.BackgroundSecondary else LiftrixColorsV2.Light.BackgroundSecondary
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
@@ -339,7 +338,7 @@ private fun ConversionDisplay(
                 Text(
                     text = "$weight ${currentUnit.symbol}",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Medium
                 )
                 
@@ -348,7 +347,7 @@ private fun ConversionDisplay(
                 Text(
                     text = "=",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -441,7 +440,7 @@ private fun SkipOption(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundPrimary
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
@@ -455,7 +454,7 @@ private fun SkipOption(
             Text(
                 text = "Prefer not to say?",
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Medium
             )
             

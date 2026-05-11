@@ -76,7 +76,8 @@ data class AIResponse(
 data class ConversationContext(
     val recentMessages: List<com.example.liftrix.domain.model.chat.ChatMessage>,
     val workoutContext: com.example.liftrix.domain.model.chat.WorkoutContext?,
-    val userPreferences: String?
+    val userPreferences: String?,
+    val includeWorkoutHistory: Boolean = true
 )
 
 /**
@@ -143,4 +144,3 @@ enum class AbuseAction {
     REJECT,
     TRUNCATE
 }
-

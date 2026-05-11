@@ -1,6 +1,7 @@
 package com.example.liftrix.data.repository.social
 
 import com.example.liftrix.data.local.dao.SocialPrivacySettingsDao
+import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.entity.SocialPrivacySettingsEntity
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
@@ -26,7 +27,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class SocialPrivacySettingsRepositoryImpl @Inject constructor(
-    private val socialPrivacySettingsDao: SocialPrivacySettingsDao
+    private val socialPrivacySettingsDao: SocialPrivacySettingsDao,
+    private val userProfileDao: UserProfileDao
 ) : SocialPrivacySettingsRepository {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -90,10 +92,11 @@ class SocialPrivacySettingsRepositoryImpl @Inject constructor(
             }
         ) {
             val entity = settings.toEntity()
-            val rowsUpdated = socialPrivacySettingsDao.updatePrivacySettings(entity)
-            if (rowsUpdated == 0) {
-                // Insert if update failed (row doesn't exist)
-                socialPrivacySettingsDao.insertPrivacySettings(entity)
+            socialPrivacySettingsDao.upsertLocal(entity)
+
+            userProfileDao.getProfileForUserSuspend(settings.userId)?.let { profile ->
+                val isPublicProfile = settings.profileVisibility == ProfileVisibility.PUBLIC
+                userProfileDao.upsertLocal(profile.copy(isPublic = isPublicProfile))
             }
             settings.copy(updatedAt = System.currentTimeMillis())
         }

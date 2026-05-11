@@ -288,6 +288,13 @@ class ProfileImageCache @Inject constructor(
      */
     private suspend fun loadFromNetwork(imageUrl: String): Bitmap? {
         return try {
+            if (imageUrl.startsWith("file:///android_asset/")) {
+                val assetPath = imageUrl.removePrefix("file:///android_asset/")
+                return context.assets.open(assetPath).use { inputStream ->
+                    BitmapFactory.decodeStream(inputStream)
+                }
+            }
+
             val url = URL(imageUrl)
             val connection = url.openConnection()
             connection.doInput = true

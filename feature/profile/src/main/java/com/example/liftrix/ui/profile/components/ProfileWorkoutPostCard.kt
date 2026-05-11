@@ -1,32 +1,46 @@
 package com.example.liftrix.ui.profile.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import com.example.liftrix.domain.model.social.MediaItem
+import com.example.liftrix.domain.model.social.MediaType
 import com.example.liftrix.domain.model.social.WorkoutPost
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.theme.LiftrixSpacing
@@ -118,6 +132,16 @@ fun WorkoutPostCard(
             )
         }
 
+        if (post.mediaItems.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(LiftrixSpacing.medium))
+            MediaCarousel(
+                mediaItems = post.mediaItems,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = LiftrixSpacing.medium)
+            )
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -164,6 +188,72 @@ fun WorkoutPostCard(
             thickness = 0.5.dp,
             color = LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.1f)
         )
+    }
+}
+
+@Composable
+private fun MediaCarousel(
+    mediaItems: List<MediaItem>,
+    modifier: Modifier = Modifier
+) {
+    if (mediaItems.size == 1) {
+        PostMediaItem(
+            mediaItem = mediaItems.first(),
+            modifier = modifier
+                .fillMaxWidth()
+                .height(300.dp)
+        )
+    } else {
+        LazyRow(
+            modifier = modifier,
+            horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.small),
+            contentPadding = PaddingValues(horizontal = 0.dp)
+        ) {
+            items(mediaItems) { mediaItem ->
+                PostMediaItem(
+                    mediaItem = mediaItem,
+                    modifier = Modifier
+                        .width(280.dp)
+                        .height(200.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PostMediaItem(
+    mediaItem: MediaItem,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier) {
+        AsyncImage(
+            model = mediaItem.thumbnailUrl ?: mediaItem.originalUrl,
+            contentDescription = "Post media",
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(8.dp)),
+            contentScale = ContentScale.Crop
+        )
+
+        if (mediaItem.type == MediaType.VIDEO) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(48.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                shape = CircleShape
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = "Play video",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(12.dp)
+                )
+            }
+        }
     }
 }
 

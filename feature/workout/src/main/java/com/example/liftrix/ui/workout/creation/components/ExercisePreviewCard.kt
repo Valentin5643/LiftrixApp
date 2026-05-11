@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.workout.creation.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,7 +22,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +35,7 @@ import com.example.liftrix.domain.model.Exercise
 import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.usecase.exercise.SearchableExercise
+import com.example.liftrix.feature.workout.R
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.cards.CardSpacing
 import com.example.liftrix.ui.theme.LiftrixTheme
@@ -261,6 +265,64 @@ private fun getExerciseIcon(category: ExerciseCategory): ImageVector {
     }
 }
 
+@Composable
+private fun ExerciseMuscleIcon(
+    category: ExerciseCategory,
+    fallbackIcon: ImageVector,
+    modifier: Modifier = Modifier
+) {
+    val iconResId = muscleGroupIconResId(category)
+    if (iconResId != null) {
+        Image(
+            painter = painterResource(id = iconResId),
+            contentDescription = muscleGroupIconContentDescription(category),
+            contentScale = ContentScale.Fit,
+            modifier = modifier
+        )
+    } else {
+        Icon(
+            imageVector = fallbackIcon,
+            contentDescription = "Exercise category",
+            modifier = modifier,
+            tint = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+private fun muscleGroupIconResId(muscleGroup: ExerciseCategory): Int? {
+    return when (muscleGroup) {
+        ExerciseCategory.SHOULDERS -> R.drawable.muscle_shoulders
+        ExerciseCategory.CHEST -> R.drawable.muscle_chest
+        ExerciseCategory.BACK -> R.drawable.muscle_back
+        ExerciseCategory.BICEPS -> R.drawable.muscle_biceps
+        ExerciseCategory.TRICEPS -> R.drawable.muscle_triceps
+        ExerciseCategory.LEGS,
+        ExerciseCategory.QUADRICEPS -> R.drawable.muscle_legs
+        ExerciseCategory.GLUTES -> R.drawable.muscle_glutes
+        ExerciseCategory.ABS,
+        ExerciseCategory.CORE -> R.drawable.muscle_core
+        ExerciseCategory.CALVES -> R.drawable.muscle_calves
+        else -> null
+    }
+}
+
+private fun muscleGroupIconContentDescription(muscleGroup: ExerciseCategory): String {
+    return when (muscleGroup) {
+        ExerciseCategory.SHOULDERS -> "Shoulders muscle icon"
+        ExerciseCategory.CHEST -> "Chest muscle icon"
+        ExerciseCategory.BACK -> "Back muscle icon"
+        ExerciseCategory.BICEPS -> "Biceps muscle icon"
+        ExerciseCategory.TRICEPS -> "Triceps muscle icon"
+        ExerciseCategory.LEGS,
+        ExerciseCategory.QUADRICEPS -> "Legs muscle icon"
+        ExerciseCategory.GLUTES -> "Glutes muscle icon"
+        ExerciseCategory.ABS,
+        ExerciseCategory.CORE -> "Core muscle icon"
+        ExerciseCategory.CALVES -> "Calves muscle icon"
+        else -> "Exercise category"
+    }
+}
+
 /**
  * Overloaded ExercisePreviewCard for SearchableExercise
  */
@@ -353,11 +415,10 @@ fun ExercisePreviewCard(
                             )
                         }
                         
-                        Icon(
-                            imageVector = Icons.Default.FitnessCenter,
-                            contentDescription = "Exercise category",
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                        ExerciseMuscleIcon(
+                            category = exercise.exercise.primaryMuscleGroup,
+                            fallbackIcon = Icons.Default.FitnessCenter,
+                            modifier = Modifier.size(32.dp)
                         )
                     }
                 }
@@ -438,11 +499,10 @@ fun ExercisePreviewCard(
                             )
                         }
                         
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = "Custom exercise",
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.secondary
+                        ExerciseMuscleIcon(
+                            category = exercise.exercise.primaryMuscle,
+                            fallbackIcon = Icons.Default.Person,
+                            modifier = Modifier.size(32.dp)
                         )
                     }
                 }

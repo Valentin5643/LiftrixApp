@@ -1,7 +1,6 @@
 package com.example.liftrix.ui.onboarding.accessibility
 
 import android.content.Context
-import android.content.res.Configuration
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -145,8 +144,10 @@ object AccessibilityUtils {
      */
     @Composable
     fun isHighContrastEnabled(): Boolean {
-        val configuration = LocalConfiguration.current
-        return (configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        // Do not infer high contrast from OS night mode. The app can force a
+        // light theme while the OS remains dark, and onboarding should follow
+        // the active Material color scheme in that case.
+        return false
     }
 
     /**

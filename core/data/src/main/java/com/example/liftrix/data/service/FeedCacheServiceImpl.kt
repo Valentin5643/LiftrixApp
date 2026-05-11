@@ -5,6 +5,7 @@ import com.example.liftrix.data.local.dao.WorkoutPostDao
 import com.example.liftrix.data.local.dao.PostLikeDao
 import com.example.liftrix.data.local.dao.PostCommentDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
+import com.example.liftrix.data.local.dao.SavedPostDao
 import com.example.liftrix.data.local.entity.FeedCacheEntity
 import com.example.liftrix.data.local.entity.WorkoutPostEntity
 import com.example.liftrix.domain.model.social.PostVisibility
@@ -14,7 +15,9 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlin.math.exp
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,6 +32,7 @@ class FeedCacheServiceImpl @Inject constructor(
     private val workoutPostDao: WorkoutPostDao,
     private val postLikeDao: PostLikeDao,
     private val postCommentDao: PostCommentDao,
+    private val savedPostDao: SavedPostDao,
     private val followRelationshipDao: FollowRelationshipDao,
     private val privacyEnforcementService: com.example.liftrix.domain.service.PrivacyEnforcementService
 ) : FeedCacheService {
@@ -54,9 +58,18 @@ class FeedCacheServiceImpl @Inject constructor(
             
             var score = 0.0
             
-            // Recency score (max 40 points) - newer posts get higher scores
+            // Recency score (max 30 points) - gradual one-week decay keeps stable workout
+            // preferences visible across sessions instead of zeroing out after a day.
             val hoursSincePost = (System.currentTimeMillis() - post.createdAt) / 3600000.0
-            score += maxOf(0.0, 40.0 - hoursSincePost * 0.5)
+            score += 30.0 * exp(-hoursSincePost / 168.0)
+
+            // Persistent workout affinity (max 25 points). Every social feed item here is
+            // workout content, so keep a durable baseline instead of treating interest as a
+            // short spike from the latest interaction.
+            score += 18.0
+            if (isOfficialWorkoutSeedPost(post)) {
+                score += 7.0
+            }
             
             // Engagement score (max 30 points) - likes and comments boost relevance
             val engagementScore = minOf(30.0, post.likeCount * 0.5 + post.commentCount * 2.0)
@@ -76,11 +89,11 @@ class FeedCacheServiceImpl @Inject constructor(
                 score += 15.0
             }
             
-            // User interaction history bonus (max 10 points) - users they've liked before
-            val hasLikedUserPosts = postLikeDao.getUserLikes(viewerId)
-                .toString().contains(post.userId) // Simplified check
-            if (hasLikedUserPosts) {
-                score += 5.0
+            // Session-to-session memory: creators the viewer repeatedly likes or saves stay
+            // weighted in Explore and cache generation without needing a new schema.
+            val engagedCreatorIds = getEngagedCreatorIds(viewerId)
+            if (post.userId in engagedCreatorIds) {
+                score += 10.0
             }
             
             // Normalize score to 0-100 range
@@ -112,29 +125,21 @@ class FeedCacheServiceImpl @Inject constructor(
             // Get followed users
             val followedUsers = followRelationshipDao.getFollowing(userId)
                 .map { it.followingId }
-            
-            // Get recent posts from followed users (last 7 days)
-            val sevenDaysAgo = System.currentTimeMillis() - (7 * 24 * 60 * 60 * 1000)
-            
-            // This would need a proper query in WorkoutPostDao
-            // For now, implementing basic logic
-            val cacheEntries = mutableListOf<FeedCacheEntity>()
+
             val currentTime = System.currentTimeMillis()
-            
-            // Process posts from followed users
-            for (followedUserId in followedUsers) {
-                // Calculate scores for this user's posts
-                // This is simplified - would need proper batching in production
-                val score = calculateRelevanceScore("dummy_post_id", userId).getOrNull() ?: 0.0
-                
-                cacheEntries.add(
-                    FeedCacheEntity(
-                        userId = userId,
-                        postId = "dummy_post_id", // Would be actual post ID
-                        score = score,
-                        fetchedAt = currentTime
-                    )
-                )
+
+            val homeCandidates = if (followedUsers.isNotEmpty()) {
+                workoutPostDao.getRecentPostsFromUsers(followedUsers + userId, CACHE_CANDIDATE_LIMIT).first()
+            } else {
+                emptyList()
+            }
+
+            val discoveryCandidates = workoutPostDao.getRecentPublicPosts(CACHE_CANDIDATE_LIMIT).first()
+                .filter { post -> post.userId != userId }
+
+            val cacheEntries = buildList {
+                addAll(homeCandidates.toCacheEntries(userId, "HOME", currentTime))
+                addAll(discoveryCandidates.toCacheEntries(userId, "DISCOVERY", currentTime))
             }
             
             // Insert cache entries
@@ -309,5 +314,41 @@ class FeedCacheServiceImpl @Inject constructor(
             likeCount = entity.likeCount,
             commentCount = entity.commentCount
         )
+    }
+
+    private suspend fun List<WorkoutPostEntity>.toCacheEntries(
+        userId: String,
+        feedType: String,
+        fetchedAt: Long
+    ): List<FeedCacheEntity> {
+        return mapNotNull { post ->
+            val domainPost = entityToDomainForPrivacyCheck(post)
+            if (!privacyEnforcementService.canViewPost(userId, domainPost)) return@mapNotNull null
+
+            val score = calculateRelevanceScore(post.id, userId).getOrNull() ?: 0.0
+            FeedCacheEntity(
+                userId = userId,
+                postId = post.id,
+                score = score,
+                fetchedAt = fetchedAt,
+                feedType = feedType
+            )
+        }
+    }
+
+    private suspend fun getEngagedCreatorIds(viewerId: String): Set<String> {
+        val likedPostIds = postLikeDao.getUserLikes(viewerId).first().map { it.postId }
+        val savedPostIds = savedPostDao.getUserSavedPosts(viewerId).first().map { it.postId }
+        return (likedPostIds + savedPostIds)
+            .distinct()
+            .mapNotNull { postId -> workoutPostDao.getPostById(postId)?.userId }
+            .toSet()
+    }
+
+    private fun isOfficialWorkoutSeedPost(post: WorkoutPostEntity): Boolean =
+        post.userId.startsWith("official_liftrix_")
+
+    private companion object {
+        private const val CACHE_CANDIDATE_LIMIT = 100
     }
 }

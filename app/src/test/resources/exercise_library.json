@@ -182,7 +182,7 @@
   {
     "id": "arms-bicep-curl-dumbbell",
     "name": "Dumbbell Bicep Curl",
-    "primaryMuscleGroup": "ARMS",
+    "primaryMuscleGroup": "BICEPS",
     "equipment": "DUMBBELLS",
     "secondaryMuscleGroups": [],
     "movementPattern": "curl",
@@ -194,7 +194,7 @@
   {
     "id": "arms-bicep-curl-barbell",
     "name": "Barbell Bicep Curl",
-    "primaryMuscleGroup": "ARMS",
+    "primaryMuscleGroup": "BICEPS",
     "equipment": "BARBELL",
     "secondaryMuscleGroups": [],
     "movementPattern": "curl",
@@ -218,7 +218,7 @@
   {
     "id": "arms-tricep-extension-dumbbell",
     "name": "Overhead Tricep Extension",
-    "primaryMuscleGroup": "ARMS",
+    "primaryMuscleGroup": "TRICEPS",
     "equipment": "DUMBBELLS",
     "secondaryMuscleGroups": [],
     "movementPattern": "extension",
@@ -290,7 +290,7 @@
   {
     "id": "legs-calf-raise-bodyweight",
     "name": "Calf Raises",
-    "primaryMuscleGroup": "LEGS",
+    "primaryMuscleGroup": "CALVES",
     "equipment": "BODYWEIGHT_ONLY",
     "secondaryMuscleGroups": [],
     "movementPattern": "raise",
@@ -362,9 +362,9 @@
   {
     "id": "cardio-jumping-jacks-bodyweight",
     "name": "Jumping Jacks",
-    "primaryMuscleGroup": "CARDIO",
+    "primaryMuscleGroup": "CORE",
     "equipment": "BODYWEIGHT_ONLY",
-    "secondaryMuscleGroups": ["LEGS"],
+    "secondaryMuscleGroups": ["CARDIO", "LEGS"],
     "movementPattern": "jump",
     "difficultyLevel": 2,
     "instructions": "Jump feet wide while raising arms overhead, return to start",
@@ -386,7 +386,7 @@
   {
     "id": "full-body-thruster-dumbbell",
     "name": "Dumbbell Thrusters",
-    "primaryMuscleGroup": "FULL_BODY",
+    "primaryMuscleGroup": "GLUTES",
     "equipment": "DUMBBELLS",
     "secondaryMuscleGroups": ["LEGS", "SHOULDERS", "CORE"],
     "movementPattern": "complex",
@@ -494,7 +494,7 @@
   {
     "id": "arms-hammer-curl-dumbbell",
     "name": "Hammer Curls",
-    "primaryMuscleGroup": "ARMS",
+    "primaryMuscleGroup": "BICEPS",
     "equipment": "DUMBBELLS",
     "secondaryMuscleGroups": [],
     "movementPattern": "curl",

@@ -521,6 +521,9 @@ fun UnifiedNavigationContainer(
                         onNavigateToAbout = {
                             navController.navigate(LiftrixRoute.About)
                         },
+                        onNavigateToPrivacySettings = {
+                            navController.navigate(LiftrixRoute.PrivacySettings)
+                        },
                         onNavigateToPrivacyPolicy = {
                             navController.navigate(LiftrixRoute.PrivacyPolicy)
                         },

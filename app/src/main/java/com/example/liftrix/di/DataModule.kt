@@ -105,12 +105,6 @@ abstract class DataModule {
                 .setTransactionExecutor(Dispatchers.IO.asExecutor())
                 .setQueryExecutor(Dispatchers.IO.asExecutor())
                 .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING) // WAL mode for better data persistence
-                .addMigrations(
-                    LiftrixDatabase.MIGRATION_3_4,
-                    LiftrixDatabase.MIGRATION_7_8,
-                    LiftrixDatabase.MIGRATION_8_9
-                )
-                .fallbackToDestructiveMigration() // Allow destructive migration for development
                 // 🛡️ DATABASE LIFECYCLE: Add callback for database lifecycle events
                 .addCallback(object : RoomDatabase.Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
@@ -135,10 +129,6 @@ abstract class DataModule {
                         Timber.d("Encrypted database opened successfully")
                     }
 
-                    override fun onDestructiveMigration(db: SupportSQLiteDatabase) {
-                        super.onDestructiveMigration(db)
-                        Timber.w("Destructive migration occurred on encrypted database - data may have been lost")
-                    }
                 })
                 .build()
 

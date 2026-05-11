@@ -27,7 +27,6 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.liftrix.feature.home.R
 import com.example.liftrix.domain.model.social.PostComment
-import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.theme.LiftrixSpacing
 import com.example.liftrix.ui.common.components.LoadingIndicator
 import kotlinx.coroutines.launch
@@ -72,12 +71,12 @@ fun CommentBottomSheet(
         },
         sheetState = sheetState,
         modifier = modifier,
-        containerColor = LiftrixColorsV2.surface,
-        contentColor = LiftrixColorsV2.onSurface,
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         dragHandle = {
             Surface(
                 modifier = Modifier.padding(vertical = LiftrixSpacing.small),
-                color = LiftrixColorsV2.outline.copy(alpha = 0.4f),
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
                 shape = RoundedCornerShape(2.dp)
             ) {
                 Box(
@@ -176,14 +175,14 @@ private fun CommentSheetHeader(
         Text(
             text = stringResource(R.string.comments_title, commentCount),
             style = MaterialTheme.typography.titleMedium,
-            color = LiftrixColorsV2.onSurface,
+            color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.SemiBold
         )
         
         if (replyingTo != null) {
             Spacer(modifier = Modifier.height(LiftrixSpacing.small))
             Surface(
-                color = LiftrixColorsV2.primaryContainer,
+                color = MaterialTheme.colorScheme.primaryContainer,
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -199,7 +198,7 @@ private fun CommentSheetHeader(
                             replyingTo.authorDisplayName
                         ),
                         style = MaterialTheme.typography.bodySmall,
-                        color = LiftrixColorsV2.onPrimaryContainer,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.weight(1f)
                     )
                     
@@ -210,7 +209,7 @@ private fun CommentSheetHeader(
                         Icon(
                             imageVector = Icons.Filled.Close,
                             contentDescription = "Clear reply",
-                            tint = LiftrixColorsV2.onPrimaryContainer,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -232,7 +231,7 @@ private fun EmptyCommentsState(
         Icon(
             imageVector = Icons.Outlined.ChatBubbleOutline,
             contentDescription = "Comments",
-            tint = LiftrixColorsV2.onSurfaceVariant,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(48.dp)
         )
         
@@ -241,7 +240,7 @@ private fun EmptyCommentsState(
         Text(
             text = stringResource(R.string.comments_empty_title),
             style = MaterialTheme.typography.titleMedium,
-            color = LiftrixColorsV2.onSurface
+            color = MaterialTheme.colorScheme.onSurface
         )
         
         Spacer(modifier = Modifier.height(LiftrixSpacing.small))
@@ -249,7 +248,7 @@ private fun EmptyCommentsState(
         Text(
             text = stringResource(R.string.comments_empty_description),
             style = MaterialTheme.typography.bodyMedium,
-            color = LiftrixColorsV2.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -322,7 +321,7 @@ private fun CommentContent(
         Column(modifier = Modifier.weight(1f)) {
             // Author and content
             Surface(
-                color = LiftrixColorsV2.surfaceVariant,
+                color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Column(
@@ -331,14 +330,14 @@ private fun CommentContent(
                     Text(
                         text = comment.authorDisplayName,
                         style = if (isReply) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
-                        color = LiftrixColorsV2.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.SemiBold
                     )
                     
                     Text(
                         text = comment.content,
                         style = if (isReply) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
-                        color = LiftrixColorsV2.onSurface
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -353,13 +352,13 @@ private fun CommentContent(
                 Text(
                     text = formatCommentTimestamp(comment.createdAt),
                     style = MaterialTheme.typography.labelSmall,
-                    color = LiftrixColorsV2.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 
                 Text(
                     text = "Like",
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (comment.isLikedByCurrentUser) LiftrixColorsV2.primary else LiftrixColorsV2.onSurfaceVariant,
+                    color = if (comment.isLikedByCurrentUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = if (comment.isLikedByCurrentUser) FontWeight.SemiBold else FontWeight.Normal,
                     modifier = Modifier.clickable { onLikeClick() }
                 )
@@ -368,7 +367,7 @@ private fun CommentContent(
                     Text(
                         text = "Reply",
                         style = MaterialTheme.typography.labelSmall,
-                        color = LiftrixColorsV2.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.clickable { onReplyClick() }
                     )
                 }
@@ -377,7 +376,7 @@ private fun CommentContent(
                     Text(
                         text = "${comment.likeCount} ${if (comment.likeCount == 1) "like" else "likes"}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = LiftrixColorsV2.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -396,7 +395,7 @@ private fun CommentInput(
 ) {
     Surface(
         modifier = modifier,
-        color = LiftrixColorsV2.surfaceVariant,
+        color = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(24.dp)
     ) {
         Row(
@@ -439,10 +438,14 @@ private fun CommentInput(
                     onSend = { onSubmit() }
                 ),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = LiftrixColorsV2.surface,
-                    unfocusedContainerColor = LiftrixColorsV2.surface,
-                    focusedBorderColor = LiftrixColorsV2.outline.copy(alpha = 0.5f),
-                    unfocusedBorderColor = LiftrixColorsV2.outline.copy(alpha = 0.3f)
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant
                 ),
                 shape = RoundedCornerShape(20.dp),
                 maxLines = 4
@@ -455,8 +458,10 @@ private fun CommentInput(
                 onClick = onSubmit,
                 enabled = text.isNotBlank(),
                 colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = if (text.isNotBlank()) LiftrixColorsV2.primary else LiftrixColorsV2.outline,
-                    contentColor = if (text.isNotBlank()) LiftrixColorsV2.onPrimary else LiftrixColorsV2.onSurfaceVariant
+                    containerColor = if (text.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (text.isNotBlank()) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             ) {
                 Icon(

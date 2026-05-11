@@ -51,6 +51,7 @@ import com.example.liftrix.domain.model.ai.WorkoutGenerationResult
 import com.example.liftrix.domain.model.chat.ChatMessage
 import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.chat.UsageLimits
+import kotlin.math.absoluteValue
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -313,6 +314,11 @@ private fun MessageList(
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+    val generatedProgramAnchorMessageId = remember(messages, generatedProgram) {
+        generatedProgram?.let {
+            messages.lastOrNull { message -> message.isGeneratedProgramPreviewMessage() }?.id
+        }
+    }
 
     // Auto-scroll to bottom when new message arrives
     LaunchedEffect(messages.size, generatedProgram, isTyping) {
@@ -348,19 +354,32 @@ private fun MessageList(
                 },
                 modifier = Modifier.animateItem()
             )
-        }
 
-        generatedProgram?.let { result ->
-            item(key = "generated_program_preview") {
+            if (message.id == generatedProgramAnchorMessageId && generatedProgram != null) {
                 GeneratedProgramPreviewCard(
-                    result = result,
+                    result = generatedProgram,
                     isSaving = isSavingGeneratedProgram,
                     isSaved = generatedProgramSaved,
                     currentLanguage = currentLanguage,
                     onSave = onSaveGeneratedProgram,
                     onOverwrite = onOverwriteGeneratedProgram,
                     onDismiss = onDismissGeneratedProgram,
-                    modifier = Modifier.animateItem()
+                    modifier = Modifier.padding(top = LiftrixSpacing.small)
+                )
+            }
+        }
+
+        if (generatedProgram != null && generatedProgramAnchorMessageId == null) {
+            item(key = generatedProgram.previewItemKey()) {
+                GeneratedProgramPreviewCard(
+                    result = generatedProgram,
+                    isSaving = isSavingGeneratedProgram,
+                    isSaved = generatedProgramSaved,
+                    currentLanguage = currentLanguage,
+                    onSave = onSaveGeneratedProgram,
+                    onOverwrite = onOverwriteGeneratedProgram,
+                    onDismiss = onDismissGeneratedProgram,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
@@ -376,6 +395,18 @@ private fun MessageList(
             }
         }
     }
+}
+
+private fun ChatMessage.isGeneratedProgramPreviewMessage(): Boolean {
+    if (type != MessageType.AI_RESPONSE) return false
+    return content.contains("Review the preview below")
+}
+
+private fun WorkoutGenerationResult.previewItemKey(): String {
+    val programFingerprint = "${program.workoutName}_${program.days.size}_${program.days.sumOf { it.exercises.size }}"
+        .hashCode()
+        .absoluteValue
+    return "generated_program_preview_$programFingerprint"
 }
 
 @Composable

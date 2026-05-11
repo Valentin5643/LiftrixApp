@@ -224,9 +224,10 @@ abstract class FeatureModule {
         @Provides
         @Singleton
         fun provideSocialPrivacySettingsRepository(
-            socialPrivacySettingsDao: SocialPrivacySettingsDao
+            socialPrivacySettingsDao: SocialPrivacySettingsDao,
+            userProfileDao: UserProfileDao
         ): SocialPrivacySettingsRepository =
-            SocialPrivacySettingsRepositoryImpl(socialPrivacySettingsDao)
+            SocialPrivacySettingsRepositoryImpl(socialPrivacySettingsDao, userProfileDao)
 
         @Provides
         @Singleton
@@ -325,6 +326,7 @@ abstract class FeatureModule {
             workoutPostDao: WorkoutPostDao,
             postLikeDao: PostLikeDao,
             postCommentDao: PostCommentDao,
+            savedPostDao: SavedPostDao,
             followRelationshipDao: FollowRelationshipDao,
             privacyEnforcementService: PrivacyEnforcementService
         ): FeedCacheService =
@@ -333,6 +335,7 @@ abstract class FeatureModule {
                 workoutPostDao = workoutPostDao,
                 postLikeDao = postLikeDao,
                 postCommentDao = postCommentDao,
+                savedPostDao = savedPostDao,
                 followRelationshipDao = followRelationshipDao,
                 privacyEnforcementService = privacyEnforcementService
             )

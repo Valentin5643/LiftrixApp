@@ -64,6 +64,7 @@ class ChatbotViewModel @Inject constructor(
 
     private var currentConversationId = UUID.randomUUID().toString()
     private var userId: String? = null
+    private var isUserMessageInFlight = false
 
     private companion object {
         const val MONTHLY_USAGE_TAG = "MonthlyUsageDebug"
@@ -117,12 +118,18 @@ class ChatbotViewModel @Inject constructor(
             // Observe conversation messages
             chatRepository.observeConversation(userId, currentConversationId)
                 .collect { incomingMessages ->
-                    // Merge with any existing optimistic messages, avoiding duplicates
+                    // Merge with any existing local pending messages, avoiding duplicates
                     val currentMessages = _uiState.value.messages
-                    val optimisticMessages = currentMessages.filter { it.id.startsWith("optimistic_") }
+                    val pendingMessages = currentMessages
+                        .filter { it.isPendingLocalMessage() }
+                        .filterNot { pendingMessage ->
+                            incomingMessages.any { incomingMessage ->
+                                incomingMessage.isPersistedVersionOf(pendingMessage)
+                            }
+                        }
                     
-                    // Combine database messages with optimistic ones, ensuring no duplicates
-                    val mergedMessages = (incomingMessages + optimisticMessages)
+                    // Combine database messages with unpersisted pending messages, ensuring no duplicates
+                    val mergedMessages = (incomingMessages + pendingMessages)
                         .distinctBy { it.id }
                         .sortedBy { it.createdAt }
                     
@@ -171,16 +178,29 @@ class ChatbotViewModel @Inject constructor(
      */
     private fun sendMessage(content: String) {
         val trimmedContent = content.trim()
-        if (trimmedContent.isBlank()) return
+        if (trimmedContent.isBlank() || userId == null) return
+        if (isUserMessageInFlight || _uiState.value.isTyping || _uiState.value.isGeneratingProgram) {
+            Timber.w("[AI] ChatbotViewModel: ignored duplicate send while message is already in flight")
+            return
+        }
 
-        val intent = workoutGenerationIntentClassifier.classify(trimmedContent)
-        Timber.i("[AI] ChatbotViewModel: classified chat message intent=${intent.javaClass.simpleName} chars=${trimmedContent.length}")
-        when (intent) {
-            ChatIntent.GenerateWorkout -> generateWorkoutProgram(trimmedContent)
-            ChatIntent.ModifyWorkout -> modifyWorkoutProgram(trimmedContent, updateFromProgress = false)
-            ChatIntent.UpdatePlanFromProgress -> modifyWorkoutProgram(trimmedContent, updateFromProgress = true)
-            ChatIntent.NeedsClarification -> showWorkoutGenerationClarification(trimmedContent)
-            ChatIntent.GeneralChat -> sendChatMessage(trimmedContent)
+        isUserMessageInFlight = true
+        try {
+            val intent = workoutGenerationIntentClassifier.classify(trimmedContent)
+            Timber.i("[AI] ChatbotViewModel: classified chat message intent=${intent.javaClass.simpleName} chars=${trimmedContent.length}")
+            when (intent) {
+                ChatIntent.GenerateWorkout -> generateWorkoutProgram(trimmedContent)
+                ChatIntent.ModifyWorkout -> modifyWorkoutProgram(trimmedContent, updateFromProgress = false)
+                ChatIntent.UpdatePlanFromProgress -> modifyWorkoutProgram(trimmedContent, updateFromProgress = true)
+                ChatIntent.NeedsClarification -> {
+                    showWorkoutGenerationClarification(trimmedContent)
+                    isUserMessageInFlight = false
+                }
+                ChatIntent.GeneralChat -> sendChatMessage(trimmedContent)
+            }
+        } catch (exception: Exception) {
+            isUserMessageInFlight = false
+            throw exception
         }
     }
 
@@ -267,6 +287,8 @@ class ChatbotViewModel @Inject constructor(
                         errorMessage = "Failed to send message: ${exception.message}"
                     )
                 )
+            } finally {
+                isUserMessageInFlight = false
             }
         }
     }
@@ -380,6 +402,8 @@ class ChatbotViewModel @Inject constructor(
                     error = exception.toLiftrixError("Failed to generate workout program"),
                     lastFailedMessage = content
                 )
+            } finally {
+                isUserMessageInFlight = false
             }
         }
     }
@@ -545,6 +569,8 @@ class ChatbotViewModel @Inject constructor(
                     error = exception.toLiftrixError("Failed to modify workout"),
                     lastFailedMessage = content
                 )
+            } finally {
+                isUserMessageInFlight = false
             }
         }
     }
@@ -638,6 +664,25 @@ class ChatbotViewModel @Inject constructor(
         content = content,
         createdAt = createdAt
     )
+
+    private fun ChatMessage.isPendingLocalMessage(): Boolean {
+        return id.startsWith("optimistic_") ||
+            id.startsWith("workout_request_") ||
+            id.startsWith("workout_preview_") ||
+            id.startsWith("workout_modify_request_") ||
+            id.startsWith("workout_modification_preview_")
+    }
+
+    private fun ChatMessage.isPersistedVersionOf(pendingMessage: ChatMessage): Boolean {
+        val createdAfterPending = createdAt >= pendingMessage.createdAt
+        val closeToPendingMessage = createdAt - pendingMessage.createdAt <= 2 * 60 * 1000
+        return createdAfterPending &&
+            closeToPendingMessage &&
+            userId == pendingMessage.userId &&
+            conversationId == pendingMessage.conversationId &&
+            type == pendingMessage.type &&
+            content == pendingMessage.content
+    }
 
     private fun buildGeneratedProgramMessage(result: WorkoutGenerationResult): String {
         val program = result.program

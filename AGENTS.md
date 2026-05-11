@@ -77,7 +77,7 @@ For `Flow<Result<T>>`, return the flow directly and emit `Result.failure(...)` f
 ## Known Global Risk Areas
 
 - `UnifiedNavigationContainer` has known route-registration drift. Verify active graph registration before exposing any destination.
-- `fallbackToDestructiveMigration()` is configured while Room is at database version 9. Schema changes require explicit migration review.
+- Room is at database version 9 without destructive fallback. Schema changes require explicit migration review.
 - Some older docs and code comments mention 22 or more Hilt modules; the source-audited docs describe the current consolidated module state.
 - Some test files use a `.disabled` suffix and are not part of normal Gradle discovery.
 - Generated/vendor/build-output folders exist in the tree. Do not treat them as source modules unless specifically auditing them.

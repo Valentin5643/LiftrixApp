@@ -5,10 +5,11 @@ import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.local.entity.WorkoutEntity
 import com.example.liftrix.data.local.entity.WorkoutPostEntity
 import com.example.liftrix.domain.model.WorkoutStatus
+import com.example.liftrix.domain.model.social.CreateWorkoutPostRequest
+import com.example.liftrix.domain.model.social.PostVisibility
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.any
 import java.time.Instant
 import java.time.LocalDate
 import kotlin.test.Test
@@ -21,6 +22,23 @@ class WorkoutPostMapperTest {
     private val workoutDao: WorkoutDao = mockk()
     private val customExerciseDao: CustomExerciseDao = mockk()
     private val mapper = WorkoutPostMapper(workoutDao, customExerciseDao)
+
+    @Test
+    fun createEntityFromRequest_marksLocalPostPendingSync() {
+        val entity = mapper.createEntityFromRequest(
+            id = "post-1",
+            userId = "user-1",
+            request = CreateWorkoutPostRequest(
+                workoutId = "workout-1",
+                visibility = PostVisibility.PUBLIC
+            )
+        )
+
+        assertEquals(false, entity.isSynced)
+        assertEquals(true, entity.isDirty)
+        assertEquals(entity.createdAt, entity.lastModified)
+        assertEquals("PUBLIC", entity.visibility)
+    }
 
     @Test
     fun toDomain_mapsKotlinxSerializedExerciseNameIntoPostExercises() = runTest {

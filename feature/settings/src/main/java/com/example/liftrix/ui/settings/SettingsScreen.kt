@@ -81,6 +81,7 @@ fun SettingsScreen(
     onNavigateToHelpCenter: (() -> Unit)? = null,
     onNavigateToContactSupport: (() -> Unit)? = null,
     onNavigateToAbout: (() -> Unit)? = null,
+    onNavigateToPrivacySettings: (() -> Unit)? = null,
     onNavigateToPrivacyPolicy: (() -> Unit)? = null,
     onNavigateToTermsOfService: (() -> Unit)? = null,
     onNavigateToAIDisclaimer: (() -> Unit)? = null,
@@ -117,6 +118,7 @@ fun SettingsScreen(
         val stableOnNavigateToHelpCenter = remember(onNavigateToHelpCenter) { onNavigateToHelpCenter }
         val stableOnNavigateToContactSupport = remember(onNavigateToContactSupport) { onNavigateToContactSupport }
         val stableOnNavigateToAbout = remember(onNavigateToAbout) { onNavigateToAbout }
+        val stableOnNavigateToPrivacySettings = remember(onNavigateToPrivacySettings) { onNavigateToPrivacySettings }
         val stableOnNavigateToPrivacyPolicy = remember(onNavigateToPrivacyPolicy) { onNavigateToPrivacyPolicy }
         val stableOnNavigateToTermsOfService = remember(onNavigateToTermsOfService) { onNavigateToTermsOfService }
         val stableOnNavigateToAIDisclaimer = remember(onNavigateToAIDisclaimer) { onNavigateToAIDisclaimer }
@@ -188,6 +190,7 @@ fun SettingsScreen(
                             onNavigateToHelpCenter = stableOnNavigateToHelpCenter,
                             onNavigateToContactSupport = stableOnNavigateToContactSupport,
                             onNavigateToAbout = stableOnNavigateToAbout,
+                            onNavigateToPrivacySettings = stableOnNavigateToPrivacySettings,
                             onNavigateToAdminBanManagement = onNavigateToAdminBanManagement,
                             onNavigateToUpgradeToPremium = onNavigateToUpgradeToPremium,
                             onNavigateToCommunityGuidelines = stableOnNavigateToCommunityGuidelines,
@@ -265,6 +268,7 @@ private fun SettingsContent(
     onNavigateToPasswordChange: (() -> Unit)? = null,
     onNavigateToUsernameChange: (() -> Unit)? = null,
     onNavigateToAccountDeletion: (() -> Unit)? = null,
+    onNavigateToPrivacySettings: (() -> Unit)? = null,
     onNavigateToPrivacyPolicy: (() -> Unit)? = null,
     onNavigateToTermsOfService: (() -> Unit)? = null,
     onNavigateToAIDisclaimer: (() -> Unit)? = null,
@@ -293,6 +297,7 @@ private fun SettingsContent(
     val stableOnNavigateToHelpCenter = remember(onNavigateToHelpCenter) { onNavigateToHelpCenter }
     val stableOnNavigateToContactSupport = remember(onNavigateToContactSupport) { onNavigateToContactSupport }
     val stableOnNavigateToAbout = remember(onNavigateToAbout) { onNavigateToAbout }
+    val stableOnNavigateToPrivacySettings = remember(onNavigateToPrivacySettings) { onNavigateToPrivacySettings }
     val stableSettingsCategories = remember { settingsCategories }
     
     LazyColumn(
@@ -334,6 +339,7 @@ private fun SettingsContent(
                     onNavigateToPasswordChange = onNavigateToPasswordChange,
                     onNavigateToUsernameChange = onNavigateToUsernameChange,
                     onNavigateToAccountDeletion = onNavigateToAccountDeletion,
+                    onNavigateToPrivacySettings = stableOnNavigateToPrivacySettings,
                     onNavigateToPrivacyPolicy = stableOnNavigateToPrivacyPolicy,
                     onNavigateToTermsOfService = stableOnNavigateToTermsOfService,
                     onNavigateToAIDisclaimer = stableOnNavigateToAIDisclaimer,
@@ -399,6 +405,7 @@ private fun SettingsCategoryContent(
     onNavigateToPasswordChange: (() -> Unit)? = null,
     onNavigateToUsernameChange: (() -> Unit)? = null,
     onNavigateToAccountDeletion: (() -> Unit)? = null,
+    onNavigateToPrivacySettings: (() -> Unit)? = null,
     onNavigateToPrivacyPolicy: (() -> Unit)? = null,
     onNavigateToTermsOfService: (() -> Unit)? = null,
     onNavigateToAIDisclaimer: (() -> Unit)? = null,
@@ -445,6 +452,7 @@ private fun SettingsCategoryContent(
                     onNavigateToPasswordChange = onNavigateToPasswordChange,
                     onNavigateToUsernameChange = onNavigateToUsernameChange,
                     onNavigateToAccountDeletion = onNavigateToAccountDeletion,
+                    onNavigateToPrivacySettings = onNavigateToPrivacySettings,
                     onNavigateToPrivacyPolicy = onNavigateToPrivacyPolicy,
                     onNavigateToTermsOfService = onNavigateToTermsOfService,
                     onNavigateToAIDisclaimer = onNavigateToAIDisclaimer,
@@ -683,6 +691,7 @@ private fun PrivacySettings(
     onNavigateToPasswordChange: (() -> Unit)? = null,
     onNavigateToUsernameChange: (() -> Unit)? = null,
     onNavigateToAccountDeletion: (() -> Unit)? = null,
+    onNavigateToPrivacySettings: (() -> Unit)? = null,
     onNavigateToPrivacyPolicy: (() -> Unit)? = null,
     onNavigateToTermsOfService: (() -> Unit)? = null,
     onNavigateToAIDisclaimer: (() -> Unit)? = null,
@@ -697,6 +706,7 @@ private fun PrivacySettings(
     val stableOnNavigateToPasswordChange = remember(onNavigateToPasswordChange) { onNavigateToPasswordChange }
     val stableOnNavigateToUsernameChange = remember(onNavigateToUsernameChange) { onNavigateToUsernameChange }
     val stableOnNavigateToAccountDeletion = remember(onNavigateToAccountDeletion) { onNavigateToAccountDeletion }
+    val stableOnNavigateToPrivacySettings = remember(onNavigateToPrivacySettings) { onNavigateToPrivacySettings }
     val stableOnNavigateToPrivacyPolicy = remember(onNavigateToPrivacyPolicy) { onNavigateToPrivacyPolicy }
     val stableOnNavigateToTermsOfService = remember(onNavigateToTermsOfService) { onNavigateToTermsOfService }
     val stableOnNavigateToAIDisclaimer = remember(onNavigateToAIDisclaimer) { onNavigateToAIDisclaimer }
@@ -754,6 +764,16 @@ private fun PrivacySettings(
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+        )
+
+        SettingsNavigationItem(
+            title = "Privacy Settings",
+            subtitle = "Control profile visibility and social sharing",
+            icon = LiftrixIcons.Workflow.Settings,
+            onClick = {
+                stableOnEvent(SettingsEvent.NavigateToPrivacy)
+                stableOnNavigateToPrivacySettings?.invoke()
+            }
         )
 
         SettingsNavigationItem(

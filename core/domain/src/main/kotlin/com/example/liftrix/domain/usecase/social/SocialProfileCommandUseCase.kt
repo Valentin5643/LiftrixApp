@@ -3,6 +3,7 @@ package com.example.liftrix.domain.usecase.social
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.model.social.ProfileVisibility
 import com.example.liftrix.domain.model.social.SocialPrivacySettings
 import com.example.liftrix.domain.model.social.SocialProfile
 import com.example.liftrix.domain.repository.social.SocialPrivacySettingsRepository
@@ -197,6 +198,11 @@ class SocialProfileCommandUseCase @Inject constructor(
         // Ensure the privacy settings belong to the current user
         val settingsForUser = privacySettings.copy(userId = userId.value)
 
-        privacyRepository.updatePrivacySettings(settingsForUser).getOrThrow()
+        val updatedSettings = privacyRepository.updatePrivacySettings(settingsForUser).getOrThrow()
+        profileRepository.updatePrivacySetting(
+            userId = userId.value,
+            isPrivate = settingsForUser.profileVisibility != ProfileVisibility.PUBLIC
+        ).getOrThrow()
+        updatedSettings
     }
 }

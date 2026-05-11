@@ -180,7 +180,8 @@ class SendChatMessageUseCase @Inject constructor(
         val conversationContext = com.example.liftrix.domain.service.ConversationContext(
             recentMessages = recentMessages,
             workoutContext = workoutContext,
-            userPreferences = userPreferences
+            userPreferences = userPreferences,
+            includeWorkoutHistory = currentPreferences?.includeWorkoutHistory ?: true
         )
         
         // 7. Get AI response

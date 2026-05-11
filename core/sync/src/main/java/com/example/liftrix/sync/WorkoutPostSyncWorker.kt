@@ -11,7 +11,16 @@ import androidx.work.Constraints
 import androidx.work.NetworkType
 import androidx.work.BackoffPolicy
 import androidx.work.workDataOf
+import com.example.liftrix.data.local.dao.SocialProfileDao
+import com.example.liftrix.data.local.dao.UserProfileDao
+import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.local.dao.WorkoutPostDao
+import com.example.liftrix.data.local.entity.SocialProfileEntity
+import com.example.liftrix.data.local.entity.UserProfileEntity
+import com.example.liftrix.data.local.entity.WorkoutEntity
+import com.example.liftrix.data.local.entity.WorkoutPostEntity
+import com.example.liftrix.domain.model.WorkoutStatus
+import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.FieldValue
@@ -25,6 +34,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.util.concurrent.TimeUnit
 
 /**
@@ -39,6 +51,9 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val postDao: WorkoutPostDao,
+    private val socialProfileDao: SocialProfileDao,
+    private val userProfileDao: UserProfileDao,
+    private val workoutDao: WorkoutDao,
     private val firestore: FirebaseFirestore,
     private val gson: Gson
 ) : BaseSyncWorker(context, params) {
@@ -52,6 +67,7 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
     companion object {
         const val WORK_NAME = "workout_post_sync_work"
         private const val MAX_RETRY_COUNT = 3
+        private const val PUBLIC_POST_SYNC_LIMIT = 100
         
         fun createWorkRequest(userId: String, forceSync: Boolean = false): OneTimeWorkRequest {
             return OneTimeWorkRequestBuilder<WorkoutPostSyncWorker>()
@@ -93,7 +109,8 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
             val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
                 OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
             val unsyncedPosts = if (useDirtyFlagGating) {
-                postDao.getDirtyPosts(userId)
+                (postDao.getDirtyPosts(userId) + postDao.getUnsyncedPosts(userId))
+                    .distinctBy { it.id }
             } else {
                 postDao.getUnsyncedPosts(userId)
             }
@@ -117,18 +134,26 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
             
             // Use batch processing with cancellation checks
             var processed = 0
-            processBatchesWithCancellation(
-                items = unsyncedPosts,
-                batchSize = 10
-            ) { batch ->
-                processed += syncPostBatch(batch)
+            if (unsyncedPosts.isNotEmpty()) {
+                processBatchesWithCancellation(
+                    items = unsyncedPosts,
+                    batchSize = 10
+                ) { batch ->
+                    processed += syncPostBatch(batch)
+                }
             }
+            val hydratedPublicPosts = if (forceSync) {
+                hydrateRecentPublicPosts(userId)
+            } else {
+                0
+            }
+            Timber.i("[POST-SYNC] Hydrated $hydratedPublicPosts public posts for Explore during force sync")
             
             Timber.i("[POST-SYNC] ✅ Successfully synced $processed/${unsyncedPosts.size} workout posts for user $userId")
             
             return Result.success(
                 Data.Builder()
-                    .putInt(KEY_SYNC_COUNT, processed)
+                    .putInt(KEY_SYNC_COUNT, processed + hydratedPublicPosts)
                     .build()
             )
             
@@ -268,6 +293,205 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
                 Timber.w("[POST-BATCH]   - Failed post: ${post.id} (workout: ${post.workoutId})")
             }
             throw e
+        }
+    }
+
+    private suspend fun hydrateRecentPublicPosts(viewerId: String): Int = withContext(Dispatchers.IO) {
+        val snapshot = firestore.collection("workout_posts")
+            .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .limit(PUBLIC_POST_SYNC_LIMIT.toLong())
+            .get()
+            .await()
+
+        var hydrated = 0
+        for (doc in snapshot.documents.sortedByDescending { it.data?.longValue("createdAt") ?: 0L }) {
+            checkCancellation()
+            val post = remotePostToEntity(doc.id, doc.data ?: continue) ?: continue
+            if (post.userId == viewerId || post.visibility != "PUBLIC" || post.isHidden) continue
+
+            ensureAuthorProfileForPublicPost(post.userId)
+            ensureWorkoutStubForPublicPost(post)
+            postDao.upsertFromRemote(post)
+            hydrated++
+        }
+
+        Timber.i("[POST-SYNC] Hydrated $hydrated recent PUBLIC posts for Explore")
+        hydrated
+    }
+
+    private suspend fun ensureAuthorProfileForPublicPost(authorId: String) {
+        val existingUserProfile = userProfileDao.getProfileForUserSuspend(authorId)
+        val existingSocialProfile = socialProfileDao.getSocialProfileByUserId(authorId)
+        if (existingUserProfile != null && existingSocialProfile != null) return
+
+        val publicProfileData = try {
+            firestore.collection("users_public").document(authorId).get().await().data
+        } catch (e: Exception) {
+            Timber.w(e, "[POST-SYNC] Failed to fetch public profile for post author $authorId")
+            null
+        }
+
+        val now = LocalDateTime.now()
+        val nowMillis = System.currentTimeMillis()
+        val displayName = publicProfileData?.stringValue("displayName")
+            ?: publicProfileData?.stringValue("username")
+            ?: "Liftrix User"
+        val username = publicProfileData?.stringValue("username") ?: "user_${authorId.take(8)}"
+        val photoUrl = publicProfileData?.stringValue("profileImageUrl")
+            ?: publicProfileData?.stringValue("profilePhotoUrl")
+
+        if (existingUserProfile == null) {
+            userProfileDao.insertProfile(
+                UserProfileEntity(
+                    id = authorId,
+                    userId = authorId,
+                    displayName = displayName,
+                    age = null,
+                    weightKg = null,
+                    heightCm = null,
+                    fitnessLevel = null,
+                    goals = null,
+                    availableEquipment = null,
+                    workoutFrequency = null,
+                    preferredWorkoutDuration = null,
+                    completedAt = null,
+                    createdAt = now,
+                    updatedAt = now,
+                    isSynced = true,
+                    syncVersion = nowMillis,
+                    isDirty = false,
+                    lastModified = nowMillis,
+                    bio = publicProfileData?.stringValue("bio"),
+                    isPublic = !(publicProfileData?.booleanValue("isPrivate") ?: false),
+                    lastActiveAt = now,
+                    totalWorkouts = publicProfileData?.intValue("totalWorkouts") ?: 0,
+                    currentStreak = publicProfileData?.intValue("currentStreak") ?: 0,
+                    longestStreak = publicProfileData?.intValue("longestStreak") ?: 0,
+                    memberSince = now,
+                    profileCompletionPercentage = 0,
+                    profileImageUrl = photoUrl,
+                    profileImageUpdatedAt = null,
+                    hasCustomProfileImage = photoUrl != null
+                )
+            )
+        }
+
+        if (existingSocialProfile == null) {
+            socialProfileDao.insertProfile(
+                SocialProfileEntity(
+                    userId = authorId,
+                    username = username,
+                    displayName = displayName,
+                    bio = publicProfileData?.stringValue("bio"),
+                    profilePhotoUrl = photoUrl,
+                    coverPhotoUrl = publicProfileData?.stringValue("coverPhotoUrl"),
+                    workoutCount = publicProfileData?.intValue("totalWorkouts") ?: 0,
+                    followerCount = publicProfileData?.intValue("followerCount") ?: 0,
+                    followingCount = publicProfileData?.intValue("followingCount") ?: 0,
+                    memberSince = publicProfileData?.longValue("memberSince") ?: nowMillis,
+                    lastActive = publicProfileData?.longValue("lastActive") ?: nowMillis,
+                    isVerified = publicProfileData?.booleanValue("isVerified") ?: false,
+                    isPrivate = publicProfileData?.booleanValue("isPrivate") ?: false,
+                    hideFromSuggestions = publicProfileData?.booleanValue("hideFromSuggestions") ?: false,
+                    allowFriendRequests = publicProfileData?.booleanValue("allowFriendRequests") ?: true,
+                    instagramHandle = publicProfileData?.stringValue("instagramHandle"),
+                    youtubeChannel = publicProfileData?.stringValue("youtubeChannel"),
+                    personalWebsite = publicProfileData?.stringValue("personalWebsite"),
+                    isSynced = true,
+                    syncVersion = nowMillis,
+                    isDirty = false,
+                    lastModified = nowMillis,
+                    createdAt = publicProfileData?.longValue("createdAt") ?: nowMillis,
+                    updatedAt = nowMillis
+                )
+            )
+        }
+    }
+
+    private suspend fun ensureWorkoutStubForPublicPost(post: WorkoutPostEntity) {
+        if (workoutDao.getWorkoutByIdForUser(post.workoutId, post.userId) != null) return
+
+        val createdAt = Instant.ofEpochMilli(post.createdAt)
+        workoutDao.insertWorkout(
+            WorkoutEntity(
+                id = post.workoutId,
+                userId = post.userId,
+                name = "Shared workout",
+                date = createdAt.atZone(ZoneOffset.UTC).toLocalDate(),
+                exercisesJson = "[]",
+                status = WorkoutStatus.COMPLETED,
+                startTime = null,
+                endTime = null,
+                notes = null,
+                templateId = null,
+                createdAt = createdAt,
+                updatedAt = Instant.ofEpochMilli(post.updatedAt),
+                isSynced = true,
+                syncVersion = post.syncVersion,
+                isDirty = false,
+                lastModified = post.lastModified
+            )
+        )
+    }
+
+    private fun remotePostToEntity(documentId: String, data: Map<String, Any?>): WorkoutPostEntity? {
+        val userId = data.stringValue("userId") ?: return null
+        val workoutId = data.stringValue("workoutId") ?: return null
+        val createdAt = data.longValue("createdAt") ?: System.currentTimeMillis()
+        val updatedAt = data.longValue("updatedAt") ?: createdAt
+        val lastModified = data.longValue("lastModified") ?: updatedAt
+
+        return WorkoutPostEntity(
+            id = data.stringValue("id") ?: documentId,
+            userId = userId,
+            workoutId = workoutId,
+            caption = data.stringValue("caption"),
+            mediaUrls = data.jsonArrayString("mediaUrls"),
+            mediaThumbnails = data.jsonArrayString("mediaThumbnails"),
+            workoutDuration = data.intValue("workoutDuration"),
+            totalVolume = data.doubleValue("totalVolume"),
+            exercisesCount = data.intValue("exercisesCount"),
+            prsCount = data.intValue("prsCount") ?: 0,
+            likeCount = data.intValue("likeCount") ?: 0,
+            commentCount = data.intValue("commentCount") ?: 0,
+            shareCount = data.intValue("shareCount") ?: 0,
+            saveCount = data.intValue("saveCount") ?: 0,
+            visibility = data.stringValue("visibility") ?: "PUBLIC",
+            createdAt = createdAt,
+            updatedAt = updatedAt,
+            isSynced = true,
+            syncVersion = data.longValue("syncVersion") ?: lastModified,
+            isDirty = false,
+            lastModified = lastModified,
+            isHidden = data.booleanValue("isHidden") ?: false,
+            hiddenReason = data.stringValue("hiddenReason"),
+            hiddenAt = data.longValue("hiddenAt"),
+            hiddenByUserId = data.stringValue("hiddenByUserId")
+        )
+    }
+
+    private fun Map<String, Any?>.stringValue(key: String): String? = this[key] as? String
+
+    private fun Map<String, Any?>.booleanValue(key: String): Boolean? = this[key] as? Boolean
+
+    private fun Map<String, Any?>.intValue(key: String): Int? = (this[key] as? Number)?.toInt()
+
+    private fun Map<String, Any?>.doubleValue(key: String): Double? = (this[key] as? Number)?.toDouble()
+
+    private fun Map<String, Any?>.longValue(key: String): Long? {
+        return when (val value = this[key]) {
+            is Timestamp -> value.toDate().time
+            is Number -> value.toLong()
+            else -> null
+        }
+    }
+
+    private fun Map<String, Any?>.jsonArrayString(key: String): String? {
+        return when (val value = this[key]) {
+            null -> null
+            is String -> value
+            is List<*> -> gson.toJson(value)
+            else -> null
         }
     }
 }

@@ -30,6 +30,7 @@ import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.service.FeedCacheService
 import com.example.liftrix.domain.sync.SyncScheduler
+import com.example.liftrix.domain.usecase.social.OfficialLiftrixAccountCatalog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -97,7 +98,7 @@ class FeedRepositoryImpl @Inject constructor(
                     }
 
                     // Include the current user's own posts in their home feed
-                    val allUserIds = finalIds + userId
+                    val allUserIds = (finalIds + OfficialLiftrixAccountCatalog.accounts.map { it.id } + userId).distinct()
 
                     // Check total posts for this user
                     val userPostCount = workoutPostDao.getUserPostCount(userId)
@@ -142,6 +143,12 @@ class FeedRepositoryImpl @Inject constructor(
             }
 
             FeedType.DISCOVERY -> {
+                try {
+                    syncScheduler.enqueueWorkoutPostSync(userId, forceSync = true)
+                } catch (e: Exception) {
+                    Timber.w(e, "[WORKOUT-POSTS] Failed to enqueue public post hydration for discovery feed")
+                }
+
                 // Get followed users to potentially exclude them from discovery
                 val followedUserIds = withContext(Dispatchers.IO) {
                     val followedIds = followRelationshipDao.getFollowingUserIds(userId)
@@ -156,8 +163,10 @@ class FeedRepositoryImpl @Inject constructor(
                         followedIds
                     }
 
-                    // Only exclude followed users from discovery (allow current user's PUBLIC posts)
-                    val excludeIds = finalIds
+                    // Keep official workout seed creators eligible for Explore even when onboarding
+                    // also follows them, so the tab keeps a workout-focused identity.
+                    val officialSeedIds = OfficialLiftrixAccountCatalog.accounts.map { it.id }.toSet()
+                    val excludeIds = finalIds.filterNot { it in officialSeedIds }
                     excludeIds
                 }
 
@@ -263,7 +272,7 @@ class FeedRepositoryImpl @Inject constructor(
                 prsCount = 0 // Will be calculated later
             )
 
-            workoutPostDao.insertPost(entity)
+            workoutPostDao.upsertLocal(entity)
 
             Timber.d("[WORKOUT-POSTS] Post created successfully - ID=$postId, visibility=${entity.visibility}")
 
@@ -327,7 +336,7 @@ class FeedRepositoryImpl @Inject constructor(
                 isSynced = false
             )
 
-            workoutPostDao.updatePost(updatedPost)
+            workoutPostDao.upsertLocal(updatedPost)
 
             enhanceWithUserData(updatedPost, userId)
         }
@@ -1019,8 +1028,14 @@ class FeedRepositoryImpl @Inject constructor(
                             getDirectDiscoveryPosts(userId, excludeUserIds, pageSize, offset)
                         } else {
                             // Get actual post entities using the cached post IDs
-                            cachedPostIds.mapNotNull { postId ->
+                            val cachedPosts = cachedPostIds.mapNotNull { postId ->
                                 workoutPostDao.getPostById(postId)
+                            }
+                            if (cachedPosts.isEmpty()) {
+                                Timber.w("[FEED-CACHE]: Cache entries did not resolve to posts, falling back to direct query for user=$userId")
+                                getDirectDiscoveryPosts(userId, excludeUserIds, pageSize, offset)
+                            } else {
+                                cachedPosts
                             }
                         }
                     } else {

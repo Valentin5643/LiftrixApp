@@ -122,7 +122,9 @@ class WorkoutPostMapper @Inject constructor(
             createdAt = domain.createdAt,
             updatedAt = domain.updatedAt,
             isSynced = false,
-            syncVersion = 0
+            syncVersion = 0,
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
         )
     }
     
@@ -162,7 +164,9 @@ class WorkoutPostMapper @Inject constructor(
             createdAt = currentTime,
             updatedAt = currentTime,
             isSynced = false,
-            syncVersion = 0
+            syncVersion = 0,
+            isDirty = true,
+            lastModified = currentTime
         )
     }
     

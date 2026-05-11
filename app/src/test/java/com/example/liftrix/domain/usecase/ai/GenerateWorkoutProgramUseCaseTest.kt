@@ -16,6 +16,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import org.junit.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -176,7 +177,7 @@ class GenerateWorkoutProgramUseCaseTest {
         val result = useCase("user-1", "Create a 1-day beginner workout using dumbbells only")
 
         assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull()?.message?.contains("failed parse after repair") == true)
+        assertTrue(result.exceptionOrNull()?.message?.contains("repair response was not valid workout JSON") == true)
     }
 
     @Test
@@ -198,6 +199,7 @@ class GenerateWorkoutProgramUseCaseTest {
         }
     }
 
+    @Ignore("Local repair fallback was removed; invalid AI repair responses now fail closed.")
     @Test
     fun `local repair clamps beginner reps above fifteen after identical AI repair`() = runTest {
         coEvery { profileQueryUseCase.getById("user-1") } returns Result.success(null)
@@ -217,6 +219,7 @@ class GenerateWorkoutProgramUseCaseTest {
         assertEquals(15, bicycleCrunches.repsMax)
     }
 
+    @Ignore("Local repair fallback was removed; invalid AI repair responses now fail closed.")
     @Test
     fun `local repair clamps beginner reps below eight after identical AI repair`() = runTest {
         coEvery { profileQueryUseCase.getById("user-1") } returns Result.success(null)
@@ -237,6 +240,7 @@ class GenerateWorkoutProgramUseCaseTest {
         assertEquals(8, replacedBurpee.repsMax)
     }
 
+    @Ignore("Local repair fallback was removed; invalid AI repair responses now fail closed.")
     @Test
     fun `local repair replaces above beginner exercises with compatible catalog exercises`() = runTest {
         coEvery { profileQueryUseCase.getById("user-1") } returns Result.success(null)
@@ -258,6 +262,7 @@ class GenerateWorkoutProgramUseCaseTest {
         assertTrue("burpees" !in exerciseIds)
     }
 
+    @Ignore("Local repair fallback was removed; invalid AI repair responses now fail closed.")
     @Test
     fun `identical AI repair does not fail when local repair can validate program`() = runTest {
         coEvery { profileQueryUseCase.getById("user-1") } returns Result.success(null)
@@ -275,6 +280,7 @@ class GenerateWorkoutProgramUseCaseTest {
         assertEquals(2, result.getOrThrow().repairAttempts)
     }
 
+    @Ignore("Local repair fallback was removed; invalid AI repair responses now fail closed.")
     @Test
     fun `locally repaired beginner program is saved after validation passes`() = runTest {
         coEvery { profileQueryUseCase.getById("user-1") } returns Result.success(null)

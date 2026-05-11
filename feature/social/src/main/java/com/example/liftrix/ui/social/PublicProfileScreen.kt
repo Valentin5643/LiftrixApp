@@ -43,6 +43,8 @@ import com.example.liftrix.ui.social.formatDuration
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.social.ConnectionStatus
 import com.example.liftrix.domain.model.FitnessLevel
+import com.example.liftrix.domain.model.social.MediaItem
+import com.example.liftrix.domain.model.social.MediaType
 import com.example.liftrix.domain.model.social.PublicUserProfile
 import com.example.liftrix.domain.model.social.PublicWorkoutStats
 import com.example.liftrix.ui.components.cards.LiftrixCard
@@ -575,6 +577,13 @@ private fun SocialWorkoutPostCard(
                 )
             }
 
+            if (post.mediaItems.isNotEmpty()) {
+                SocialPostMediaCarousel(
+                    mediaItems = post.mediaItems,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -618,6 +627,71 @@ private fun SocialWorkoutPostCard(
                         tint = if (isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SocialPostMediaCarousel(
+    mediaItems: List<MediaItem>,
+    modifier: Modifier = Modifier
+) {
+    if (mediaItems.size == 1) {
+        SocialPostMediaItem(
+            mediaItem = mediaItems.first(),
+            modifier = modifier
+                .fillMaxWidth()
+                .height(220.dp)
+        )
+    } else {
+        LazyRow(
+            modifier = modifier,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(mediaItems) { mediaItem ->
+                SocialPostMediaItem(
+                    mediaItem = mediaItem,
+                    modifier = Modifier
+                        .width(220.dp)
+                        .height(160.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SocialPostMediaItem(
+    mediaItem: MediaItem,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier) {
+        AsyncImage(
+            model = mediaItem.thumbnailUrl ?: mediaItem.originalUrl,
+            contentDescription = "Post media",
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(8.dp)),
+            contentScale = ContentScale.Crop
+        )
+
+        if (mediaItem.type == MediaType.VIDEO) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(48.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                shape = CircleShape
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = "Play video",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(12.dp)
+                )
             }
         }
     }
