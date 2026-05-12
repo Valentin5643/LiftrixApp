@@ -178,6 +178,7 @@ class UserPublicSyncWorker @AssistedInject constructor(
                     .document(userId)
                 
                 publicDocRef.set(minimalPublicData, SetOptions.merge()).await()
+                Timber.i("[PUBLIC-LOG] Created minimal public profile in $USERS_PUBLIC_COLLECTION/$userId searchable=true")
                 
                 Timber.i("[USER-PUBLIC-SYNC] ✅ Created minimal public profile for new user: $userId")
                 Timber.i("[USER-PUBLIC-SYNC]   - User is now discoverable with basic information")
@@ -256,6 +257,7 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 "fitnessLevel" to userProfile?.fitnessLevel,
                 "isPublic" to isPublicProfile,
                 "isPrivate" to !isPublicProfile,
+                "isSearchable" to isPublicProfile,
                 "totalWorkouts" to totalWorkouts,
                 "currentStreak" to workoutStats.currentStreak,
                 "longestStreak" to workoutStats.longestStreak,
@@ -313,7 +315,9 @@ class UserPublicSyncWorker @AssistedInject constructor(
             }
             
             Timber.d("[USER-PUBLIC-SYNC] 📦 Uploading to $USERS_PUBLIC_COLLECTION/$userId")
+            Timber.i("[PUBLIC-LOG] Uploading public profile to $USERS_PUBLIC_COLLECTION/$userId username=${userAccount.username} displayName=${publicUserData["displayName"]} isPublic=$isPublicProfile isSearchable=${publicUserData["isSearchable"]} searchTokens=${searchTokens.size}")
             publicDocRef.set(publicUserData, SetOptions.merge()).await()
+            Timber.i("[PUBLIC-LOG] Uploaded public profile to $USERS_PUBLIC_COLLECTION/$userId")
             Timber.i("[USER-PUBLIC-SYNC] ✅ Successfully uploaded to users_public collection")
             
             // Also sync to user_search_cache collection for tokenized search
@@ -340,7 +344,9 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 .document(userId)
             
             Timber.d("[USER-PUBLIC-SYNC] 📦 Uploading to $USER_SEARCH_CACHE_COLLECTION/$userId")
+            Timber.i("[PUBLIC-LOG] Uploading search cache to $USER_SEARCH_CACHE_COLLECTION/$userId isSearchable=true searchTokens=${searchTokens.size} keywords=${searchKeywords.size}")
             searchCacheDocRef.set(searchCacheData, SetOptions.merge()).await()
+            Timber.i("[PUBLIC-LOG] Uploaded search cache to $USER_SEARCH_CACHE_COLLECTION/$userId")
             Timber.i("[USER-PUBLIC-SYNC] ✅ Successfully uploaded to user_search_cache collection")
             
             Timber.i("[USER-PUBLIC-SYNC] ✅ User public data sync completed successfully for user: $userId")

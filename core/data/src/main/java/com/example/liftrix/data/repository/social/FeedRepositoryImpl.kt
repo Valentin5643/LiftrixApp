@@ -273,6 +273,9 @@ class FeedRepositoryImpl @Inject constructor(
             )
 
             workoutPostDao.upsertLocal(entity)
+            Timber.i(
+                "[PUBLIC-LOG] Local post created id=${entity.id} user=$userId workout=${entity.workoutId} visibility=${entity.visibility} isDirty=${entity.isDirty} isSynced=${entity.isSynced}"
+            )
 
             Timber.d("[WORKOUT-POSTS] Post created successfully - ID=$postId, visibility=${entity.visibility}")
 
@@ -1085,11 +1088,20 @@ class FeedRepositoryImpl @Inject constructor(
         pageSize: Int,
         offset: Int
     ): List<com.example.liftrix.data.local.entity.WorkoutPostEntity> {
-        return workoutPostDao.getPublicPostsExcludingUsers(
+        val posts = workoutPostDao.getPublicPostsExcludingUsers(
             excludeUserIds = excludeUserIds,
             limit = pageSize,
             offset = offset
         )
+        Timber.i(
+            "[PUBLIC-LOG] Discovery direct query user=$userId offset=$offset limit=$pageSize returned=${posts.size}"
+        )
+        posts.take(5).forEach { post ->
+            Timber.d(
+                "[PUBLIC-LOG] Discovery post id=${post.id} author=${post.userId} visibility=${post.visibility} hidden=${post.isHidden}"
+            )
+        }
+        return posts
     }
 
     /**

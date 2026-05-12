@@ -17,8 +17,10 @@ import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
+import com.example.liftrix.domain.repository.social.FeedRepository
 import com.example.liftrix.domain.service.MediaUploadService
 import com.example.liftrix.domain.repository.AuthRepository
+import com.example.liftrix.domain.model.social.CreateWorkoutPostRequest
 import com.example.liftrix.domain.model.social.WorkoutPost
 import com.example.liftrix.domain.model.social.PostVisibility
 import com.example.liftrix.domain.model.social.WorkoutSummary
@@ -43,6 +45,7 @@ import com.example.liftrix.domain.model.WorkoutId
 @HiltViewModel
 class PostCreationViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository,
+    private val feedRepository: FeedRepository,
     private val mediaUploadService: MediaUploadService,
     private val authRepository: AuthRepository
 ) : ModernBaseViewModel<UiState<PostCreationUiState>>(initialState = UiState.Success(PostCreationUiState.Initial)) {
@@ -69,6 +72,7 @@ class PostCreationViewModel @Inject constructor(
         privacy: PostVisibility
     ) {
         Timber.d("Creating post for workout $workoutId with ${mediaUris.size} media items")
+        Timber.i("[PUBLIC-LOG] PostCreationViewModel createPost workout=$workoutId privacy=${privacy.name} mediaCount=${mediaUris.size}")
 
         viewModelScope.launch {
             updateState { UiState.Loading }
@@ -200,27 +204,20 @@ class PostCreationViewModel @Inject constructor(
             duration = workout.getDuration()?.toMinutes()?.toInt() ?: 0
         )
 
-        // Create post entity using corrected volume
-        val post = WorkoutPost(
-            id = UUID.randomUUID().toString(),
-            userId = userId.value,
+        val request = CreateWorkoutPostRequest(
             workoutId = workoutId,
             caption = caption.trim(),
             mediaUrls = mediaUrls,
-            mediaThumbnails = mediaUrls.map { it.replace("/original/", "/thumb/") },
-            workoutDuration = workout.getDuration()?.toMinutes()?.toInt() ?: 0,
-            totalVolume = finalVolume,
-            exercisesCount = workout.exercises.size,
-            prsCount = 0, // PR detection handled separately
-            workoutSummary = workoutSummary,
-            visibility = privacy,
-            createdAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis()
+            visibility = privacy
+        )
+        Timber.i(
+            "[PUBLIC-LOG] Persisting workout post workout=$workoutId privacy=${privacy.name} mediaCount=${mediaUrls.size} totalSets=${workoutSummary.totalSets} totalVolume=${workoutSummary.totalVolume}"
         )
 
-        Timber.d("Post creation prepared in feature:workout; persistence is delegated to social/home feature callbacks")
-        
-        return post
+        return feedRepository.createPost(
+            userId = userId.value,
+            request = request
+        ).getOrThrow()
     }
 
     /**

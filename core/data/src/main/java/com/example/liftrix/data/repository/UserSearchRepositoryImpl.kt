@@ -73,7 +73,7 @@ class UserSearchRepositoryImpl @Inject constructor(
 ) : UserSearchRepository {
 
     companion object {
-        private const val USERS_PUBLIC_COLLECTION = "social_profiles"
+        private const val USERS_PUBLIC_COLLECTION = "users_public"
         private const val USER_SEARCH_CACHE_COLLECTION = "user_search_cache"
         private const val QR_CODE_COLLECTION = "qr_codes"
         private const val PROFILE_VIEWS_COLLECTION = "profile_views"
@@ -660,13 +660,15 @@ class UserSearchRepositoryImpl @Inject constructor(
     ): List<UserSearchResult> {
         return try {
             val searchTokens = generateSearchTokensFromQuery(query)
+            Timber.i("[PUBLIC-LOG] Firebase user search query='$query' tokens=$searchTokens")
             val documents = legacyDataSource.searchUsersWithTokens(searchTokens, MAX_SEARCH_RESULTS)
             val results = documents.mapNotNull { data ->
                 mapLegacySearchResult(data, viewerId)
             }
 
             if (results.isEmpty()) {
-                Timber.w("[FIREBASE-SEARCH] 🚫 Tokenized search found no results for: '$query'")
+                Timber.w("[PUBLIC-LOG] Tokenized search found no results for '$query'; falling back to basic $USERS_PUBLIC_COLLECTION scan")
+                return searchLegacyUsersBasic(query, viewerId, filters)
             }
             results
         } catch (e: Exception) {
@@ -682,7 +684,8 @@ class UserSearchRepositoryImpl @Inject constructor(
     ): List<UserSearchResult> {
         return try {
             val documents = legacyDataSource.searchUsersBasic(MAX_SEARCH_RESULTS)
-            documents.mapNotNull { data ->
+            Timber.i("[PUBLIC-LOG] Basic search candidate count=${documents.size} query='$query'")
+            val results = documents.mapNotNull { data ->
                 val displayName = data["displayName"] as? String ?: return@mapNotNull null
                 val username = data["username"] as? String
                 val userId = data["userId"] as? String ?: return@mapNotNull null
@@ -695,6 +698,8 @@ class UserSearchRepositoryImpl @Inject constructor(
 
                 mapLegacySearchResult(data, viewerId)
             }
+            Timber.i("[PUBLIC-LOG] Basic search matched ${results.size} users for query='$query'")
+            results
         } catch (e: Exception) {
             Timber.e(e, "[BASIC-SEARCH] ❌ Basic search failed: ${e.message}")
             emptyList()

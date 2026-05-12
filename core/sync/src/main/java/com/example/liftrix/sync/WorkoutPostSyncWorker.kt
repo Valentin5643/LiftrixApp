@@ -102,6 +102,7 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
             checkCancellation()
             
             val forceSync = inputData.getBoolean("forceSync", false)
+            Timber.i("[PUBLIC-LOG] WorkoutPostSyncWorker started user=$userId forceSync=$forceSync")
 
             // 🔥 ENHANCED: Comprehensive logging for workout post sync
             Timber.i("[POST-SYNC] 🔍 Starting WorkoutPostSyncWorker for user $userId (forceSync: $forceSync)")
@@ -116,6 +117,7 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
             }
             
             if (unsyncedPosts.isEmpty() && !forceSync) {
+                Timber.w("[PUBLIC-LOG] WorkoutPostSyncWorker found no unsynced posts for user=$userId")
                 Timber.i("[POST-SYNC] ✅ No unsynced workout posts found for user $userId")
                 return Result.success(
                     Data.Builder()
@@ -130,6 +132,7 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
                 Timber.d("[POST-SYNC]     - Caption: '${post.caption?.take(50) ?: "No caption"}${if (post.caption?.length ?: 0 > 50) "..." else ""}'")
                 Timber.d("[POST-SYNC]     - Visibility: ${post.visibility}")
                 Timber.d("[POST-SYNC]     - Engagement: ${post.likeCount} likes, ${post.commentCount} comments")
+                Timber.i("[PUBLIC-LOG] Pending sync post id=${post.id} workout=${post.workoutId} visibility=${post.visibility} dirty=${post.isDirty} synced=${post.isSynced}")
             }
             
             // Use batch processing with cancellation checks
@@ -261,6 +264,9 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
                 "syncVersion" to timestamp,
                 "lastModified" to post.lastModified
             )
+            if (post.visibility == "PUBLIC") {
+                Timber.i("[PUBLIC-LOG] Uploading PUBLIC workout post id=${post.id} user=${post.userId} workout=${post.workoutId} likes=${post.likeCount} comments=${post.commentCount}")
+            }
             
             batch.set(docRef, postData, SetOptions.merge())
         }
@@ -281,6 +287,9 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
                 userId = postsToUpload.first().userId,
                 syncVersion = timestamp
             )
+            postsToUpload.filter { it.visibility == "PUBLIC" }.forEach { post ->
+                Timber.i("[PUBLIC-LOG] Uploaded PUBLIC workout post id=${post.id} syncVersion=$timestamp")
+            }
             
             Timber.i("[POST-BATCH] 📊 Successfully synced batch of ${postsToUpload.size} workout posts")
             return postsToUpload.size
@@ -312,6 +321,7 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
             ensureAuthorProfileForPublicPost(post.userId)
             ensureWorkoutStubForPublicPost(post)
             postDao.upsertFromRemote(post)
+            Timber.i("[PUBLIC-LOG] Hydrated PUBLIC post into local feed id=${post.id} author=${post.userId} viewer=$viewerId")
             hydrated++
         }
 

@@ -11,18 +11,20 @@ class LegacyUserSearchFirestoreDataSource @Inject constructor(
     private val firestore: FirebaseFirestore
 ) {
     companion object {
-        private const val USERS_PUBLIC_COLLECTION = "social_profiles"
+        private const val USERS_PUBLIC_COLLECTION = "users_public"
         private const val USER_SEARCH_CACHE_COLLECTION = "user_search_cache"
         private const val QR_CODE_COLLECTION = "qr_codes"
         private const val PROFILE_VIEWS_COLLECTION = "profile_views"
     }
 
     suspend fun getPublicProfileData(userId: String): Map<String, Any>? {
+        Timber.i("[PUBLIC-LOG] Reading public profile from $USERS_PUBLIC_COLLECTION/$userId")
         val document = firestore.collection(USERS_PUBLIC_COLLECTION)
             .document(userId)
             .get()
             .await()
         if (!document.exists()) {
+            Timber.w("[PUBLIC-LOG] Public profile missing in $USERS_PUBLIC_COLLECTION/$userId")
             return null
         }
         return document.data
@@ -102,6 +104,7 @@ class LegacyUserSearchFirestoreDataSource @Inject constructor(
         limit: Int
     ): List<Map<String, Any>> {
         return try {
+            Timber.i("[PUBLIC-LOG] Searching $USER_SEARCH_CACHE_COLLECTION with tokens=$searchTokens limit=$limit")
             val snapshot = firestore.collection(USER_SEARCH_CACHE_COLLECTION)
                 .whereEqualTo("isSearchable", true)
                 .whereArrayContainsAny("searchTokens", searchTokens)
@@ -109,25 +112,28 @@ class LegacyUserSearchFirestoreDataSource @Inject constructor(
                 .limit(limit.toLong())
                 .get()
                 .await()
+            Timber.i("[PUBLIC-LOG] Token search returned ${snapshot.size()} docs from $USER_SEARCH_CACHE_COLLECTION")
             snapshot.documents.mapNotNull { it.data }
         } catch (e: Exception) {
-            Timber.e(e, "Legacy searchUsersWithTokens failed")
+            Timber.e(e, "[PUBLIC-LOG] Token search failed in $USER_SEARCH_CACHE_COLLECTION")
             emptyList()
         }
     }
 
     suspend fun searchUsersBasic(limit: Int): List<Map<String, Any>> {
         return try {
+            Timber.i("[PUBLIC-LOG] Running basic public search in $USERS_PUBLIC_COLLECTION limit=$limit")
             val snapshot = firestore.collection(USERS_PUBLIC_COLLECTION)
                 .whereEqualTo("isSearchable", true)
                 .limit(limit.toLong())
                 .get()
                 .await()
+            Timber.i("[PUBLIC-LOG] Basic public search returned ${snapshot.size()} docs from $USERS_PUBLIC_COLLECTION")
             snapshot.documents.mapNotNull { document ->
                 document.data?.toMutableMap()?.apply { put("userId", document.id) }
             }
         } catch (e: Exception) {
-            Timber.e(e, "Legacy searchUsersBasic failed")
+            Timber.e(e, "[PUBLIC-LOG] Basic public search failed in $USERS_PUBLIC_COLLECTION")
             emptyList()
         }
     }

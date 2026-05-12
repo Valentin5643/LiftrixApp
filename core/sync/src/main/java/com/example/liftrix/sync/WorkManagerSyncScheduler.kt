@@ -127,7 +127,11 @@ class WorkManagerSyncScheduler @Inject constructor(
     }
 
     override fun enqueueWorkoutPostSync(userId: String, forceSync: Boolean) {
-        workManager.enqueue(WorkoutPostSyncWorker.createWorkRequest(userId, forceSync))
+        val request = WorkoutPostSyncWorker.createWorkRequest(userId, forceSync)
+        workManager.enqueue(request)
+        Timber.i(
+            "[PUBLIC-LOG] Enqueued workout post sync user=$userId forceSync=$forceSync requestId=${request.id}"
+        )
         Timber.d("Queued workout post sync for user $userId")
     }
 

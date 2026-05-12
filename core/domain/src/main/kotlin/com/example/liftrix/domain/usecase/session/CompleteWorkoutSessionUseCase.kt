@@ -4,9 +4,6 @@ import com.example.liftrix.core.cache.CacheManager
 import com.example.liftrix.domain.model.UnifiedWorkoutSession
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.common.LiftrixResult
-import com.example.liftrix.domain.model.social.CreateWorkoutPostRequest
-import com.example.liftrix.domain.model.social.PostVisibility
-import com.example.liftrix.domain.repository.social.FeedRepository
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.service.CacheInvalidationService
 import com.example.liftrix.service.WorkoutCompletionNotifier
@@ -16,7 +13,6 @@ import javax.inject.Inject
 
 class CompleteWorkoutSessionUseCase @Inject constructor(
     private val workoutRepository: WorkoutRepository,
-    private val feedRepository: FeedRepository,
     private val cacheManager: CacheManager,
     private val cacheInvalidationService: CacheInvalidationService,
     private val workoutCompletionNotifier: WorkoutCompletionNotifier
@@ -59,79 +55,14 @@ class CompleteWorkoutSessionUseCase @Inject constructor(
     private suspend fun createAutomaticWorkoutPost(
         savedWorkout: Workout
     ): CompletionSideEffectStatus {
-        return try {
-            Timber.d(
-                "WORKOUT-POSTS-DEBUG: Creating automatic post for workout ${savedWorkout.id.value}"
-            )
-
-            feedRepository.hasPostForWorkout(
-                userId = savedWorkout.userId,
-                workoutId = savedWorkout.id.value
-            ).fold(
-                onSuccess = { hasPost ->
-                    if (hasPost) {
-                        Timber.d(
-                            "WORKOUT-POSTS-DEBUG: Skipping auto-post, already exists for workout " +
-                                savedWorkout.id.value
-                        )
-                        CompletionSideEffectStatus(
-                            effect = CompletionSideEffect.AUTO_POST,
-                            state = CompletionSideEffectState.SKIPPED,
-                            detail = "Post already exists"
-                        )
-                    } else {
-                        val postRequest = CreateWorkoutPostRequest(
-                            workoutId = savedWorkout.id.value,
-                            caption = "Great workout completed! \uD83D\uDCAA",
-                            mediaUrls = emptyList(),
-                            visibility = PostVisibility.FOLLOWERS
-                        )
-
-                        feedRepository.createPost(
-                            userId = savedWorkout.userId,
-                            request = postRequest
-                        ).fold(
-                            onSuccess = { post ->
-                                Timber.d(
-                                    "WORKOUT-POSTS-DEBUG: Auto-post created successfully - ID=${post.id}"
-                                )
-                                CompletionSideEffectStatus(
-                                    effect = CompletionSideEffect.AUTO_POST,
-                                    state = CompletionSideEffectState.SUCCESS
-                                )
-                            },
-                            onFailure = { error ->
-                                Timber.w(
-                                    "WORKOUT-POSTS-DEBUG: Auto-post creation failed: ${error.message}"
-                                )
-                                CompletionSideEffectStatus(
-                                    effect = CompletionSideEffect.AUTO_POST,
-                                    state = CompletionSideEffectState.FAILED,
-                                    detail = error.message
-                                )
-                            }
-                        )
-                    }
-                },
-                onFailure = { error ->
-                    Timber.w(
-                        "WORKOUT-POSTS-DEBUG: Failed to check existing post: ${error.message}"
-                    )
-                    CompletionSideEffectStatus(
-                        effect = CompletionSideEffect.AUTO_POST,
-                        state = CompletionSideEffectState.FAILED,
-                        detail = error.message
-                    )
-                }
-            )
-        } catch (e: Exception) {
-            Timber.w(e, "WORKOUT-POSTS-DEBUG: Exception during auto-post creation")
-            CompletionSideEffectStatus(
-                effect = CompletionSideEffect.AUTO_POST,
-                state = CompletionSideEffectState.FAILED,
-                detail = e.message
-            )
-        }
+        Timber.i(
+            "[PUBLIC-LOG] Automatic workout post disabled for workout=${savedWorkout.id.value} user=${savedWorkout.userId}"
+        )
+        return CompletionSideEffectStatus(
+            effect = CompletionSideEffect.AUTO_POST,
+            state = CompletionSideEffectState.SKIPPED,
+            detail = "Manual share flow owns workout post creation"
+        )
     }
 
     private suspend fun invalidateWorkoutRelatedCache(
