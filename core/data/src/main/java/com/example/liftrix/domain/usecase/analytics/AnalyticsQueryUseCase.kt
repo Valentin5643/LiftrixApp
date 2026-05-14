@@ -348,22 +348,40 @@ class AnalyticsQueryUseCase @Inject constructor(
             val progressions = oneRmResults
                 .groupBy { it.exercise_library_id }
                 .map { (exerciseId, results) ->
+                    var runningBestOneRm = 0f
+                    var runningBestWeight = 0f
+                    var runningBestReps = 0
                     ExerciseProgression(
                         exerciseId = exerciseId,
                         exerciseName = exerciseMap[exerciseId]?.name ?: "Unknown Exercise",
-                        progressionPoints = results.map { result ->
-                            OneRmDataPoint(
-                                date = Instant.fromEpochMilliseconds(result.completed_at)
-                                    .toLocalDateTime(TimeZone.currentSystemDefault()).date,
-                                exerciseId = exerciseId,
-                                exerciseName = exerciseMap[exerciseId]?.name ?: "",
-                                actualOneRm = null,
-                                estimatedOneRm = result.estimated_one_rm.toFloat(),
-                                weight = result.weight_kg,
-                                reps = result.reps,
-                                isEstimated = true
-                            )
-                        }.sortedBy { it.date }
+                        progressionPoints = results
+                            .groupBy { result ->
+                                Instant.fromEpochMilliseconds(result.completed_at)
+                                    .toLocalDateTime(TimeZone.currentSystemDefault()).date
+                            }
+                            .map { (date, dayResults) ->
+                                val bestSetForDay = dayResults.maxBy { it.estimated_one_rm }
+                                date to bestSetForDay
+                            }
+                            .sortedBy { it.first }
+                            .map { (date, result) ->
+                                val dayOneRm = result.estimated_one_rm.toFloat()
+                                if (dayOneRm >= runningBestOneRm) {
+                                    runningBestOneRm = dayOneRm
+                                    runningBestWeight = result.weight_kg
+                                    runningBestReps = result.reps
+                                }
+                                OneRmDataPoint(
+                                    date = date,
+                                    exerciseId = exerciseId,
+                                    exerciseName = exerciseMap[exerciseId]?.name ?: "",
+                                    actualOneRm = null,
+                                    estimatedOneRm = runningBestOneRm,
+                                    weight = runningBestWeight,
+                                    reps = runningBestReps,
+                                    isEstimated = true
+                                )
+                            }
                     )
                 }
 

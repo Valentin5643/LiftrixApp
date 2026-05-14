@@ -86,6 +86,19 @@ interface WorkoutPostDao {
         ORDER BY created_at DESC
     """)
     fun getHomeFeedPostsWithSelf(currentUserId: String, followedUserIds: List<String>): PagingSource<Int, WorkoutPostEntity>
+
+    @Query("""
+        SELECT * FROM workout_posts
+        WHERE (user_id = :currentUserId OR (user_id IN (:followedUserIds) AND visibility IN ('PUBLIC', 'FOLLOWERS')))
+        AND created_at >= :sinceTimestamp
+        AND is_hidden = 0
+        ORDER BY created_at DESC
+    """)
+    fun getHomeFeedPostsWithSelfSince(
+        currentUserId: String,
+        followedUserIds: List<String>,
+        sinceTimestamp: Long
+    ): PagingSource<Int, WorkoutPostEntity>
     
     @Query("""
         SELECT * FROM workout_posts

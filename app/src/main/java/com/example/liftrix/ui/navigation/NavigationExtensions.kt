@@ -31,9 +31,10 @@ import com.example.liftrix.ui.animations.TransitionType
  */
 fun NavController.navigateToWorkoutDetails(
     workoutId: String,
+    ownerId: String? = null,
     transitionType: TransitionType = TransitionType.VERTICAL
 ) {
-    navigate(LiftrixRoute.WorkoutDetails(workoutId))
+    navigate(LiftrixRoute.WorkoutDetails(workoutId, ownerId))
 }
 
 /**
@@ -397,9 +398,9 @@ fun NavController.navigateAnimated(
  * Navigate to workout details with card transition animation
  * Provides smooth card-to-detail transition experience
  */
-fun NavController.navigateToWorkoutDetailsAnimated(workoutId: String) {
+fun NavController.navigateToWorkoutDetailsAnimated(workoutId: String, ownerId: String? = null) {
     navigateAnimated(
-        route = LiftrixRoute.WorkoutDetails(workoutId),
+        route = LiftrixRoute.WorkoutDetails(workoutId, ownerId),
         transitionType = TransitionType.CARD
     )
 }

@@ -111,7 +111,7 @@ object VolumeCalculator {
      * @return Weight object or null if volume is 0
      */
     fun toWeightOrNull(volumeKg: Double): Weight? {
-        return if (volumeKg > 0.0) Weight(volumeKg) else null
+        return if (volumeKg > 0.0) Weight.fromKilograms(volumeKg) else null
     }
     
     /**

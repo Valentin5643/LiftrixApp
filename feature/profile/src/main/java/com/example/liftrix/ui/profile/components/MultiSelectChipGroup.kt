@@ -6,6 +6,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.ui.theme.LiftrixSpacing
 
@@ -19,7 +20,7 @@ import com.example.liftrix.ui.theme.LiftrixSpacing
  * - Clear visual feedback
  * - Accessible with proper semantics
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun <T> MultiSelectChipGroup(
     items: List<T>,
@@ -41,61 +42,56 @@ fun <T> MultiSelectChipGroup(
             )
         }
 
-        // Simple wrapping implementation using Column and Row
-        Column(
+        FlowRow(
             modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.small),
             verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.small)
         ) {
-            items.chunked(3).forEach { rowItems ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.small)
-                ) {
-                    rowItems.forEach { item ->
-                        val isSelected = item in selectedItems
+            items.forEach { item ->
+                val isSelected = item in selectedItems
 
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = {
-                                val newSelection = if (isSelected) {
-                                    selectedItems - item
-                                } else {
-                                    selectedItems + item
-                                }
-                                onSelectionChange(newSelection)
-                            },
-                            label = {
-                                Text(
-                                    text = itemLabel(item),
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            },
-                            leadingIcon = if (isSelected) {
-                                {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "Selected",
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            } else null,
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            ),
-                            border = FilterChipDefaults.filterChipBorder(
-                                enabled = true,
-                                selected = isSelected,
-                                borderColor = if (isSelected) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.outline
-                                }
-                            )
+                FilterChip(
+                    selected = isSelected,
+                    onClick = {
+                        val newSelection = if (isSelected) {
+                            selectedItems - item
+                        } else {
+                            selectedItems + item
+                        }
+                        onSelectionChange(newSelection)
+                    },
+                    label = {
+                        Text(
+                            text = itemLabel(item),
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                    }
-                }
+                    },
+                    leadingIcon = if (isSelected) {
+                        {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Selected",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    } else null,
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = isSelected,
+                        borderColor = if (isSelected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.outline
+                        }
+                    )
+                )
             }
         }
     }

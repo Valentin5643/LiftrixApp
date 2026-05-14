@@ -40,6 +40,7 @@ import java.time.format.FormatStyle
 @Composable
 fun WorkoutDetailsScreen(
     workoutId: String,
+    ownerId: String? = null,
     navController: NavController,
     onNavigateToEditWorkout: (String) -> Unit = {},
     onNavigateToShareWorkout: (String) -> Unit = {},
@@ -47,8 +48,8 @@ fun WorkoutDetailsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     
-    LaunchedEffect(workoutId) {
-        viewModel.loadWorkoutDetails(workoutId)
+    LaunchedEffect(workoutId, ownerId) {
+        viewModel.loadWorkoutDetails(workoutId, ownerId)
     }
     
     Scaffold { paddingValues ->
@@ -148,7 +149,7 @@ fun WorkoutDetailsScreen(
             is WorkoutDetailsUiState.Error -> {
                 ErrorContent(
                     message = state.message,
-                    onRetry = { viewModel.loadWorkoutDetails(workoutId) },
+                    onRetry = { viewModel.loadWorkoutDetails(workoutId, ownerId) },
                     onBack = { navController.navigateUp() },
                     modifier = Modifier.padding(paddingValues)
                 )

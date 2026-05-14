@@ -28,6 +28,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import com.google.firebase.ai.Chat
 import com.google.firebase.ai.type.Content
 import com.google.firebase.ai.type.GenerationConfig
+import com.google.firebase.ai.type.ResponseStoppedException
 import com.google.firebase.ai.type.content
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
@@ -53,7 +54,7 @@ class AIChatServiceImpl @Inject constructor(
     companion object {
         private const val MONTHLY_USAGE_TAG = "MonthlyUsageDebug"
         private const val MODEL_NAME = "gemini-2.5-flash-lite"
-        private const val MAX_OUTPUT_TOKENS = 500
+        private const val MAX_OUTPUT_TOKENS = 1024
         private const val TEMPERATURE = 0.7
         private const val TOP_K = 40
         private const val TOP_P = 0.95
@@ -71,7 +72,8 @@ class AIChatServiceImpl @Inject constructor(
         userId: String,
         message: String,
         conversationContext: ConversationContext,
-        language: Language
+        language: Language,
+        autoDetectLanguage: Boolean
     ): LiftrixResult<AIResponse> = liftrixCatching(
         errorMapper = { throwable ->
             when (throwable) {
@@ -101,6 +103,12 @@ class AIChatServiceImpl @Inject constructor(
                     errorMessage = "AI security verification is temporarily unavailable. Please try again later.",
                     analyticsContext = mapOf("user_id" to userId)
                 )
+                is AIResponseMaxTokensException -> LiftrixError.BusinessLogicError(
+                    code = "AI_RESPONSE_MAX_TOKENS",
+                    errorMessage = "The AI response was cut off because it was too long. Please ask for a shorter answer or try again.",
+                    isRecoverable = true,
+                    analyticsContext = mapOf("user_id" to userId)
+                )
                 else -> LiftrixError.NetworkError(
                     errorMessage = "Failed to get AI response. Please try again.",
                     analyticsContext = mapOf("user_id" to userId)
@@ -118,7 +126,7 @@ class AIChatServiceImpl @Inject constructor(
         )
 
         // 1. Detect language if needed
-        val detectedLanguage = if (language == Language.ENGLISH && containsRomanian(effectiveMessage)) {
+        val detectedLanguage = if (autoDetectLanguage && language == Language.ENGLISH && containsRomanian(effectiveMessage)) {
             Language.ROMANIAN
         } else {
             language
@@ -283,6 +291,13 @@ class AIChatServiceImpl @Inject constructor(
                 is DebugAppCheckTokenNotRegisteredException -> throw e
                 is AppCheckRateLimitedException -> throw e
                 is AppCheckUnavailableException -> throw e
+                is ResponseStoppedException -> {
+                    if (e.isMaxTokensStop()) {
+                        Timber.w("[AI] Firebase AI response reached max output tokens: ${e.message}")
+                        throw AIResponseMaxTokensException(e)
+                    }
+                    throw e
+                }
                 is SecurityException -> {
                     Timber.e("[AI] Firebase AI permissions error: ${e.message}")
                     throw Exception("AI service security configuration error. Verify Firebase App Check provider, package name, and SHA fingerprints.")
@@ -421,6 +436,35 @@ class AIChatServiceImpl @Inject constructor(
             parts.add("$prefix $it")
         }
         
+        val responseStyleInstruction = when (context.aiResponseStyle) {
+            "concise" -> if (language == Language.ROMANIAN) {
+                "Stil raspuns: raspunde concis, cu pasi scurti si directi."
+            } else {
+                "Response style: answer concisely with short, direct steps."
+            }
+            "detailed" -> if (language == Language.ROMANIAN) {
+                "Stil raspuns: ofera explicatii mai detaliate, exemple si pasi concreti."
+            } else {
+                "Response style: give more detailed explanations, examples, and concrete steps."
+            }
+            else -> if (language == Language.ROMANIAN) {
+                "Stil raspuns: echilibreaza claritatea cu detaliile utile."
+            } else {
+                "Response style: balance clarity with useful detail."
+            }
+        }
+        parts.add(responseStyleInstruction)
+
+        if (!context.includeExerciseFormTips) {
+            parts.add(
+                if (language == Language.ROMANIAN) {
+                    "Nu include sfaturi de tehnica pentru exercitii decat daca utilizatorul le cere explicit."
+                } else {
+                    "Do not include exercise form tips unless the user explicitly asks for them."
+                }
+            )
+        }
+
         // Add workout context
         context.workoutContext?.let { workout ->
             if (language == Language.ROMANIAN) {
@@ -761,6 +805,9 @@ class AIChatServiceImpl @Inject constructor(
         // Rough estimation: ~1 token per 4 characters
         return (input.length + output.length) / 4
     }
+
+    private fun ResponseStoppedException.isMaxTokensStop(): Boolean =
+        message.orEmpty().contains("MAX_TOKENS", ignoreCase = true)
     
     /**
      * Obtains an App Check token using the SDK cache path.
@@ -874,6 +921,9 @@ class AppCheckUnavailableException(
     message: String,
     cause: Throwable? = null
 ) : Exception(message, cause)
+class AIResponseMaxTokensException(
+    cause: Throwable
+) : Exception("Firebase AI response stopped because it reached max output tokens.", cause)
 
 internal const val APP_CHECK_DEBUG_SETUP_MARKER = "LIFTRIX_APP_CHECK_DEBUG_SETUP"
 

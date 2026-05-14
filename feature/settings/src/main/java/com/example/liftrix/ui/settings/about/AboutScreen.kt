@@ -11,7 +11,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
@@ -23,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.feature.settings.BuildConfig
+import com.example.liftrix.feature.settings.R
 import com.example.liftrix.ui.common.ContextualColorOverlay
 import com.example.liftrix.ui.common.ColorContext
 import com.example.liftrix.ui.components.cards.LiftrixCard
@@ -160,6 +163,13 @@ fun AboutScreen(
 private fun AppBrandingSection(
     modifier: Modifier = Modifier
 ) {
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val logoResource = if (isDarkTheme) {
+        R.drawable.ic_liftrix_symbol
+    } else {
+        R.drawable.ic_liftrix_symbol_light
+    }
+
     ContextualColorOverlay(
         context = ColorContext.UserPreference(
             preferredColor = MaterialTheme.colorScheme.primary,
@@ -177,12 +187,11 @@ private fun AppBrandingSection(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // App logo placeholder - replace with actual logo
-                Icon(
-                    imageVector = Icons.Default.FitnessCenter,
+                Image(
+                    painter = painterResource(id = logoResource),
                     contentDescription = "Liftrix logo",
-                    modifier = Modifier.size(120.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.size(120.dp)
                 )
                 
                 Text(
@@ -563,23 +572,11 @@ private fun DeveloperCreditsCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            
-            Text(
-                text = "Special thanks to:",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            
-            CreditItem(text = "• Android Jetpack for Compose UI framework")
-            CreditItem(text = "• Material Design for design guidelines")
-            CreditItem(text = "• Open source contributors for libraries used")
-            CreditItem(text = "• Beta testers for valuable feedback")
-            CreditItem(text = "• Fitness community for inspiration and support")
-            
+
             Spacer(modifier = Modifier.height(8.dp))
             
             Text(
-                text = "© 2025 Liftrix. All rights reserved.",
+                text = "© 2026 All rights reserved.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -587,22 +584,6 @@ private fun DeveloperCreditsCard(
             )
         }
     }
-}
-
-/**
- * Individual credit item
- */
-@Composable
-private fun CreditItem(
-    text: String,
-    modifier: Modifier = Modifier
-) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.padding(start = 8.dp)
-    )
 }
 
 /**

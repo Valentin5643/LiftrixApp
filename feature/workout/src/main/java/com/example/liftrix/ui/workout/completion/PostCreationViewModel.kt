@@ -171,8 +171,8 @@ class PostCreationViewModel @Inject constructor(
         updateState { UiState.Loading }
 
         // Calculate total volume using centralized VolumeCalculator with debug logging
-        val calculatedVolume = workout.calculateTotalVolume()
-        Timber.d("🔍 COMPLETION-POST-DEBUG: Domain model volume calculation - totalVolume=${calculatedVolume.value}kg")
+        val calculatedVolume = workout.calculateTotalVolumeKg()
+        Timber.d("🔍 COMPLETION-POST-DEBUG: Domain model volume calculation - totalVolume=${calculatedVolume}kg")
         Timber.d("🔍 COMPLETION-POST-DEBUG: Workout has ${workout.exercises.size} exercises")
         
         // Also calculate manually to compare
@@ -192,8 +192,8 @@ class PostCreationViewModel @Inject constructor(
         }
         
         // Use the manually calculated volume if domain model is still showing 0
-        val finalVolume = if (calculatedVolume.value > 0.0) calculatedVolume.value else manualTotalVolume
-        Timber.d("🔍 COMPLETION-POST-DEBUG: Final volume to use: ${finalVolume}kg (domain=${calculatedVolume.value}kg, manual=${manualTotalVolume}kg)")
+        val finalVolume = if (calculatedVolume > 0.0) calculatedVolume else manualTotalVolume
+        Timber.d("🔍 COMPLETION-POST-DEBUG: Final volume to use: ${finalVolume}kg (domain=${calculatedVolume}kg, manual=${manualTotalVolume}kg)")
         
         // Create workout summary using corrected volume
         val workoutSummary = WorkoutSummary(
@@ -201,7 +201,7 @@ class PostCreationViewModel @Inject constructor(
             totalReps = workout.getTotalRepsCompleted().count,
             totalVolume = finalVolume,
             exerciseCount = workout.exercises.size,
-            duration = workout.getDuration()?.toMinutes()?.toInt() ?: 0
+            duration = workout.getDuration()?.toRoundedUpMinutes() ?: 0
         )
 
         val request = CreateWorkoutPostRequest(
@@ -291,6 +291,11 @@ class PostCreationViewModel @Inject constructor(
             }
         }
     }
+}
+
+private fun java.time.Duration.toRoundedUpMinutes(): Int {
+    if (isZero || isNegative) return 0
+    return ((seconds + 59L) / 60L).toInt()
 }
 
 /**

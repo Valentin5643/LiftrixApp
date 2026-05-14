@@ -328,7 +328,7 @@ async function updateUserProfile(userId, subscriptionData) {
       subscription_tier: tier,
       subscription_status: status,
       premium_features_enabled: premiumEnabled,
-      profile_version: db.FieldValue.increment(1),
+      profile_version: FieldValue.increment(1),
       updated_at: new Date(),
     };
 
@@ -1750,7 +1750,7 @@ exports.banUser = onCall(async (request) => {
     throw new Error("Only admin users can ban other users");
   }
 
-  const { userId, reason, banDuration, severity } = request.data;
+  const {userId, reason, banDuration, severity} = request.data;
 
   if (!userId || !reason) {
     throw new Error("userId and reason are required");
@@ -1766,18 +1766,22 @@ exports.banUser = onCall(async (request) => {
       throw new Error(`User not found: ${userId}`);
     }
 
-    // Disable Firebase Auth account
+    const bannedAt = new Date();
+
+    // Disable Firebase Auth account and update custom claims separately.
+    // Firebase Auth updateUser does not accept customClaims.
     await auth.updateUser(userId, {
       disabled: true,
-      customClaims: {
-        ...userRecord.customClaims,
-        banned: true,
-        banReason: reason,
-        bannedBy: request.auth.uid,
-        bannedAt: new Date().toISOString(),
-        banDuration: banDuration || null,
-        severity: severity || "moderate"
-      }
+    });
+
+    await auth.setCustomUserClaims(userId, {
+      ...userRecord.customClaims,
+      banned: true,
+      banReason: reason,
+      bannedBy: request.auth.uid,
+      bannedAt: bannedAt.toISOString(),
+      banDuration: banDuration || null,
+      severity: severity || "moderate",
     });
 
     // Create ban record in Firestore
@@ -1787,15 +1791,15 @@ exports.banUser = onCall(async (request) => {
       reason: reason,
       severity: severity || "moderate",
       banDuration: banDuration || null, // null means permanent
-      bannedAt: new Date(),
+      bannedAt: bannedAt,
       status: "active",
       userEmail: userRecord.email || null,
       userDisplayName: userRecord.displayName || null,
       metadata: {
         userCreatedAt: userRecord.metadata.creationTime,
         lastSignIn: userRecord.metadata.lastSignInTime,
-        providerData: userRecord.providerData.map(p => p.providerId)
-      }
+        providerData: userRecord.providerData.map((p) => p.providerId),
+      },
     };
 
     const banDoc = await db.collection("user_bans").add(banRecord);
@@ -1804,12 +1808,12 @@ exports.banUser = onCall(async (request) => {
     try {
       await db.collection("users").doc(userId).update({
         accountStatus: "banned",
-        bannedAt: new Date(),
+        bannedAt: bannedAt,
         bannedBy: request.auth.uid,
         banReason: reason,
         banSeverity: severity || "moderate",
-        profileVersion: db.FieldValue.increment(1),
-        updated_at: new Date()
+        profileVersion: FieldValue.increment(1),
+        updated_at: bannedAt,
       });
     } catch (profileError) {
       logger.warn(`Could not update user profile for banned user ${userId}:`, profileError);
@@ -1822,8 +1826,8 @@ exports.banUser = onCall(async (request) => {
         userId: userId,
         bannedBy: request.auth.uid,
         reason: reason,
-        bannedAt: new Date(),
-        status: "active"
+        bannedAt: bannedAt,
+        status: "active",
       });
 
       // Remove from public discoverable profiles
@@ -1832,7 +1836,7 @@ exports.banUser = onCall(async (request) => {
         isDiscoverable: false,
         profileVisibility: "PRIVATE",
         accountStatus: "banned",
-        updatedAt: new Date()
+        updatedAt: bannedAt,
       });
     } catch (socialError) {
       logger.warn(`Could not update social data for banned user ${userId}:`, socialError);
@@ -1847,10 +1851,11 @@ exports.banUser = onCall(async (request) => {
         reason: reason,
         severity: severity || "moderate",
         banDuration: banDuration || "permanent",
-        userEmail: userRecord.email
+        userEmail: userRecord.email,
+        userDisplayName: userRecord.displayName,
       },
-      timestamp: new Date(),
-      outcome: "success"
+      timestamp: bannedAt,
+      outcome: "success",
     });
 
     logger.info(`User ${userId} successfully banned by admin ${request.auth.uid}. Reason: ${reason}`);
@@ -1859,8 +1864,8 @@ exports.banUser = onCall(async (request) => {
       success: true,
       userId: userId,
       banId: banDoc.id,
-      bannedAt: banRecord.bannedAt,
-      message: `User ${userId} has been banned successfully`
+      bannedAt: bannedAt.toISOString(),
+      message: `User ${userId} has been banned successfully`,
     };
 
   } catch (error) {
@@ -1874,10 +1879,10 @@ exports.banUser = onCall(async (request) => {
       details: {
         reason: reason,
         severity: severity || "moderate",
-        error: error.message
+        error: error.message,
       },
       timestamp: new Date(),
-      outcome: "failed"
+      outcome: "failed",
     });
 
     throw new Error(`Failed to ban user: ${error.message}`);
@@ -1893,7 +1898,7 @@ exports.unbanUser = onCall(async (request) => {
     throw new Error("Only admin users can unban other users");
   }
 
-  const { userId, reason } = request.data;
+  const {userId, reason} = request.data;
 
   if (!userId) {
     throw new Error("userId is required");
@@ -1902,15 +1907,26 @@ exports.unbanUser = onCall(async (request) => {
   try {
     logger.info(`Admin ${request.auth.uid} attempting to unban user: ${userId}`);
 
-    // Re-enable Firebase Auth account
+    const unbannedAt = new Date();
+    const userRecord = await auth.getUser(userId);
+
+    // Re-enable Firebase Auth account and update custom claims separately.
+    // Preserve unrelated claims such as admin/premium.
     await auth.updateUser(userId, {
       disabled: false,
-      customClaims: {
-        banned: false,
-        unbannedBy: request.auth.uid,
-        unbannedAt: new Date().toISOString(),
-        unbanReason: reason || "Appeal approved"
-      }
+    });
+
+    await auth.setCustomUserClaims(userId, {
+      ...userRecord.customClaims,
+      banned: false,
+      banReason: null,
+      bannedBy: null,
+      bannedAt: null,
+      banDuration: null,
+      severity: null,
+      unbannedBy: request.auth.uid,
+      unbannedAt: unbannedAt.toISOString(),
+      unbanReason: reason || "Appeal approved",
     });
 
     // Update ban record to inactive
@@ -1924,8 +1940,8 @@ exports.unbanUser = onCall(async (request) => {
       await banQuery.docs[0].ref.update({
         status: "inactive",
         unbannedBy: request.auth.uid,
-        unbannedAt: new Date(),
-        unbanReason: reason || "Appeal approved"
+        unbannedAt: unbannedAt,
+        unbanReason: reason || "Appeal approved",
       });
     }
 
@@ -1933,14 +1949,14 @@ exports.unbanUser = onCall(async (request) => {
     try {
       await db.collection("users").doc(userId).update({
         accountStatus: "active",
-        bannedAt: db.FieldValue.delete(),
-        bannedBy: db.FieldValue.delete(),
-        banReason: db.FieldValue.delete(),
-        banSeverity: db.FieldValue.delete(),
-        unbannedAt: new Date(),
+        bannedAt: FieldValue.delete(),
+        bannedBy: FieldValue.delete(),
+        banReason: FieldValue.delete(),
+        banSeverity: FieldValue.delete(),
+        unbannedAt: unbannedAt,
         unbannedBy: request.auth.uid,
-        profileVersion: db.FieldValue.increment(1),
-        updated_at: new Date()
+        profileVersion: FieldValue.increment(1),
+        updated_at: unbannedAt,
       });
     } catch (profileError) {
       logger.warn(`Could not update user profile for unbanned user ${userId}:`, profileError);
@@ -1954,7 +1970,7 @@ exports.unbanUser = onCall(async (request) => {
       const socialProfileRef = db.collection("social_profiles").doc(userId);
       await socialProfileRef.update({
         accountStatus: "active",
-        updatedAt: new Date()
+        updatedAt: unbannedAt,
         // Note: Don't automatically restore discoverability - user should opt back in
       });
     } catch (socialError) {
@@ -1967,10 +1983,10 @@ exports.unbanUser = onCall(async (request) => {
       performedBy: request.auth.uid,
       targetUserId: userId,
       details: {
-        reason: reason || "Appeal approved"
+        reason: reason || "Appeal approved",
       },
-      timestamp: new Date(),
-      outcome: "success"
+      timestamp: unbannedAt,
+      outcome: "success",
     });
 
     logger.info(`User ${userId} successfully unbanned by admin ${request.auth.uid}`);
@@ -1978,8 +1994,8 @@ exports.unbanUser = onCall(async (request) => {
     return {
       success: true,
       userId: userId,
-      unbannedAt: new Date(),
-      message: `User ${userId} has been unbanned successfully`
+      unbannedAt: unbannedAt.toISOString(),
+      message: `User ${userId} has been unbanned successfully`,
     };
 
   } catch (error) {
@@ -1992,10 +2008,10 @@ exports.unbanUser = onCall(async (request) => {
       targetUserId: userId,
       details: {
         reason: reason,
-        error: error.message
+        error: error.message,
       },
       timestamp: new Date(),
-      outcome: "failed"
+      outcome: "failed",
     });
 
     throw new Error(`Failed to unban user: ${error.message}`);
@@ -2131,6 +2147,67 @@ exports.listBannedUsers = onCall(async (request) => {
   } catch (error) {
     logger.error("Error listing banned users:", error);
     throw new Error(`Failed to list banned users: ${error.message}`);
+  }
+});
+
+/**
+ * Admin-only Cloud Function to list recent ban management audit logs
+ */
+exports.getAdminLogs = onCall(async (request) => {
+  // Verify admin permissions
+  if (!request.auth || !request.auth.token.admin) {
+    throw new Error("Only admin users can view admin logs");
+  }
+
+  const {limit = 100, actionType = null} = request.data || {};
+
+  try {
+    const query = db.collection("admin_actions")
+      .orderBy("timestamp", "desc")
+      .limit(actionType ? limit : Math.max(limit * 3, limit));
+
+    const snapshot = await query.get();
+
+    return snapshot.docs
+      .filter((doc) => {
+        const logActionType = doc.data().actionType;
+        if (actionType) {
+          return logActionType === actionType;
+        }
+        return logActionType === "BAN_USER" || logActionType === "UNBAN_USER";
+      })
+      .slice(0, limit)
+      .map((doc) => {
+        const data = doc.data();
+        const details = data.details || {};
+        const isUnban = data.actionType === "UNBAN_USER";
+        const timestamp = data.timestamp?.toDate?.()?.toISOString() ||
+          data.timestamp;
+
+        return {
+          id: doc.id,
+          userId: data.targetUserId || "",
+          bannedBy: data.performedBy || "",
+          reason: details.reason || details.error || "No reason provided",
+          severity: details.severity || "moderate",
+          banDuration: details.banDuration || null,
+          bannedAt: timestamp,
+          unbannedAt: isUnban ? timestamp : null,
+          unbannedBy: isUnban ? data.performedBy || null : null,
+          unbanReason: isUnban ? details.reason || null : null,
+          status: isUnban ? "inactive" : "active",
+          userEmail: details.userEmail || null,
+          userDisplayName: details.userDisplayName || null,
+          metadata: {
+            outcome: data.outcome || null,
+            actionType: data.actionType || null,
+          },
+        };
+      });
+
+  } catch (error) {
+    logger.error("Error getting admin logs:", error);
+    throw new Error(`Failed to get admin logs: ${error.message}`);
   }
 });
 

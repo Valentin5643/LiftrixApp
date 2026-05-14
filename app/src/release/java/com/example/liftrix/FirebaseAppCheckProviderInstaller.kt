@@ -23,4 +23,12 @@ object FirebaseAppCheckProviderInstaller {
             PlayIntegrityAppCheckProviderFactory.getInstance()
         )
     }
+
+    fun logDebugSecretIfAvailable(firebaseApp: FirebaseApp) {
+        Log.i(
+            TAG,
+            "No Firebase App Check debug secret is available in release builds. " +
+                "Release uses Play Integrity for projectId=${firebaseApp.options.projectId}."
+        )
+    }
 }

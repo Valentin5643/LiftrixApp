@@ -75,6 +75,20 @@ interface UserProfileDao {
     
     @Query("UPDATE user_profiles SET is_public = :isPublic WHERE user_id = :userId")
     suspend fun updatePrivacySetting(userId: String, isPublic: Boolean): Int
+
+    @Query("""
+        UPDATE user_profiles
+        SET is_public = :isPublic,
+            is_dirty = 1,
+            is_synced = 0,
+            last_modified = :lastModified
+        WHERE user_id = :userId
+    """)
+    suspend fun updatePrivacySettingLocal(
+        userId: String,
+        isPublic: Boolean,
+        lastModified: Long = System.currentTimeMillis()
+    ): Int
     
     @Query("UPDATE user_profiles SET bio = :bio WHERE user_id = :userId")
     suspend fun updateBio(userId: String, bio: String?): Int

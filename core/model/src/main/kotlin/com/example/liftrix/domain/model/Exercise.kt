@@ -180,7 +180,7 @@ data class Exercise(
         if (!isWeightBased) return null
         
         val totalVolumeKg = com.example.liftrix.domain.util.VolumeCalculator.calculateVolumeFromSets(sets)
-        return com.example.liftrix.domain.util.VolumeCalculator.toWeightOrNull(totalVolumeKg)
+        return if (totalVolumeKg > 0.0) Weight.fromKilograms(totalVolumeKg) else null
     }
     
     /**

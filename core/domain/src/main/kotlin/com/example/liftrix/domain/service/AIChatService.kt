@@ -15,13 +15,15 @@ interface AIChatService {
      * @param message The user's message
      * @param conversationContext Context from the conversation including recent messages
      * @param language The language for the response (English or Romanian)
+     * @param autoDetectLanguage Whether the service may override the preferred language based on the message
      * @return AI-generated response with metadata
      */
     suspend fun generateResponse(
         userId: String,
         message: String,
         conversationContext: ConversationContext,
-        language: Language = Language.ENGLISH
+        language: Language = Language.ENGLISH,
+        autoDetectLanguage: Boolean = true
     ): LiftrixResult<AIResponse>
     
     /**
@@ -77,7 +79,9 @@ data class ConversationContext(
     val recentMessages: List<com.example.liftrix.domain.model.chat.ChatMessage>,
     val workoutContext: com.example.liftrix.domain.model.chat.WorkoutContext?,
     val userPreferences: String?,
-    val includeWorkoutHistory: Boolean = true
+    val includeWorkoutHistory: Boolean = true,
+    val aiResponseStyle: String = "balanced",
+    val includeExerciseFormTips: Boolean = true
 )
 
 /**

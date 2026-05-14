@@ -11,6 +11,7 @@ import com.example.liftrix.domain.repository.ChatRepository
 import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.state.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -37,22 +38,47 @@ class AIChatSettingsViewModel @Inject constructor(
     
     private fun loadInitialData() {
         viewModelScope.launch {
-            currentUserId = authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it?.value },
-                onFailure = { null }
-            )
-            currentUserId?.let { userId ->
-                // Load current preferences
-                chatRepository.observePreferences(userId).collect { preferences ->
+            val userId = authQueryUseCase(waitForAuth = true).fold(
+                onSuccess = { it.value },
+                onFailure = { error ->
+                    Timber.e(error, "Failed to load AI chat settings user")
                     _uiState.value = _uiState.value.copy(
-                        preferences = preferences,
-                        preferencesState = if (preferences != null) UiState.Success(preferences) else UiState.Loading
+                        preferencesState = UiState.Error(
+                            error as? LiftrixError ?: LiftrixError.AuthenticationError(
+                                errorMessage = "Unable to load AI settings because the user is not authenticated.",
+                                errorCode = "AI_SETTINGS_AUTH_FAILED"
+                            )
+                        )
                     )
+                    null
                 }
-                
-                // Load usage statistics
+            ) ?: return@launch
+
+            currentUserId = userId
+
+            launch {
                 loadUsageStatistics(userId)
             }
+
+            chatRepository.observePreferences(userId)
+                .catch { error ->
+                    Timber.e(error, "Failed to observe AI chat preferences")
+                    _uiState.value = _uiState.value.copy(
+                        preferencesState = UiState.Error(
+                            LiftrixError.DatabaseError(
+                                operation = "OBSERVE_CHAT_PREFERENCES",
+                                errorMessage = "Failed to load AI chat settings"
+                            )
+                        )
+                    )
+                }
+                .collect { preferences ->
+                    val effectivePreferences = preferences ?: ChatPreferences(userId = userId)
+                    _uiState.value = _uiState.value.copy(
+                        preferences = effectivePreferences,
+                        preferencesState = UiState.Success(effectivePreferences)
+                    )
+                }
         }
     }
     
@@ -89,14 +115,12 @@ class AIChatSettingsViewModel @Inject constructor(
             is AIChatSettingsEvent.UpdateUserContextPrompt -> updateUserContextPrompt(event.prompt)
             is AIChatSettingsEvent.UpdateWorkoutHistoryInclusion -> updateWorkoutHistoryInclusion(event.include)
             is AIChatSettingsEvent.UpdateExerciseFormTips -> updateExerciseFormTips(event.include)
-            is AIChatSettingsEvent.UpdateUsageThreshold -> updateUsageThreshold(event.threshold)
-            is AIChatSettingsEvent.UpdateMaxMessagesPerDay -> updateMaxMessagesPerDay(event.maxMessages)
-            is AIChatSettingsEvent.UpdateMaxTokensPerMonth -> updateMaxTokensPerMonth(event.maxTokens)
             is AIChatSettingsEvent.UpdateConversationSaveEnabled -> updateConversationSaveEnabled(event.enabled)
             is AIChatSettingsEvent.ClearAllHistory -> clearAllHistory(event.confirmationText)
             is AIChatSettingsEvent.ExportHistory -> exportHistory(event.format)
             AIChatSettingsEvent.DismissError -> dismissError()
             AIChatSettingsEvent.DismissSuccessMessage -> dismissSuccessMessage()
+            AIChatSettingsEvent.RetryLoad -> loadInitialData()
             AIChatSettingsEvent.HideClearHistoryDialog -> hideClearHistoryDialog()
             AIChatSettingsEvent.ShowClearHistoryDialog -> showClearHistoryDialog()
             AIChatSettingsEvent.HideExportDialog -> hideExportDialog()
@@ -126,18 +150,6 @@ class AIChatSettingsViewModel @Inject constructor(
     
     private fun updateExerciseFormTips(include: Boolean) {
         updatePreference { it.copy(includeExerciseFormTips = include) }
-    }
-    
-    private fun updateUsageThreshold(threshold: Int) {
-        updatePreference { it.copy(usageNotificationsThreshold = threshold) }
-    }
-    
-    private fun updateMaxMessagesPerDay(maxMessages: Int) {
-        updatePreference { it.copy(maxMessagesPerDay = maxMessages) }
-    }
-    
-    private fun updateMaxTokensPerMonth(maxTokens: Int) {
-        updatePreference { it.copy(maxTokensPerMonth = maxTokens) }
     }
     
     private fun updateConversationSaveEnabled(enabled: Boolean) {
@@ -210,7 +222,8 @@ class AIChatSettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = currentState.copy(
                 exportInProgress = true,
-                showExportDialog = false
+                showExportDialog = true,
+                exportedData = null
             )
             
             chatOperationsUseCase.exportHistory(format).fold(
@@ -242,11 +255,17 @@ class AIChatSettingsViewModel @Inject constructor(
     }
     
     private fun showExportDialog() {
-        _uiState.value = _uiState.value.copy(showExportDialog = true)
+        _uiState.value = _uiState.value.copy(
+            showExportDialog = true,
+            exportedData = null
+        )
     }
     
     private fun hideExportDialog() {
-        _uiState.value = _uiState.value.copy(showExportDialog = false)
+        _uiState.value = _uiState.value.copy(
+            showExportDialog = false,
+            exportedData = null
+        )
     }
     
     private fun dismissError() {
@@ -299,10 +318,6 @@ sealed class AIChatSettingsEvent {
     data class UpdateWorkoutHistoryInclusion(val include: Boolean) : AIChatSettingsEvent()
     data class UpdateExerciseFormTips(val include: Boolean) : AIChatSettingsEvent()
     
-    // Usage Settings
-    data class UpdateUsageThreshold(val threshold: Int) : AIChatSettingsEvent()
-    data class UpdateMaxMessagesPerDay(val maxMessages: Int) : AIChatSettingsEvent()
-    data class UpdateMaxTokensPerMonth(val maxTokens: Int) : AIChatSettingsEvent()
     data class UpdateConversationSaveEnabled(val enabled: Boolean) : AIChatSettingsEvent()
     
     // History Management
@@ -318,4 +333,5 @@ sealed class AIChatSettingsEvent {
     // State Management
     object DismissError : AIChatSettingsEvent()
     object DismissSuccessMessage : AIChatSettingsEvent()
+    object RetryLoad : AIChatSettingsEvent()
 }

@@ -1003,37 +1003,62 @@ class WorkoutRepositoryImpl @Inject constructor(
             // EXPLORE TAB: Get all public workout posts
             workoutPostDao.getRecentPublicPosts(limit)
                 .map { postEntities ->
-                    try {
-                        val feedWorkouts = postEntities.mapNotNull { postEntity ->
-                            // Get the workout for this post
+                    val feedWorkouts = postEntities.mapNotNull { postEntity ->
+                        runCatching {
                             val workoutEntity = workoutDao.getWorkoutByIdForUser(
                                 postEntity.workoutId,
                                 postEntity.userId
-                            )
-                            if (workoutEntity != null) {
+                            ) ?: return@runCatching null
+                            val workout = workoutMapper.toDomain(workoutEntity)
+                            val mediaUrls = parseStringList(json, postEntity.mediaUrls, "media URLs")
+                            val mediaThumbnails = parseStringList(json, postEntity.mediaThumbnails, "media thumbnails")
+                            val isPersonal = postEntity.userId == userId
+
+                            if (isPersonal) {
+                                FeedWorkout.forPersonalWorkout(
+                                    workout = workout,
+                                    mediaUrls = mediaUrls,
+                                    mediaThumbnails = mediaThumbnails
+                                )
+                            } else {
+                                val user = User.forSocialDisplay(
+                                    uid = postEntity.userId,
+                                    displayName = "User"
+                                )
+                                FeedWorkout.forFriendWorkout(
+                                    workout = workout,
+                                    friendUser = user,
+                                    mediaUrls = mediaUrls,
+                                    mediaThumbnails = mediaThumbnails
+                                )
+                            }
+                        }.onFailure { throwable ->
+                            Timber.e(throwable, "Skipping invalid explore feed post ${postEntity.id}")
+                        }.getOrNull()
+                    }
+
+                    LiftrixResult.success(feedWorkouts)
+                }
+        } else {
+            // FOLLOWING TAB: Get posts from user and people they follow
+            // First get the followed user IDs, then query posts
+            flow {
+                val followedUserIds = followRelationshipDao.getFollowingUserIds(userId)
+                val allUserIds = followedUserIds + userId
+
+                workoutPostDao.getRecentPostsFromUsers(allUserIds, limit)
+                    .collect { postEntities ->
+                        val feedWorkouts = postEntities.mapNotNull { postEntity ->
+                            runCatching {
+                                val workoutEntity = workoutDao.getWorkoutByIdForUser(
+                                    postEntity.workoutId,
+                                    postEntity.userId
+                                ) ?: return@runCatching null
                                 val workout = workoutMapper.toDomain(workoutEntity)
-                                
-                                // Parse media URLs from JSON
-                                val mediaUrls = postEntity.mediaUrls?.let { 
-                                    try {
-                                        json.decodeFromString(ListSerializer(String.serializer()), it)
-                                    } catch (e: Exception) {
-                                        Timber.e(e, "Failed to parse media URLs")
-                                        emptyList()
-                                    }
-                                } ?: emptyList()
-                                
-                                val mediaThumbnails = postEntity.mediaThumbnails?.let {
-                                    try {
-                                        json.decodeFromString(ListSerializer(String.serializer()), it)
-                                    } catch (e: Exception) {
-                                        Timber.e(e, "Failed to parse media thumbnails")
-                                        emptyList()
-                                    }
-                                } ?: emptyList()
-                                
-                                // Create FeedWorkout with media - determine if it's personal
+                                val mediaUrls = parseStringList(json, postEntity.mediaUrls, "media URLs")
+                                val mediaThumbnails = parseStringList(json, postEntity.mediaThumbnails, "media thumbnails")
                                 val isPersonal = postEntity.userId == userId
+
                                 if (isPersonal) {
                                     FeedWorkout.forPersonalWorkout(
                                         workout = workout,
@@ -1041,10 +1066,9 @@ class WorkoutRepositoryImpl @Inject constructor(
                                         mediaThumbnails = mediaThumbnails
                                     )
                                 } else {
-                                    // For non-personal workouts, create a social display User object
                                     val user = User.forSocialDisplay(
                                         uid = postEntity.userId,
-                                        displayName = "User"
+                                        displayName = "Friend"
                                     )
                                     FeedWorkout.forFriendWorkout(
                                         workout = workout,
@@ -1053,116 +1077,13 @@ class WorkoutRepositoryImpl @Inject constructor(
                                         mediaThumbnails = mediaThumbnails
                                     )
                                 }
-                            } else {
-                                null
-                            }
+                            }.onFailure { throwable ->
+                                Timber.e(throwable, "Skipping invalid following feed post ${postEntity.id}")
+                            }.getOrNull()
                         }
-                        
-                        LiftrixResult.success(feedWorkouts)
-                    } catch (throwable: Throwable) {
-                        Timber.e(throwable, "Error mapping explore feed")
-                        LiftrixResult.failure(
-                            LiftrixError.DatabaseError(
-                                errorMessage = "Failed to map explore feed",
-                                operation = "READ",
-                                table = "workout_posts",
-                                analyticsContext = mapOf(
-                                    "user_id" to userId,
-                                    "include_others" to includeOthers.toString(),
-                                    "limit" to limit.toString()
-                                )
-                            )
-                        )
+
+                        emit(LiftrixResult.success(feedWorkouts))
                     }
-                }
-        } else {
-            // FOLLOWING TAB: Get posts from user and people they follow
-            // First get the followed user IDs, then query posts
-            flow {
-                try {
-                    // Get list of followed user IDs
-                    val followedUserIds = followRelationshipDao.getFollowingUserIds(userId)
-                    
-                    // Include the current user in the list
-                    val allUserIds = followedUserIds + userId
-                    
-                    
-                    // Get posts from all these users
-                    workoutPostDao.getRecentPostsFromUsers(allUserIds, limit)
-                        .collect { postEntities ->
-                            val feedWorkouts = postEntities.mapNotNull { postEntity ->
-                                // Get the workout for this post
-                                val workoutEntity = workoutDao.getWorkoutByIdForUser(
-                                    postEntity.workoutId,
-                                    postEntity.userId
-                                )
-                                if (workoutEntity != null) {
-                                    val workout = workoutMapper.toDomain(workoutEntity)
-                                    
-                                    // Parse media URLs from JSON
-                                    val mediaUrls = postEntity.mediaUrls?.let { 
-                                        try {
-                                            json.decodeFromString(ListSerializer(String.serializer()), it)
-                                        } catch (e: Exception) {
-                                            Timber.e(e, "Failed to parse media URLs")
-                                            emptyList()
-                                        }
-                                    } ?: emptyList()
-                                    
-                                    val mediaThumbnails = postEntity.mediaThumbnails?.let {
-                                        try {
-                                            json.decodeFromString(ListSerializer(String.serializer()), it)
-                                        } catch (e: Exception) {
-                                            Timber.e(e, "Failed to parse media thumbnails")
-                                            emptyList()
-                                        }
-                                    } ?: emptyList()
-                                    
-                                    // Determine if it's a personal workout
-                                    val isPersonal = postEntity.userId == userId
-                                    if (isPersonal) {
-                                        FeedWorkout.forPersonalWorkout(
-                                            workout = workout,
-                                            mediaUrls = mediaUrls,
-                                            mediaThumbnails = mediaThumbnails
-                                        )
-                                    } else {
-                                        // For friend workouts, create a social display User object
-                                        val user = User.forSocialDisplay(
-                                            uid = postEntity.userId,
-                                            displayName = "Friend"
-                                        )
-                                        FeedWorkout.forFriendWorkout(
-                                            workout = workout,
-                                            friendUser = user,
-                                            mediaUrls = mediaUrls,
-                                            mediaThumbnails = mediaThumbnails
-                                        )
-                                    }
-                                } else {
-                                    null
-                                }
-                            }
-                            
-                            emit(LiftrixResult.success(feedWorkouts))
-                        }
-                } catch (throwable: Throwable) {
-                    Timber.e(throwable, "Error getting following feed")
-                    emit(
-                        LiftrixResult.failure(
-                            LiftrixError.DatabaseError(
-                                errorMessage = "Failed to get following feed",
-                                operation = "READ",
-                                table = "workout_posts",
-                                analyticsContext = mapOf(
-                                    "user_id" to userId,
-                                    "include_others" to includeOthers.toString(),
-                                    "limit" to limit.toString()
-                                )
-                            )
-                        )
-                    )
-                }
             }
         }.catch { throwable ->
             Timber.e(throwable, "Database flow error for recent activity")
@@ -1181,6 +1102,17 @@ class WorkoutRepositoryImpl @Inject constructor(
                 )
             )
         }
+    }
+
+    private fun parseStringList(json: Json, rawJson: String?, label: String): List<String> {
+        return rawJson?.let {
+            try {
+                json.decodeFromString(ListSerializer(String.serializer()), it)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to parse $label")
+                emptyList()
+            }
+        } ?: emptyList()
     }
 
     override suspend fun getWorkoutStats(userId: String): LiftrixResult<WorkoutStats> {
@@ -1676,6 +1608,7 @@ class WorkoutRepositoryImpl @Inject constructor(
     override suspend fun getLastCompletedWorkoutsWithExercise(
         userId: String,
         exerciseId: String,
+        exerciseName: String?,
         limit: Int,
         excludeWorkoutId: String?
     ): LiftrixResult<List<Workout>> {
@@ -1688,6 +1621,7 @@ class WorkoutRepositoryImpl @Inject constructor(
                     analyticsContext = mapOf(
                         "user_id" to userId,
                         "exercise_id" to exerciseId,
+                        "exercise_name" to (exerciseName ?: "null"),
                         "limit" to limit.toString(),
                         "exclude_workout_id" to (excludeWorkoutId ?: "null")
                     )
@@ -1695,21 +1629,55 @@ class WorkoutRepositoryImpl @Inject constructor(
             }
         ) {
             withContext(Dispatchers.IO) {
-                Timber.d("Getting last completed workouts with exercise $exerciseId for user $userId")
-                
+                val normalizedExerciseName = exerciseName.normalizedExerciseIdentifierOrNull()
+                Timber.tag("PREV_SET_QUERY").d(
+                    "SQL=WorkoutDao.getLastCompletedWorkoutsWithExercise userId=$userId exerciseId=$exerciseId exerciseName=$exerciseName limit=$limit excludeWorkoutId=$excludeWorkoutId"
+                )
+
                 val normalizedWorkoutEntities = workoutDao.getLastCompletedWorkoutsWithExercise(
                     userId = userId,
                     exerciseId = exerciseId,
                     limit = limit,
                     excludeWorkoutId = excludeWorkoutId
                 )
+                Timber.tag("PREV_SET_QUERY").d(
+                    "canonicalRows=${normalizedWorkoutEntities.size} exerciseId=$exerciseId"
+                )
 
-                val workoutEntities = if (normalizedWorkoutEntities.size >= limit) {
-                    normalizedWorkoutEntities
+                val legacyNameWorkoutEntities = if (
+                    normalizedExerciseName != null &&
+                    normalizedExerciseName != exerciseId.normalizedExerciseIdentifierOrNull()
+                ) {
+                    Timber.tag("PREV_SET_QUERY").d(
+                        "SQL=WorkoutDao.getLastCompletedWorkoutsWithExercise legacyName userId=$userId exerciseName=$exerciseName limit=$limit excludeWorkoutId=$excludeWorkoutId"
+                    )
+                    workoutDao.getLastCompletedWorkoutsWithExercise(
+                        userId = userId,
+                        exerciseId = exerciseName!!.trim(),
+                        limit = limit,
+                        excludeWorkoutId = excludeWorkoutId
+                    ).also { rows ->
+                        Timber.tag("PREV_SET_QUERY").d(
+                            "legacyNameRows=${rows.size} exerciseName=$exerciseName"
+                        )
+                    }
                 } else {
-                    val normalizedIds = normalizedWorkoutEntities.mapTo(mutableSetOf()) { it.id }
-                    val fallbackLimit = ((limit - normalizedWorkoutEntities.size) * 10)
+                    emptyList()
+                }
+
+                val directWorkoutEntities = (normalizedWorkoutEntities + legacyNameWorkoutEntities)
+                    .distinctBy { entity -> entity.id }
+                    .take(limit)
+
+                val workoutEntities = if (directWorkoutEntities.size >= limit) {
+                    directWorkoutEntities
+                } else {
+                    val normalizedIds = directWorkoutEntities.mapTo(mutableSetOf()) { it.id }
+                    val fallbackLimit = ((limit - directWorkoutEntities.size) * 10)
                         .coerceAtLeast(20)
+                    Timber.tag("PREV_SET_QUERY").d(
+                        "SQL=WorkoutDao.getRecentCompletedWorkoutsForExerciseJsonFallback userId=$userId limit=$fallbackLimit excludeWorkoutId=$excludeWorkoutId"
+                    )
                     val fallbackWorkoutEntities = workoutDao.getRecentCompletedWorkoutsForExerciseJsonFallback(
                         userId = userId,
                         limit = fallbackLimit,
@@ -1717,16 +1685,31 @@ class WorkoutRepositoryImpl @Inject constructor(
                     ).filterNot { entity ->
                         entity.id in normalizedIds
                     }.filter { entity ->
-                        entity.containsExerciseInJsonFallback(exerciseId)
+                        entity.containsExerciseInJsonFallback(exerciseId, exerciseName)
+                    }.also { rows ->
+                        Timber.tag("PREV_SET_QUERY").d(
+                            "jsonFallbackRows=${rows.size} exerciseId=$exerciseId exerciseName=$exerciseName"
+                        )
                     }
 
-                    (normalizedWorkoutEntities + fallbackWorkoutEntities)
+                    (directWorkoutEntities + fallbackWorkoutEntities)
                         .distinctBy { entity -> entity.id }
                         .take(limit)
                 }
                 
-                Timber.d("Found ${workoutEntities.size} completed workouts with exercise $exerciseId")
-                workoutEntities.map { workoutMapper.toDomain(it) }
+                Timber.tag(if (workoutEntities.isEmpty()) "PREV_SET_EMPTY" else "PREV_SET_QUERY").d(
+                    "rowsReturned=${workoutEntities.size} exerciseId=$exerciseId exerciseName=$exerciseName canonicalRows=${normalizedWorkoutEntities.size} legacyNameRows=${legacyNameWorkoutEntities.size}"
+                )
+                workoutEntities.map { entity ->
+                    workoutMapper.toDomain(entity).also { workout ->
+                        val matched = workout.exercises.map { exercise ->
+                            "${exercise.libraryExercise.id}|${exercise.libraryExercise.name}"
+                        }
+                        Timber.tag("PREV_SET_QUERY").d(
+                            "matchedWorkout=${workout.id.value} matchedExerciseIdentifiers=$matched"
+                        )
+                    }
+                }
             }
         }
     }
@@ -1751,15 +1734,21 @@ class WorkoutRepositoryImpl @Inject constructor(
         )
     }
 
-    private fun WorkoutEntity.containsExerciseInJsonFallback(exerciseId: String): Boolean {
+    private fun WorkoutEntity.containsExerciseInJsonFallback(exerciseId: String, exerciseName: String?): Boolean {
         return runCatching {
+            val normalizedExerciseName = exerciseName.normalizedExerciseIdentifierOrNull()
             workoutMapper.toDomain(this).exercises.any { exercise ->
-                exercise.libraryExercise.id == exerciseId
+                exercise.libraryExercise.id == exerciseId ||
+                    (normalizedExerciseName != null &&
+                        exercise.libraryExercise.name.normalizedExerciseIdentifierOrNull() == normalizedExerciseName)
             }
         }.getOrElse { throwable ->
             Timber.w(throwable, "Failed to parse legacy workout JSON for previous-set fallback")
             false
         }
     }
+
+    private fun String?.normalizedExerciseIdentifierOrNull(): String? =
+        this?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
 
 }

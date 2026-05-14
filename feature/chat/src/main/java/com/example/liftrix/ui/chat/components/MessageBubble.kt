@@ -21,7 +21,7 @@ import com.example.liftrix.domain.model.chat.MessageType
  * Adapts appearance based on message type (user vs AI) with:
  * - Distinct colors and positioning for user and AI messages
  * - Rounded corner styling with appropriate bubble tails
- * - Timestamp and token count display
+ * - Timestamp display
  * - Responsive width constraints for readability
  * 
  * @param message The chat message to display
@@ -61,7 +61,6 @@ fun MessageBubble(
                 
                 MessageMetadata(
                     timestamp = message.createdAt,
-                    tokenCount = message.tokenCount,
                     processingTime = message.processingTimeMs,
                     isUserMessage = isUserMessage
                 )
@@ -88,7 +87,6 @@ private fun MessageContent(
 @Composable
 private fun MessageMetadata(
     timestamp: Long,
-    tokenCount: Int?,
     processingTime: Long?,
     isUserMessage: Boolean
 ) {
@@ -104,17 +102,6 @@ private fun MessageMetadata(
             else
                 LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.7f)
         )
-        
-        tokenCount?.let { tokens ->
-            Text(
-                text = "$tokens tokens",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (isUserMessage)
-                    LiftrixColorsV2.onPrimary.copy(alpha = 0.7f)
-                else
-                    LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.7f)
-            )
-        }
         
         processingTime?.let { time ->
             if (!isUserMessage && time > 1000) {

@@ -12,7 +12,7 @@ fun HomeRoute(
     onNavigateToPublicProfile: (String) -> Unit,
     onNavigateToUserSearch: () -> Unit,
     onNavigateToPostComments: (String) -> Unit,
-    onNavigateToWorkoutDetails: (String) -> Unit,
+    onNavigateToWorkoutDetails: (String, String?) -> Unit,
     onNavigateToEditWorkout: (String) -> Unit,
     syncStatusContent: @Composable () -> Unit,
     modifier: Modifier = Modifier

@@ -77,13 +77,26 @@ data class Workout(
     }
     
     /**
-     * Calculates total volume across all exercises using centralized VolumeCalculator
+     * Calculates total volume across all exercises in kilograms.
+     *
+     * Workout volume is an aggregate metric and can validly exceed the
+     * single-load Weight limit.
      */
-    fun calculateTotalVolume(): Weight {
-        val totalVolumeKg = exercises.sumOf { exercise ->
+    fun calculateTotalVolumeKg(): Double {
+        return exercises.sumOf { exercise ->
             com.example.liftrix.domain.util.VolumeCalculator.calculateVolumeFromSets(exercise.sets)
         }
-        return Weight(totalVolumeKg)
+    }
+    
+    /**
+     * Calculates total volume across all exercises using centralized VolumeCalculator.
+     *
+     * Kept as Weight for existing callers. Values above the single-load Weight
+     * limit are capped here; callers that need the exact aggregate should use
+     * calculateTotalVolumeKg().
+     */
+    fun calculateTotalVolume(): Weight {
+        return Weight.fromKilograms(calculateTotalVolumeKg())
     }
     
     /**

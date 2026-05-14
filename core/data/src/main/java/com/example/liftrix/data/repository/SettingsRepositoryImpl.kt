@@ -499,7 +499,7 @@ class SettingsRepositoryImpl @Inject constructor(
      */
     suspend fun updateDistanceUnit(userId: String, distanceUnit: String): Result<Unit> {
         return try {
-            settingsDao.updateDistanceUnit(userId, distanceUnit)
+            settingsDao.updateDistanceUnit(userId, distanceUnit, Instant.now())
             
             // Schedule Firebase sync
             scheduleFirebaseSync(userId)
@@ -518,7 +518,7 @@ class SettingsRepositoryImpl @Inject constructor(
      */
     suspend fun updatePrivacySettings(userId: String, privateProfile: Boolean, hideStats: Boolean): Result<Unit> {
         return try {
-            settingsDao.updatePrivacySettings(userId, privateProfile, hideStats)
+            settingsDao.updatePrivacySettings(userId, privateProfile, hideStats, Instant.now())
             
             // Schedule Firebase sync
             scheduleFirebaseSync(userId)
@@ -537,7 +537,7 @@ class SettingsRepositoryImpl @Inject constructor(
      */
     suspend fun updateCommunicationSettings(userId: String, allowMessages: Boolean, autoPlayVideos: Boolean): Result<Unit> {
         return try {
-            settingsDao.updateCommunicationSettings(userId, allowMessages, autoPlayVideos)
+            settingsDao.updateCommunicationSettings(userId, allowMessages, autoPlayVideos, Instant.now())
             
             // Schedule Firebase sync
             scheduleFirebaseSync(userId)

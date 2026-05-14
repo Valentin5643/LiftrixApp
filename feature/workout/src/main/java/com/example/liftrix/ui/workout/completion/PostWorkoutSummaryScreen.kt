@@ -170,7 +170,7 @@ fun PostWorkoutSummaryScreen(
                             },
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.textButtonColors(
-                                contentColor = LiftrixColorsV2.Dark.Error.copy(alpha = 0.8f)
+                                contentColor = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
                             )
                         ) {
                             Text(
@@ -358,7 +358,7 @@ private fun KeyMetricsGrid(
                 value = totalSets.toString(),
                 unit = "sets",
                 label = "Sets Completed", 
-                iconTint = LiftrixColorsV2.Dark.Success,
+                iconTint = LiftrixColorsV2.DataViz.Positive,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -382,7 +382,7 @@ private fun KeyMetricsGrid(
                     value = prsCount.toString(),
                     unit = "PRs",
                     label = "Personal Records",
-                    iconTint = LiftrixColorsV2.Dark.Warning,
+                    iconTint = LiftrixColorsV2.DataViz.Warning,
                     modifier = Modifier.weight(1f)
                 )
             } else {
@@ -471,9 +471,9 @@ private fun PersonalRecordsSection(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = LiftrixColorsV2.Dark.Warning.copy(alpha = 0.1f)
+            containerColor = LiftrixColorsV2.DataViz.Warning.copy(alpha = 0.1f)
         ),
-        border = BorderStroke(1.dp, LiftrixColorsV2.Dark.Warning.copy(alpha = 0.3f))
+        border = BorderStroke(1.dp, LiftrixColorsV2.DataViz.Warning.copy(alpha = 0.3f))
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
@@ -485,14 +485,14 @@ private fun PersonalRecordsSection(
                 Icon(
                     Icons.Default.EmojiEvents,
                     contentDescription = "Personal records",
-                    tint = LiftrixColorsV2.Dark.Warning,
+                    tint = LiftrixColorsV2.DataViz.Warning,
                     modifier = Modifier.size(24.dp)
                 )
                 Text(
                     text = "Personal Records! 🎯",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = LiftrixColorsV2.Dark.TextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
             
@@ -526,19 +526,19 @@ private fun PRItem(
                 text = record.exerciseName,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                color = LiftrixColorsV2.Dark.TextPrimary
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = record.type,
                 fontSize = 12.sp,
-                color = LiftrixColorsV2.Dark.TextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         Text(
             text = weightUnitManager?.formatWeightText(record.value) ?: record.value,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
-            color = LiftrixColorsV2.Dark.Warning
+            color = LiftrixColorsV2.DataViz.Warning
         )
     }
 }
@@ -554,7 +554,7 @@ private fun ExerciseSummaryCard(
             .clickable { onClick() },
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
@@ -570,7 +570,7 @@ private fun ExerciseSummaryCard(
                     text = "Exercise Summary",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Box(
                     modifier = Modifier
@@ -718,7 +718,7 @@ private fun ShareOptionsBottomSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = LiftrixColorsV2.Dark.Surface
+        containerColor = MaterialTheme.colorScheme.surface
     ) {
         Column(
             modifier = Modifier
@@ -731,7 +731,7 @@ private fun ShareOptionsBottomSheet(
                 text = "Share Your Workout",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = LiftrixColorsV2.Dark.TextPrimary,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
             
@@ -781,7 +781,7 @@ private fun ShareMethodItem(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = LiftrixColorsV2.Dark.SurfaceVariant
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
         Row(
@@ -813,19 +813,19 @@ private fun ShareMethodItem(
                     text = title,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
-                    color = LiftrixColorsV2.Dark.TextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = subtitle,
                     fontSize = 14.sp,
-                    color = LiftrixColorsV2.Dark.TextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             
             Icon(
                 Icons.Default.KeyboardArrowRight,
                 contentDescription = "View details",
-                tint = LiftrixColorsV2.Dark.TextSecondary
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -847,7 +847,7 @@ private fun ErrorContent(
         Icon(
             Icons.Default.ErrorOutline,
             contentDescription = "Error",
-            tint = LiftrixColorsV2.Dark.Error,
+            tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(64.dp)
         )
         Spacer(modifier = Modifier.height(16.dp))
@@ -855,13 +855,13 @@ private fun ErrorContent(
             text = "Something went wrong",
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
-            color = LiftrixColorsV2.Dark.TextPrimary
+            color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = message,
             fontSize = 14.sp,
-            color = LiftrixColorsV2.Dark.TextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(24.dp))

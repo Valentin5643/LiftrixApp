@@ -1,10 +1,11 @@
 package com.example.liftrix.data.mapper
 
 import com.example.liftrix.data.local.entity.WorkoutTemplateEntity
+import com.example.liftrix.domain.model.ExerciseId
 import com.example.liftrix.domain.model.Reps
+import com.example.liftrix.domain.model.TemplateExercise
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.model.WorkoutTemplateId
-import com.example.liftrix.domain.model.TemplateExercise
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -20,6 +21,7 @@ class WorkoutTemplateMapper @Inject constructor() {
     private val json = Json { 
         ignoreUnknownKeys = true
         coerceInputValues = true
+        encodeDefaults = true
     }
     
     /**
@@ -118,26 +120,48 @@ class WorkoutTemplateMapper @Inject constructor() {
         source: String
     ): List<TemplateExercise> {
         return exercises.mapIndexed { index, exercise ->
+            val normalizedExerciseId = exercise.exerciseId.value
+                .takeIf { it.isNotBlank() }
+                ?.let { exercise.exerciseId }
+                ?: ExerciseId.fromString(generateLegacyExerciseId(exercise.name, index))
             val normalizedTargetSets = exercise.targetSets ?: DEFAULT_TEMPLATE_SETS
             val targetReps = exercise.targetReps
             val normalizedTargetReps = targetReps
                 ?.takeIf { it.count > 0 }
                 ?: DEFAULT_TEMPLATE_REPS
 
-            if (exercise.targetSets == null || targetReps == null || targetReps.count <= 0) {
+            if (
+                exercise.exerciseId.value.isBlank() ||
+                exercise.targetSets == null ||
+                targetReps == null ||
+                targetReps.count <= 0
+            ) {
                 timber.log.Timber.w(
                     "EDIT-WORKOUT-DEBUG: $source normalized templateId=$templateId " +
                         "exerciseIndex=$index exerciseName='${exercise.name}' " +
+                        "exerciseId='${exercise.exerciseId.value}' normalizedExerciseId='${normalizedExerciseId.value}' " +
                         "targetSets=${exercise.targetSets} targetReps=${targetReps?.count} " +
                         "normalizedTargetSets=$normalizedTargetSets normalizedTargetReps=${normalizedTargetReps.count}"
                 )
             }
 
             exercise.copy(
+                exerciseId = normalizedExerciseId,
                 targetSets = normalizedTargetSets,
                 targetReps = normalizedTargetReps
             )
         }
+    }
+
+    private fun generateLegacyExerciseId(name: String, index: Int): String {
+        val slug = name
+            .lowercase()
+            .replace(Regex("[^a-z0-9]+"), "_")
+            .trim('_')
+            .takeIf { it.isNotBlank() }
+            ?: "exercise"
+
+        return "legacy_${slug}_$index"
     }
     
     /**

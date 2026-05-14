@@ -9,6 +9,7 @@ import com.example.liftrix.data.local.dao.WorkoutPostDao
 import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.example.liftrix.data.local.dao.QRCodeMappingDao
 import com.example.liftrix.data.local.dao.ProfileViewDao
+import com.example.liftrix.data.local.dao.BlockedUserDao
 import com.example.liftrix.data.local.entity.UserSearchCacheEntity
 import com.example.liftrix.data.local.entity.FollowRelationshipEntity
 import com.example.liftrix.data.local.entity.QRCodeMappingEntity
@@ -67,6 +68,7 @@ class UserSearchRepositoryImpl @Inject constructor(
     private val socialProfileDao: SocialProfileDao,
     private val qrCodeMappingDao: QRCodeMappingDao,
     private val profileViewDao: ProfileViewDao,
+    private val blockedUserDao: BlockedUserDao,
     private val authRepository: AuthRepository,
     private val gson: Gson,
     private val legacyDataSource: LegacyUserSearchFirestoreDataSource
@@ -974,6 +976,10 @@ class UserSearchRepositoryImpl @Inject constructor(
         }
         
         try {
+            if (blockedUserDao.hasBlockRelationship(viewerId, userId)) {
+                return ConnectionStatus.BLOCKED
+            }
+
             // Check the follow relationship from viewer to user
             val followRelationship = followRelationshipDao.getFollowRelationship(viewerId, userId)
             

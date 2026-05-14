@@ -111,8 +111,9 @@ private fun shouldHideFabForRoute(route: String?): Boolean {
     
     // Define route patterns where FAB should be hidden
     val routesToHideFab = setOf(
-        // Coach tab - AI chat interface doesn't need workout creation
+        // Coach tab and standalone AI chat interface don't need workout creation
         LiftrixRoute.Coach::class.simpleName,
+        "AIChatbot",
         
         // Settings screens - contextually inappropriate for workout creation
         "Settings", "WidgetSettings", "AnomalySettings", 

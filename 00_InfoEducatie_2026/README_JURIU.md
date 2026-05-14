@@ -13,7 +13,7 @@ Acest folder conține materialele pentru evaluarea proiectului Liftrix la secți
 
 - Repository cod sursă: https://github.com/valentin5643/LiftrixApp
 - APK / Release: https://github.com/valentin5643/LiftrixApp/releases
-- Demo video: [PUNE LINKUL AICI]
+- Demo video: https://drive.google.com/file/d/138EH_MFxiS6wFZGwY7s6fRI6sg261IJI/view?usp=drivesdk
 
 ## Rulare rapidă pentru juriu
 

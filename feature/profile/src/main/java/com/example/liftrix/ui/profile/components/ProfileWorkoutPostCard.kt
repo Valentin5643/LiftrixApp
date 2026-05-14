@@ -42,7 +42,6 @@ import coil.compose.AsyncImage
 import com.example.liftrix.domain.model.social.MediaItem
 import com.example.liftrix.domain.model.social.MediaType
 import com.example.liftrix.domain.model.social.WorkoutPost
-import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.theme.LiftrixSpacing
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -91,12 +90,12 @@ fun WorkoutPostCard(
                     text = post.authorDisplayName.ifBlank { post.authorUsername },
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = LiftrixColorsV2.onSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = formatTimestamp(post.createdAt),
                     style = MaterialTheme.typography.bodySmall,
-                    color = LiftrixColorsV2.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -125,7 +124,7 @@ fun WorkoutPostCard(
             Text(
                 text = post.caption,
                 style = MaterialTheme.typography.bodyMedium,
-                color = LiftrixColorsV2.onSurface,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = LiftrixSpacing.medium)
@@ -179,14 +178,18 @@ fun WorkoutPostCard(
                 Icon(
                     Icons.Default.Bookmark,
                     contentDescription = if (isSaved) "Unsave" else "Save",
-                    tint = if (isSaved) LiftrixColorsV2.primary else LiftrixColorsV2.onSurfaceVariant
+                    tint = if (isSaved) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
                 )
             }
         }
         HorizontalDivider(
             modifier = Modifier.fillMaxWidth(),
             thickness = 0.5.dp,
-            color = LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.1f)
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
         )
     }
 }
@@ -264,12 +267,12 @@ private fun Metric(value: String, label: String) {
             text = value,
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            color = LiftrixColorsV2.onSurface
+            color = MaterialTheme.colorScheme.onSurface
         )
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
-            color = LiftrixColorsV2.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -291,14 +294,18 @@ private fun EngagementButton(
         Icon(
             imageVector = if (active) activeIcon else inactiveIcon,
             contentDescription = contentDescription,
-            tint = if (active) LiftrixColorsV2.primary else LiftrixColorsV2.onSurfaceVariant,
+            tint = if (active) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
             modifier = Modifier.size(20.dp)
         )
         if (count > 0) {
             Text(
                 text = formatCount(count),
                 style = MaterialTheme.typography.labelMedium,
-                color = LiftrixColorsV2.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

@@ -317,8 +317,12 @@ class SyncOperationManager @Inject constructor(
                         .document(workout.id)
                     
                     try {
+                        require(workout.userId == userId) {
+                            "User ownership validation failed: workout.userId=${workout.userId}, expected=$userId"
+                        }
+
                         // 🔥 SYNC-FIX: Implement fallback to prevent exercise data loss during schema mismatches
-                        val workoutData = try {
+                        val baseWorkoutData = try {
                             // First attempt: Use normal domain conversion
                             val domainWorkout = workoutMapper.toDomain(workout)
 
@@ -341,6 +345,20 @@ class SyncOperationManager @Inject constructor(
                             workoutMapper.entityToFirestoreDto(workout, userId)
                         }
                         
+                        val syncVersion = System.currentTimeMillis()
+                        val workoutData = baseWorkoutData.copy(
+                            syncVersion = syncVersion,
+                            synced = true,
+                            lastModified = workout.lastModified,
+                            updatedAt = null
+                        )
+
+                        Timber.d(
+                            "SyncOperationManager: Queuing workout write path=${docRef.path} " +
+                                "authUid=${auth.currentUser?.uid} userId=$userId workoutUserId=${workout.userId} " +
+                                "lastModified=${workout.lastModified} syncVersion=$syncVersion"
+                        )
+
                         firestoreBatch.set(docRef, workoutData, SetOptions.merge())
                         
                     } catch (e: Exception) {

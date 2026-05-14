@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
 import com.example.liftrix.core.json.ExerciseJsonParser
+import com.google.gson.annotations.SerializedName
 import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
@@ -65,6 +66,10 @@ class FeedRepositoryImpl @Inject constructor(
     private val syncScheduler: SyncScheduler
 ) : FeedRepository {
 
+    private companion object {
+        private const val FOLLOWING_FEED_RETENTION_MILLIS = 24L * 60L * 60L * 1000L
+    }
+
     // Cache for followed user IDs to prevent feed clearing during sync
     private val followedUserIdsCache = mutableMapOf<String, List<String>>()
 
@@ -78,6 +83,12 @@ class FeedRepositoryImpl @Inject constructor(
 
         val pager = when (feedType) {
             FeedType.HOME -> {
+                try {
+                    syncScheduler.enqueueWorkoutPostSync(userId, forceSync = true)
+                } catch (e: Exception) {
+                    Timber.w(e, "[WORKOUT-POSTS] Failed to enqueue following post hydration")
+                }
+
                 // Get the list of users that the current user follows
                 // Include the current user's own posts in their home feed
                 val followedUserIds = withContext(Dispatchers.IO) {
@@ -132,7 +143,11 @@ class FeedRepositoryImpl @Inject constructor(
 
                         // Wrap in StableFeedPagingSource to handle intermediate empty states
                         StableFeedPagingSource(
-                            delegate = workoutPostDao.getHomeFeedPostsWithSelf(userId, safeFollowedIds),
+                            delegate = workoutPostDao.getHomeFeedPostsWithSelfSince(
+                                currentUserId = userId,
+                                followedUserIds = safeFollowedIds,
+                                sinceTimestamp = System.currentTimeMillis() - FOLLOWING_FEED_RETENTION_MILLIS
+                            ),
                             userId = userId,
                             hasLocalPosts = {
                                 workoutPostDao.getUserPostCount(userId) > 0
@@ -149,25 +164,17 @@ class FeedRepositoryImpl @Inject constructor(
                     Timber.w(e, "[WORKOUT-POSTS] Failed to enqueue public post hydration for discovery feed")
                 }
 
-                // Get followed users to potentially exclude them from discovery
+                // Exclude only the viewer's own posts from discovery. Followed users are still
+                // eligible because discovery is the public feed surface.
                 val followedUserIds = withContext(Dispatchers.IO) {
                     val followedIds = followRelationshipDao.getFollowingUserIds(userId)
-
-                    // Use cached IDs if DB is temporarily empty
-                    val finalIds = if (followedIds.isEmpty() && followedUserIdsCache.containsKey(userId)) {
-                        followedUserIdsCache[userId] ?: emptyList()
-                    } else {
-                        if (followedIds.isNotEmpty()) {
-                            followedUserIdsCache[userId] = followedIds
-                        }
-                        followedIds
+                    if (followedIds.isNotEmpty()) {
+                        followedUserIdsCache[userId] = followedIds
                     }
-
-                    // Keep official workout seed creators eligible for Explore even when onboarding
-                    // also follows them, so the tab keeps a workout-focused identity.
-                    val officialSeedIds = OfficialLiftrixAccountCatalog.accounts.map { it.id }.toSet()
-                    val excludeIds = finalIds.filterNot { it in officialSeedIds }
-                    excludeIds
+                    Timber.i(
+                        "[PUBLIC-LOG] Discovery exclusion user=$userId followedCount=${followedIds.size} excludedAuthors=[$userId]"
+                    )
+                    listOf(userId)
                 }
 
                 Pager(
@@ -753,10 +760,12 @@ class FeedRepositoryImpl @Inject constructor(
         val profilePhotoUrl: String?
     )
     // Helper functions for workout metadata calculation
-    private fun calculateWorkoutDuration(workout: Any?): Int? {
-        // For now, return null as workout duration calculation needs WorkoutEntity structure
-        // In a full implementation, this would calculate duration from workout.startTime to workout.endTime
-        return null
+    private fun calculateWorkoutDuration(workout: WorkoutEntity?): Int? {
+        val startTime = workout?.startTime ?: return null
+        val endTime = workout.endTime ?: return null
+        val duration = java.time.Duration.between(startTime, endTime)
+        if (duration.isNegative || duration.isZero) return 0
+        return ((duration.seconds + 59L) / 60L).toInt()
     }
 
     private fun calculateTotalVolume(workout: WorkoutEntity?): Double? {
@@ -839,9 +848,13 @@ class FeedRepositoryImpl @Inject constructor(
      * Helper data classes for JSON parsing
      */
     private data class WorkoutExerciseJson(
+        @SerializedName("name")
         val name: String? = null,
+        @SerializedName("libraryExerciseName")
         val libraryExerciseName: String? = null,
+        @SerializedName("sets")
         val sets: List<WorkoutSetJson>? = emptyList(),
+        @SerializedName("libraryExercise")
         val libraryExercise: LibraryExerciseJson? = null
     ) {
         // Helper to get effective name from current, canonical, and legacy formats.
@@ -855,55 +868,101 @@ class FeedRepositoryImpl @Inject constructor(
     }
 
     private data class LibraryExerciseJson(
+        @SerializedName("name")
         val name: String? = null,
+        @SerializedName("libraryExerciseName")
         val libraryExerciseName: String? = null,
+        @SerializedName("id")
         val id: String? = null,
+        @SerializedName("sets")
         val sets: List<WorkoutSetJson>? = null
     )
 
     private data class WorkoutSetJson(
         // Support both direct fields and nested object structures from WorkoutMapper
-        val actualWeight: Double? = null,
-        val targetWeight: Double? = null,
-        val weight: WeightJson? = null,     // Support Weight object structure
+        @SerializedName("actualWeight")
+        val actualWeight: com.google.gson.JsonElement? = null,
+        @SerializedName("targetWeight")
+        val targetWeight: com.google.gson.JsonElement? = null,
+        @SerializedName("weight")
+        val weight: com.google.gson.JsonElement? = null, // Supports canonical number and legacy Weight object structures
+        @SerializedName("weightKg")
         val weightKg: Double? = null,       // Legacy field
+        @SerializedName("weightLbs")
         val weightLbs: Double? = null,      // Legacy field
 
+        @SerializedName("actualReps")
         val actualReps: Int? = null,
+        @SerializedName("targetReps")
         val targetReps: Int? = null,
-        val reps: RepsJson? = null,         // Support Reps object structure
+        @SerializedName("reps")
+        val reps: com.google.gson.JsonElement? = null, // Supports canonical number and legacy Reps object structures
+        @SerializedName("repsValue")
         val repsValue: Int? = null,         // Legacy field
+        @SerializedName("repsCount")
         val repsCount: Int? = null,         // From KotlinxWorkoutSerializationService
 
+        @SerializedName("completed")
         val completed: Boolean = false,
+        @SerializedName("completedAt")
         val completedAt: String? = null,           // ISO timestamp
+        @SerializedName("completedAtEpochMilli")
         val completedAtEpochMilli: Long? = null    // From KotlinxWorkoutSerializationService
     ) {
         // Helper to get the effective weight with fallback to nested/legacy fields
         val effectiveWeight: Double? get() =
-            actualWeight ?: targetWeight ?:
-            weight?.kilograms ?: weightKg ?:
+            actualWeight.asKilograms() ?: targetWeight.asKilograms() ?:
+            weightKg ?: weight.asKilograms() ?:
             // Convert lbs to kg if that's all we have
             weightLbs?.let { it / 2.20462 }
 
         // Helper to get the effective reps with fallback to nested/legacy fields
         val effectiveReps: Int? get() =
             actualReps ?: targetReps ?:
-            reps?.count ?: repsValue ?: repsCount
+            reps.asRepsCount() ?: repsValue ?: repsCount
 
         // Helper to get the effective completion status
         val isEffectivelyCompleted: Boolean get() =
             completed || completedAt != null || completedAtEpochMilli != null
+
+        private fun com.google.gson.JsonElement?.asKilograms(): Double? {
+            if (this == null || isJsonNull) return null
+            return when {
+                isJsonPrimitive && asJsonPrimitive.isNumber -> asDouble
+                isJsonObject -> {
+                    val obj = asJsonObject
+                    obj.get("kilograms")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }?.asDouble
+                        ?: obj.get("value")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }?.asDouble
+                }
+                else -> null
+            }
+        }
+
+        private fun com.google.gson.JsonElement?.asRepsCount(): Int? {
+            if (this == null || isJsonNull) return null
+            return when {
+                isJsonPrimitive && asJsonPrimitive.isNumber -> asInt
+                isJsonObject -> {
+                    val obj = asJsonObject
+                    obj.get("count")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }?.asInt
+                        ?: obj.get("value")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }?.asInt
+                }
+                else -> null
+            }
+        }
     }
 
     // Support for nested Weight object structure from WorkoutMapper
     private data class WeightJson(
+        @SerializedName("kilograms")
         val kilograms: Double? = null,
+        @SerializedName("pounds")
         val pounds: Double? = null
     )
 
     // Support for nested Reps object structure from WorkoutMapper
     private data class RepsJson(
+        @SerializedName("count")
         val count: Int? = null
     )
 
@@ -1094,7 +1153,7 @@ class FeedRepositoryImpl @Inject constructor(
             offset = offset
         )
         Timber.i(
-            "[PUBLIC-LOG] Discovery direct query user=$userId offset=$offset limit=$pageSize returned=${posts.size}"
+            "[PUBLIC-LOG] Discovery direct query user=$userId visibility=PUBLIC excludedAuthors=${excludeUserIds.joinToString()} offset=$offset limit=$pageSize returned=${posts.size}"
         )
         posts.take(5).forEach { post ->
             Timber.d(

@@ -67,7 +67,7 @@ fun RedesignedEditWorkoutScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(LiftrixColorsV2.Dark.BackgroundPrimary)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         when (val state = uiState) {
             is EditWorkoutUiState.Loading -> {
@@ -75,7 +75,7 @@ fun RedesignedEditWorkoutScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = LiftrixColorsV2.Teal)
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             }
             
@@ -100,7 +100,7 @@ fun RedesignedEditWorkoutScreen(
                     Text(
                         text = "Error loading workout",
                         style = TextStyle(
-                            color = LiftrixColorsV2.Dark.Error,
+                            color = MaterialTheme.colorScheme.error,
                             fontSize = 16.sp
                         )
                     )
@@ -139,7 +139,7 @@ private fun EditWorkoutContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(LiftrixColorsV2.Dark.BackgroundPrimary)
+                .background(MaterialTheme.colorScheme.background)
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -177,7 +177,7 @@ private fun EditWorkoutContent(
                     Text(
                         text = "Workout Details",
                         style = TextStyle(
-                            color = LiftrixColorsV2.Dark.TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -190,7 +190,7 @@ private fun EditWorkoutContent(
                                     .format(lastModified.atZone(java.time.ZoneId.systemDefault()))
                             }",
                             style = TextStyle(
-                                color = LiftrixColorsV2.Dark.TextTertiary,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp
                             )
                         )
@@ -202,7 +202,7 @@ private fun EditWorkoutContent(
                     Text(
                         text = "Workout Name *",
                         style = TextStyle(
-                            color = LiftrixColorsV2.Dark.TextSecondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -215,14 +215,14 @@ private fun EditWorkoutContent(
                             viewModel.updateName(it)
                         },
                         textStyle = TextStyle(
-                            color = LiftrixColorsV2.Dark.TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 16.sp
                         ),
-                        cursorBrush = SolidColor(LiftrixColorsV2.Teal),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(
-                                LiftrixColorsV2.Dark.BackgroundSecondary,
+                                MaterialTheme.colorScheme.surfaceVariant,
                                 RoundedCornerShape(8.dp)
                             )
                             .padding(16.dp),
@@ -232,7 +232,7 @@ private fun EditWorkoutContent(
                                     Text(
                                         text = "Enter workout name",
                                         style = TextStyle(
-                                            color = LiftrixColorsV2.Dark.TextTertiary,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                             fontSize = 16.sp
                                         )
                                     )
@@ -246,7 +246,7 @@ private fun EditWorkoutContent(
                     Text(
                         text = "Description (optional)",
                         style = TextStyle(
-                            color = LiftrixColorsV2.Dark.TextSecondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -259,16 +259,16 @@ private fun EditWorkoutContent(
                             viewModel.updateDescription(it)
                         },
                         textStyle = TextStyle(
-                            color = LiftrixColorsV2.Dark.TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 14.sp,
                             lineHeight = 20.sp
                         ),
-                        cursorBrush = SolidColor(LiftrixColorsV2.Teal),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(100.dp)
                             .background(
-                                LiftrixColorsV2.Dark.BackgroundSecondary,
+                                MaterialTheme.colorScheme.surfaceVariant,
                                 RoundedCornerShape(8.dp)
                             )
                             .padding(16.dp),
@@ -278,7 +278,7 @@ private fun EditWorkoutContent(
                                     Text(
                                         text = "Add workout description",
                                         style = TextStyle(
-                                            color = LiftrixColorsV2.Dark.TextTertiary,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                             fontSize = 14.sp
                                         )
                                     )
@@ -420,7 +420,7 @@ private fun EditWorkoutContent(
                         title = {
                             Text(
                                 "Exercise Notes",
-                                color = LiftrixColorsV2.Dark.TextPrimary
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         },
                         text = {
@@ -432,10 +432,10 @@ private fun EditWorkoutContent(
                                 onValueChange = { notes = it },
                                 label = { Text("Notes") },
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = LiftrixColorsV2.Dark.TextPrimary,
-                                    unfocusedTextColor = LiftrixColorsV2.Dark.TextPrimary,
-                                    focusedBorderColor = LiftrixColorsV2.Teal,
-                                    unfocusedBorderColor = LiftrixColorsV2.Dark.Outline
+                                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
                                 ),
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -453,10 +453,10 @@ private fun EditWorkoutContent(
                         },
                         dismissButton = {
                             TextButton(onClick = { showNotesDialog = false }) {
-                                Text("Cancel", color = LiftrixColorsV2.Dark.TextSecondary)
+                                Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         },
-                        containerColor = LiftrixColorsV2.Dark.BackgroundSecondary
+                        containerColor = MaterialTheme.colorScheme.surface
                     )
                 }
             }
@@ -505,7 +505,7 @@ private fun EditWorkoutContent(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(LiftrixColorsV2.Dark.BackgroundPrimary)
+                .background(MaterialTheme.colorScheme.background)
                 .padding(16.dp)
         ) {
             RedesignedPrimaryButton(

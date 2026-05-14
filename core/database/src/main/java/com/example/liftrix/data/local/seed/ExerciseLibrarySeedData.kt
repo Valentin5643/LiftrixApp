@@ -6,8 +6,11 @@ import com.example.liftrix.data.local.entity.ExerciseLibraryEntity
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseCategory
 import com.google.gson.Gson
+import com.google.gson.JsonArray
+import com.google.gson.JsonElement
 import com.google.gson.JsonObject
-import com.google.gson.reflect.TypeToken
+import com.google.gson.JsonParseException
+import com.google.gson.JsonParser
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -124,16 +127,95 @@ class ExerciseLibrarySeedData @Inject constructor(
         return try {
             val jsonString = context.assets.open("exercise_library.json").bufferedReader().use { it.readText() }
             
-            val listType = object : TypeToken<List<ExerciseJsonData>>() {}.type
-            val exercises = gson.fromJson<List<ExerciseJsonData>>(jsonString, listType)
-            
-            exercises
+            parseExerciseLibraryJson(jsonString)
         } catch (e: Exception) {
             Timber.e(e, "🔥 JSON-DEBUG: Error loading exercise library JSON")
             throw e
         }
     }
     
+    /**
+     * Parses the seed asset without Gson reflection/TypeToken metadata.
+     *
+     * Release builds minify this app, and anonymous Gson TypeToken plus private DTO
+     * reflection is fragile when R8 strips generic signatures or obfuscates field names.
+     */
+    private fun parseExerciseLibraryJson(jsonString: String): List<ExerciseJsonData> {
+        val root = JsonParser.parseString(jsonString)
+        if (!root.isJsonArray) {
+            throw JsonParseException("exercise_library.json root must be an array")
+        }
+
+        return root.asJsonArray.mapIndexed { index, element ->
+            val jsonObject = element.asJsonObjectOrThrow(index)
+            ExerciseJsonData(
+                id = jsonObject.requiredString("id", index),
+                name = jsonObject.requiredString("name", index),
+                primaryMuscleGroup = jsonObject.requiredString("primaryMuscleGroup", index),
+                equipment = jsonObject.requiredString("equipment", index),
+                secondaryMuscleGroups = jsonObject.requiredStringList("secondaryMuscleGroups", index),
+                movementPattern = jsonObject.requiredString("movementPattern", index),
+                difficultyLevel = jsonObject.requiredInt("difficultyLevel", index),
+                instructions = jsonObject.optionalString("instructions"),
+                isCompound = jsonObject.requiredBoolean("isCompound", index),
+                searchableTerms = jsonObject.requiredStringList("searchableTerms", index)
+            )
+        }
+    }
+
+    private fun JsonElement.asJsonObjectOrThrow(index: Int): JsonObject {
+        if (!isJsonObject) {
+            throw JsonParseException("Exercise at index $index must be an object")
+        }
+        return asJsonObject
+    }
+
+    private fun JsonObject.requiredString(field: String, index: Int): String {
+        val element = get(field)
+        if (element == null || element.isJsonNull || !element.isJsonPrimitive || !element.asJsonPrimitive.isString) {
+            throw JsonParseException("Exercise at index $index has invalid '$field'; expected string")
+        }
+        return element.asString
+    }
+
+    private fun JsonObject.optionalString(field: String): String? {
+        val element = get(field)
+        return if (element == null || element.isJsonNull) null else element.asString
+    }
+
+    private fun JsonObject.requiredInt(field: String, index: Int): Int {
+        val element = get(field)
+        if (element == null || element.isJsonNull || !element.isJsonPrimitive || !element.asJsonPrimitive.isNumber) {
+            throw JsonParseException("Exercise at index $index has invalid '$field'; expected number")
+        }
+        return element.asInt
+    }
+
+    private fun JsonObject.requiredBoolean(field: String, index: Int): Boolean {
+        val element = get(field)
+        if (element == null || element.isJsonNull || !element.isJsonPrimitive || !element.asJsonPrimitive.isBoolean) {
+            throw JsonParseException("Exercise at index $index has invalid '$field'; expected boolean")
+        }
+        return element.asBoolean
+    }
+
+    private fun JsonObject.requiredStringList(field: String, index: Int): List<String> {
+        val element = get(field)
+        if (element == null || element.isJsonNull || !element.isJsonArray) {
+            throw JsonParseException("Exercise at index $index has invalid '$field'; expected string array")
+        }
+        return element.asJsonArray.toStringList(field, index)
+    }
+
+    private fun JsonArray.toStringList(field: String, exerciseIndex: Int): List<String> {
+        return mapIndexed { valueIndex, element ->
+            if (!element.isJsonPrimitive || !element.asJsonPrimitive.isString) {
+                throw JsonParseException("Exercise at index $exerciseIndex has invalid '$field[$valueIndex]'; expected string")
+            }
+            element.asString
+        }
+    }
+
     /**
      * Converts JSON data to Room entity
      */

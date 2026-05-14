@@ -68,6 +68,12 @@ class TemplateSyncWorker @AssistedInject constructor(
 
     override val workerName: String = "TemplateSyncWorker"
 
+    private val templateJson = Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+        encodeDefaults = true
+    }
+
     companion object {
         const val WORK_NAME = "template_sync_work"
         const val KEY_SYNC_COUNT = "sync_count"
@@ -361,7 +367,7 @@ class TemplateSyncWorker @AssistedInject constructor(
                         
                         // Parse the JSON exercises string into a proper list for Firestore validation
                         val exercisesList = try {
-                            Json.decodeFromString<List<TemplateExercise>>(template.templateExercisesJson)
+                            templateJson.decodeFromString<List<TemplateExercise>>(template.templateExercisesJson)
                         } catch (e: Exception) {
                             Timber.w(e, "Failed to parse template exercises JSON, using empty list")
                             emptyList<TemplateExercise>()

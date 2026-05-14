@@ -154,6 +154,7 @@ class ChatRepositoryImpl @Inject constructor(
         
         val todayCount = chatHistoryDao.getTodayMessageCount(userId, todayStart)
         val monthTokens = chatHistoryDao.getMonthlyTokenUsage(userId, monthStart) ?: 0
+        val warningThreshold = prefs.usageNotificationsThreshold / 100.0
         Timber.tag(MONTHLY_USAGE_TAG).d(
             "Display usage limits read userId=%s todayCount=%d monthTokens=%d dailyLimit=%d monthlyLimit=%d dailyRemaining=%d monthlyRemaining=%d month=%d year=%d monthStart=%s source=Room.chat_history+Room.chat_preferences prefsSynced=%s prefsDirty=%s prefsLastModified=%s",
             userId,
@@ -174,8 +175,8 @@ class ChatRepositoryImpl @Inject constructor(
         UsageLimits(
             dailyMessagesRemaining = maxOf(0, prefs.maxMessagesPerDay - todayCount),
             monthlyTokensRemaining = maxOf(0, prefs.maxTokensPerMonth - monthTokens),
-            isNearDailyLimit = todayCount >= (prefs.maxMessagesPerDay * 0.8).toInt(),
-            isNearMonthlyLimit = monthTokens >= (prefs.maxTokensPerMonth * 0.8).toInt()
+            isNearDailyLimit = todayCount >= (prefs.maxMessagesPerDay * warningThreshold).toInt(),
+            isNearMonthlyLimit = monthTokens >= (prefs.maxTokensPerMonth * warningThreshold).toInt()
         )
     }
     

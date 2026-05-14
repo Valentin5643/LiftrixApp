@@ -172,11 +172,21 @@
 # Keep database encryption utilities
 -keep class com.example.liftrix.core.security.** { *; }
 
+# Keep release builds shrinkable, but avoid name obfuscation. This app still has
+# several Gson/reflection paths where obfuscated field names break persisted JSON.
+-dontobfuscate
+
 # Kotlin serialization for navigation
 -keep class kotlinx.serialization.** { *; }
 -dontwarn kotlinx.serialization.**
--keepattributes *Annotation*, InnerClasses
+-keepattributes Signature,*Annotation*,InnerClasses,EnclosingMethod
 -dontnote kotlinx.serialization.SerializationKt
+
+# Keep Gson fields that are addressed by serialized JSON names. These fields may
+# be obfuscated, but R8 must not remove them because Gson reads them reflectively.
+-keepclassmembers,allowobfuscation class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
 
 # Keep Kotlin metadata for serialization
 -keep class kotlin.Metadata { *; }

@@ -241,7 +241,7 @@ interface ExerciseSetDao {
             e.exercise_library_id,
             es.weight_kg,
             es.reps,
-            es.completed_at,
+            COALESCE(es.completed_at, CAST(strftime('%s', w.date) AS INTEGER) * 1000) as completed_at,
             es.weight_kg * (1.0 + CAST(es.reps AS REAL) / 30.0) as estimated_one_rm
         FROM exercise_sets es
         JOIN exercises e ON es.exercise_id = e.id
@@ -255,7 +255,7 @@ interface ExerciseSetDao {
             OR 
             (es.completed_at IS NULL AND DATE(w.date) BETWEEN :startDate AND :endDate)
         )
-        ORDER BY es.completed_at DESC, es.weight_kg DESC
+        ORDER BY completed_at DESC, es.weight_kg DESC
         LIMIT :limit
     """)
     @UserScoped
@@ -362,7 +362,7 @@ interface ExerciseSetDao {
             e.exercise_library_id,
             es.weight_kg,
             es.reps,
-            es.completed_at,
+            COALESCE(es.completed_at, CAST(strftime('%s', w.date) AS INTEGER) * 1000) as completed_at,
             es.weight_kg * (1.0 + CAST(es.reps AS REAL) / 30.0) as estimated_one_rm
         FROM exercise_sets es
         JOIN exercises e ON es.exercise_id = e.id
@@ -375,7 +375,7 @@ interface ExerciseSetDao {
             OR 
             (es.completed_at IS NULL AND DATE(w.date) BETWEEN :startDate AND :endDate)
         )
-        ORDER BY es.completed_at DESC, es.weight_kg DESC
+        ORDER BY completed_at DESC, es.weight_kg DESC
         LIMIT 5000
     """)
     @UserScoped

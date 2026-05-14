@@ -150,7 +150,7 @@ private fun UsageWarningContent(
             )
         }
         
-        // Monthly tokens warning
+        // Monthly AI usage warning
         if (limits.isNearMonthlyLimit || limits.monthlyTokensRemaining <= 0) {
             Text(
                 text = getMonthlyTokenText(limits, currentLanguage),
@@ -192,19 +192,6 @@ private fun UsageProgressIndicators(
                 LiftrixColorsV2.primary
         )
         
-        // Monthly tokens progress (simplified visualization)
-        if (limits.monthlyTokensRemaining < 50000) { // Show when approaching limit
-            UsageProgressBar(
-                label = "Monthly Tokens",
-                current = 100000 - limits.monthlyTokensRemaining, // Assuming 100k monthly limit
-                total = 100000,
-                color = if (limits.isNearMonthlyLimit) 
-                    MaterialTheme.colorScheme.tertiary 
-                else 
-                    LiftrixColorsV2.primary,
-                showAsPercentage = true
-            )
-        }
     }
 }
 
@@ -410,12 +397,12 @@ private fun getDailyMessageText(limits: UsageLimits, language: Language): String
 private fun getMonthlyTokenText(limits: UsageLimits, language: Language): String {
     return when (language) {
         Language.ROMANIAN -> when {
-            limits.monthlyTokensRemaining <= 0 -> "Nu mai aveți tokeni disponibili luna aceasta"
-            else -> "${limits.monthlyTokensRemaining} tokeni rămași luna aceasta"
+            limits.monthlyTokensRemaining <= 0 -> "Limita lunară pentru AI a fost atinsă"
+            else -> "Te apropii de limita lunară pentru AI. Mesajele mai scurte pot ajuta."
         }
         Language.ENGLISH -> when {
-            limits.monthlyTokensRemaining <= 0 -> "No tokens remaining this month"
-            else -> "${limits.monthlyTokensRemaining} tokens left this month"
+            limits.monthlyTokensRemaining <= 0 -> "Monthly AI usage limit reached"
+            else -> "You're close to this month's AI usage limit. Shorter messages can help."
         }
     }
 }

@@ -1,5 +1,7 @@
 package com.example.liftrix.domain.model
 
+import java.io.Serializable
+
 /**
  * Domain model representing an exercise from the exercise library
  */
@@ -14,7 +16,7 @@ data class ExerciseLibrary(
     val instructions: String?,
     val isCompound: Boolean,
     val searchableTerms: List<String>
-) {
+) : Serializable {
     init {
         require(id.isNotBlank()) { "Exercise ID cannot be blank" }
         require(name.isNotBlank()) { "Exercise name cannot be blank" }

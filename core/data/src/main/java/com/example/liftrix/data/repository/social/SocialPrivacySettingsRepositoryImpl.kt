@@ -96,7 +96,10 @@ class SocialPrivacySettingsRepositoryImpl @Inject constructor(
 
             userProfileDao.getProfileForUserSuspend(settings.userId)?.let { profile ->
                 val isPublicProfile = settings.profileVisibility == ProfileVisibility.PUBLIC
-                userProfileDao.upsertLocal(profile.copy(isPublic = isPublicProfile))
+                userProfileDao.updatePrivacySettingLocal(
+                    userId = profile.userId,
+                    isPublic = isPublicProfile
+                )
             }
             settings.copy(updatedAt = System.currentTimeMillis())
         }

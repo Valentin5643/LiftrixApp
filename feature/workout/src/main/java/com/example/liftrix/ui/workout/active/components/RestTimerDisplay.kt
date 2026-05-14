@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.RestaurantMenu
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Card
@@ -104,11 +103,11 @@ fun RestTimerDisplay(
     AnimatedVisibility(
         visible = isRestActive,
         enter = slideInVertically(
-            initialOffsetY = { -it },
+            initialOffsetY = { it },
             animationSpec = tween(300)
         ) + fadeIn(animationSpec = tween(300)),
         exit = slideOutVertically(
-            targetOffsetY = { -it },
+            targetOffsetY = { it },
             animationSpec = tween(300)
         ) + fadeOut(animationSpec = tween(300)),
         modifier = modifier.testTag(REST_TIMER_DISPLAY_TAG)
@@ -208,7 +207,7 @@ private fun RestTimerCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Rest timer header with completion checkmark
@@ -219,7 +218,7 @@ private fun RestTimerCard(
                     if (isRestCompleted) {
                         CompletionCheckmark(
                             completed = true,
-                            size = 18.dp,
+                            size = 16.dp,
                             color = contentColor
                         )
                     } else {
@@ -230,11 +229,11 @@ private fun RestTimerCard(
                                 isPaused -> "Rest paused"
                                 else -> "Rest timer"
                             },
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(16.dp),
                             tint = contentColor.copy(alpha = 0.8f)
                         )
                     }
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = when {
                             isRestCompleted -> "Rest Complete!"
@@ -247,28 +246,28 @@ private fun RestTimerCard(
                     )
                 }
                 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 
                 // Circular progress with countdown
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(88.dp)
+                    modifier = Modifier.size(64.dp)
                 ) {
                     // Background circle
                     CircularProgressIndicator(
                         progress = { 1f },
-                        modifier = Modifier.size(88.dp),
+                        modifier = Modifier.size(64.dp),
                         color = contentColor.copy(alpha = 0.2f),
-                        strokeWidth = 6.dp,
+                        strokeWidth = 5.dp,
                         strokeCap = StrokeCap.Round
                     )
                     
                     // Progress indicator
                     CircularProgressIndicator(
                         progress = { progress },
-                        modifier = Modifier.size(88.dp),
+                        modifier = Modifier.size(64.dp),
                         color = contentColor,
-                        strokeWidth = 6.dp,
+                        strokeWidth = 5.dp,
                         strokeCap = StrokeCap.Round
                     )
                     
@@ -285,7 +284,7 @@ private fun RestTimerCard(
                     ) { displayText ->
                         Text(
                             text = displayText,
-                            style = MaterialTheme.typography.titleLarge.copy(
+                            style = MaterialTheme.typography.titleMedium.copy(
                                 fontFamily = if (isRestCompleted) FontFamily.Default else FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold
                             ),
@@ -295,40 +294,8 @@ private fun RestTimerCard(
                         )
                     }
                 }
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Rest type indicator
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(contentColor.copy(alpha = 0.15f))
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.RestaurantMenu,
-                        contentDescription = when {
-                            restTimer.isStrengthTimer() -> "Strength rest"
-                            restTimer.isCardioTimer() -> "Cardio rest"
-                            else -> "Rest break"
-                        },
-                        modifier = Modifier.size(12.dp),
-                        tint = contentColor.copy(alpha = 0.7f)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = when {
-                            restTimer.isStrengthTimer() -> "Strength Rest"
-                            restTimer.isCardioTimer() -> "Cardio Rest"
-                            else -> "Rest Break"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = contentColor.copy(alpha = 0.7f)
-                    )
-                }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -405,7 +372,7 @@ private fun RestTimerControlButton(
     ) {
         Box(
             modifier = Modifier
-                .size(32.dp)
+                .size(28.dp)
                 .clip(CircleShape)
                 .background(contentColor.copy(alpha = 0.15f)),
             contentAlignment = Alignment.Center

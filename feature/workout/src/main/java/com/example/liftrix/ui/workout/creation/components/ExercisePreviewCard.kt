@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Info
@@ -39,7 +38,6 @@ import com.example.liftrix.feature.workout.R
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.cards.CardSpacing
 import com.example.liftrix.ui.theme.LiftrixTheme
-import com.example.liftrix.ui.theme.LiftrixColorsV2
 
 /**
  * Visual exercise preview component for professional training interface
@@ -362,27 +360,13 @@ fun ExercisePreviewCard(
                     null
                 },
                 colors = if (isSelected) {
-                    val isDarkTheme = isSystemInDarkTheme()
                     androidx.compose.material3.CardDefaults.cardColors(
-                        containerColor = if (isDarkTheme) {
-                            LiftrixColorsV2.TealContainer
-                        } else {
-                            LiftrixColorsV2.TealSurface
-                        },
-                        contentColor = if (isDarkTheme) {
-                            LiftrixColorsV2.TealLight
-                        } else {
-                            LiftrixColorsV2.TealDark
-                        }
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 } else {
-                    val isDarkTheme = isSystemInDarkTheme()
                     androidx.compose.material3.CardDefaults.cardColors(
-                        containerColor = if (isDarkTheme) {
-                            LiftrixColorsV2.Dark.BackgroundSecondary
-                        } else {
-                            LiftrixColorsV2.Light.BackgroundSecondary
-                        },
+                        containerColor = MaterialTheme.colorScheme.surface,
                         contentColor = MaterialTheme.colorScheme.onSurface
                     )
                 },
@@ -446,27 +430,13 @@ fun ExercisePreviewCard(
                     null
                 },
                 colors = if (isSelected) {
-                    val isDarkTheme = isSystemInDarkTheme()
                     androidx.compose.material3.CardDefaults.cardColors(
-                        containerColor = if (isDarkTheme) {
-                            LiftrixColorsV2.TealContainer
-                        } else {
-                            LiftrixColorsV2.TealSurface
-                        },
-                        contentColor = if (isDarkTheme) {
-                            LiftrixColorsV2.TealLight
-                        } else {
-                            LiftrixColorsV2.TealDark
-                        }
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 } else {
-                    val isDarkTheme = isSystemInDarkTheme()
                     androidx.compose.material3.CardDefaults.cardColors(
-                        containerColor = if (isDarkTheme) {
-                            LiftrixColorsV2.Dark.BackgroundSecondary
-                        } else {
-                            LiftrixColorsV2.Light.BackgroundSecondary
-                        },
+                        containerColor = MaterialTheme.colorScheme.surface,
                         contentColor = MaterialTheme.colorScheme.onSurface
                     )
                 },

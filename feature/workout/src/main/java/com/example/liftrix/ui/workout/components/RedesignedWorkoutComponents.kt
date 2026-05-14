@@ -77,7 +77,7 @@ fun RedesignedExerciseCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
             .padding(16.dp)
     ) {
         // Exercise header with name and menu
@@ -874,7 +874,7 @@ private fun SwipeToDismissSetRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    MaterialTheme.colorScheme.surfaceVariant,
+                    MaterialTheme.colorScheme.surface,
                     RoundedCornerShape(6.dp)
                 )
         ) {

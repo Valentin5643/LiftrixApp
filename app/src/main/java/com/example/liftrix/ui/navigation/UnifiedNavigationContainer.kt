@@ -235,8 +235,8 @@ fun UnifiedNavigationContainer(
                             onNavigateToPostComments = { postId ->
                                 navController.navigate(LiftrixRoute.PostComments(postId))
                             },
-                            onNavigateToWorkoutDetails = { workoutId ->
-                                navController.navigate(LiftrixRoute.WorkoutDetails(workoutId))
+                            onNavigateToWorkoutDetails = { workoutId, ownerId ->
+                                navController.navigate(LiftrixRoute.WorkoutDetails(workoutId, ownerId))
                             },
                             onNavigateToEditWorkout = { workoutId ->
                                 navController.navigateToEditWorkout(workoutId)
@@ -346,7 +346,7 @@ fun UnifiedNavigationContainer(
                             navController.navigate(LiftrixRoute.FollowingList(userId = userId, listType = "FOLLOWING"))
                         },
                         onNavigateToWorkoutDetail = { workoutId ->
-                            navController.navigate(LiftrixRoute.WorkoutDetails(workoutId))
+                            navController.navigate(LiftrixRoute.WorkoutDetails(workoutId, route.userId))
                         }
                     )
                 }
@@ -962,6 +962,7 @@ fun UnifiedNavigationContainer(
                     val route = backStackEntry.toRoute<LiftrixRoute.WorkoutDetails>()
                     WorkoutDetailsRoute(
                         workoutId = route.workoutId,
+                        ownerId = route.ownerId,
                         navController = navController,
                         onNavigateToEditWorkout = { workoutId ->
                             navController.navigate(LiftrixRoute.EditWorkout(workoutId))
@@ -1321,7 +1322,7 @@ private fun BottomNavigationBar(
         add(BottomNavItem(LiftrixRoute.Home, "Home", Icons.Default.Home))
         add(BottomNavItem(LiftrixRoute.Workout, "Workout", Icons.Default.FitnessCenter))
         add(BottomNavItem(LiftrixRoute.Progress, "Progress", Icons.Default.TrendingUp))
-        add(BottomNavItem(LiftrixRoute.Coach, "AI", Icons.Default.Psychology))
+        add(BottomNavItem(LiftrixRoute.Coach, "Coach", Icons.Default.Psychology))
     }
     
     NavigationBar {
@@ -1581,7 +1582,7 @@ private fun NavigationAwareTopAppBar(
         "Home" to "Liftrix",
         "Workout" to "Workout",
         "Progress" to "Progress",
-        "Coach" to "AI Coach"
+        "Coach" to "Coach"
     )
     
     // Check if current route is a main tab (should show global top bar)

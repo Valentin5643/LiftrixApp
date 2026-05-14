@@ -101,7 +101,7 @@ suspend fun List<WorkoutEntity>.calculateDailyMetrics(): Map<LocalDate, WorkoutD
         // Calculate duration metrics
         val totalDurationMinutes = validWorkouts.sumOf { workout ->
             val durationMs = workout.endTime!!.toEpochMilli() - workout.startTime!!.toEpochMilli()
-            (durationMs / 60_000L).toInt()
+            durationMs.toRoundedUpMinutes()
         }
         
         val averageDurationMinutes = if (validWorkouts.isNotEmpty()) {
@@ -119,6 +119,11 @@ suspend fun List<WorkoutEntity>.calculateDailyMetrics(): Map<LocalDate, WorkoutD
         
         metrics
     }
+}
+
+private fun Long.toRoundedUpMinutes(): Int {
+    if (this <= 0L) return 0
+    return ((this + 59_999L) / 60_000L).toInt()
 }
 
 /**
@@ -450,12 +455,11 @@ suspend fun parseExercisesFromJsonLegacyAsync(
  */
 private fun parseExercisesFromJson(workoutId: String, exercisesJson: String, gson: Gson): List<SearchableExercise> {
     if (exercisesJson.isBlank()) return emptyList()
-    
-    // Attempt 1: Parse as SearchableExercise list (new format)
+
+    // Attempt 1: Parse SearchableExercise payloads without asking Gson to instantiate the sealed base type.
     try {
-        val searchableType = object : TypeToken<List<SearchableExercise>>() {}.type
-        val exercises = gson.fromJson<List<SearchableExercise>>(exercisesJson, searchableType)
-        if (exercises != null && exercises.isNotEmpty()) return exercises
+        val exercises = parseSearchableExercisesFromJson(exercisesJson, gson)
+        if (exercises.isNotEmpty()) return exercises
     } catch (e: Exception) {
     }
     
@@ -471,14 +475,42 @@ private fun parseExercisesFromJson(workoutId: String, exercisesJson: String, gso
     } catch (e: Exception) {
     }
     
-    // Attempt 3: Use defensive parser for wrapped format
-    try {
-        val exercises = ExerciseJsonParser.parseWrappedExercises(exercisesJson, SearchableExercise::class.java, "exercises")
-        if (exercises.isNotEmpty()) return exercises
-    } catch (e: Exception) {
-    }
-    
     return emptyList()
+}
+
+private fun parseSearchableExercisesFromJson(exercisesJson: String, gson: Gson): List<SearchableExercise> {
+    val element = com.google.gson.JsonParser.parseString(exercisesJson)
+    val exerciseElements = when {
+        element.isJsonArray -> element.asJsonArray.toList()
+        element.isJsonObject && element.asJsonObject.has("exercises") -> {
+            val wrapped = element.asJsonObject.get("exercises")
+            if (wrapped.isJsonArray) wrapped.asJsonArray.toList() else emptyList()
+        }
+        element.isJsonObject -> listOf(element)
+        else -> emptyList()
+    }
+
+    return exerciseElements.mapNotNull { exerciseElement ->
+        try {
+            if (!exerciseElement.isJsonObject) return@mapNotNull null
+            val exerciseObject = exerciseElement.asJsonObject
+            val payload = exerciseObject.get("exercise")?.takeIf { it.isJsonObject } ?: exerciseElement
+            val payloadObject = payload.asJsonObject
+
+            if (payloadObject.has("userId") || payloadObject.has("primaryMuscle")) {
+                SearchableExercise.CustomExercise(
+                    gson.fromJson(payload, com.example.liftrix.domain.model.CustomExercise::class.java)
+                )
+            } else {
+                SearchableExercise.LibraryExercise(
+                    gson.fromJson(payload, com.example.liftrix.domain.model.ExerciseLibrary::class.java)
+                )
+            }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Timber.w(e, "WorkoutExtensions: Failed to parse searchable exercise")
+            null
+        }
+    }
 }
 
 /**

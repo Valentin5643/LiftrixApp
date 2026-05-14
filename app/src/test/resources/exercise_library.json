@@ -206,7 +206,7 @@
   {
     "id": "arms-tricep-dip-bodyweight",
     "name": "Tricep Dips",
-    "primaryMuscleGroup": "ARMS",
+    "primaryMuscleGroup": "TRICEPS",
     "equipment": "BODYWEIGHT_ONLY",
     "secondaryMuscleGroups": ["CHEST", "SHOULDERS"],
     "movementPattern": "press",

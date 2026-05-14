@@ -43,7 +43,7 @@ class WorkoutDetailsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<WorkoutDetailsUiState>(WorkoutDetailsUiState.Loading)
     val uiState: StateFlow<WorkoutDetailsUiState> = _uiState.asStateFlow()
     
-    fun loadWorkoutDetails(workoutId: String) {
+    fun loadWorkoutDetails(workoutId: String, ownerId: String? = null) {
         viewModelScope.launch {
             _uiState.value = WorkoutDetailsUiState.Loading
 
@@ -75,7 +75,24 @@ class WorkoutDetailsViewModel @Inject constructor(
                 }
             )
 
-            // If not found as current user's workout, it might be another user's workout
+            // If the feed/profile supplied an owner, resolve that public/social workout
+            // under its owner so the details screen can render it read-only.
+            val socialOwnerId = ownerId?.takeIf { it.isNotBlank() && it != currentUserId }
+            if (workout == null && socialOwnerId != null) {
+                workoutQueryUseCase.getById(WorkoutId(workoutId), socialOwnerId).fold(
+                    onSuccess = { socialWorkout ->
+                        if (socialWorkout != null) {
+                            workout = socialWorkout
+                            workoutOwnerId = socialWorkout.userId
+                        }
+                    },
+                    onFailure = { error ->
+                        Timber.d("Could not load social workout for owner $socialOwnerId: $error")
+                    }
+                )
+            }
+
+            // If not found as current user's workout, it might be another user's workout.
             // Official Liftrix seed posts use fixed public owners, so resolve those owners explicitly.
             if (workout == null) {
                 for (officialOwnerId in OFFICIAL_LIFTRIX_ACCOUNT_IDS) {

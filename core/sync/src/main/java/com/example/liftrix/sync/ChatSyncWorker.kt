@@ -201,6 +201,16 @@ class ChatSyncWorker @AssistedInject constructor(
                             ?: preferences.autoClearDays,
                         userContextPrompt = remoteDoc.getString("userContextPrompt")
                             ?: preferences.userContextPrompt,
+                        aiResponseStyle = remoteDoc.getString("aiResponseStyle")
+                            ?: preferences.aiResponseStyle,
+                        includeWorkoutHistory = remoteDoc.getBoolean("includeWorkoutHistory")
+                            ?: preferences.includeWorkoutHistory,
+                        includeExerciseFormTips = remoteDoc.getBoolean("includeExerciseFormTips")
+                            ?: preferences.includeExerciseFormTips,
+                        usageNotificationsThreshold = remoteDoc.getLong("usageNotificationsThreshold")?.toInt()
+                            ?: preferences.usageNotificationsThreshold,
+                        conversationSaveEnabled = remoteDoc.getBoolean("conversationSaveEnabled")
+                            ?: preferences.conversationSaveEnabled,
                         updatedAt = remoteDoc.getLong("updatedAt") ?: preferences.updatedAt,
                         isDirty = false,
                         isSynced = true,
@@ -230,6 +240,11 @@ class ChatSyncWorker @AssistedInject constructor(
                 "maxTokensPerMonth" to preferences.maxTokensPerMonth,
                 "autoClearDays" to preferences.autoClearDays,
                 "userContextPrompt" to preferences.userContextPrompt,
+                "aiResponseStyle" to preferences.aiResponseStyle,
+                "includeWorkoutHistory" to preferences.includeWorkoutHistory,
+                "includeExerciseFormTips" to preferences.includeExerciseFormTips,
+                "usageNotificationsThreshold" to preferences.usageNotificationsThreshold,
+                "conversationSaveEnabled" to preferences.conversationSaveEnabled,
                 "updatedAt" to preferences.updatedAt,
                 "syncVersion" to 1L,
                 "lastModified" to preferences.lastModified,
@@ -435,6 +450,11 @@ class ChatSyncWorker @AssistedInject constructor(
                     maxTokensPerMonth = preferencesDoc.getLong("maxTokensPerMonth")?.toInt() ?: 100000,
                     autoClearDays = preferencesDoc.getLong("autoClearDays")?.toInt() ?: 30,
                     userContextPrompt = preferencesDoc.getString("userContextPrompt"),
+                    aiResponseStyle = preferencesDoc.getString("aiResponseStyle") ?: "balanced",
+                    includeWorkoutHistory = preferencesDoc.getBoolean("includeWorkoutHistory") ?: true,
+                    includeExerciseFormTips = preferencesDoc.getBoolean("includeExerciseFormTips") ?: true,
+                    usageNotificationsThreshold = preferencesDoc.getLong("usageNotificationsThreshold")?.toInt() ?: 80,
+                    conversationSaveEnabled = preferencesDoc.getBoolean("conversationSaveEnabled") ?: true,
                     isDirty = false,
                     isSynced = true,
                     syncVersion = preferencesDoc.getLong("syncVersion") ?: 1L,

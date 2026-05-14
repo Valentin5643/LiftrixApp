@@ -12,6 +12,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.FirebaseException
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerationConfig
+import com.google.firebase.ai.type.ResponseStoppedException
 import com.google.firebase.ai.type.content
 import com.google.firebase.appcheck.appCheck
 import kotlinx.coroutines.delay
@@ -131,6 +132,12 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
                     errorMessage = aiUnavailableForAppCheckMessage(),
                     analyticsContext = mapOf("user_id" to userId, "stage" to stage)
                 )
+                is AIResponseMaxTokensException -> LiftrixError.BusinessLogicError(
+                    code = "AI_WORKOUT_GENERATION_MAX_TOKENS",
+                    errorMessage = "The AI workout response was cut off before it finished. Please try a shorter request or generate again.",
+                    isRecoverable = true,
+                    analyticsContext = mapOf("user_id" to userId, "stage" to stage)
+                )
                 else -> LiftrixError.NetworkError(
                     errorMessage = "Failed to generate workout program. Please try again.",
                     analyticsContext = mapOf("user_id" to userId, "stage" to stage)
@@ -158,7 +165,15 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
         )
 
         logRequestPayload(stage, userId, systemPrompt, requestPayload)
-        val response = generativeModel.generateContent(content { text(requestPayload) })
+        val response = try {
+            generativeModel.generateContent(content { text(requestPayload) })
+        } catch (exception: ResponseStoppedException) {
+            if (exception.isMaxTokensStop()) {
+                Timber.w(exception, "[AI] WorkoutProgramGenerationService: response reached max output tokens stage=$stage")
+                throw AIResponseMaxTokensException(exception)
+            }
+            throw exception
+        }
         val responseText = response.text?.trim().orEmpty()
         Timber.i("[AI] WorkoutProgramGenerationService: raw response received stage=$stage chars=${responseText.length}")
         logSanitizedRawResponse(responseText, stage)
@@ -366,7 +381,7 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
     companion object {
         private const val MONTHLY_USAGE_TAG = "MonthlyUsageDebug"
         private const val MODEL_NAME = "gemini-2.5-flash-lite"
-        private const val MAX_OUTPUT_TOKENS = 4096
+        private const val MAX_OUTPUT_TOKENS = 8192
         private const val TEMPERATURE = 0.25f
         private const val TOP_K = 40
         private const val TOP_P = 0.9f
@@ -375,4 +390,7 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
         private const val APP_CHECK_TOKEN_TIMEOUT_MS = 10_000L
         private const val APP_CHECK_MAX_RETRIES = 1
     }
+
+    private fun ResponseStoppedException.isMaxTokensStop(): Boolean =
+        message.orEmpty().contains("MAX_TOKENS", ignoreCase = true)
 }

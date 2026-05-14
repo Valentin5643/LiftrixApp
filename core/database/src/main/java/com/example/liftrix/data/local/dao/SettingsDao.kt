@@ -137,44 +137,6 @@ interface SettingsDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertSettings(settings: SettingsEntity)
     
-    // Convenience methods without explicit timestamp for SettingsPersistenceManager
-    
-    /**
-     * Updates dark mode setting with automatic timestamp
-     */
-    @Query("UPDATE user_settings SET dark_mode = :darkMode, updated_at = datetime('now') WHERE user_id = :userId")
-    suspend fun updateDarkMode(userId: String, darkMode: Boolean)
-    
-    /**
-     * Updates notification setting with automatic timestamp
-     */
-    @Query("UPDATE user_settings SET notifications_enabled = :enabled, updated_at = datetime('now') WHERE user_id = :userId")
-    suspend fun updateNotificationsEnabled(userId: String, enabled: Boolean)
-    
-    /**
-     * Updates weight unit setting with automatic timestamp (using string for consistency)
-     */
-    @Query("UPDATE user_settings SET weight_unit = :weightUnit, updated_at = datetime('now') WHERE user_id = :userId")
-    suspend fun updateWeightUnit(userId: String, weightUnit: String)
-    
-    /**
-     * Updates terminology preference with automatic timestamp
-     */
-    @Query("UPDATE user_settings SET terminology_preference = :preference, updated_at = datetime('now') WHERE user_id = :userId")
-    suspend fun updateTerminologyPreference(userId: String, preference: String)
-    
-    /**
-     * Updates migration explanation seen status with automatic timestamp
-     */
-    @Query("UPDATE user_settings SET migration_explanation_seen = :seen, updated_at = datetime('now') WHERE user_id = :userId")
-    suspend fun updateMigrationExplanationSeen(userId: String, seen: Boolean)
-    
-    /**
-     * Updates migration completed status with automatic timestamp
-     */
-    @Query("UPDATE user_settings SET migration_completed = :completed, updated_at = datetime('now') WHERE user_id = :userId")
-    suspend fun updateMigrationCompleted(userId: String, completed: Boolean)
-    
     // ========================================
     // Sync Management
     // ========================================
@@ -204,20 +166,20 @@ interface SettingsDao {
     /**
      * Updates distance unit setting
      */
-    @Query("UPDATE user_settings SET distance_unit = :distanceUnit, updated_at = datetime('now') WHERE user_id = :userId")
-    suspend fun updateDistanceUnit(userId: String, distanceUnit: String)
+    @Query("UPDATE user_settings SET distance_unit = :distanceUnit, updated_at = :updatedAt WHERE user_id = :userId")
+    suspend fun updateDistanceUnit(userId: String, distanceUnit: String, updatedAt: java.time.Instant)
     
     /**
      * Updates privacy settings
      */
-    @Query("UPDATE user_settings SET private_profile = :privateProfile, hide_stats = :hideStats, updated_at = datetime('now') WHERE user_id = :userId")
-    suspend fun updatePrivacySettings(userId: String, privateProfile: Boolean, hideStats: Boolean)
+    @Query("UPDATE user_settings SET private_profile = :privateProfile, hide_stats = :hideStats, updated_at = :updatedAt WHERE user_id = :userId")
+    suspend fun updatePrivacySettings(userId: String, privateProfile: Boolean, hideStats: Boolean, updatedAt: java.time.Instant)
     
     /**
      * Updates communication settings
      */
-    @Query("UPDATE user_settings SET allow_messages = :allowMessages, auto_play_videos = :autoPlayVideos, updated_at = datetime('now') WHERE user_id = :userId")
-    suspend fun updateCommunicationSettings(userId: String, allowMessages: Boolean, autoPlayVideos: Boolean)
+    @Query("UPDATE user_settings SET allow_messages = :allowMessages, auto_play_videos = :autoPlayVideos, updated_at = :updatedAt WHERE user_id = :userId")
+    suspend fun updateCommunicationSettings(userId: String, allowMessages: Boolean, autoPlayVideos: Boolean, updatedAt: java.time.Instant)
 
     // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
 

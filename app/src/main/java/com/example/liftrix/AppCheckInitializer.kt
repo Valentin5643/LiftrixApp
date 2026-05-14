@@ -15,7 +15,8 @@ object AppCheckInitializer {
 
     @Synchronized
     fun initialize(context: Context): FirebaseApp {
-        val firebaseApp = FirebaseApp.initializeApp(context.applicationContext)
+        val appContext = context.applicationContext ?: context
+        val firebaseApp = FirebaseApp.initializeApp(appContext)
             ?: FirebaseApp.getInstance()
 
         if (!initialized) {
@@ -35,5 +36,7 @@ object AppCheckInitializer {
     suspend fun verifyTokenOnce(): Result<Unit> = runCatching {
         Firebase.appCheck.getAppCheckToken(false).await()
         Unit
+    }.also {
+        FirebaseAppCheckProviderInstaller.logDebugSecretIfAvailable(FirebaseApp.getInstance())
     }
 }

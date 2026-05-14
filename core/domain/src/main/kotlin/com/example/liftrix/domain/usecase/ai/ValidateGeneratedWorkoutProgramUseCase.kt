@@ -27,6 +27,7 @@ class ValidateGeneratedWorkoutProgramUseCase @Inject constructor() {
         val violations = mutableListOf<String>()
         val warnings = mutableListOf<String>()
         val catalogById = exerciseCatalog.associateBy { it.id }
+        val seenExerciseIds = mutableSetOf<String>()
 
         validateProgramShape(program, request, violations)
         program.days.forEachIndexed { dayIndex, day ->
@@ -39,6 +40,7 @@ class ValidateGeneratedWorkoutProgramUseCase @Inject constructor() {
                     path = "days[$dayIndex].exercises[$exerciseIndex]",
                     request = request,
                     catalogById = catalogById,
+                    seenExerciseIds = seenExerciseIds,
                     violations = violations,
                     warnings = warnings
                 )
@@ -150,9 +152,13 @@ class ValidateGeneratedWorkoutProgramUseCase @Inject constructor() {
         path: String,
         request: WorkoutGenerationRequest,
         catalogById: Map<String, ExerciseLibrary>,
+        seenExerciseIds: MutableSet<String>,
         violations: MutableList<String>,
         warnings: MutableList<String>
     ) {
+        if (!seenExerciseIds.add(exercise.exerciseId)) {
+            warnings.add("$path.exercise_id duplicates another exercise in the generated program")
+        }
         val catalogExercise = catalogById[exercise.exerciseId]
         if (catalogExercise == null) {
             violations.add("$path.exercise_id is not in the exercise catalog")

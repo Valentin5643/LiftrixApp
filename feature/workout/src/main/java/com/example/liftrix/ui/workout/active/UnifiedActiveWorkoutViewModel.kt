@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import timber.log.Timber
@@ -737,7 +739,8 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                     }
                     
                     SessionExercise(
-                        exerciseId = templateExercise.exerciseId,
+                        exerciseId = ExerciseId.generate(),
+                        libraryExerciseId = templateExercise.exerciseId,
                         name = templateExercise.name,
                         category = templateExercise.primaryMuscle,
                         primaryMuscle = templateExercise.primaryMuscle,
@@ -873,10 +876,10 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                             // Convert session exercises to template exercises
                             val updatedTemplateExercises = currentSession.exercises.mapIndexed { index, sessionExercise ->
                                 com.example.liftrix.domain.model.TemplateExercise(
-                                    exerciseId = sessionExercise.exerciseId,
+                                    exerciseId = sessionExercise.libraryExerciseId,
                                     name = sessionExercise.name,
                                     primaryMuscle = sessionExercise.primaryMuscle,
-                                    equipment = com.example.liftrix.domain.model.Equipment.BODYWEIGHT_ONLY,
+                                    equipment = sessionExercise.equipment,
                                     orderIndex = index,
                                     targetSets = sessionExercise.sets.size,
                                     targetReps = sessionExercise.sets.firstOrNull()?.targetReps?.let { 
@@ -1128,45 +1131,54 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                 Timber.d("Loading previous set data for ${currentSession.exercises.size} exercises")
                 
                 // Load previous data for all exercises in parallel
-                val previousDataMap = mutableMapOf<String, PreviousSetDataResponse>()
+                val previousDataRequests = mutableListOf<kotlinx.coroutines.Deferred<Pair<String, PreviousSetDataResponse>?>>()
                 
                 // Process exercises in parallel with structured concurrency
                 currentSession.exercises.forEach { exercise ->
                     // 🔥 FIX: Use canonical library ID for history queries instead of display name
                     // The exerciseId should contain the canonical library ID like "core-ab-wheel-rollout"
-                    val canonicalLibraryId = exercise.exerciseId.value
+                    val canonicalLibraryId = exercise.libraryExerciseId.value
                     
                     // Debug logging for exercise ID investigation
                     Timber.d("[PREV_SET_DEBUG] Exercise '${exercise.name}' - Using canonical ID: '$canonicalLibraryId' for history query")
                     Timber.d("[PREV_SET_ID_FIX] Switching from display name '${exercise.name}' to canonical ID '$canonicalLibraryId'")
                     
                     // Launch concurrent requests for each exercise
-                    launch {
+                    previousDataRequests += async {
                         workoutQueryUseCase.getPreviousSetData(
                             userId = userId.value,
                             exerciseId = canonicalLibraryId, // 🔥 FIX: Use canonical library ID instead of display name
+                            exerciseName = exercise.name,
                             setNumber = 1, // Load for all sets initially
                             excludeWorkoutId = currentSession.id.value // Exclude current active session
                         ).fold(
                             onSuccess = { response ->
                                 if (response.hasPreviousData()) {
-                                    previousDataMap[exercise.exerciseId.value] = response
                                     Timber.d("Loaded previous data for exercise ${exercise.name}: ${response.previousSets.size} sets")
+                                    response.previousSets.values.firstOrNull()?.let { previous ->
+                                        Timber.tag("PREV_SET_RESULT").d(
+                                            "Found previous weight: ${previous.weight} for $canonicalLibraryId exerciseName=${exercise.name}"
+                                        )
+                                    }
+                                    exercise.exerciseId.value to response
                                 } else {
                                     Timber.d("No previous data found for exercise ${exercise.name}")
+                                    Timber.tag("PREV_SET_EMPTY").d(
+                                        "No history found for $canonicalLibraryId exerciseName=${exercise.name}"
+                                    )
+                                    null
                                 }
                             },
                             onFailure = { error ->
                                 Timber.w("Failed to load previous set data for exercise ${exercise.name}: ${error.message}")
                                 // Don't fail the entire operation for individual exercise failures
+                                null
                             }
                         )
                     }
                 }
                 
-                // Wait for all parallel requests to complete, then update state
-                // Using a small delay to allow all parallel operations to complete
-                delay(100)
+                val previousDataMap = previousDataRequests.awaitAll().filterNotNull().toMap()
                 _previousSetData.value = previousDataMap
                 
                 Timber.d("Previous set data loading completed: ${previousDataMap.size} exercises with data")
@@ -1213,6 +1225,9 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
             try {
                 val userId = authRepository.getCurrentUserId() ?: return@launch
                 val currentSession = sessionManager.getCurrentSession() ?: return@launch
+                val sessionExercise = currentSession.exercises.firstOrNull {
+                    it.libraryExerciseId.value == exerciseId || it.exerciseId.value == exerciseId
+                }
                 
                 // 🔥 FIX: The exerciseId parameter should already be the canonical library ID
                 // since it comes from the exercise selection. Add logging to verify.
@@ -1221,15 +1236,25 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                 workoutQueryUseCase.getPreviousSetData(
                     userId = userId.value,
                     exerciseId = exerciseId, // Should already be canonical library ID
+                    exerciseName = sessionExercise?.name,
                     setNumber = 1,
                     excludeWorkoutId = currentSession.id.value
                 ).fold(
                     onSuccess = { response ->
                         val currentMap = _previousSetData.value.toMutableMap()
+                        val stateKey = sessionExercise?.exerciseId?.value ?: exerciseId
                         if (response.hasPreviousData()) {
-                            currentMap[exerciseId] = response
+                            currentMap[stateKey] = response
+                            response.previousSets.values.firstOrNull()?.let { previous ->
+                                Timber.tag("PREV_SET_RESULT").d(
+                                    "Found previous weight: ${previous.weight} for $exerciseId exerciseName=${sessionExercise?.name}"
+                                )
+                            }
                         } else {
-                            currentMap.remove(exerciseId)
+                            currentMap.remove(stateKey)
+                            Timber.tag("PREV_SET_EMPTY").d(
+                                "No history found for $exerciseId exerciseName=${sessionExercise?.name}"
+                            )
                         }
                         _previousSetData.value = currentMap
                         

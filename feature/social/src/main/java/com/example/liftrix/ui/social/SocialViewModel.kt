@@ -539,7 +539,7 @@ class SocialViewModel @Inject constructor(
                     // Convert FollowRelationship to Friend for UI compatibility - now with actual profile data
                     val followingFriends = followRelationships.map { relationship ->
                         Friend(
-                            userId = relationship.followingId,
+                            userId = relationship.userId,
                             displayName = relationship.displayName ?: "Unknown User", // Now populated from database join
                             email = null,
                             status = FriendStatus.ACCEPTED, // Following relationships are accepted
@@ -593,17 +593,23 @@ class SocialViewModel @Inject constructor(
                     followerRelationships.forEachIndexed { index, relationship ->
                         Timber.d("DEBUG_FOLLOWERS: Follower $index - Name: ${relationship.displayName}, ID: ${relationship.followerId}, Status: ${relationship.status}")
                     }
+
+                    val followingIds = followRepository.observeFollowingWithProfiles(currentUser.uid)
+                        .first()
+                        .map { relationship -> relationship.userId }
+                        .toSet()
                     
                     // Convert FollowRelationship to Friend for UI compatibility - now with actual profile data
                     val followerFriends = followerRelationships.map { relationship ->
                         Friend(
-                            userId = relationship.followerId,
+                            userId = relationship.userId,
                             displayName = relationship.displayName ?: "Unknown User", // Now populated from database join
                             email = null,
                             status = FriendStatus.ACCEPTED, // Follower relationships are accepted
                             presence = null,
                             avatarUrl = relationship.profileImageUrl, // Now populated from database join
-                            friendSince = java.time.Instant.ofEpochMilli(relationship.createdAt)
+                            friendSince = java.time.Instant.ofEpochMilli(relationship.createdAt),
+                            isMutual = relationship.userId in followingIds
                         )
                     }
                     

@@ -15,6 +15,7 @@ import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.domain.model.ai.WorkoutGenerationResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.chat.ChatMessage
+import com.example.liftrix.domain.model.chat.ChatPreferences
 import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.chat.UsageLimits
 import com.example.liftrix.domain.service.Language as DomainLanguage
@@ -87,6 +88,7 @@ class ChatbotViewModel @Inject constructor(
                         userId = userIdResult?.value
                         if (userId != null) {
                             _uiState.value = _uiState.value.copy(isAiAccessEnabled = true)
+                            observeChatPreferences(userId!!)
                             checkUsageLimits()
                             setupConversation(userId!!)
                         } else {
@@ -106,6 +108,18 @@ class ChatbotViewModel @Inject constructor(
                 handleError(LiftrixError.UnknownError(
                     errorMessage = "Failed to initialize chat: ${exception.message}"
                 ))
+            }
+        }
+    }
+
+    private fun observeChatPreferences(userId: String) {
+        viewModelScope.launch {
+            chatRepository.observePreferences(userId).collect { preferences ->
+                val effectivePreferences = preferences ?: ChatPreferences(userId = userId)
+                _uiState.value = _uiState.value.copy(
+                    currentLanguage = effectivePreferences.preferredLanguage.toChatLanguage(),
+                    autoDetectLanguage = effectivePreferences.autoDetectLanguage
+                )
             }
         }
     }
@@ -667,6 +681,7 @@ class ChatbotViewModel @Inject constructor(
 
     private fun ChatMessage.isPendingLocalMessage(): Boolean {
         return id.startsWith("optimistic_") ||
+            id.startsWith("local_") ||
             id.startsWith("workout_request_") ||
             id.startsWith("workout_preview_") ||
             id.startsWith("workout_modify_request_") ||
@@ -886,6 +901,11 @@ enum class Language(val code: String, val displayName: String) {
     ROMANIAN("ro", "Română")
 }
 
+private fun String.toChatLanguage(): Language = when (this) {
+    Language.ROMANIAN.code -> Language.ROMANIAN
+    else -> Language.ENGLISH
+}
+
 private fun Language.toDomainLanguage(): DomainLanguage = when (this) {
     Language.ENGLISH -> DomainLanguage.ENGLISH
     Language.ROMANIAN -> DomainLanguage.ROMANIAN
@@ -900,23 +920,19 @@ fun UsageLimits.canSendMessage(): Boolean {
 
 fun UsageLimits.getWarningMessage(language: Language): String {
     return when (language) {
-        Language.ROMANIAN -> {
-            when {
-                dailyMessagesRemaining <= 0 -> "Limita zilnică de mesaje a fost atinsă"
-                monthlyTokensRemaining <= 0 -> "Limita lunară de tokeni a fost atinsă"
-                isNearDailyLimit -> "$dailyMessagesRemaining mesaje rămase azi"
-                isNearMonthlyLimit -> "$monthlyTokensRemaining tokeni rămași luna aceasta"
-                else -> ""
-            }
+        Language.ROMANIAN -> when {
+            dailyMessagesRemaining <= 0 -> "Limita zilnică de mesaje a fost atinsă"
+            monthlyTokensRemaining <= 0 -> "Limita lunară pentru AI a fost atinsă"
+            isNearDailyLimit -> "$dailyMessagesRemaining mesaje rămase azi"
+            isNearMonthlyLimit -> "Te apropii de limita lunară pentru AI. Mesajele mai scurte pot ajuta."
+            else -> ""
         }
-        Language.ENGLISH -> {
-            when {
-                dailyMessagesRemaining <= 0 -> "Daily message limit reached"
-                monthlyTokensRemaining <= 0 -> "Monthly token limit reached"
-                isNearDailyLimit -> "$dailyMessagesRemaining messages left today"
-                isNearMonthlyLimit -> "$monthlyTokensRemaining tokens left this month"
-                else -> ""
-            }
+        Language.ENGLISH -> when {
+            dailyMessagesRemaining <= 0 -> "Daily message limit reached"
+            monthlyTokensRemaining <= 0 -> "Monthly AI usage limit reached"
+            isNearDailyLimit -> "$dailyMessagesRemaining messages left today"
+            isNearMonthlyLimit -> "You're close to this month's AI usage limit. Shorter messages can help."
+            else -> ""
         }
     }
 }

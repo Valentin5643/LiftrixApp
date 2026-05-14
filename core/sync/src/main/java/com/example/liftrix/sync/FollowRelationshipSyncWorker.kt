@@ -700,15 +700,12 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
             return
         }
 
-        Timber.w("PFP_PROFILE_PRUNE_START userId=$userId missingCount=${missingUserIds.size}")
+        Timber.w("PFP_PROFILE_PRUNE_SKIPPED userId=$userId missingCount=${missingUserIds.size}")
         missingUserIds.distinct().forEach { missingUserId ->
-            try {
-                followDao.deleteFollowRelationship(userId, missingUserId)
-                followDao.deleteFollowRelationship(missingUserId, userId)
-                Timber.w("PFP_PROFILE_PRUNE_RELATIONSHIP userId=$userId removedUserId=$missingUserId")
-            } catch (e: Exception) {
-                Timber.e(e, "PFP_PROFILE_PRUNE_FAIL userId=$userId removedUserId=$missingUserId")
-            }
+            Timber.w(
+                "PFP_PROFILE_PRUNE_KEEP_RELATIONSHIP userId=$userId missingProfileUserId=$missingUserId " +
+                    "reason=profile_fetch_failed"
+            )
         }
     }
 }

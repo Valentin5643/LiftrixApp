@@ -8,16 +8,16 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class TemplateExercise(
-    val exerciseId: ExerciseId,
-    val name: String,
-    val primaryMuscle: ExerciseCategory,
-    val equipment: Equipment,
+    val exerciseId: ExerciseId = ExerciseId.fromString(""),
+    val name: String = DEFAULT_NAME,
+    val primaryMuscle: ExerciseCategory = ExerciseCategory.OTHER,
+    val equipment: Equipment = Equipment.BODYWEIGHT_ONLY,
     val targetSets: Int? = null,
     val targetReps: Reps? = null,
     val targetWeight: Weight? = null,
     val restTimeSeconds: Int? = null,
     val notes: String? = null,
-    val orderIndex: Int,
+    val orderIndex: Int = 0,
     val isCustomExercise: Boolean = false,
     val customExerciseId: CustomExerciseId? = null,
     val instanceId: String = java.util.UUID.randomUUID().toString()
@@ -54,6 +54,7 @@ data class TemplateExercise(
     }
     
     companion object {
+        const val DEFAULT_NAME: String = "Unknown Exercise"
         const val MAX_NAME_LENGTH: Int = 100
         const val MAX_NOTES_LENGTH: Int = 500
         const val MAX_SETS: Int = 50

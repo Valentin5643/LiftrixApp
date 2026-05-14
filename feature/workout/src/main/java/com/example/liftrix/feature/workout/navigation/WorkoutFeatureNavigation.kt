@@ -197,12 +197,14 @@ fun PostWorkoutSummaryRoute(
 @Composable
 fun WorkoutDetailsRoute(
     workoutId: String,
+    ownerId: String?,
     navController: NavController,
     onNavigateToEditWorkout: (String) -> Unit,
     onNavigateToShareWorkout: (String) -> Unit
 ) {
     WorkoutDetailsScreen(
         workoutId = workoutId,
+        ownerId = ownerId,
         navController = navController,
         onNavigateToEditWorkout = onNavigateToEditWorkout,
         onNavigateToShareWorkout = onNavigateToShareWorkout

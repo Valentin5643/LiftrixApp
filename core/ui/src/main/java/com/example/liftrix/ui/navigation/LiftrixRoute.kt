@@ -80,12 +80,16 @@ sealed class LiftrixRoute {
     data object PrivacySettings : LiftrixRoute()
     
     /**
-     * Workout details screen with specific workout ID
+     * Workout details screen with specific workout ID.
      * 
      * @param workoutId Unique identifier for the workout to display
+     * @param ownerId Optional owner id for read-only social/public workout views
      */
     @Serializable
-    data class WorkoutDetails(val workoutId: String) : LiftrixRoute()
+    data class WorkoutDetails(
+        val workoutId: String,
+        val ownerId: String? = null
+    ) : LiftrixRoute()
     
     /**
      * Exercise selection screen for adding exercises to workout or routine

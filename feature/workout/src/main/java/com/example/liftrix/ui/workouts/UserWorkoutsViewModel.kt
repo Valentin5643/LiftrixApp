@@ -156,7 +156,7 @@ class UserWorkoutsViewModel @Inject constructor(
                                     }
                                     
                                     val durationMinutes = if (workout.startTime != null && workout.endTime != null) {
-                                        java.time.Duration.between(workout.startTime, workout.endTime).toMinutes().toInt()
+                                        java.time.Duration.between(workout.startTime, workout.endTime).toRoundedUpMinutes()
                                     } else null
                                     
                                     WorkoutPost(
@@ -368,4 +368,9 @@ class UserWorkoutsViewModel @Inject constructor(
             )
         }
     }
+}
+
+private fun java.time.Duration.toRoundedUpMinutes(): Int {
+    if (isZero || isNegative) return 0
+    return ((seconds + 59L) / 60L).toInt()
 }

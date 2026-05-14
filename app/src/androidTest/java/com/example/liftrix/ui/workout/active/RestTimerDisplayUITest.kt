@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.workout.active
 
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -45,6 +46,7 @@ class RestTimerDisplayUITest {
         composeTestRule.onNodeWithTag(REST_TIMER_DISPLAY_TAG).assertIsDisplayed()
         composeTestRule.onNodeWithTag(REST_TIMER_COUNTDOWN_TAG).assertIsDisplayed()
         composeTestRule.onNodeWithText("0:45").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Rest Break").assertDoesNotExist()
         composeTestRule.onNodeWithContentDescription("Pause rest timer").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Skip rest timer").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Add 15 seconds").assertIsDisplayed()

@@ -18,8 +18,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -37,26 +41,20 @@ class WorkoutForegroundService : Service() {
         notificationManager = getSystemService()
         createNotificationChannel()
         
-        // Start observing session state changes
         scope.launch {
             workoutSessionManager.currentSession.collectLatest { session ->
-                if (session != null) {
-                    val isRunning = session.sessionStatus == UnifiedWorkoutSession.SessionStatus.ACTIVE
-                    updateNotification(session, isRunning)
-                } else {
+                if (session == null) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
+                    return@collectLatest
                 }
-            }
-        }
-        
-        // Start observing session duration for timer updates
-        scope.launch {
-            workoutSessionManager.currentSession.collectLatest { session ->
-                if (session != null) {
-                    val isRunning = session.sessionStatus == UnifiedWorkoutSession.SessionStatus.ACTIVE
-                    val duration = session.elapsedTimeSeconds * 1000L
-                    updateNotification(session, isRunning, duration)
+
+                while (true) {
+                    val currentSession = workoutSessionManager.currentSession.value ?: break
+                    val isRunning = currentSession.sessionStatus == UnifiedWorkoutSession.SessionStatus.ACTIVE
+                    val duration = currentSession.getTotalDurationSeconds() * 1000L
+                    updateNotification(currentSession, isRunning, duration)
+                    delay(NOTIFICATION_TICK_MILLIS)
                 }
             }
         }
@@ -72,10 +70,14 @@ class WorkoutForegroundService : Service() {
                 stopSelf()
             }
             ACTION_PAUSE_RESUME -> {
-                togglePauseResume()
+                scope.launch {
+                    togglePauseResume()
+                }
             }
             ACTION_END_WORKOUT -> {
-                endWorkout()
+                scope.launch {
+                    endWorkout()
+                }
             }
             ACTION_VIEW_WORKOUT -> {
                 openWorkoutActivity()
@@ -97,7 +99,11 @@ class WorkoutForegroundService : Service() {
         val session = workoutSessionManager.currentSession.value
         if (session != null) {
             val isRunning = session.sessionStatus == UnifiedWorkoutSession.SessionStatus.ACTIVE
-            val notification = buildNotification(session, isRunning)
+            val notification = buildNotification(
+                session = session,
+                isRunning = isRunning,
+                duration = session.getTotalDurationSeconds() * 1000L
+            )
             
             // For Android 14+ (API 34+), specify the service type when starting foreground
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -167,12 +173,12 @@ class WorkoutForegroundService : Service() {
         }
         
         val statusText = if (isRunning) {
-            "Active • $formattedDuration"
+            "Active - $formattedDuration"
         } else {
-            "Paused • $formattedDuration"
+            "Paused - $formattedDuration"
         }
-        
-        val contentText = "${session.exercises.size} exercises • $completedExercises completed"
+
+        val contentText = "${session.exercises.size} exercises - $completedExercises completed"
         
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(session.name)
@@ -214,21 +220,33 @@ class WorkoutForegroundService : Service() {
         }
     }
     
-    private fun togglePauseResume() {
-        val session = workoutSessionManager.currentSession.value
+    private suspend fun togglePauseResume() {
+        val session = currentSessionForAction()
         if (session != null) {
             if (session.sessionStatus == UnifiedWorkoutSession.SessionStatus.ACTIVE) {
                 workoutSessionManager.pauseSession()
             } else if (session.sessionStatus == UnifiedWorkoutSession.SessionStatus.PAUSED) {
                 workoutSessionManager.resumeSession()
             }
+        } else {
+            Timber.w("Cannot toggle pause/resume from notification - no recovered session")
         }
     }
     
-    private fun endWorkout() {
-        // This should probably show a confirmation dialog in the main app
-        // For now, just end the session
-        workoutSessionManager.completeSession()
+    private suspend fun endWorkout() {
+        val session = currentSessionForAction()
+        if (session != null) {
+            workoutSessionManager.completeSession()
+        } else {
+            Timber.w("Cannot end workout from notification - no recovered session")
+        }
+    }
+
+    private suspend fun currentSessionForAction(): UnifiedWorkoutSession? {
+        return workoutSessionManager.currentSession.value
+            ?: withTimeoutOrNull(ACTION_SESSION_WAIT_MILLIS) {
+                workoutSessionManager.currentSession.filterNotNull().first()
+            }
     }
     
     private fun openWorkoutActivity() {
@@ -266,5 +284,7 @@ class WorkoutForegroundService : Service() {
         
         private const val CHANNEL_ID = "workout_session_channel"
         private const val NOTIFICATION_ID = 1001
+        private const val NOTIFICATION_TICK_MILLIS = 1_000L
+        private const val ACTION_SESSION_WAIT_MILLIS = 1_500L
     }
 }

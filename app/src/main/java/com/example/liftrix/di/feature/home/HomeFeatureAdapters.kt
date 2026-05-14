@@ -35,7 +35,9 @@ import com.example.liftrix.feature.home.ports.HomeFeedPort
 import com.example.liftrix.feature.home.ports.HomeSocialPort
 import com.example.liftrix.feature.home.ports.HomeWorkoutPort
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -57,7 +59,7 @@ class AppHomeWorkoutAdapter @Inject constructor(
         limit: Int
     ): Flow<LiftrixResult<List<HomeWorkout>>> {
         return workoutRepository.getRecentWorkouts(userId, limit).map { result ->
-            result.map { workouts -> workouts.map { it.toHomeWorkout() } }
+            result.map { workouts -> workouts.mapNotNull { it.toHomeWorkoutOrNull() } }
         }
     }
 
@@ -66,9 +68,14 @@ class AppHomeWorkoutAdapter @Inject constructor(
         includeOthers: Boolean,
         limit: Int
     ): Flow<LiftrixResult<List<HomeFeedWorkout>>> {
-        return workoutFeedDataRepository.getRecentActivityFeed(userId, includeOthers, limit).map { result ->
-            result.map { feedWorkouts -> feedWorkouts.map { it.toHomeFeedWorkout() } }
-        }
+        return workoutFeedDataRepository.getRecentActivityFeed(userId, includeOthers, limit)
+            .map { result ->
+                result.map { feedWorkouts -> feedWorkouts.mapNotNull { it.toHomeFeedWorkoutOrNull() } }
+            }
+            .catch { throwable ->
+                Timber.e(throwable, "Failed to adapt recent activity feed")
+                emit(LiftrixResult.failure(throwable))
+            }
     }
 
     override suspend fun getWorkoutStats(userId: String): LiftrixResult<HomeWorkoutStats> {
@@ -177,7 +184,7 @@ class AppPostCreationAdapter @Inject constructor(
                     id = summary.id.value,
                     name = summary.name,
                     durationMinutes = summary.duration?.toMinutes()?.toInt() ?: 0,
-                    totalVolume = summary.totalVolume.kilograms,
+                    totalVolume = workout.calculateTotalVolumeKg(),
                     exerciseCount = summary.exerciseCount,
                     prsCount = 0
                 )
@@ -204,13 +211,16 @@ class AppPostCreationAdapter @Inject constructor(
     }
 }
 
-private fun FeedWorkout.toHomeFeedWorkout() = HomeFeedWorkout(
-    workout = workout.toHomeWorkout(),
-    isPersonal = isPersonal,
-    user = user?.toHomeUser(),
-    mediaUrls = mediaUrls,
-    mediaThumbnails = mediaThumbnails
-)
+private fun FeedWorkout.toHomeFeedWorkoutOrNull(): HomeFeedWorkout? =
+    workout.toHomeWorkoutOrNull()?.let { homeWorkout ->
+        HomeFeedWorkout(
+            workout = homeWorkout,
+            isPersonal = isPersonal,
+            user = user?.toHomeUser(),
+            mediaUrls = mediaUrls,
+            mediaThumbnails = mediaThumbnails
+        )
+    }
 
 private fun User.toHomeUser() = HomeUser(
     uid = uid,
@@ -218,26 +228,32 @@ private fun User.toHomeUser() = HomeUser(
     photoUrl = photoUrl
 )
 
-private fun Workout.toHomeWorkout() = HomeWorkout(
-    id = id.value,
-    userId = userId,
-    name = name,
-    date = date,
-    exerciseCount = exercises.size,
-    totalSets = getTotalSets(),
-    completedSetCount = getCompletedSets(),
-    totalVolumeKg = calculateTotalVolume().kilograms,
-    status = when (status) {
-        com.example.liftrix.domain.model.WorkoutStatus.PLANNED -> HomeWorkoutStatus.PLANNED
-        com.example.liftrix.domain.model.WorkoutStatus.IN_PROGRESS -> HomeWorkoutStatus.IN_PROGRESS
-        com.example.liftrix.domain.model.WorkoutStatus.PAUSED -> HomeWorkoutStatus.PAUSED
-        com.example.liftrix.domain.model.WorkoutStatus.COMPLETED -> HomeWorkoutStatus.COMPLETED
-        com.example.liftrix.domain.model.WorkoutStatus.CANCELLED -> HomeWorkoutStatus.CANCELLED
-    },
-    startTime = startTime,
-    endTime = endTime,
-    notes = notes
-)
+private fun Workout.toHomeWorkoutOrNull(): HomeWorkout? {
+    return runCatching {
+        HomeWorkout(
+            id = id.value,
+            userId = userId,
+            name = name,
+            date = date,
+            exerciseCount = exercises.size,
+            totalSets = getTotalSets(),
+            completedSetCount = getCompletedSets(),
+            totalVolumeKg = calculateTotalVolumeKg(),
+            status = when (status) {
+                com.example.liftrix.domain.model.WorkoutStatus.PLANNED -> HomeWorkoutStatus.PLANNED
+                com.example.liftrix.domain.model.WorkoutStatus.IN_PROGRESS -> HomeWorkoutStatus.IN_PROGRESS
+                com.example.liftrix.domain.model.WorkoutStatus.PAUSED -> HomeWorkoutStatus.PAUSED
+                com.example.liftrix.domain.model.WorkoutStatus.COMPLETED -> HomeWorkoutStatus.COMPLETED
+                com.example.liftrix.domain.model.WorkoutStatus.CANCELLED -> HomeWorkoutStatus.CANCELLED
+            },
+            startTime = startTime,
+            endTime = endTime,
+            notes = notes
+        )
+    }.onFailure { throwable ->
+        Timber.e(throwable, "Skipping invalid home workout ${id.value}")
+    }.getOrNull()
+}
 
 private fun WorkoutStats.toHomeWorkoutStats() = HomeWorkoutStats(
     totalWorkouts = totalWorkouts,

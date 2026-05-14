@@ -89,8 +89,7 @@ fun ChatbotScreen(
                 ChatbotTopBar(
                     onNavigateBack = onNavigateBack,
                     usageLimits = uiState.usageLimits,
-                    currentLanguage = uiState.currentLanguage,
-                    onLanguageToggle = { viewModel.handleEvent(ChatbotEvent.ToggleLanguage(it)) }
+                    currentLanguage = uiState.currentLanguage
                 )
             }
         },
@@ -141,7 +140,6 @@ fun ChatbotScreen(
                 ChatControlsRow(
                     usageLimits = uiState.usageLimits,
                     currentLanguage = uiState.currentLanguage,
-                    onLanguageToggle = { viewModel.handleEvent(ChatbotEvent.ToggleLanguage(it)) },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(LiftrixSpacing.medium)
@@ -195,7 +193,6 @@ fun ChatbotScreen(
 private fun ChatControlsRow(
     usageLimits: UsageLimits?,
     currentLanguage: Language,
-    onLanguageToggle: (Language) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -219,19 +216,6 @@ private fun ChatControlsRow(
             }
         }
 
-        TextButton(
-            onClick = {
-                val newLanguage = if (currentLanguage == Language.ENGLISH)
-                    Language.ROMANIAN else Language.ENGLISH
-                onLanguageToggle(newLanguage)
-            }
-        ) {
-            Text(
-                text = if (currentLanguage == Language.ENGLISH) "RO" else "EN",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold
-            )
-        }
     }
 }
 
@@ -240,8 +224,7 @@ private fun ChatControlsRow(
 private fun ChatbotTopBar(
     onNavigateBack: () -> Unit,
     usageLimits: UsageLimits?,
-    currentLanguage: Language,
-    onLanguageToggle: (Language) -> Unit
+    currentLanguage: Language
 ) {
     TopAppBar(
         title = { 
@@ -259,21 +242,6 @@ private fun ChatbotTopBar(
             }
         },
         actions = {
-            // Language toggle
-            TextButton(
-                onClick = {
-                    val newLanguage = if (currentLanguage == Language.ENGLISH) 
-                        Language.ROMANIAN else Language.ENGLISH
-                    onLanguageToggle(newLanguage)
-                }
-            ) {
-                Text(
-                    text = if (currentLanguage == Language.ENGLISH) "RO" else "EN",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            
             // Usage limits display
             usageLimits?.let { limits ->
                 if (limits.dailyMessagesRemaining < 20) {
@@ -657,17 +625,6 @@ private fun MessageBubble(
                         else
                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
-
-                    message.tokenCount?.let { tokens ->
-                        Text(
-                            text = "$tokens tokens",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isUserMessage)
-                                MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
-                            else
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        )
-                    }
 
                     // Report button for AI messages only
                     if (!isUserMessage) {

@@ -15,9 +15,16 @@ c*.iml
 .cxx
 local.properties
 /.claude
+/.codex
 /.cursor
 /.vscode
+/.idea/
+/.kotlin/
+/.fleet/
 /user-stories
+/AGENTS.md
+/CLAUDE.md
+*.code-workspace
 /docs
 /scripts
 /serviceAccountKey.json
@@ -102,6 +109,7 @@ firebase-debug.log
 # Compiled bytecode
 *.class
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
 *.war
 *.aar
 

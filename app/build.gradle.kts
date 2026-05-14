@@ -1,4 +1,5 @@
 import org.gradle.api.tasks.PathSensitivity
+import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
 import java.io.FileInputStream
 import java.util.Properties
 
@@ -96,8 +97,12 @@ android {
     compileSdk = 35
     buildToolsVersion = "34.0.0"  // Installed SDK build tools with complete binaries
 
+    installation {
+        enableBaselineProfile = false
+    }
+
     defaultConfig {
-        applicationId = "com.example.liftrix"
+        applicationId = "com.liftrix.app"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -182,6 +187,11 @@ android {
             // Secure OAuth configuration from properties
             buildConfigField("String", "GOOGLE_CLIENT_ID", "\"${project.findProperty("GOOGLE_CLIENT_ID_RELEASE") ?: ""}\"")
             signingConfig = signingConfigs.getByName("release")  // ADD THIS LINE
+
+            // Temporarily disable local Crashlytics mapping uploads when release builds hang.
+            configure<CrashlyticsExtension> {
+                mappingFileUploadEnabled = false
+            }
         }
         
         debug {
@@ -629,14 +639,35 @@ jacoco {
     toolVersion = "0.8.11"
 }
 
+val jacocoCoverageModuleDirs = listOf(
+    projectDir,
+    rootProject.file("core/analytics"),
+    rootProject.file("core/data"),
+    rootProject.file("core/database"),
+    rootProject.file("core/domain"),
+    rootProject.file("core/domain-common"),
+    rootProject.file("core/design-system"),
+    rootProject.file("core/model"),
+    rootProject.file("core/network"),
+    rootProject.file("core/notifications"),
+    rootProject.file("core/presentation"),
+    rootProject.file("core/sync"),
+    rootProject.file("core/ui"),
+    rootProject.file("feature/auth"),
+    rootProject.file("feature/chat"),
+    rootProject.file("feature/home"),
+    rootProject.file("feature/profile"),
+    rootProject.file("feature/progress"),
+    rootProject.file("feature/settings"),
+    rootProject.file("feature/social"),
+    rootProject.file("feature/workout")
+)
+
 tasks.register<JacocoReport>("jacocoTestReport") {
     group = "verification"
     description = "Generates code coverage report for unit tests"
 
-    // Only run when explicitly requested with -PrunCoverage
-    onlyIf { project.hasProperty("runCoverage") }
-
-    dependsOn("testDebugUnitTest")
+    dependsOn("testDebugUnitTest", ":core:model:test")
 
     reports {
         xml.required.set(true)
@@ -659,18 +690,40 @@ tasks.register<JacocoReport>("jacocoTestReport") {
         "**/*Module_*Factory.*"
     )
 
-    val buildDirFile = layout.buildDirectory.get().asFile
-    val debugTree = fileTree("${buildDirFile}/tmp/kotlin-classes/debug") {
-        exclude(fileFilter)
+    val classTrees = jacocoCoverageModuleDirs.flatMap { moduleDir ->
+        val buildDirFile = File(moduleDir, "build")
+        listOf(
+            fileTree("${buildDirFile}/tmp/kotlin-classes/debug") {
+                exclude(fileFilter)
+            },
+            fileTree("${buildDirFile}/intermediates/javac/debug/classes") {
+                exclude(fileFilter)
+            },
+            fileTree("${buildDirFile}/classes/kotlin/main") {
+                exclude(fileFilter)
+            },
+            fileTree("${buildDirFile}/classes/java/main") {
+                exclude(fileFilter)
+            }
+        )
     }
 
-    val mainSrc = "${project.projectDir}/src/main/java"
+    val sourceDirs = jacocoCoverageModuleDirs.flatMap { moduleDir ->
+        listOf(
+            "${moduleDir}/src/main/java",
+            "${moduleDir}/src/main/kotlin"
+        )
+    }
 
-    sourceDirectories.setFrom(files(mainSrc))
-    classDirectories.setFrom(files(debugTree))
-    executionData.setFrom(fileTree(buildDirFile) {
-        include("jacoco/testDebugUnitTest.exec")
-    })
+    sourceDirectories.setFrom(files(sourceDirs))
+    classDirectories.setFrom(files(classTrees))
+    executionData.setFrom(
+        jacocoCoverageModuleDirs.map { moduleDir ->
+            fileTree(File(moduleDir, "build")) {
+                include("jacoco/*.exec")
+            }
+        }
+    )
 }
 
 tasks.register<JacocoCoverageVerification>("jacocoCoverageVerification") {
@@ -694,15 +747,32 @@ tasks.register<JacocoCoverageVerification>("jacocoCoverageVerification") {
         "**/*Module_*Factory.*"
     )
 
-    val buildDirFile = layout.buildDirectory.get().asFile
-    val debugTree = fileTree("${buildDirFile}/tmp/kotlin-classes/debug") {
-        exclude(fileFilter)
+    val classTrees = jacocoCoverageModuleDirs.flatMap { moduleDir ->
+        val buildDirFile = File(moduleDir, "build")
+        listOf(
+            fileTree("${buildDirFile}/tmp/kotlin-classes/debug") {
+                exclude(fileFilter)
+            },
+            fileTree("${buildDirFile}/intermediates/javac/debug/classes") {
+                exclude(fileFilter)
+            },
+            fileTree("${buildDirFile}/classes/kotlin/main") {
+                exclude(fileFilter)
+            },
+            fileTree("${buildDirFile}/classes/java/main") {
+                exclude(fileFilter)
+            }
+        )
     }
 
-    classDirectories.setFrom(files(debugTree))
-    executionData.setFrom(fileTree(buildDirFile) {
-        include("jacoco/testDebugUnitTest.exec")
-    })
+    classDirectories.setFrom(files(classTrees))
+    executionData.setFrom(
+        jacocoCoverageModuleDirs.map { moduleDir ->
+            fileTree(File(moduleDir, "build")) {
+                include("jacoco/*.exec")
+            }
+        }
+    )
 
     violationRules {
         rule {

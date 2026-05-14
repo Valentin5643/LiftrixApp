@@ -664,7 +664,7 @@ class SettingsViewModel @Inject constructor(
             }
         }
     }
-    
+
     /**
      * Fallback method for weight unit when persistence manager fails.
      */

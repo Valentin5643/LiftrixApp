@@ -75,7 +75,9 @@ fun AIChatSettingsScreen(
                 is UiState.Error -> {
                     ErrorState(
                         error = preferencesState.error,
-                        onRetry = { }, // No retry needed for preferences loading
+                        onRetry = {
+                            viewModel.handleEvent(AIChatSettingsEvent.RetryLoad)
+                        },
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }
@@ -160,6 +162,9 @@ fun AIChatSettingsScreen(
                     isExporting = uiState.exportInProgress,
                     exportedData = uiState.exportedData,
                     language = uiState.preferences?.preferredLanguage ?: "en",
+                    onExport = { format ->
+                        viewModel.handleEvent(AIChatSettingsEvent.ExportHistory(format))
+                    },
                     onDismiss = {
                         viewModel.handleEvent(AIChatSettingsEvent.HideExportDialog)
                     }
@@ -249,23 +254,6 @@ private fun AIChatSettingsContent(
             },
             onExerciseFormTipsChange = { include ->
                 onEvent(AIChatSettingsEvent.UpdateExerciseFormTips(include))
-            }
-        )
-        
-        // Usage Limits Settings
-        UsageLimitsCard(
-            maxMessagesPerDay = preferences.maxMessagesPerDay,
-            maxTokensPerMonth = preferences.maxTokensPerMonth,
-            usageNotificationsThreshold = preferences.usageNotificationsThreshold,
-            language = preferences.preferredLanguage,
-            onMaxMessagesChange = { maxMessages ->
-                onEvent(AIChatSettingsEvent.UpdateMaxMessagesPerDay(maxMessages))
-            },
-            onMaxTokensChange = { maxTokens ->
-                onEvent(AIChatSettingsEvent.UpdateMaxTokensPerMonth(maxTokens))
-            },
-            onThresholdChange = { threshold ->
-                onEvent(AIChatSettingsEvent.UpdateUsageThreshold(threshold))
             }
         )
         

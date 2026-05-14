@@ -7,6 +7,7 @@ interface PreviousSetRepository {
     suspend fun getLastCompletedWorkoutsWithExercise(
         userId: String,
         exerciseId: String,
+        exerciseName: String? = null,
         limit: Int = 5,
         excludeWorkoutId: String? = null
     ): LiftrixResult<List<Workout>>

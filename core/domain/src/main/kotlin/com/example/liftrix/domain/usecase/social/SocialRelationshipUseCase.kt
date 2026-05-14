@@ -186,10 +186,10 @@ class SocialRelationshipUseCase @Inject constructor(
             }
 
             // Block the user
-            blockRepository.blockUser(currentUserId.value, targetUserId)
+            blockRepository.blockUser(currentUserId.value, targetUserId).getOrThrow()
         } else {
             // Unblock the user
-            blockRepository.unblockUser(currentUserId.value, targetUserId)
+            blockRepository.unblockUser(currentUserId.value, targetUserId).getOrThrow()
         }
 
         Unit

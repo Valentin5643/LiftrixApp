@@ -92,9 +92,6 @@ class LiftrixApp : Application(), Configuration.Provider {
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
         INSTANCE = this
-
-        // App Check must be installed before Hilt can create Firebase singletons.
-        initializeFirebaseAppCheck(verifyToken = false)
     }
     
     override fun onCreate() {
@@ -198,8 +195,8 @@ class LiftrixApp : Application(), Configuration.Provider {
         if (BuildConfig.DEBUG) {
             Timber.e("Debug App Check token is not registered in Firebase Console for this Firebase app/project.")
             Timber.e("Search Logcat for: Enter this debug secret into the allow list in the Firebase Console")
-            Timber.e("Firebase Console path: App Check > Apps > com.example.liftrix > Manage debug tokens.")
-            Timber.e("Project must be liftrix-390cf and package must be com.example.liftrix.")
+            Timber.e("Firebase Console path: App Check > Apps > $packageName > Manage debug tokens.")
+            Timber.e("Project must be liftrix-390cf and package must be $packageName.")
         } else {
             Timber.e("Release App Check uses Play Integrity. Verify SHA-1/SHA-256 fingerprints and Play Integrity provider setup.")
         }

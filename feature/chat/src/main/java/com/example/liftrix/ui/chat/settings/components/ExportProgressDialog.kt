@@ -28,6 +28,7 @@ fun ExportProgressDialog(
     isExporting: Boolean,
     exportedData: String?,
     language: String,
+    onExport: (ExportFormat) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -69,7 +70,7 @@ fun ExportProgressDialog(
                     
                     else -> {
                         // Export options
-                        ExportOptionsState(language, onDismiss)
+                        ExportOptionsState(language, onExport, onDismiss)
                     }
                 }
             }
@@ -280,6 +281,7 @@ private fun ExportCompletedState(
 @Composable
 private fun ExportOptionsState(
     language: String,
+    onExport: (ExportFormat) -> Unit,
     onDismiss: () -> Unit
 ) {
     Column(
@@ -313,7 +315,6 @@ private fun ExportOptionsState(
             textAlign = TextAlign.Center
         )
         
-        // Format options (for future expansion)
         Card(
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
@@ -352,7 +353,7 @@ private fun ExportOptionsState(
             }
             
             Button(
-                onClick = { /* This should trigger the export - handled by parent */ },
+                onClick = { onExport(ExportFormat.JSON) },
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary

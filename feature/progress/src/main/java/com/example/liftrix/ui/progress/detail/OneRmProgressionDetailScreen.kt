@@ -359,7 +359,7 @@ private fun ProgressionSummaryCard(
                 Spacer(modifier = Modifier.height(12.dp))
                 
                 Text(
-                    text = "Strongest: ${summary.strongestExercise.name} (${summary.strongestExercise.latestOneRm?.toInt() ?: "N/A"} lbs)",
+                    text = "Strongest: ${summary.strongestExercise.name} (${summary.strongestExercise.latestOneRm?.toInt() ?: "N/A"} kg)",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -465,7 +465,7 @@ private fun ExerciseDetailItem(
             horizontalAlignment = Alignment.End
         ) {
             Text(
-                text = "${exercise.latestOneRm?.toInt() ?: "N/A"} lbs",
+                text = "${exercise.latestOneRm?.toInt() ?: "N/A"} kg",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium
             )

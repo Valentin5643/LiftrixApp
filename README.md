@@ -11,11 +11,11 @@
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=flat-square&logo=jetpack-compose)](https://developer.android.com/jetpack/compose)
-[![Firebase](https://img.shields.io/badge/Firebase-8%20Services-FFCA28?style=flat-square&logo=firebase)](https://firebase.google.com)
-[![Clean Architecture](https://img.shields.io/badge/Architecture-Clean%20+%20MVVM-orange?style=flat-square)](https://developer.android.com/topic/architecture)
+[![Firebase](https://img.shields.io/badge/Firebase-12%20Services-FFCA28?style=flat-square&logo=firebase)](https://firebase.google.com)
+[![Clean Architecture](https://img.shields.io/badge/Architecture-MVI%20+%20MVVM-orange?style=flat-square)](https://developer.android.com/topic/architecture)
 [![Offline First](https://img.shields.io/badge/Design-Offline%20First-success?style=flat-square)](https://developer.android.com/topic/architecture/data-layer/offline-first)
 
-<img src="docs/assets/liftrix-hero-banner.png" alt="Liftrix Banner" width="800"/>
+<img src="assets/banner.png" alt="Liftrix Banner" width="800"/>
 
 *Transform your fitness journey with intelligent workout tracking, AI-powered coaching, and social motivation*
 
@@ -55,7 +55,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/liftrix.git
+git clone https://github.com/valentin5643/LiftrixApp.git
 cd liftrix
 
 # Verify Gradle wrapper
@@ -101,7 +101,7 @@ adb logcat -s Liftrix:V
 ## 🏗️ Architecture
 
 <div align="center">
-<img src="docs/assets/architecture-diagram.png" alt="Architecture Diagram" width="700"/>
+<img src="assets/architecture-diagram.png" alt="Architecture Diagram" width="700"/>
 </div>
 
 ### Clean Architecture Layers
@@ -145,7 +145,7 @@ Firebase Services (8 Integrated)
 <br>Compose
 </td>
 <td align="center" width="96">
-<img src="https://firebase.google.com/static/downloads/brand-guidelines/PNG/logo-standard.png" width="48" height="48" alt="Firebase" />
+<img src="https://static.vecteezy.com/system/resources/previews/072/678/006/non_2x/firebase-logo-icon-free-png.png" width="48" height="48" alt="Firebase" />
 <br>Firebase
 </td>
 <td align="center" width="96">
@@ -157,7 +157,7 @@ Firebase Services (8 Integrated)
 <br>Hilt
 </td>
 <td align="center" width="96">
-<img src="https://developer.android.com/static/images/training/dependency-injection/hilt-logo.svg" width="48" height="48" alt="Room" />
+<img src="https://velog.velcdn.com/images/heymoko/post/3fbb6e8c-5922-490a-815a-477bc7c18577/image.png" width="48" height="48" alt="Room" />
 <br>Room
 </td>
 </tr>
@@ -225,16 +225,16 @@ Firebase Services (8 Integrated)
 <div align="center">
 <table>
 <tr>
-<td><img src="docs/screenshots/home-screen.png" width="200" alt="Home Screen"/></td>
-<td><img src="docs/screenshots/workout-tracking.png" width="200" alt="Workout Tracking"/></td>
-<td><img src="docs/screenshots/progress-dashboard.png" width="200" alt="Progress Dashboard"/></td>
-<td><img src="docs/screenshots/social-feed.png" width="200" alt="Social Feed"/></td>
+<td><img src="assets/Home-screen.jpg" width="200" alt="Home Screen"/></td>
+<td><img src="assets/Workout.jpg" width="200" alt="Workout Tracking"/></td>
+<td><img src="assets/Progress.jpg" width="200" alt="Progress Dashboard"/></td>
+<td><img src="assets/Coach.jpg" width="200" alt="Coach"/></td>
 </tr>
 <tr>
 <td align="center">Home</td>
 <td align="center">Workout</td>
 <td align="center">Analytics</td>
-<td align="center">Social</td>
+<td align="center">Coach</td>
 </tr>
 </table>
 </div>
@@ -332,26 +332,6 @@ The app includes comprehensive ProGuard rules for:
 - [ ] Multi-language expansion
 - [ ] Export to fitness platforms
 
----
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-### Development Setup
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Code Standards
-
-- **Kotlin Style Guide**: Official Kotlin conventions
-- **Commit Messages**: Conventional commits format
-- **Testing**: Minimum 80% coverage for new features
-- **Documentation**: Update relevant docs with changes
 
 ---
 
@@ -361,23 +341,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## 🙏 Acknowledgments
-
-- **Firebase Team** for the comprehensive backend services
-- **Android Team** for Jetpack Compose and modern Android tools
-- **Kotlin Team** for the amazing language and coroutines
-- **Open Source Community** for the invaluable libraries
-- **Contributors** for making Liftrix better every day
-
----
-
 ## 💬 Community & Support
 
 <div align="center">
 
-[![Discord](https://img.shields.io/badge/Discord-Join%20Server-7289DA?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/liftrix)
-[![Twitter](https://img.shields.io/badge/Twitter-Follow-1DA1F2?style=for-the-badge&logo=twitter&logoColor=white)](https://twitter.com/liftrixapp)
-[![Email](https://img.shields.io/badge/Email-Contact-EA4335?style=for-the-badge&logo=gmail&logoColor=white)](mailto:support@liftrix.app)
+[![Email](https://img.shields.io/badge/Email-Contact-EA4335?style=for-the-badge&logo=gmail&logoColor=white)](mailto:valijianu98@gmail.com)
 
 **Found a bug?** [Report Issue](https://github.com/yourusername/liftrix/issues/new?template=bug_report.md)  
 **Have a feature request?** [Request Feature](https://github.com/yourusername/liftrix/issues/new?template=feature_request.md)  
@@ -392,7 +360,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 Materialele pentru jurizare sunt disponibile în folderul:
 
-[`00_InfoEducatie-2026/`](./00_InfoEducatie-2026/)
+[`00_InfoEducatie_2026/`](./00_InfoEducatie_2026/)
 
 Conține documentația tehnică, declarația de resurse externe, prezentarea, APK-ul și dovezile tehnice relevante.
 

@@ -148,66 +148,110 @@ class SendChatMessageUseCase @Inject constructor(
             }
         }
         
-        // 3. Load prior conversation context before saving the current user message.
+        // 3. Get user chat preferences before persistence, limits, and AI personalization.
+        val currentPreferences = chatRepository.observePreferences(userId).first()
+        val shouldSaveConversation = currentPreferences?.conversationSaveEnabled
+            ?: currentPreferences?.conversationHistoryEnabled
+            ?: true
+
+        // 4. Check user-configured usage limits.
+        val userConfiguredLimits = chatRepository.checkUsageLimits(userId).getOrThrow()
+        if (userConfiguredLimits.dailyMessagesRemaining <= 0) {
+            throw IllegalStateException("Daily message limit reached. Please try again tomorrow.")
+        }
+        if (userConfiguredLimits.monthlyTokensRemaining <= 0) {
+            throw IllegalStateException("Monthly token limit reached. Please try again next month.")
+        }
+
+        // 5. Load prior conversation context before saving the current user message.
         // Firebase AI chat history must contain completed prior turns, not the message
         // that is about to be sent again via sendMessage().
-        val recentMessages = chatRepository.observeConversation(userId, activeConversationId)
-            .first()
-            .takeLast(10)
+        val recentMessages = if (shouldSaveConversation) {
+            chatRepository.observeConversation(userId, activeConversationId)
+                .first()
+                .takeLast(10)
+        } else {
+            emptyList()
+        }
         Timber.i(
             "[AI] SendChatMessageUseCase: loaded prior conversation context conversation=%s messages=%d",
             activeConversationId,
             recentMessages.size
         )
 
-        // 4. Get user chat preferences for personalization before the AI call
-        val currentPreferences = chatRepository.observePreferences(userId).first()
         val userPreferences = currentPreferences?.userContextPrompt
 
-        // 5. Save user message
-        val userMessage = chatRepository.saveMessage(
-            userId = userId,
-            message = message,
-            type = MessageType.USER,
-            conversationId = activeConversationId,
-            language = language,
-            workoutContext = workoutContext
-        ).getOrThrow()
+        // 6. Save user message when conversation saving is enabled.
+        val userMessage = if (shouldSaveConversation) {
+            chatRepository.saveMessage(
+                userId = userId,
+                message = message,
+                type = MessageType.USER,
+                conversationId = activeConversationId,
+                language = language,
+                workoutContext = workoutContext
+            ).getOrThrow()
+        } else {
+            localChatMessage(
+                userId = userId,
+                conversationId = activeConversationId,
+                type = MessageType.USER,
+                language = language,
+                content = message,
+                workoutContext = workoutContext
+            )
+        }
         
-        Timber.i("[AI] SendChatMessageUseCase: user message saved id=${userMessage.id}")
+        Timber.i("[AI] SendChatMessageUseCase: user message ready id=${userMessage.id} persisted=$shouldSaveConversation")
         
-        // 6. Build conversation context
+        // 7. Build conversation context
         val conversationContext = com.example.liftrix.domain.service.ConversationContext(
             recentMessages = recentMessages,
             workoutContext = workoutContext,
             userPreferences = userPreferences,
-            includeWorkoutHistory = currentPreferences?.includeWorkoutHistory ?: true
+            includeWorkoutHistory = currentPreferences?.includeWorkoutHistory ?: true,
+            aiResponseStyle = currentPreferences?.aiResponseStyle ?: "balanced",
+            includeExerciseFormTips = currentPreferences?.includeExerciseFormTips ?: true
         )
         
-        // 7. Get AI response
+        // 8. Get AI response
         Timber.i("[AI] SendChatMessageUseCase: requesting AI response conversation=$activeConversationId priorMessages=${recentMessages.size}")
         val aiResponse = aiChatService.generateResponse(
             userId = userId,
             message = message,
             conversationContext = conversationContext,
-            language = if (language == "ro") com.example.liftrix.domain.service.Language.ROMANIAN else com.example.liftrix.domain.service.Language.ENGLISH
+            language = if (language == "ro") com.example.liftrix.domain.service.Language.ROMANIAN else com.example.liftrix.domain.service.Language.ENGLISH,
+            autoDetectLanguage = currentPreferences?.autoDetectLanguage ?: true
         ).getOrThrow()
         
         Timber.i("[AI] SendChatMessageUseCase: AI response generated processingMs=${aiResponse.processingTimeMs} tokens=${aiResponse.tokensUsed}")
         
-        // 7. Save AI response
-        val assistantMessage = chatRepository.saveMessage(
-            userId = userId,
-            message = aiResponse.content,
-            type = MessageType.AI_RESPONSE,
-            conversationId = activeConversationId,
-            language = language,
-            workoutContext = workoutContext,
-            tokenCount = aiResponse.tokensUsed,
-            processingTimeMs = aiResponse.processingTimeMs
-        ).getOrThrow()
+        // 9. Save AI response when conversation saving is enabled.
+        val assistantMessage = if (shouldSaveConversation) {
+            chatRepository.saveMessage(
+                userId = userId,
+                message = aiResponse.content,
+                type = MessageType.AI_RESPONSE,
+                conversationId = activeConversationId,
+                language = language,
+                workoutContext = workoutContext,
+                tokenCount = aiResponse.tokensUsed,
+                processingTimeMs = aiResponse.processingTimeMs
+            ).getOrThrow()
+        } else {
+            localChatMessage(
+                userId = userId,
+                conversationId = activeConversationId,
+                type = MessageType.AI_RESPONSE,
+                language = language,
+                content = aiResponse.content,
+                workoutContext = workoutContext,
+                tokenCount = aiResponse.tokensUsed,
+                processingTimeMs = aiResponse.processingTimeMs
+            )
+        }
         
-        Timber.i("[AI] SendChatMessageUseCase: AI message saved id=${assistantMessage.id}")
+        Timber.i("[AI] SendChatMessageUseCase: AI message ready id=${assistantMessage.id} persisted=$shouldSaveConversation")
         
         // Return both messages
         userMessage to assistantMessage
@@ -219,5 +263,30 @@ class SendChatMessageUseCase @Inject constructor(
     private fun generateConversationId(): String {
         val timestamp = System.currentTimeMillis()
         return "chat_${timestamp}_${(1000..9999).random()}"
+    }
+
+    private fun localChatMessage(
+        userId: String,
+        conversationId: String,
+        type: MessageType,
+        language: String,
+        content: String,
+        workoutContext: WorkoutContext? = null,
+        tokenCount: Int? = null,
+        processingTimeMs: Long? = null
+    ): ChatMessage {
+        return ChatMessage(
+            id = "local_${System.currentTimeMillis()}_${(1000..9999).random()}",
+            userId = userId,
+            conversationId = conversationId,
+            type = type,
+            language = language,
+            content = content,
+            workoutContext = workoutContext,
+            tokenCount = tokenCount,
+            processingTimeMs = processingTimeMs,
+            createdAt = System.currentTimeMillis(),
+            isSynced = false
+        )
     }
 }

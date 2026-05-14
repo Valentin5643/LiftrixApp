@@ -509,7 +509,12 @@ class FollowRepositoryImpl @Inject constructor(
     override fun observeFollowingWithProfiles(userId: String): Flow<List<FollowRelationship>> {
         return followRelationshipDao.observeFollowingWithProfiles(userId)
             .map { enrichedList -> 
-                enrichedList.map { enriched -> mapEnrichedToDomain(enriched) }
+                enrichedList.map { enriched ->
+                    mapEnrichedToDomain(
+                        enriched = enriched,
+                        displayUserId = enriched.followingId
+                    )
+                }
             }
     }
 
@@ -520,7 +525,12 @@ class FollowRepositoryImpl @Inject constructor(
     override fun observeFollowersWithProfiles(userId: String): Flow<List<FollowRelationship>> {
         return followRelationshipDao.observeFollowersWithProfiles(userId)
             .map { enrichedList -> 
-                enrichedList.map { enriched -> mapEnrichedToDomain(enriched) }
+                enrichedList.map { enriched ->
+                    mapEnrichedToDomain(
+                        enriched = enriched,
+                        displayUserId = enriched.followerId
+                    )
+                }
             }
     }
 
@@ -726,7 +736,10 @@ class FollowRepositoryImpl @Inject constructor(
      * Maps enriched follow relationship (with profile data) to domain model
      * This provides complete user information to prevent "Unknown User" display
      */
-    private fun mapEnrichedToDomain(enriched: EnrichedFollowRelationship): FollowRelationship {
+    private fun mapEnrichedToDomain(
+        enriched: EnrichedFollowRelationship,
+        displayUserId: String
+    ): FollowRelationship {
         return FollowRelationship(
             id = enriched.id,
             followerId = enriched.followerId,
@@ -741,7 +754,7 @@ class FollowRepositoryImpl @Inject constructor(
             acceptedAt = enriched.acceptedAt,
             blockedAt = enriched.blockedAt,
             // Enriched display properties from social_profiles join
-            userId = enriched.followingId, // For display purposes, show the followed user
+            userId = displayUserId,
             displayName = enriched.profileDisplayName ?: "Unknown User", // Fallback for missing profiles
             profileImageUrl = enriched.profileImageUrl,
             bio = enriched.profileBio,

@@ -402,7 +402,7 @@ private fun ChartTooltip(
             )
             
             Text(
-                text = "${point.value.toInt()} lbs",
+                text = "${point.value.toInt()} kg",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.inverseOnSurface
             )

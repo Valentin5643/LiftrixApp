@@ -87,7 +87,7 @@ fun HomeScreen(
     onNavigateToPublicProfile: (String) -> Unit = {},
     onNavigateToUserSearch: () -> Unit = {},
     onNavigateToPostComments: (String) -> Unit = {},
-    onNavigateToWorkoutDetails: (String) -> Unit = {},
+    onNavigateToWorkoutDetails: (String, String?) -> Unit = { _, _ -> },
     onNavigateToEditWorkout: (String) -> Unit = {},
     syncStatusContent: @Composable () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -202,7 +202,7 @@ private fun EnhancedHomeContent(
     onNavigateToPublicProfile: (String) -> Unit,
     onNavigateToUserSearch: () -> Unit,
     onNavigateToPostComments: (String) -> Unit,
-    onNavigateToWorkoutDetails: (String) -> Unit,
+    onNavigateToWorkoutDetails: (String, String?) -> Unit,
     onNavigateToEditWorkout: (String) -> Unit,
     onEvent: (HomeEvent) -> Unit,
     feedViewModel: FeedViewModel,
@@ -437,7 +437,7 @@ private fun EnhancedHomeContent(
                         feedViewModel.handleEvent(FeedEvent.HandlePostInteraction(PostInteraction.CopyWorkout(post)))
                     },
                     onWorkoutClick = {
-                        onNavigateToWorkoutDetails(post.workoutId)
+                        onNavigateToWorkoutDetails(post.workoutId, post.userId)
                     },
                     onEditWorkout = {
                         onNavigateToEditWorkout(post.workoutId)

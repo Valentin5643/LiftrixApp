@@ -181,8 +181,9 @@ class AdminBanViewModel @Inject constructor(
                     
                     Timber.i("Successfully banned user: $userId")
                     
-                    // Refresh banned users list
+                    // Refresh moderation lists after the backend audit write.
                     loadBannedUsers()
+                    loadAdminLogs()
                 },
                 onFailure = { throwable ->
                     _uiState.value = _uiState.value.copy(
@@ -227,8 +228,9 @@ class AdminBanViewModel @Inject constructor(
                     
                     Timber.i("Successfully unbanned user: $userId")
                     
-                    // Refresh banned users list
+                    // Refresh moderation lists after the backend audit write.
                     loadBannedUsers()
+                    loadAdminLogs()
                 },
                 onFailure = { throwable ->
                     _uiState.value = _uiState.value.copy(

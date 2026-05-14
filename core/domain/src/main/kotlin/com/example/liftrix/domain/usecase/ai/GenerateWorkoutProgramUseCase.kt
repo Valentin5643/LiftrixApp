@@ -249,7 +249,8 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
             onSuccess = { program ->
                 Timber.i("[AI] GenerateWorkoutProgramUseCase: parsing succeeded days=${program.days.size}")
                 Timber.i("[AI] GenerateWorkoutProgramUseCase: validation started")
-                val validation = validator(program, request, catalog)
+                val normalizedProgram = normalizeGeneratedProgram(program, request, catalog)
+                val validation = validator(normalizedProgram, request, catalog)
                 if (validation.isSuccess) {
                     val valid = validation.getOrThrow()
                     Timber.i("[AI] GenerateWorkoutProgramUseCase: validation succeeded warnings=${valid.warnings.size}")
@@ -321,8 +322,9 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
                 details = "The AI repair response was not valid workout JSON: ${it.message ?: it.javaClass.simpleName}."
             )
         }
-        val validation = validator(repairedProgram, request, catalog).getOrElse {
-            Timber.w(it, "[AI] GenerateWorkoutProgramUseCase: repair validation failed; refusing fallback workout")
+        val normalizedProgram = normalizeGeneratedProgram(repairedProgram, request, catalog)
+        val validation = validator(normalizedProgram, request, catalog).getOrElse {
+            Timber.w(it, "[AI] GenerateWorkoutProgramUseCase: repair validation failed after local normalization; refusing fallback workout")
             return invalidGenerationFailure(
                 stage = "repair_validation",
                 details = "The AI repair response still did not satisfy the request: ${it.message ?: it.javaClass.simpleName}."
@@ -339,6 +341,196 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
                 modelVersion = repairedJson.modelVersion.ifBlank { originalModelVersion }
             )
         )
+    }
+
+    private fun normalizeGeneratedProgram(
+        program: GeneratedWorkoutProgram,
+        request: WorkoutGenerationRequest,
+        catalog: List<ExerciseLibrary>
+    ): GeneratedWorkoutProgram {
+        val catalogById = catalog.associateBy { it.id }
+        val catalogByName = catalog.associateBy { it.name.normalizedLookupKey() }
+        val beginner = request.normalizedConstraints.level == WorkoutProgramLevel.BEGINNER
+        val eligibleCatalog = catalog
+            .filter { it.equipment in request.normalizedConstraints.allowedEquipment }
+            .filter { !beginner || it.difficultyLevel <= 3 }
+            .sortedWith(
+                compareBy<ExerciseLibrary> { it.difficultyLevel }
+                    .thenByDescending { it.isCompound }
+                    .thenBy { it.primaryMuscleGroup.getPriority() }
+                    .thenBy { it.name }
+            )
+        val usedExerciseIds = mutableSetOf<String>()
+
+        return program.copy(
+            days = program.days.map { day ->
+                val normalizedExercises = day.exercises.mapNotNull { exercise ->
+                    val catalogExercise = catalogById[exercise.exerciseId]
+                        ?: catalogByName[exercise.exerciseName.normalizedLookupKey()]
+                    val safeCatalogExercise = catalogExercise
+                        ?.takeIf { it.id !in usedExerciseIds }
+                        ?.takeIf { it in eligibleCatalog }
+                        ?: findCompatibleReplacement(
+                            exercise = exercise,
+                            eligibleCatalog = eligibleCatalog,
+                            usedExerciseIds = usedExerciseIds
+                        )
+
+                    safeCatalogExercise?.let {
+                        usedExerciseIds.add(it.id)
+                        normalizePrescription(
+                            exercise.copy(
+                                exerciseId = it.id,
+                                exerciseName = it.name,
+                                primaryMuscle = it.primaryMuscleGroup,
+                                equipment = it.equipment
+                            ),
+                            beginner
+                        )
+                    }
+                }.let { exercises ->
+                    exercises.ifEmpty {
+                        fallbackExerciseForDay(day.dayName, eligibleCatalog, usedExerciseIds, beginner)?.let { listOf(it) }
+                            ?: emptyList()
+                    }
+                }
+
+                day.copy(
+                    estimatedDurationMinutes = day.estimatedDurationMinutes.coerceIn(5, 90),
+                    exercises = normalizedExercises.take(MAX_NORMALIZED_EXERCISES_PER_DAY)
+                )
+            }
+        )
+    }
+
+    private fun findCompatibleReplacement(
+        exercise: GeneratedWorkoutExercise,
+        eligibleCatalog: List<ExerciseLibrary>,
+        usedExerciseIds: Set<String>
+    ): ExerciseLibrary? {
+        val compatible = eligibleCatalog.filter { it.id !in usedExerciseIds }
+
+        return compatible.firstOrNull { it.primaryMuscleGroup == exercise.primaryMuscle && it.equipment == exercise.equipment }
+            ?: compatible.firstOrNull { it.primaryMuscleGroup == exercise.primaryMuscle }
+            ?: compatible.firstOrNull { it.equipment == exercise.equipment }
+            ?: compatible.firstOrNull()
+    }
+
+    private fun fallbackExerciseForDay(
+        dayName: String,
+        eligibleCatalog: List<ExerciseLibrary>,
+        usedExerciseIds: MutableSet<String>,
+        beginner: Boolean
+    ): GeneratedWorkoutExercise? {
+        val dayFocus = dayName.toExerciseCategoryHint()
+        val fallback = eligibleCatalog
+            .filter { it.id !in usedExerciseIds }
+            .let { unused ->
+                unused.firstOrNull { dayFocus != null && it.primaryMuscleGroup.matchesCategoryHint(dayFocus) }
+                    ?: unused.firstOrNull()
+            }
+            ?: eligibleCatalog.firstOrNull { dayFocus != null && it.primaryMuscleGroup.matchesCategoryHint(dayFocus) }
+            ?: eligibleCatalog.firstOrNull()
+
+        if (fallback != null) usedExerciseIds.add(fallback.id)
+        return fallback?.let {
+            normalizePrescription(
+                GeneratedWorkoutExercise(
+                    exerciseId = it.id,
+                    exerciseName = it.name,
+                    primaryMuscle = it.primaryMuscleGroup,
+                    equipment = it.equipment,
+                    sets = if (beginner) 3 else 4,
+                    type = if (it.primaryMuscleGroup == ExerciseCategory.CARDIO) {
+                        GeneratedPrescriptionType.TIME
+                    } else {
+                        GeneratedPrescriptionType.REPS
+                    },
+                    repsMin = if (it.primaryMuscleGroup == ExerciseCategory.CARDIO) null else if (beginner) 8 else 8,
+                    repsMax = if (it.primaryMuscleGroup == ExerciseCategory.CARDIO) null else if (beginner) 12 else 15,
+                    durationSeconds = if (it.primaryMuscleGroup == ExerciseCategory.CARDIO) 120 else null,
+                    isUnilateral = false,
+                    restSeconds = 60
+                ),
+                beginner
+            )
+        }
+    }
+
+    private fun normalizePrescription(
+        exercise: GeneratedWorkoutExercise,
+        beginner: Boolean
+    ): GeneratedWorkoutExercise {
+        val resolvedType = when {
+            exercise.type == GeneratedPrescriptionType.TIME -> GeneratedPrescriptionType.TIME
+            exercise.durationSeconds != null -> GeneratedPrescriptionType.TIME
+            exercise.isTimedMovement() -> GeneratedPrescriptionType.TIME
+            else -> GeneratedPrescriptionType.REPS
+        }
+
+        return when (resolvedType) {
+            GeneratedPrescriptionType.TIME -> {
+                val rawDuration = exercise.durationSeconds
+                    ?: exercise.repsMax
+                    ?: exercise.repsMin
+                    ?: 30
+                exercise.copy(
+                    sets = exercise.sets.coerceIn(1, if (beginner) 3 else 5),
+                    type = GeneratedPrescriptionType.TIME,
+                    repsMin = null,
+                    repsMax = null,
+                    durationSeconds = rawDuration.coerceIn(10, 300),
+                    restSeconds = exercise.restSeconds.coerceIn(30, 180)
+                )
+            }
+            GeneratedPrescriptionType.REPS -> {
+                val lowerBound = if (beginner) 8 else 1
+                val upperBound = if (beginner) 15 else 30
+                val rawMin = exercise.repsMin ?: exercise.repsMax ?: lowerBound
+                val rawMax = exercise.repsMax ?: exercise.repsMin ?: rawMin
+                val orderedMin = minOf(rawMin, rawMax).coerceIn(lowerBound, upperBound)
+                val orderedMax = maxOf(rawMin, rawMax).coerceIn(lowerBound, upperBound)
+
+                exercise.copy(
+                    sets = exercise.sets.coerceIn(1, if (beginner) 3 else 5),
+                    type = GeneratedPrescriptionType.REPS,
+                    repsMin = orderedMin,
+                    repsMax = maxOf(orderedMin, orderedMax),
+                    durationSeconds = null,
+                    restSeconds = exercise.restSeconds.coerceIn(30, 180)
+                )
+            }
+        }
+    }
+
+    private fun GeneratedWorkoutExercise.isTimedMovement(): Boolean {
+        val text = "$exerciseId $exerciseName".lowercase()
+        return listOf("plank", "hold", "wall sit", "cardio", "treadmill", "bike", "walk", "run", "jumping jack")
+            .any { text.contains(it) }
+    }
+
+    private fun String.normalizedLookupKey(): String =
+        lowercase()
+            .replace(Regex("""[^a-z0-9]+"""), "")
+
+    private fun String.toExerciseCategoryHint(): ExerciseCategory? {
+        val lower = lowercase()
+        return when {
+            "push" in lower -> ExerciseCategory.CHEST
+            "pull" in lower -> ExerciseCategory.BACK
+            "leg" in lower -> ExerciseCategory.LEGS
+            "cardio" in lower -> ExerciseCategory.CARDIO
+            "core" in lower -> ExerciseCategory.CORE
+            else -> null
+        }
+    }
+
+    private fun ExerciseCategory.matchesCategoryHint(hint: ExerciseCategory): Boolean = when (hint) {
+        ExerciseCategory.CHEST -> this == ExerciseCategory.CHEST || this == ExerciseCategory.SHOULDERS || this == ExerciseCategory.ARMS || this == ExerciseCategory.TRICEPS
+        ExerciseCategory.BACK -> this == ExerciseCategory.BACK || this == ExerciseCategory.ARMS || this == ExerciseCategory.BICEPS || this == ExerciseCategory.FULL_BODY
+        ExerciseCategory.LEGS -> this == ExerciseCategory.LEGS || this == ExerciseCategory.QUADRICEPS || this == ExerciseCategory.HAMSTRINGS || this == ExerciseCategory.GLUTES || this == ExerciseCategory.CALVES
+        ExerciseCategory.CORE -> this == ExerciseCategory.CORE || this == ExerciseCategory.ABS
+        else -> this == hint
     }
 
     private fun parseProgram(
@@ -588,12 +780,13 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         saveAfterGeneration: Boolean
     ): WorkoutGenerationRequest {
         val profileEquipment = profile?.availableEquipment?.toSet().orEmpty()
+        val level = extractLevel(prompt)
         val allowedEquipment = resolveAllowedEquipment(
             requestedEquipment = extractEquipment(prompt),
-            profileEquipment = profileEquipment
+            profileEquipment = profileEquipment,
+            level = level
         )
         val goal = extractGoal(prompt) ?: profile?.fitnessGoals?.firstOrNull()?.toProgramGoal() ?: WorkoutProgramGoal.GENERAL_FITNESS
-        val level = extractLevel(prompt)
 
         return WorkoutGenerationRequest(
             userId = userId,
@@ -619,11 +812,19 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
 
     private fun resolveAllowedEquipment(
         requestedEquipment: Set<Equipment>,
-        profileEquipment: Set<Equipment>
-    ): Set<Equipment> = when {
-        requestedEquipment.isNotEmpty() -> requestedEquipment
-        profileEquipment.isNotEmpty() -> profileEquipment
-        else -> Equipment.entries.toSet()
+        profileEquipment: Set<Equipment>,
+        level: WorkoutProgramLevel
+    ): Set<Equipment> {
+        val resolved = when {
+            requestedEquipment.isNotEmpty() -> requestedEquipment
+            profileEquipment.isNotEmpty() -> profileEquipment
+            else -> Equipment.entries.toSet()
+        }
+        return if (level == WorkoutProgramLevel.BEGINNER) {
+            resolved + Equipment.BODYWEIGHT_ONLY
+        } else {
+            resolved
+        }
     }
 
     private fun extractDays(prompt: String): Int {
@@ -777,6 +978,10 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
                 )
             )
         )
+    }
+
+    private companion object {
+        const val MAX_NORMALIZED_EXERCISES_PER_DAY = 8
     }
 
     @Serializable

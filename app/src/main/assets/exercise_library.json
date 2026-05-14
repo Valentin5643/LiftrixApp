@@ -206,7 +206,7 @@
   {
     "id": "arms-tricep-dip-bodyweight",
     "name": "Tricep Dips",
-    "primaryMuscleGroup": "ARMS",
+    "primaryMuscleGroup": "TRICEPS",
     "equipment": "BODYWEIGHT_ONLY",
     "secondaryMuscleGroups": ["CHEST", "SHOULDERS"],
     "movementPattern": "press",
@@ -638,7 +638,7 @@
   {
     "id": "arms-preacher-curl-barbell",
     "name": "Preacher Curl",
-    "primaryMuscleGroup": "ARMS",
+    "primaryMuscleGroup": "BICEPS",
     "equipment": "BARBELL",
     "secondaryMuscleGroups": [],
     "movementPattern": "curl",
@@ -674,7 +674,7 @@
   {
     "id": "arms-tricep-pushdown-cable",
     "name": "Tricep Pushdown",
-    "primaryMuscleGroup": "ARMS",
+    "primaryMuscleGroup": "TRICEPS",
     "equipment": "CABLE_MACHINE",
     "secondaryMuscleGroups": [],
     "movementPattern": "extension",
@@ -686,7 +686,7 @@
   {
     "id": "arms-close-grip-bench-barbell",
     "name": "Close-Grip Bench Press",
-    "primaryMuscleGroup": "ARMS",
+    "primaryMuscleGroup": "TRICEPS",
     "equipment": "BARBELL",
     "secondaryMuscleGroups": ["CHEST", "SHOULDERS"],
     "movementPattern": "press",
@@ -1010,7 +1010,7 @@
   {
     "id": "full-body-clean-and-press-barbell",
     "name": "Clean and Press",
-    "primaryMuscleGroup": "FULL_BODY",
+    "primaryMuscleGroup": "TRICEPS",
     "equipment": "BARBELL",
     "secondaryMuscleGroups": ["LEGS", "SHOULDERS", "BACK"],
     "movementPattern": "complex",

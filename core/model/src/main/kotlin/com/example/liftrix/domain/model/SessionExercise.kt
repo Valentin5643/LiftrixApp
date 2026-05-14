@@ -9,6 +9,7 @@ import java.time.Instant
  */
 data class SessionExercise(
     val exerciseId: ExerciseId,
+    val libraryExerciseId: ExerciseId = exerciseId,
     val name: String,
     val category: ExerciseCategory,
     val primaryMuscle: ExerciseCategory,
@@ -80,6 +81,7 @@ data class SessionExercise(
 
             return SessionExercise(
                 exerciseId = ExerciseId.generate(), // 🔥 FIX: Generate unique ID per session instance
+                libraryExerciseId = templateExercise.exerciseId,
                 name = templateExercise.name,
                 category = templateExercise.primaryMuscle,
                 primaryMuscle = templateExercise.primaryMuscle,
@@ -529,7 +531,7 @@ data class SessionExercise(
         
         // Create a basic library exercise for the Exercise constructor
         val libraryExercise = ExerciseLibrary(
-            id = exerciseId.value,
+            id = libraryExerciseId.value,
             name = name, // 🔥 FIX: Ensure name is preserved
             primaryMuscleGroup = primaryMuscle,
             equipment = correctedEquipment, // 🔥 FIX: Use corrected equipment

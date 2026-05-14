@@ -108,7 +108,14 @@ fun AdminBanManagementScreen(
             // Tab navigation
             AdminTabRow(
                 selectedTab = selectedTab,
-                onTabSelected = { selectedTab = it }
+                onTabSelected = { tab ->
+                    selectedTab = tab
+                    when (tab) {
+                        AdminTab.SEARCH -> Unit
+                        AdminTab.BANNED_USERS -> viewModel.handleEvent(AdminBanEvent.LoadBannedUsers)
+                        AdminTab.ADMIN_LOGS -> viewModel.handleEvent(AdminBanEvent.LoadAdminLogs)
+                    }
+                }
             )
             
             // Content based on selected tab

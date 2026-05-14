@@ -126,6 +126,7 @@ abstract class DataModule {
 
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
+                        repairSettingsUpdatedAt(db)
                         Timber.d("Encrypted database opened successfully")
                     }
 
@@ -382,6 +383,20 @@ abstract class DataModule {
         @Singleton
         fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> {
             return context.settingsDataStore
+        }
+
+        private fun repairSettingsUpdatedAt(db: SupportSQLiteDatabase) {
+            try {
+                db.execSQL(
+                    """
+                    UPDATE user_settings
+                    SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                    WHERE updated_at IS NULL OR TRIM(updated_at) = ''
+                    """.trimIndent()
+                )
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to repair null user_settings.updated_at values")
+            }
         }
 
         /**

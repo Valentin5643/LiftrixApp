@@ -14,6 +14,7 @@ import com.example.liftrix.domain.usecase.common.ErrorHandler
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
+import kotlinx.datetime.LocalDate
 import com.example.liftrix.domain.util.DomainLogger as Timber
 import javax.inject.Inject
 
@@ -344,10 +345,11 @@ class WorkoutQueryUseCase @Inject constructor(
     suspend fun getPreviousSetData(
         userId: String,
         exerciseId: String,
+        exerciseName: String? = null,
         setNumber: Int,
         excludeWorkoutId: String? = null
     ): LiftrixResult<PreviousSetDataResponse> {
-        Timber.d("[PREV_SET_TIMING] Starting Previous Set Data query at ${System.currentTimeMillis()} for exercise: $exerciseId")
+        Timber.d("[PREV_SET_TIMING] Starting Previous Set Data query at ${System.currentTimeMillis()} for exercise: $exerciseId name=$exerciseName")
 
         return liftrixCatching(
             errorMapper = { throwable ->
@@ -375,6 +377,7 @@ class WorkoutQueryUseCase @Inject constructor(
             val previousWorkouts = previousSetRepository.getLastCompletedWorkoutsWithExercise(
                 userId = userId,
                 exerciseId = exerciseId,
+                exerciseName = exerciseName,
                 limit = 5,
                 excludeWorkoutId = excludeWorkoutId
             )
@@ -392,12 +395,19 @@ class WorkoutQueryUseCase @Inject constructor(
                         )
                     }
 
-                    // For now, return empty data - full JSON parsing implementation
-                    // can be migrated from GetPreviousSetDataUseCase if needed
+                    val previousSets = extractPreviousSetInfo(
+                        workouts = workouts,
+                        exerciseId = exerciseId,
+                        exerciseName = exerciseName
+                    )
+                    val lastWorkoutDate = previousSets.values
+                        .maxByOrNull { it.workoutDate }
+                        ?.workoutDate
+
                     Timber.d("[PREV_SET_TIMING] Completing Previous Set Data query at ${System.currentTimeMillis()} - FOUND ${workouts.size} workouts")
                     PreviousSetDataResponse(
-                        previousSets = emptyMap(),
-                        lastWorkoutDate = null,
+                        previousSets = previousSets,
+                        lastWorkoutDate = lastWorkoutDate,
                         totalPreviousWorkouts = workouts.size
                     )
                 },
@@ -407,6 +417,58 @@ class WorkoutQueryUseCase @Inject constructor(
             )
         }
     }
+
+    private fun extractPreviousSetInfo(
+        workouts: List<Workout>,
+        exerciseId: String,
+        exerciseName: String?
+    ): Map<Int, PreviousSetInfo> {
+        if (workouts.isEmpty()) return emptyMap()
+
+        val normalizedExerciseName = exerciseName.normalizedExerciseIdentifierOrNull()
+        val previousSets = linkedMapOf<Int, PreviousSetInfo>()
+        workouts.forEach { workout ->
+            val exercise = workout.exercises.firstOrNull { exercise ->
+                exercise.libraryExercise.id == exerciseId
+            } ?: workout.exercises.firstOrNull { exercise ->
+                normalizedExerciseName != null &&
+                    exercise.libraryExercise.name.normalizedExerciseIdentifierOrNull() == normalizedExerciseName
+            } ?: return@forEach
+
+            val workoutDate = runCatching { LocalDate.parse(workout.date.toString()) }
+                .getOrElse {
+                    Timber.w("Skipping previous-set workout with invalid date: ${workout.id.value}")
+                    return@forEach
+                }
+
+            exercise.sets
+                .asSequence()
+                .filter { set -> set.completedAt != null }
+                .filter { set -> set.weight != null || set.reps != null }
+                .filter { set -> set.weight?.kilograms?.let { it.isFinite() && it >= 0.0 } != false }
+                .filter { set -> set.reps?.count?.let { it > 0 } != false }
+                .sortedWith(
+                    compareBy<com.example.liftrix.domain.model.ExerciseSet> { it.setNumber }
+                        .thenByDescending { it.completedAt }
+                )
+                .forEach { set ->
+                    previousSets.putIfAbsent(
+                        set.setNumber,
+                        PreviousSetInfo.create(
+                            weight = set.weight?.kilograms,
+                            reps = set.reps?.count,
+                            workoutDate = workoutDate,
+                            workoutName = workout.name
+                        )
+                    )
+                }
+        }
+
+        return previousSets
+    }
+
+    private fun String?.normalizedExerciseIdentifierOrNull(): String? =
+        this?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
 
     // ============== WORKOUT DURATION ESTIMATION ==============
 

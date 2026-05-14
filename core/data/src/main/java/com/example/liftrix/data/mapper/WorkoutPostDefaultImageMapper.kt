@@ -7,7 +7,7 @@ import com.example.liftrix.domain.model.social.MediaType
  * Centralized fallback image mapper for workout posts with no user-selected media.
  */
 object WorkoutPostDefaultImageMapper {
-    private const val APP_PACKAGE = "com.example.liftrix"
+    private const val APP_PACKAGE = "com.liftrix.app"
     const val GYM_DEFAULT_IMAGE_URI: String =
         "android.resource://$APP_PACKAGE/drawable/workout_card_default_gym"
     const val BODYWEIGHT_DEFAULT_IMAGE_URI: String =

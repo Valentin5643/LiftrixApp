@@ -153,13 +153,13 @@ fun FriendsScreen(
                 uiState = uiState,
                 onEvent = viewModel::onEvent,
                 onNavigateToUserSearch = onNavigateToUserSearch,
-                onUserClick = { userId -> viewModel.onEvent(SocialEvent.NavigateToUserProfile(userId)) },
+                onUserClick = onNavigateToUserProfile,
                 modifier = Modifier.fillMaxSize()
             )
             1 -> FollowersTab(
                 uiState = uiState,
                 onEvent = viewModel::onEvent,
-                onUserClick = { userId -> viewModel.onEvent(SocialEvent.NavigateToUserProfile(userId)) },
+                onUserClick = onNavigateToUserProfile,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -762,16 +762,18 @@ private fun FollowerItem(
                 }
             }
             
-            Button(
-                onClick = onFollowBack
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PersonAdd,
-                    contentDescription = "Follow back",
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Follow Back")
+            if (!user.isMutual) {
+                Button(
+                    onClick = onFollowBack
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PersonAdd,
+                        contentDescription = "Follow back",
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Follow Back")
+                }
             }
         }
     }

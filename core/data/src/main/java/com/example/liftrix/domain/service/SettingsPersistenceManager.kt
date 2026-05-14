@@ -105,13 +105,21 @@ class SettingsPersistenceManager @Inject constructor(
         
         // 2. Save to Room (offline persistence)
         withContext(Dispatchers.IO) {
+            val updatedAt = Instant.now()
             when (key) {
-                "dark_mode" -> settingsDao.updateDarkMode(userId, value as Boolean)
-                "notifications_enabled" -> settingsDao.updateNotificationsEnabled(userId, value as Boolean)
-                "weight_unit" -> settingsDao.updateWeightUnit(userId, (value as WeightUnit).name)
-                "terminology_preference" -> settingsDao.updateTerminologyPreference(userId, value as String)
-                "migration_completed" -> settingsDao.updateMigrationCompleted(userId, value as Boolean)
-                "migration_explanation_seen" -> settingsDao.updateMigrationExplanationSeen(userId, value as Boolean)
+                "dark_mode" -> settingsDao.updateDarkMode(userId, value as Boolean, updatedAt)
+                "notifications_enabled" -> settingsDao.updateNotifications(userId, value as Boolean, updatedAt)
+                "weight_unit" -> {
+                    val weightUnit = when (value) {
+                        is WeightUnit -> value
+                        is String -> WeightUnit.valueOf(value)
+                        else -> throw IllegalArgumentException("Unsupported weight unit value type: ${value::class.simpleName}")
+                    }
+                    settingsDao.updateWeightUnit(userId, weightUnit, updatedAt)
+                }
+                "terminology_preference" -> settingsDao.updateTerminologyPreference(userId, value as String, updatedAt)
+                "migration_completed" -> settingsDao.updateMigrationCompleted(userId, value as Boolean, updatedAt)
+                "migration_explanation_seen" -> settingsDao.updateMigrationExplanationSeen(userId, value as Boolean, updatedAt)
                 else -> {
                     // For generic settings, update the entity directly
                     val entity = settingsDao.getUserSettingsSync(userId)

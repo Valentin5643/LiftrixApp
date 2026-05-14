@@ -14,6 +14,7 @@ import androidx.work.workDataOf
 import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.dao.WorkoutDao
+import com.example.liftrix.data.local.dao.FollowRelationshipDao
 import com.example.liftrix.data.local.dao.WorkoutPostDao
 import com.example.liftrix.data.local.entity.SocialProfileEntity
 import com.example.liftrix.data.local.entity.UserProfileEntity
@@ -36,6 +37,7 @@ import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import java.time.Instant
 import java.time.LocalDateTime
+import java.time.LocalDate
 import java.time.ZoneOffset
 import java.util.concurrent.TimeUnit
 
@@ -54,6 +56,7 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
     private val socialProfileDao: SocialProfileDao,
     private val userProfileDao: UserProfileDao,
     private val workoutDao: WorkoutDao,
+    private val followRelationshipDao: FollowRelationshipDao,
     private val firestore: FirebaseFirestore,
     private val gson: Gson
 ) : BaseSyncWorker(context, params) {
@@ -68,6 +71,8 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
         const val WORK_NAME = "workout_post_sync_work"
         private const val MAX_RETRY_COUNT = 3
         private const val PUBLIC_POST_SYNC_LIMIT = 100
+        private const val FOLLOWING_POST_SYNC_LIMIT = 100
+        private val FOLLOWING_FEED_RETENTION_MILLIS = TimeUnit.DAYS.toMillis(1)
         
         fun createWorkRequest(userId: String, forceSync: Boolean = false): OneTimeWorkRequest {
             return OneTimeWorkRequestBuilder<WorkoutPostSyncWorker>()
@@ -150,13 +155,19 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
             } else {
                 0
             }
+            val hydratedFollowingPosts = if (forceSync) {
+                hydrateRecentFollowingPosts(userId)
+            } else {
+                0
+            }
             Timber.i("[POST-SYNC] Hydrated $hydratedPublicPosts public posts for Explore during force sync")
+            Timber.i("[POST-SYNC] Hydrated $hydratedFollowingPosts following posts during force sync")
             
             Timber.i("[POST-SYNC] ✅ Successfully synced $processed/${unsyncedPosts.size} workout posts for user $userId")
             
             return Result.success(
                 Data.Builder()
-                    .putInt(KEY_SYNC_COUNT, processed + hydratedPublicPosts)
+                    .putInt(KEY_SYNC_COUNT, processed + hydratedPublicPosts + hydratedFollowingPosts)
                     .build()
             )
             
@@ -172,6 +183,7 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
     private suspend fun syncPostBatch(posts: List<com.example.liftrix.data.local.entity.WorkoutPostEntity>): Int {
         val postsToUpload = mutableListOf<com.example.liftrix.data.local.entity.WorkoutPostEntity>()
         val collectionRef = firestore.collection("workout_posts")
+        Timber.i("[PUBLIC-LOG] Uploading workout posts to collection=${collectionRef.path}")
         val remoteDocs = FirestorePrefetcher.prefetchByIds(
             collection = collectionRef,
             ids = posts.map { it.id }
@@ -236,6 +248,7 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
         
         postsToUpload.forEach { post ->
             val docRef = collectionRef.document(post.id)
+            val workout = workoutDao.getWorkoutByIdForUser(post.workoutId, post.userId)
             
             // Parse media URLs JSON safely
             val mediaUrls: JsonElement? = post.mediaUrls?.let { 
@@ -259,13 +272,25 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
                 "commentCount" to post.commentCount,
                 "shareCount" to post.shareCount,
                 "saveCount" to post.saveCount,
+                "workoutDuration" to post.workoutDuration,
+                "totalVolume" to post.totalVolume,
+                "exercisesCount" to post.exercisesCount,
+                "prsCount" to post.prsCount,
                 "createdAt" to post.createdAt,
                 "updatedAt" to FieldValue.serverTimestamp(),
                 "syncVersion" to timestamp,
-                "lastModified" to post.lastModified
+                "lastModified" to post.lastModified,
+                "isHidden" to post.isHidden,
+                "hiddenReason" to post.hiddenReason,
+                "hiddenAt" to post.hiddenAt,
+                "hiddenByUserId" to post.hiddenByUserId,
+                "isDeleted" to false,
+                "workoutData" to workout?.toPublicWorkoutData()
             )
             if (post.visibility == "PUBLIC") {
-                Timber.i("[PUBLIC-LOG] Uploading PUBLIC workout post id=${post.id} user=${post.userId} workout=${post.workoutId} likes=${post.likeCount} comments=${post.commentCount}")
+                Timber.i(
+                    "[PUBLIC-LOG] Uploading PUBLIC workout post id=${post.id} collection=${collectionRef.path} user=${post.userId} workout=${post.workoutId} payloadVisibility=${post.visibility} payloadHidden=${post.isHidden} payloadDeleted=false hasWorkoutData=${workout != null} exercisesJsonLength=${workout?.exercisesJson?.length ?: 0} createdAt=${post.createdAt} lastModified=${post.lastModified} likes=${post.likeCount} comments=${post.commentCount}"
+                )
             }
             
             batch.set(docRef, postData, SetOptions.merge())
@@ -289,6 +314,14 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
             )
             postsToUpload.filter { it.visibility == "PUBLIC" }.forEach { post ->
                 Timber.i("[PUBLIC-LOG] Uploaded PUBLIC workout post id=${post.id} syncVersion=$timestamp")
+                try {
+                    val uploadedDoc = collectionRef.document(post.id).get().await()
+                    Timber.i(
+                        "[PUBLIC-LOG] Uploaded PUBLIC Firestore doc id=${post.id} path=${uploadedDoc.reference.path} exists=${uploadedDoc.exists()} visibility=${uploadedDoc.getString("visibility")} isHidden=${uploadedDoc.getBoolean("isHidden")} isDeleted=${uploadedDoc.getBoolean("isDeleted")} createdAt=${uploadedDoc.get("createdAt")} lastModified=${uploadedDoc.get("lastModified")} userId=${uploadedDoc.getString("userId")}"
+                    )
+                } catch (e: Exception) {
+                    Timber.w(e, "[PUBLIC-LOG] Failed to read back uploaded PUBLIC post id=${post.id}")
+                }
             }
             
             Timber.i("[POST-BATCH] 📊 Successfully synced batch of ${postsToUpload.size} workout posts")
@@ -306,26 +339,74 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
     }
 
     private suspend fun hydrateRecentPublicPosts(viewerId: String): Int = withContext(Dispatchers.IO) {
-        val snapshot = firestore.collection("workout_posts")
+        val collectionRef = firestore.collection("workout_posts")
+        Timber.i("[PUBLIC-LOG] Reading public posts from collection=${collectionRef.path} filter visibility=PUBLIC orderBy=createdAt DESC limit=$PUBLIC_POST_SYNC_LIMIT viewer=$viewerId")
+        val snapshot = collectionRef
+            .whereEqualTo("visibility", "PUBLIC")
             .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
             .limit(PUBLIC_POST_SYNC_LIMIT.toLong())
             .get()
             .await()
 
         var hydrated = 0
+        Timber.i("[PUBLIC-LOG] Public hydration query returned=${snapshot.size()} viewer=$viewerId")
         for (doc in snapshot.documents.sortedByDescending { it.data?.longValue("createdAt") ?: 0L }) {
             checkCancellation()
             val post = remotePostToEntity(doc.id, doc.data ?: continue) ?: continue
+            Timber.d(
+                "[PUBLIC-LOG] Public hydration candidate id=${post.id} path=${doc.reference.path} author=${post.userId} visibility=${post.visibility} hidden=${post.isHidden} deleted=${doc.getBoolean("isDeleted")} createdAt=${post.createdAt}"
+            )
             if (post.userId == viewerId || post.visibility != "PUBLIC" || post.isHidden) continue
 
             ensureAuthorProfileForPublicPost(post.userId)
-            ensureWorkoutStubForPublicPost(post)
+            ensureWorkoutForPublicPost(post, doc.data ?: emptyMap())
             postDao.upsertFromRemote(post)
             Timber.i("[PUBLIC-LOG] Hydrated PUBLIC post into local feed id=${post.id} author=${post.userId} viewer=$viewerId")
             hydrated++
         }
 
         Timber.i("[POST-SYNC] Hydrated $hydrated recent PUBLIC posts for Explore")
+        hydrated
+    }
+
+    private suspend fun hydrateRecentFollowingPosts(viewerId: String): Int = withContext(Dispatchers.IO) {
+        val followedUserIds = followRelationshipDao.getFollowingUserIds(viewerId)
+        val homeAuthorIds = (listOf(viewerId) + followedUserIds).distinct()
+        val sinceTimestamp = System.currentTimeMillis() - FOLLOWING_FEED_RETENTION_MILLIS
+        var hydrated = 0
+        for (authorId in homeAuthorIds) {
+            val query = firestore.collection("workout_posts")
+                .whereEqualTo("userId", authorId)
+
+            val visiblePostsQuery = if (authorId == viewerId) {
+                query
+            } else {
+                query.whereIn("visibility", listOf("PUBLIC", "FOLLOWERS"))
+            }
+
+            val snapshot = visiblePostsQuery
+                .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(FOLLOWING_POST_SYNC_LIMIT.toLong())
+                .get()
+                .await()
+
+            for (doc in snapshot.documents.sortedByDescending { it.data?.longValue("createdAt") ?: 0L }) {
+                checkCancellation()
+                val post = remotePostToEntity(doc.id, doc.data ?: continue) ?: continue
+                val isViewerPost = post.userId == viewerId
+                if (post.isHidden) continue
+                if (post.createdAt < sinceTimestamp) continue
+                if (!isViewerPost && post.visibility !in setOf("PUBLIC", "FOLLOWERS")) continue
+
+                ensureAuthorProfileForPublicPost(post.userId)
+                ensureWorkoutForPublicPost(post, doc.data ?: emptyMap())
+                postDao.upsertFromRemote(post)
+                Timber.i("[PUBLIC-LOG] Hydrated home post into local feed id=${post.id} author=${post.userId} viewer=$viewerId visibility=${post.visibility}")
+                hydrated++
+            }
+        }
+
+        Timber.i("[POST-SYNC] Hydrated $hydrated home posts for viewer and followed users")
         hydrated
     }
 
@@ -418,8 +499,20 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
         }
     }
 
-    private suspend fun ensureWorkoutStubForPublicPost(post: WorkoutPostEntity) {
+    private suspend fun ensureWorkoutForPublicPost(post: WorkoutPostEntity, postData: Map<String, Any?>) {
         if (workoutDao.getWorkoutByIdForUser(post.workoutId, post.userId) != null) return
+
+        val embeddedWorkout = (postData["workoutData"] as? Map<*, *>)
+            ?.mapKeys { it.key.toString() }
+            ?.toWorkoutEntity(post)
+        val remoteWorkout = embeddedWorkout ?: fetchRemoteWorkoutForPost(post)
+        if (remoteWorkout != null) {
+            workoutDao.insertWorkout(remoteWorkout)
+            Timber.i(
+                "[PUBLIC-LOG] Hydrated workout details for public post id=${post.id} workout=${post.workoutId} author=${post.userId} source=${if (embeddedWorkout != null) "postPayload" else "authorWorkoutCollection"} exercisesJsonLength=${remoteWorkout.exercisesJson.length}"
+            )
+            return
+        }
 
         val createdAt = Instant.ofEpochMilli(post.createdAt)
         workoutDao.insertWorkout(
@@ -442,6 +535,22 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
                 lastModified = post.lastModified
             )
         )
+        Timber.w("[PUBLIC-LOG] Inserted fallback workout stub for public post id=${post.id} workout=${post.workoutId} author=${post.userId}; details may be sparse")
+    }
+
+    private suspend fun fetchRemoteWorkoutForPost(post: WorkoutPostEntity): WorkoutEntity? {
+        return try {
+            val doc = firestore.collection("users")
+                .document(post.userId)
+                .collection("workouts")
+                .document(post.workoutId)
+                .get()
+                .await()
+            doc.data?.toWorkoutEntity(post)
+        } catch (e: Exception) {
+            Timber.w(e, "[PUBLIC-LOG] Failed to fetch author workout details for public post id=${post.id} workout=${post.workoutId} author=${post.userId}")
+            null
+        }
     }
 
     private fun remotePostToEntity(documentId: String, data: Map<String, Any?>): WorkoutPostEntity? {
@@ -503,5 +612,73 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
             is List<*> -> gson.toJson(value)
             else -> null
         }
+    }
+
+    private fun WorkoutEntity.toPublicWorkoutData(): Map<String, Any?> = mapOf(
+        "id" to id,
+        "userId" to userId,
+        "name" to name,
+        "date" to date.toString(),
+        "exercisesJson" to exercisesJson,
+        "status" to status.name,
+        "startTime" to startTime?.toEpochMilli(),
+        "endTime" to endTime?.toEpochMilli(),
+        "notes" to notes,
+        "templateId" to templateId,
+        "createdAt" to createdAt.toEpochMilli(),
+        "updatedAt" to updatedAt.toEpochMilli(),
+        "syncVersion" to syncVersion,
+        "lastModified" to lastModified
+    )
+
+    private fun Map<String, Any?>.toWorkoutEntity(post: WorkoutPostEntity): WorkoutEntity? {
+        val id = stringValue("id") ?: post.workoutId
+        val userId = stringValue("userId") ?: post.userId
+        val createdAt = instantValue("createdAt") ?: Instant.ofEpochMilli(post.createdAt)
+        val updatedAt = instantValue("updatedAt") ?: Instant.ofEpochMilli(post.updatedAt)
+        return WorkoutEntity(
+            id = id,
+            userId = userId,
+            name = stringValue("name") ?: "Shared workout",
+            date = dateValue("date") ?: LocalDate.ofInstant(createdAt, ZoneOffset.UTC),
+            exercisesJson = stringValue("exercisesJson")
+                ?: stringValue("exercises_json")
+                ?: "[]",
+            status = workoutStatusValue("status"),
+            startTime = instantValue("startTime"),
+            endTime = instantValue("endTime"),
+            notes = stringValue("notes"),
+            templateId = stringValue("templateId"),
+            createdAt = createdAt,
+            updatedAt = updatedAt,
+            isSynced = true,
+            syncVersion = longValue("syncVersion") ?: post.syncVersion,
+            isDirty = false,
+            lastModified = longValue("lastModified") ?: post.lastModified
+        )
+    }
+
+    private fun Map<String, Any?>.instantValue(key: String): Instant? {
+        return when (val value = this[key]) {
+            is Timestamp -> value.toDate().toInstant()
+            is Number -> Instant.ofEpochMilli(value.toLong())
+            is String -> runCatching { Instant.parse(value) }.getOrNull()
+            else -> null
+        }
+    }
+
+    private fun Map<String, Any?>.dateValue(key: String): LocalDate? {
+        return when (val value = this[key]) {
+            is String -> runCatching { LocalDate.parse(value) }.getOrNull()
+            is Timestamp -> LocalDate.ofInstant(value.toDate().toInstant(), ZoneOffset.UTC)
+            is Number -> LocalDate.ofInstant(Instant.ofEpochMilli(value.toLong()), ZoneOffset.UTC)
+            else -> null
+        }
+    }
+
+    private fun Map<String, Any?>.workoutStatusValue(key: String): WorkoutStatus {
+        return runCatching {
+            WorkoutStatus.valueOf(stringValue(key) ?: WorkoutStatus.COMPLETED.name)
+        }.getOrDefault(WorkoutStatus.COMPLETED)
     }
 }

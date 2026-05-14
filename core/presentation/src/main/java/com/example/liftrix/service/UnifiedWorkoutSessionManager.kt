@@ -781,6 +781,7 @@ data class SerializableSession(
 @Serializable
 data class SerializableSessionExercise(
     val exerciseId: String,
+    val libraryExerciseId: String? = null,
     val name: String,
     val category: String,
     val primaryMuscle: String,
@@ -826,6 +827,7 @@ private fun UnifiedWorkoutSession.toSerializable(): SerializableSession {
 private fun SessionExercise.toSerializable(): SerializableSessionExercise {
     return SerializableSessionExercise(
         exerciseId = exerciseId.value,
+        libraryExerciseId = libraryExerciseId.value,
         name = name,
         category = category.name,
         primaryMuscle = primaryMuscle.name,
@@ -870,6 +872,7 @@ private fun SerializableSession.toUnifiedWorkoutSession(): UnifiedWorkoutSession
 private fun SerializableSessionExercise.toSessionExercise(): SessionExercise {
     return SessionExercise(
         exerciseId = ExerciseId(exerciseId),
+        libraryExerciseId = ExerciseId(libraryExerciseId ?: exerciseId),
         name = name,
         category = ExerciseCategory.valueOf(category),
         primaryMuscle = ExerciseCategory.valueOf(primaryMuscle),

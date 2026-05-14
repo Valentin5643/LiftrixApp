@@ -307,6 +307,7 @@ private fun convertWorkoutToUnifiedSession(workout: Workout): UnifiedWorkoutSess
     val sessionExercises = workout.exercises.mapIndexed { index, exercise ->
         SessionExercise(
             exerciseId = exercise.id,
+            libraryExerciseId = ExerciseId.fromString(exercise.libraryExercise.id),
             name = exercise.libraryExercise.name,
             category = exercise.libraryExercise.primaryMuscleGroup,
             primaryMuscle = exercise.libraryExercise.primaryMuscleGroup,

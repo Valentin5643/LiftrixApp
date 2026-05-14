@@ -141,7 +141,7 @@ fun PostCreationScreen(
                         .fillMaxWidth()
                         .padding(16.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = LiftrixColorsV2.surfaceVariant
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 ) {
                     Row(
@@ -229,7 +229,7 @@ fun PostCreationScreen(
                                 .fillMaxWidth()
                                 .height(120.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(LiftrixColorsV2.surfaceVariant)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .clickable { mediaPickerLauncher.launch("image/*") },
                             contentAlignment = Alignment.Center
                         ) {
@@ -240,7 +240,7 @@ fun PostCreationScreen(
                                     Icons.Default.AddPhotoAlternate,
                                     contentDescription = "Add photos",
                                     modifier = Modifier.size(32.dp),
-                                    tint = LiftrixColorsV2.primary
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
@@ -445,7 +445,7 @@ private fun AddMediaButton(
             .size(100.dp)
             .clickable { onClick() },
         colors = CardDefaults.cardColors(
-            containerColor = LiftrixColorsV2.surfaceVariant
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
         shape = RoundedCornerShape(12.dp)
     ) {
@@ -457,7 +457,7 @@ private fun AddMediaButton(
                 Icons.Default.Add,
                 contentDescription = "Add more photos",
                 modifier = Modifier.size(32.dp),
-                tint = LiftrixColorsV2.primary
+                tint = MaterialTheme.colorScheme.primary
             )
         }
     }
@@ -481,7 +481,7 @@ private fun PrivacyOption(
             selected = isSelected,
             onClick = onSelect,
             colors = RadioButtonDefaults.colors(
-                selectedColor = LiftrixColorsV2.primary
+                selectedColor = MaterialTheme.colorScheme.primary
             )
         )
         Spacer(modifier = Modifier.width(12.dp))

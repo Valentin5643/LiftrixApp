@@ -513,8 +513,7 @@ private fun GeneralSettings(
             val newUnit = if (useMetric) WeightUnit.KILOGRAMS else WeightUnit.POUNDS
             stableOnEvent(SettingsEvent.UpdateWeightUnit(newUnit))
         }}
-        
-        
+
         SettingsToggleItem(
             title = "Dark Mode",
             subtitle = "Use dark theme throughout the app",
@@ -534,7 +533,7 @@ private fun GeneralSettings(
                 stableOnNavigateToNotifications?.invoke()
             }
         )
-        
+
         if (uiState.isAdmin && onNavigateToAIChatSettings != null) {
             SettingsNavigationItem(
                 title = "AI Chat Settings",

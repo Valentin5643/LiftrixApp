@@ -170,14 +170,14 @@ data class UnifiedWorkoutSession(
             }
             SessionStatus.PAUSED -> elapsedTimeSeconds
             SessionStatus.COMPLETED -> {
-                endedAt?.let { end ->
+                elapsedTimeSeconds.takeIf { it > 0L } ?: endedAt?.let { end ->
                     end.epochSecond - startedAt.epochSecond
-                } ?: elapsedTimeSeconds
+                } ?: 0L
             }
             SessionStatus.FAILED_TO_SAVE -> {
-                endedAt?.let { end ->
+                elapsedTimeSeconds.takeIf { it > 0L } ?: endedAt?.let { end ->
                     end.epochSecond - startedAt.epochSecond
-                } ?: elapsedTimeSeconds
+                } ?: 0L
             }
         }
     }
@@ -403,6 +403,14 @@ data class UnifiedWorkoutSession(
         Timber.d("[SETS-DEBUG-6d] Final workout has ${completedExercises.size} completed exercises")
 
 
+        val completedEndTime = endedAt ?: Instant.now()
+        val completedDurationSeconds = getTotalDurationSeconds().coerceAtLeast(0)
+        val completedStartTime = when {
+            completedDurationSeconds > 0L -> completedEndTime.minusSeconds(completedDurationSeconds)
+            completedEndTime.isAfter(startedAt) -> startedAt
+            else -> completedEndTime.minusNanos(1_000_000)
+        }
+
         return Workout(
             id = WorkoutId(id.value), // Keep session ID for workout tracking
             userId = userId,
@@ -411,8 +419,8 @@ data class UnifiedWorkoutSession(
             exercises = completedExercises,
             status = WorkoutStatus.COMPLETED,
             templateId = templateId?.let { WorkoutId(it.toString()) },
-            startTime = startedAt,
-            endTime = endedAt ?: Instant.now(),
+            startTime = completedStartTime,
+            endTime = completedEndTime,
             createdAt = startedAt,
             updatedAt = lastModified,
             notes = notes

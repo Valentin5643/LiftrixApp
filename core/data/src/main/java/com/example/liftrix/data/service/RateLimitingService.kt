@@ -54,18 +54,27 @@ class RateLimitingService @Inject constructor(
     override suspend fun checkLimits(userId: String): RateLimitStatus {
         try {
             // Get configurable thresholds from Remote Config
-            val maxDailyMessages = remoteConfig.getLong("ai_max_daily_messages").getOrDefault(DEFAULT_DAILY_MESSAGES.toLong()).toInt()
-            val maxMonthlyTokens = remoteConfig.getLong("ai_max_monthly_tokens").getOrDefault(DEFAULT_MONTHLY_TOKENS.toLong()).toInt()
+            val remoteMaxDailyMessages = remoteConfig.getLong("ai_max_daily_messages").getOrDefault(DEFAULT_DAILY_MESSAGES.toLong()).toInt()
+            val remoteMaxMonthlyTokens = remoteConfig.getLong("ai_max_monthly_tokens").getOrDefault(DEFAULT_MONTHLY_TOKENS.toLong()).toInt()
             val costThreshold = remoteConfig.getDouble("ai_cost_threshold_per_hour").getOrDefault(DEFAULT_COST_THRESHOLD_PER_HOUR)
             val rateLimitEnabled = remoteConfig.getBoolean("ai_rate_limit_enabled").getOrDefault(true)
             val todayUsage = getTodayMessageUsage(userId)
             val monthlyUsage = getMonthlyTokenUsage(userId)
             val todayMessagesUsed = todayUsage.count
             val monthlyTokensUsed = monthlyUsage.count
+            val localUsageLimits = chatRepository.checkUsageLimits(userId).getOrNull()
+            val maxDailyMessages = localUsageLimits
+                ?.let { todayMessagesUsed + it.dailyMessagesRemaining }
+                ?: remoteMaxDailyMessages
+            val maxMonthlyTokens = localUsageLimits
+                ?.let { monthlyTokensUsed + it.monthlyTokensRemaining }
+                ?: remoteMaxMonthlyTokens
             val dailyMessagesRemaining = (maxDailyMessages - todayMessagesUsed).coerceAtLeast(0)
             val monthlyTokensRemaining = (maxMonthlyTokens - monthlyTokensUsed).coerceAtLeast(0)
-            val isNearDailyLimit = todayMessagesUsed >= (maxDailyMessages * WARNING_THRESHOLD_PERCENTAGE).toInt()
-            val isNearMonthlyLimit = monthlyTokensUsed >= (maxMonthlyTokens * WARNING_THRESHOLD_PERCENTAGE).toInt()
+            val isNearDailyLimit = localUsageLimits?.isNearDailyLimit
+                ?: (todayMessagesUsed >= (maxDailyMessages * WARNING_THRESHOLD_PERCENTAGE).toInt())
+            val isNearMonthlyLimit = localUsageLimits?.isNearMonthlyLimit
+                ?: (monthlyTokensUsed >= (maxMonthlyTokens * WARNING_THRESHOLD_PERCENTAGE).toInt())
             val subscriptionSnapshot = getSubscriptionSnapshot(userId)
             logMonthlyUsageState(
                 userId = userId,
