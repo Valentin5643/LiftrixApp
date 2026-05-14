@@ -209,3 +209,6 @@ build-cache/
 feature/settings/build/outputs
 **/tmp/compileDebugJavaWithJavac
 **/tmp/kotlin-classes/
+
+# InfoEducatie deliverables should be visible to Git.
+!/00_InfoEducatie_2026/**
