@@ -63,6 +63,9 @@ class FollowRepositoryImpl @Inject constructor(
         private const val REQUEST_EXPIRATION_DAYS = 30L
     }
 
+    private fun relationshipId(followerId: String, followingId: String): String =
+        "${followerId}_${followingId}"
+
     // ========================================
     // Follow Request Management
     // ========================================
@@ -121,7 +124,7 @@ class FollowRepositoryImpl @Inject constructor(
             }
             
             val currentTime = System.currentTimeMillis()
-            val relationshipId = UUID.randomUUID().toString()
+            val relationshipId = relationshipId(followerId, targetUserId)
             
             if (targetProfile.isPrivate) {
                 // Private profile - create pending request

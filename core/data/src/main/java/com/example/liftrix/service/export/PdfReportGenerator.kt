@@ -10,9 +10,11 @@ import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.model.export.ProgressReportData
 import timber.log.Timber
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.*
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -129,6 +131,397 @@ class PdfReportGenerator @Inject constructor() {
                 pdfDocument.close()
             }
         }
+    }
+
+    suspend fun generateChartlessProgressReport(
+        reportData: ProgressReportData
+    ): LiftrixResult<ByteArray> {
+        return liftrixCatching(
+            errorMapper = { exception ->
+                LiftrixError.ExportError(
+                    errorMessage = "PDF generation failed: ${exception.message}",
+                    operation = "generateChartlessProgressReport",
+                    format = "PDF"
+                )
+            }
+        ) {
+            val pdfDocument = PdfDocument()
+            val pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH.toInt(), PAGE_HEIGHT.toInt(), 1).create()
+            try {
+                drawProgressSummaryPage(pdfDocument, pageInfo, reportData)
+                drawProgressStrengthPage(pdfDocument, pageInfo, reportData)
+                drawProgressVolumePage(pdfDocument, pageInfo, reportData)
+                drawProgressConsistencyPage(pdfDocument, pageInfo, reportData)
+                drawProgressRecordsPage(pdfDocument, pageInfo, reportData)
+                drawProgressCoachPage(pdfDocument, pageInfo, reportData)
+
+                val outputStream = ByteArrayOutputStream()
+                pdfDocument.writeTo(outputStream)
+                outputStream.toByteArray()
+            } finally {
+                pdfDocument.close()
+            }
+        }
+    }
+
+    private fun drawProgressSummaryPage(
+        pdfDocument: PdfDocument,
+        pageInfo: PdfDocument.PageInfo,
+        data: ProgressReportData
+    ) {
+        val page = pdfDocument.startPage(pageInfo)
+        try {
+            val canvas = page.canvas
+            drawProgressPageChrome(canvas, "Liftrix Progress Report", 1)
+            var y = MARGIN_TOP + 45f
+            y = drawWrappedText(canvas, data.title, MARGIN_LEFT, y, CONTENT_WIDTH, createPaint(TITLE_SIZE, TEXT_PRIMARY, Typeface.DEFAULT_BOLD), 30f)
+            y += 14f
+            y = drawKeyValue(canvas, "Generated", data.generatedAt.format(DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm")), y)
+            y = drawKeyValue(canvas, "Range", "${data.range.start} to ${data.range.end}", y)
+            y = drawKeyValue(canvas, "Source", "Generated offline from local training data", y)
+            y = drawKeyValue(canvas, "Sync", formatSyncStatus(data), y)
+            y += 20f
+            val metrics = listOf(
+                "Workouts" to data.summary.workoutsCompleted.toString(),
+                "Total volume" to "${"%.0f".format(data.summary.totalVolumeKg)} kg",
+                "Active days" to data.summary.activeTrainingDays.toString(),
+                "New PRs" to data.summary.newPersonalRecords.toString(),
+                "Best streak" to "${data.summary.bestStreakDays} days",
+                "1RM gain" to (data.summary.estimatedOneRmImprovementKg?.let { "${"%.1f".format(it)} kg" } ?: "Not enough data")
+            )
+            drawMetricGrid(canvas, y, metrics)
+        } finally {
+            pdfDocument.finishPage(page)
+        }
+    }
+
+    private fun drawProgressStrengthPage(
+        pdfDocument: PdfDocument,
+        pageInfo: PdfDocument.PageInfo,
+        data: ProgressReportData
+    ) {
+        val page = pdfDocument.startPage(pageInfo)
+        try {
+            val canvas = page.canvas
+            drawProgressPageChrome(canvas, "Strength Progress", 2)
+            var y = MARGIN_TOP + 55f
+            y = drawTable(
+                canvas = canvas,
+                yPosition = y,
+                headers = listOf("Exercise", "Start 1RM", "Best 1RM", "Gain"),
+                rows = data.strengthRows.map {
+                    listOf(
+                        it.exerciseName,
+                        "${"%.1f".format(it.startEstimatedOneRmKg)} kg",
+                        "${"%.1f".format(it.bestEstimatedOneRmKg)} kg",
+                        "${"%.1f".format(it.improvementKg)} kg"
+                    )
+                }.ifEmpty { listOf(listOf("Not enough strength data yet", "-", "-", "-")) }
+            )
+            y += 24f
+            drawWrappedText(
+                canvas,
+                data.strengthRows.firstOrNull()?.let { "Top strength improvement came from ${it.exerciseName}, with an estimated ${"%.1f".format(it.improvementKg)} kg increase." }
+                    ?: "Complete more weighted sets to unlock strength progression insights.",
+                MARGIN_LEFT,
+                y,
+                CONTENT_WIDTH,
+                createPaint(BODY_SIZE, TEXT_SECONDARY, Typeface.DEFAULT),
+                18f
+            )
+        } finally {
+            pdfDocument.finishPage(page)
+        }
+    }
+
+    private fun drawProgressVolumePage(
+        pdfDocument: PdfDocument,
+        pageInfo: PdfDocument.PageInfo,
+        data: ProgressReportData
+    ) {
+        val page = pdfDocument.startPage(pageInfo)
+        try {
+            val canvas = page.canvas
+            drawProgressPageChrome(canvas, "Training Volume Analysis", 3)
+            var y = MARGIN_TOP + 55f
+            y = drawTable(
+                canvas,
+                y,
+                listOf("Week", "Workouts", "Volume", "Sets"),
+                data.weeklyVolumeRows.map {
+                    listOf(it.weekLabel, it.workoutCount.toString(), "${"%.0f".format(it.totalVolumeKg)} kg", it.setCount.toString())
+                }.ifEmpty { listOf(listOf("No weekly volume", "-", "-", "-")) }
+            )
+            y += 24f
+            y = drawTable(
+                canvas,
+                y,
+                listOf("Muscle group", "Volume", "Exercises", "Sets"),
+                data.muscleGroupRows.map {
+                    listOf(it.muscleGroup, "${"%.0f".format(it.totalVolumeKg)} kg", it.exerciseCount.toString(), it.setCount.toString())
+                }.ifEmpty { listOf(listOf("No muscle data", "-", "-", "-")) }
+            )
+            y += 20f
+            drawWrappedText(
+                canvas,
+                "Volume is calculated from local completed sets only. Rows are summarized to keep the report within six pages.",
+                MARGIN_LEFT,
+                y,
+                CONTENT_WIDTH,
+                createPaint(BODY_SIZE, TEXT_SECONDARY, Typeface.DEFAULT),
+                18f
+            )
+        } finally {
+            pdfDocument.finishPage(page)
+        }
+    }
+
+    private fun drawProgressConsistencyPage(
+        pdfDocument: PdfDocument,
+        pageInfo: PdfDocument.PageInfo,
+        data: ProgressReportData
+    ) {
+        val page = pdfDocument.startPage(pageInfo)
+        try {
+            val canvas = page.canvas
+            drawProgressPageChrome(canvas, "Consistency", 4)
+            var y = MARGIN_TOP + 55f
+            y = drawKeyValue(canvas, "Average workouts per week", "%.1f".format(data.summary.averageWorkoutsPerWeek), y)
+            y = drawKeyValue(canvas, "Best streak", "${data.summary.bestStreakDays} days", y)
+            y = drawKeyValue(canvas, "Average duration", data.summary.averageDurationMinutes?.let { "$it minutes" } ?: "Not enough data", y)
+            y += 18f
+            y = drawTable(
+                canvas,
+                y,
+                listOf("Week", "Workouts", "Active days"),
+                data.consistencyRows.map {
+                    listOf(it.weekLabel, it.workoutCount.toString(), it.activeDays.toString())
+                }.ifEmpty { listOf(listOf("No consistency data", "-", "-")) }
+            )
+            y += 20f
+            drawWrappedText(
+                canvas,
+                if (data.summary.averageWorkoutsPerWeek >= 3.0) "Training frequency is strong for this range." else "A repeatable weekly schedule would improve consistency.",
+                MARGIN_LEFT,
+                y,
+                CONTENT_WIDTH,
+                createPaint(BODY_SIZE, TEXT_SECONDARY, Typeface.DEFAULT),
+                18f
+            )
+        } finally {
+            pdfDocument.finishPage(page)
+        }
+    }
+
+    private fun drawProgressRecordsPage(
+        pdfDocument: PdfDocument,
+        pageInfo: PdfDocument.PageInfo,
+        data: ProgressReportData
+    ) {
+        val page = pdfDocument.startPage(pageInfo)
+        try {
+            val canvas = page.canvas
+            drawProgressPageChrome(canvas, "Personal Records", 5)
+            var y = MARGIN_TOP + 55f
+            y = drawBadgeRow(canvas, y, data)
+            y += 20f
+            y = drawTable(
+                canvas,
+                y,
+                listOf("Date", "Exercise", "New PR", "Previous"),
+                data.personalRecordRows.map {
+                    listOf(it.date.toString(), it.exerciseName, "${it.recordType}: ${it.newValue}", it.previousValue ?: "-")
+                }.ifEmpty { listOf(listOf("No new records", "-", "-", "-")) }
+            )
+            if (data.workoutRows.size >= 24) {
+                y += 16f
+                drawWrappedText(
+                    canvas,
+                    "Additional workouts omitted to keep this report within 6 pages.",
+                    MARGIN_LEFT,
+                    y,
+                    CONTENT_WIDTH,
+                    createPaint(CAPTION_SIZE, TEXT_SECONDARY, Typeface.DEFAULT),
+                    16f
+                )
+            }
+        } finally {
+            pdfDocument.finishPage(page)
+        }
+    }
+
+    private fun drawProgressCoachPage(
+        pdfDocument: PdfDocument,
+        pageInfo: PdfDocument.PageInfo,
+        data: ProgressReportData
+    ) {
+        val page = pdfDocument.startPage(pageInfo)
+        try {
+            val canvas = page.canvas
+            drawProgressPageChrome(canvas, "AI Coach Summary", 6)
+            var y = MARGIN_TOP + 55f
+            y = drawWrappedText(canvas, data.aiSummary.summary, MARGIN_LEFT, y, CONTENT_WIDTH, createPaint(BODY_SIZE, TEXT_PRIMARY, Typeface.DEFAULT), 18f)
+            y += 22f
+            canvas.drawText("Next week", MARGIN_LEFT, y, createPaint(SUBHEADING_SIZE, TEXT_PRIMARY, Typeface.DEFAULT_BOLD))
+            y += 24f
+            val recommendations = data.aiSummary.recommendations.ifEmpty { listOf("Complete more workouts to unlock deeper insights.") }
+            recommendations.take(3).forEachIndexed { index, recommendation ->
+                y = drawWrappedText(canvas, "${index + 1}. $recommendation", MARGIN_LEFT + 12f, y, CONTENT_WIDTH - 12f, createPaint(BODY_SIZE, TEXT_SECONDARY, Typeface.DEFAULT), 18f)
+            }
+            y += 20f
+            canvas.drawText("Context used", MARGIN_LEFT, y, createPaint(SUBHEADING_SIZE, TEXT_PRIMARY, Typeface.DEFAULT_BOLD))
+            y += 24f
+            data.aiSummary.contextUsed.take(6).forEach { context ->
+                y = drawWrappedText(canvas, "- $context", MARGIN_LEFT + 12f, y, CONTENT_WIDTH - 12f, createPaint(BODY_SIZE, TEXT_SECONDARY, Typeface.DEFAULT), 18f)
+            }
+            y += 20f
+            drawWrappedText(
+                canvas,
+                "This local summary is generated from training data on this device and is not medical advice.",
+                MARGIN_LEFT,
+                y,
+                CONTENT_WIDTH,
+                createPaint(CAPTION_SIZE, TEXT_SECONDARY, Typeface.DEFAULT),
+                16f
+            )
+        } finally {
+            pdfDocument.finishPage(page)
+        }
+    }
+
+    private fun drawProgressPageChrome(canvas: Canvas, title: String, pageNumber: Int) {
+        canvas.drawColor(Color.WHITE)
+        val titlePaint = createPaint(HEADING_SIZE, TEXT_PRIMARY, Typeface.DEFAULT_BOLD)
+        val accentPaint = Paint().apply {
+            color = PRIMARY_COLOR
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        canvas.drawRect(0f, 0f, PAGE_WIDTH, 14f, accentPaint)
+        canvas.drawText(title, MARGIN_LEFT, MARGIN_TOP - 20f, titlePaint)
+        drawProgressReportFooter(canvas, pageNumber)
+    }
+
+    private fun drawMetricGrid(canvas: Canvas, yPosition: Float, metrics: List<Pair<String, String>>) {
+        val cardPaint = Paint().apply {
+            color = BACKGROUND_COLOR
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        val labelPaint = createPaint(CAPTION_SIZE, TEXT_SECONDARY, Typeface.DEFAULT)
+        val valuePaint = createPaint(SUBHEADING_SIZE, PRIMARY_COLOR, Typeface.DEFAULT_BOLD)
+        val cardWidth = (CONTENT_WIDTH - 18f) / 2f
+        val cardHeight = 74f
+        metrics.forEachIndexed { index, metric ->
+            val column = index % 2
+            val row = index / 2
+            val left = MARGIN_LEFT + column * (cardWidth + 18f)
+            val top = yPosition + row * (cardHeight + 16f)
+            canvas.drawRoundRect(android.graphics.RectF(left, top, left + cardWidth, top + cardHeight), 8f, 8f, cardPaint)
+            canvas.drawText(metric.first, left + 14f, top + 24f, labelPaint)
+            canvas.drawText(metric.second, left + 14f, top + 52f, valuePaint)
+        }
+    }
+
+    private fun drawKeyValue(canvas: Canvas, label: String, value: String, yPosition: Float): Float {
+        canvas.drawText(label, MARGIN_LEFT, yPosition, createPaint(BODY_SIZE, TEXT_SECONDARY, Typeface.DEFAULT_BOLD))
+        canvas.drawText(value, MARGIN_LEFT + 190f, yPosition, createPaint(BODY_SIZE, TEXT_PRIMARY, Typeface.DEFAULT))
+        return yPosition + 24f
+    }
+
+    private fun drawTable(
+        canvas: Canvas,
+        yPosition: Float,
+        headers: List<String>,
+        rows: List<List<String>>
+    ): Float {
+        val headerPaint = createPaint(CAPTION_SIZE, TEXT_PRIMARY, Typeface.DEFAULT_BOLD)
+        val bodyPaint = createPaint(CAPTION_SIZE, TEXT_SECONDARY, Typeface.DEFAULT)
+        val rowPaint = Paint().apply {
+            color = 0xFFF1F3F4.toInt()
+            style = Paint.Style.FILL
+        }
+        val columns = headers.size.coerceAtLeast(1)
+        val colWidth = CONTENT_WIDTH / columns
+        var y = yPosition
+        canvas.drawRoundRect(android.graphics.RectF(MARGIN_LEFT, y - 16f, MARGIN_LEFT + CONTENT_WIDTH, y + 10f), 6f, 6f, rowPaint)
+        headers.forEachIndexed { index, header ->
+            canvas.drawText(header.take(22), MARGIN_LEFT + index * colWidth + 6f, y, headerPaint)
+        }
+        y += 24f
+        rows.take(12).forEach { row ->
+            row.take(columns).forEachIndexed { index, value ->
+                canvas.drawText(value.take(24), MARGIN_LEFT + index * colWidth + 6f, y, bodyPaint)
+            }
+            y += 22f
+        }
+        return y
+    }
+
+    private fun drawBadgeRow(canvas: Canvas, yPosition: Float, data: ProgressReportData): Float {
+        val badges = buildList {
+            if (data.personalRecordRows.any { it.recordType.contains("ONE", ignoreCase = true) }) add("New Strength PR")
+            if (data.personalRecordRows.any { it.recordType.contains("VOLUME", ignoreCase = true) }) add("Volume PR")
+            if (data.summary.bestStreakDays >= 3) add("Consistency PR")
+            if (isEmpty()) add("No new PR badges")
+        }
+        val badgePaint = Paint().apply {
+            color = 0xFFE8F5F3.toInt()
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        val textPaint = createPaint(CAPTION_SIZE, PRIMARY_COLOR, Typeface.DEFAULT_BOLD)
+        var x = MARGIN_LEFT
+        badges.forEach { badge ->
+            val width = textPaint.measureText(badge) + 24f
+            canvas.drawRoundRect(android.graphics.RectF(x, yPosition - 16f, x + width, yPosition + 10f), 12f, 12f, badgePaint)
+            canvas.drawText(badge, x + 12f, yPosition, textPaint)
+            x += width + 10f
+        }
+        return yPosition + 24f
+    }
+
+    private fun drawWrappedText(
+        canvas: Canvas,
+        text: String,
+        x: Float,
+        yPosition: Float,
+        maxWidth: Float,
+        paint: Paint,
+        lineHeight: Float
+    ): Float {
+        var y = yPosition
+        var line = ""
+        text.split(" ").forEach { word ->
+            val candidate = if (line.isEmpty()) word else "$line $word"
+            if (paint.measureText(candidate) > maxWidth && line.isNotEmpty()) {
+                canvas.drawText(line, x, y, paint)
+                y += lineHeight
+                line = word
+            } else {
+                line = candidate
+            }
+        }
+        if (line.isNotEmpty()) {
+            canvas.drawText(line, x, y, paint)
+            y += lineHeight
+        }
+        return y
+    }
+
+    private fun drawProgressReportFooter(canvas: Canvas, pageNumber: Int) {
+        val footerPaint = createPaint(CAPTION_SIZE, TEXT_SECONDARY, Typeface.DEFAULT)
+        val footerText = "Generated by Liftrix · page $pageNumber / 6"
+        val textWidth = footerPaint.measureText(footerText)
+        canvas.drawText(footerText, PAGE_WIDTH / 2 - textWidth / 2, PAGE_HEIGHT - MARGIN_BOTTOM + 20f, footerPaint)
+    }
+
+    private fun formatSyncStatus(data: ProgressReportData): String {
+        val pending = if (data.syncStatus.pendingSyncItems == 0) "No pending sync items" else "${data.syncStatus.pendingSyncItems} pending sync items"
+        val lastSync = data.syncStatus.lastSyncTimestampMillis?.let {
+            SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(it))
+        } ?: "Never synced"
+        return "$pending, last sync: $lastSync"
     }
     
     /**

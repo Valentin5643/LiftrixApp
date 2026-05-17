@@ -125,6 +125,18 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                 Timber.d("🔥 FOLLOW-SYNC-FIX: Restored $restoredCount follow relationships from Firebase")
             }
 
+            if (restoreFromFirebase) {
+                val localRelationshipCount = followDao.getTotalRelationshipCount(userId)
+                val relatedProfileFetchCount = fetchMissingProfilesForRelationships(userId)
+                return@withContext Result.success(
+                    Data.Builder()
+                        .putInt(KEY_SYNC_COUNT, localRelationshipCount)
+                        .putInt("profile_fetch_count", relatedProfileFetchCount)
+                        .putString("operation", "restore_from_firebase")
+                        .build()
+                )
+            }
+
             val unsyncedRelationships = if (useDirtyFlagGating) {
                 followDao.getDirtyFollowRelationships(userId)
             } else {
@@ -211,7 +223,18 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
             }
 
             if (relationship.followingId == userId && relationship.status == "ACCEPTED") {
-                relationshipsToAccept.add(relationship)
+                val remoteRelationshipId = relationshipId(relationship.followerId, relationship.followingId)
+                val remoteRelationship = collectionRef.document(remoteRelationshipId).get().await()
+                if (remoteRelationship.exists() && remoteRelationship.getString("status") == "ACCEPTED") {
+                    relationshipsToMarkClean.add(relationship)
+                } else if (remoteRelationship.exists() && remoteRelationship.getString("status") == "PENDING") {
+                    relationshipsToAccept.add(relationship)
+                } else {
+                    Timber.w(
+                        "PROFILE_FOLLOW_ACCEPT_SKIP userId=$userId relationshipId=${relationship.id} " +
+                            "remoteRelationshipId=$remoteRelationshipId reason=missing_or_not_pending"
+                    )
+                }
                 continue
             }
         }
@@ -229,11 +252,12 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                     "followerId=${relationship.followerId} followingId=${relationship.followingId} " +
                     "status=${relationship.status} createdAt=${relationship.createdAt}"
             )
-            // Add relationship document to Firestore
-            val docRef = collectionRef.document(relationship.id)
+            // Use the deterministic ID expected by Firestore rules for follower-only content reads.
+            val remoteRelationshipId = relationshipId(relationship.followerId, relationship.followingId)
+            val docRef = collectionRef.document(remoteRelationshipId)
             
             val relationshipData = mapOf(
-                "id" to relationship.id,
+                "id" to remoteRelationshipId,
                 "followerId" to relationship.followerId,
                 "followingId" to relationship.followingId,
                 "status" to relationship.status,
@@ -285,7 +309,8 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                     "followerId=${relationship.followerId} followingId=${relationship.followingId} " +
                     "status=${relationship.status} acceptedAt=${relationship.acceptedAt}"
             )
-            val docRef = collectionRef.document(relationship.id)
+            val remoteRelationshipId = relationshipId(relationship.followerId, relationship.followingId)
+            val docRef = collectionRef.document(remoteRelationshipId)
             val updateData = mapOf(
                 "status" to relationship.status,
                 "acceptedAt" to relationship.acceptedAt,
@@ -437,12 +462,7 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                 }
             }
             
-            if (dirtyRelationships.isEmpty() && restoredRelationships.isNotEmpty()) {
-                val clearedCount = followDao.deleteAllRelationshipsForUser(userId)
-                Timber.w(
-                    "PROFILE_FOLLOW_RESTORE_CLEAR userId=$userId clearedCount=$clearedCount reason=no_dirty_local_state"
-                )
-            } else if (dirtyRelationships.isEmpty() && restoredRelationships.isEmpty() && localRelationshipCount > 0) {
+            if (dirtyRelationships.isEmpty() && restoredRelationships.isEmpty() && localRelationshipCount > 0) {
                 Timber.w(
                     "PROFILE_FOLLOW_RESTORE_CLEAR_SKIP userId=$userId reason=remote_empty localCount=$localRelationshipCount"
                 )
@@ -453,10 +473,9 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                 val insertedCount = safeFollowDao.insertFollowRelationshipsWithUserValidation(restoredRelationships)
                 Timber.i("🔥 FOLLOW-SYNC-FIX: Successfully restored $insertedCount/${restoredRelationships.size} follow relationships from Firebase with user validation")
 
-                // ✅ DUPLICATE-PREVENTION-FIX: Removed redundant upsertFromRemote() loop
-                // The insertFollowRelationshipsWithUserValidation() call above already handles insertion
+                // Restore is strictly remote-to-local. Outbound relationship writes belong
+                // to explicit local follow actions, not login/startup restoration.
 
-                // 🔥 FIX: Actively fetch and cache missing user profiles for restored relationships
                 val allUserIds = restoredRelationships.flatMap { listOf(it.followerId, it.followingId) }.distinct()
                 val missingUserIds = mutableListOf<String>()
                 
@@ -488,7 +507,7 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
             
         } catch (e: Exception) {
             Timber.e(e, "🔥 FOLLOW-SYNC-FIX: Failed to restore follow relationships from Firebase for user $userId")
-            0
+            throw e
         }
     }
 
@@ -541,6 +560,9 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
         val fetchedCount: Int,
         val missingUserIds: List<String>
     )
+
+    private fun relationshipId(followerId: String, followingId: String): String =
+        "${followerId}_${followingId}"
 
     private suspend fun fetchMissingUserProfiles(userIds: List<String>): FetchProfilesResult {
         return try {

@@ -345,7 +345,6 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation("com.google.android.material:material:1.13.0")  // Latest Material Components for XML themes
-    implementation("androidx.compose.material3:material3:1.3.1")   // Explicit Material3 for Compose
     implementation("androidx.compose.runtime:runtime-livedata")
     implementation("androidx.compose.runtime:runtime-tracing")
     implementation(libs.androidx.material3.window.size.util)

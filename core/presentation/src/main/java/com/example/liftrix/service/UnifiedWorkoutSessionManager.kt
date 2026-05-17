@@ -3,6 +3,7 @@ package com.example.liftrix.service
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import com.example.liftrix.domain.model.Equipment
@@ -518,8 +519,25 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         failedSessionState: UnifiedWorkoutSession
     ): Boolean {
         return try {
+            sessionForPersistence.exercises.forEach { exercise ->
+                exercise.sets
+                    .filter { set -> set.completedAt != null || set.actualWeight != null || set.actualReps != null }
+                    .forEach { set ->
+                        Log.d(
+                            "PREV_SAVE",
+                            "Saving set: exerciseId=${exercise.libraryExerciseId.value} sessionExerciseId=${exercise.exerciseId.value} " +
+                                "weight=${set.actualWeight?.kilograms ?: set.targetWeight?.kilograms} reps=${set.actualReps ?: set.targetReps} completedAt=${set.completedAt}"
+                        )
+                    }
+            }
             completeWorkoutSessionUseCase(sessionForPersistence).fold(
                 onSuccess = { result ->
+                    sessionForPersistence.exercises.forEach { exercise ->
+                        Log.d(
+                            "PREV_DB_WRITE",
+                            "DB write completed for ${exercise.libraryExerciseId.value} workoutId=${result.savedWorkoutId}"
+                        )
+                    }
                     Timber.d(
                         "[WORKOUT-DEBUG] completion save success workoutId=${result.savedWorkoutId} " +
                             "userId=${sessionForPersistence.userId}"

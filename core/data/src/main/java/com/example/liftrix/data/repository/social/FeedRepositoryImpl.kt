@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.withContext
 import com.example.liftrix.core.json.ExerciseJsonParser
 import com.google.gson.annotations.SerializedName
@@ -89,72 +90,57 @@ class FeedRepositoryImpl @Inject constructor(
                     Timber.w(e, "[WORKOUT-POSTS] Failed to enqueue following post hydration")
                 }
 
-                // Get the list of users that the current user follows
-                // Include the current user's own posts in their home feed
-                val followedUserIds = withContext(Dispatchers.IO) {
-                    // First try to get from database
-                    val followedIds = followRelationshipDao.getFollowingUserIds(userId)
-
-                    // Cache the followed IDs and use cache if DB returns empty
-                    // This prevents feed from disappearing during sync operations
-                    val finalIds = if (followedIds.isEmpty() && followedUserIdsCache.containsKey(userId)) {
-                        // Use cached IDs if DB is temporarily empty during sync
-                        followedUserIdsCache[userId] ?: emptyList()
-                    } else {
-                        // Update cache with fresh data
-                        if (followedIds.isNotEmpty()) {
-                            followedUserIdsCache[userId] = followedIds
-                        }
-                        followedIds
-                    }
-
-                    // Include the current user's own posts in their home feed
-                    val allUserIds = (finalIds + OfficialLiftrixAccountCatalog.accounts.map { it.id } + userId).distinct()
-
-                    // Check total posts for this user
-                    val userPostCount = workoutPostDao.getUserPostCount(userId)
-                    val publicCount = workoutPostDao.getUserPostCountByVisibility(userId, "PUBLIC")
-                    val followersCount = workoutPostDao.getUserPostCountByVisibility(userId, "FOLLOWERS")
-                    val privateCount = workoutPostDao.getUserPostCountByVisibility(userId, "PRIVATE")
-                    Timber.d("[WORKOUT-POSTS] User $userId posts - Total: $userPostCount, Public: $publicCount, Followers: $followersCount, Private: $privateCount")
-
-                    allUserIds
-                }
-
-                Pager(
-                    config = PagingConfig(
-                        pageSize = pageSize,
-                        enablePlaceholders = false,
-                        prefetchDistance = pageSize / 2
-                    ),
-                    // Remove RemoteMediator entirely to prevent cache-related feed clearing
-                    // The feed will now always load directly from the database without any
-                    // cache invalidation or network refresh logic
-                    // remoteMediator = null, // Removed to prevent feed clearing
-                    pagingSourceFactory = {
-                        // Always include current user's posts and handle empty follow lists gracefully
-                        // Use the new query that includes the current user's posts by default
-                        val safeFollowedIds = if (followedUserIds.isEmpty()) {
-                            // Empty list is fine with the new query since it always includes currentUserId
-                            emptyList()
-                        } else {
-                            followedUserIds
-                        }
-
-                        // Wrap in StableFeedPagingSource to handle intermediate empty states
-                        StableFeedPagingSource(
-                            delegate = workoutPostDao.getHomeFeedPostsWithSelfSince(
-                                currentUserId = userId,
-                                followedUserIds = safeFollowedIds,
-                                sinceTimestamp = System.currentTimeMillis() - FOLLOWING_FEED_RETENTION_MILLIS
-                            ),
-                            userId = userId,
-                            hasLocalPosts = {
-                                workoutPostDao.getUserPostCount(userId) > 0
+                emitAll(
+                    followRelationshipDao.observeFollowingUserIds(userId)
+                        .map { followedIds ->
+                            val finalIds = if (followedIds.isEmpty() && followedUserIdsCache.containsKey(userId)) {
+                                followedUserIdsCache[userId] ?: emptyList()
+                            } else {
+                                if (followedIds.isNotEmpty()) {
+                                    followedUserIdsCache[userId] = followedIds
+                                }
+                                followedIds
                             }
-                        )
-                    }
+                            (finalIds + OfficialLiftrixAccountCatalog.accounts.map { it.id }).distinct()
+                        }
+                        .distinctUntilChanged()
+                        .flatMapLatest { followedUserIds ->
+                            withContext(Dispatchers.IO) {
+                                val userPostCount = workoutPostDao.getUserPostCount(userId)
+                                val publicCount = workoutPostDao.getUserPostCountByVisibility(userId, "PUBLIC")
+                                val followersCount = workoutPostDao.getUserPostCountByVisibility(userId, "FOLLOWERS")
+                                val privateCount = workoutPostDao.getUserPostCountByVisibility(userId, "PRIVATE")
+                                Timber.d("[WORKOUT-POSTS] User $userId posts - Total: $userPostCount, Public: $publicCount, Followers: $followersCount, Private: $privateCount")
+                            }
+
+                            Pager(
+                                config = PagingConfig(
+                                    pageSize = pageSize,
+                                    enablePlaceholders = false,
+                                    prefetchDistance = pageSize / 2
+                                ),
+                                pagingSourceFactory = {
+                                    StableFeedPagingSource(
+                                        delegate = workoutPostDao.getHomeFeedPostsWithSelfSince(
+                                            currentUserId = userId,
+                                            followedUserIds = followedUserIds,
+                                            sinceTimestamp = System.currentTimeMillis() - FOLLOWING_FEED_RETENTION_MILLIS
+                                        ),
+                                        userId = userId,
+                                        hasLocalPosts = {
+                                            workoutPostDao.getUserPostCount(userId) > 0
+                                        }
+                                    )
+                                }
+                            ).flow.map { pagingData ->
+                                pagingData.map { entity ->
+                                    Timber.d("[WORKOUT-POSTS] Feed delivering post ID=${entity.id}, user=${entity.userId}, visibility=${entity.visibility}, workout=${entity.workoutId}")
+                                    enhanceWithUserData(entity, userId)
+                                }
+                            }
+                        }
                 )
+                return@flow
             }
 
             FeedType.DISCOVERY -> {

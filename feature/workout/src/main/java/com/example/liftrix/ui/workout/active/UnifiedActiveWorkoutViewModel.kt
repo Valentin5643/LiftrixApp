@@ -245,7 +245,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
     /**
      */
     private suspend fun completeSessionDirectly() {
-        val success = sessionManager.completeSession()
+        val success = sessionManager.completeCurrentSession()
         if (success) {
             timerServiceManager.stopTimer()
             Timber.i("Workout completion initiated")

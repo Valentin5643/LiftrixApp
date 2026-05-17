@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination
+import androidx.navigation.NavDestination.Companion.hierarchy
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import com.example.liftrix.ui.components.WorkoutCreationFab
 import com.example.liftrix.ui.components.QuickWorkoutFab
@@ -62,7 +63,7 @@ fun ConditionalWorkoutFab(
     val hasActiveSession by viewModel.hasActiveSession.collectAsState()
     
     // Type-safe FAB visibility check
-    val shouldHideFab = hasActiveSession || shouldHideFabForRoute(currentDestination?.route)
+    val shouldHideFab = hasActiveSession || shouldHideFabForDestination(currentDestination)
     
     AnimatedVisibility(
         visible = !shouldHideFab,
@@ -106,9 +107,15 @@ enum class FabType {
  * @param route The current navigation route
  * @return true if FAB should be hidden, false otherwise
  */
-private fun shouldHideFabForRoute(route: String?): Boolean {
-    if (route == null) return false
-    
+private fun shouldHideFabForDestination(destination: NavDestination?): Boolean {
+    if (destination == null) return false
+
+    return destination.hierarchy
+        .mapNotNull { it.route }
+        .any(::shouldHideFabForRoute)
+}
+
+private fun shouldHideFabForRoute(route: String): Boolean {
     // Define route patterns where FAB should be hidden
     val routesToHideFab = setOf(
         // Coach tab and standalone AI chat interface don't need workout creation
@@ -123,13 +130,14 @@ private fun shouldHideFabForRoute(route: String?): Boolean {
         
         // Help and legal screens
         "HelpCenter", "ContactSupport", "About",
-        "PrivacyPolicy", "TermsOfService", "DataPortability",
+        "PrivacyPolicy", "TermsOfService", "DataPortability", "ExportProgressReport",
         
         // Authentication screens
         "AuthSignIn", "AuthSignUp", "AuthForgotPassword",
         
-        // Active workout - already in a workout session
-        "ActiveWorkout", "ActiveWorkoutDetail"
+        // Active workout and completion flow screens do not need workout creation
+        "ActiveWorkout", "ActiveWorkoutDetail",
+        "PostWorkoutSummary", "PostCreation", "WorkoutDetails"
     )
     
     // Check if current route contains any of the patterns

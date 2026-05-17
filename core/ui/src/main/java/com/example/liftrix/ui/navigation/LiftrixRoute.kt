@@ -481,6 +481,12 @@ sealed class LiftrixRoute {
      */
     @Serializable
     data object DataPortability : LiftrixRoute()
+
+    /**
+     * Privacy-safe local progress report PDF export screen.
+     */
+    @Serializable
+    data object ExportProgressReport : LiftrixRoute()
     
     // AI Chatbot System Routes (Added for SPEC-20250119-ai-chatbot-frontend)
     

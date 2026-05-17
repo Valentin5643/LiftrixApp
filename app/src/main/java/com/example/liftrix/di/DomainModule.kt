@@ -136,6 +136,12 @@ abstract class DomainModule {
         impl: com.example.liftrix.data.service.DownloadManagerServiceImpl
     ): com.example.liftrix.domain.service.DownloadManagerService
 
+    @dagger.Binds
+    @javax.inject.Singleton
+    abstract fun bindProgressReportFileManager(
+        impl: com.example.liftrix.service.export.ProgressReportFileManagerImpl
+    ): com.example.liftrix.domain.service.ProgressReportFileManager
+
     // ========================================
     // COMPANION OBJECT (All @Provides methods)
     // ========================================

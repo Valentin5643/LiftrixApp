@@ -15,6 +15,7 @@ import com.example.liftrix.ui.settings.account.EmailChangeScreen
 import com.example.liftrix.ui.settings.account.PasswordChangeScreen
 import com.example.liftrix.ui.settings.account.UsernameChangeScreen
 import com.example.liftrix.ui.settings.data.DataPortabilityScreen
+import com.example.liftrix.ui.settings.data.ProgressReportExportScreen
 import com.example.liftrix.ui.settings.legal.AIDisclaimerScreen
 import com.example.liftrix.ui.settings.legal.CommunityGuidelinesScreen
 import com.example.liftrix.ui.settings.legal.ContentModerationPolicyScreen
@@ -49,6 +50,7 @@ fun SettingsRoute(
     onNavigateToContentModerationPolicy: () -> Unit,
     onNavigateToRefundSubscriptionPolicy: () -> Unit,
     onNavigateToDataPortability: () -> Unit,
+    onNavigateToExportProgressReport: () -> Unit,
     onNavigateToAIChatSettings: () -> Unit,
     onNavigateToAdminBanManagement: () -> Unit,
     onNavigateToUpgradeToPremium: () -> Unit
@@ -76,6 +78,7 @@ fun SettingsRoute(
         onNavigateToContentModerationPolicy = onNavigateToContentModerationPolicy,
         onNavigateToRefundSubscriptionPolicy = onNavigateToRefundSubscriptionPolicy,
         onNavigateToDataPortability = onNavigateToDataPortability,
+        onNavigateToExportProgressReport = onNavigateToExportProgressReport,
         onNavigateToAIChatSettings = onNavigateToAIChatSettings,
         onNavigateToAdminBanManagement = onNavigateToAdminBanManagement,
         onNavigateToUpgradeToPremium = onNavigateToUpgradeToPremium
@@ -228,6 +231,11 @@ fun RefundSubscriptionPolicyRoute(onNavigateBack: () -> Unit) {
 @Composable
 fun DataPortabilityRoute(onNavigateBack: () -> Unit) {
     DataPortabilityScreen(onNavigateBack = onNavigateBack, showTopBar = false)
+}
+
+@Composable
+fun ExportProgressReportRoute(onNavigateBack: () -> Unit) {
+    ProgressReportExportScreen(onNavigateBack = onNavigateBack, showTopBar = false)
 }
 
 @Composable

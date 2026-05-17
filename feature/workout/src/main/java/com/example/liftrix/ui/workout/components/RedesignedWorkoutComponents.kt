@@ -67,7 +67,7 @@ fun RedesignedExerciseCard(
     onRemoveSet: ((Int) -> Unit)? = null,
     onMenuClick: () -> Unit,
     onNotesClick: (() -> Unit)? = null,
-    onAnomalyDetected: ((String, Int) -> Unit)? = null,
+    onAnomalyDetected: ((String, String, Int, String?) -> Unit)? = null,
     context: ExerciseCardContext = ExerciseCardContext.ACTIVE_WORKOUT,
     weightUnit: WeightUnit = WeightUnit.getSystemDefault(),
     leadingIconResId: Int? = null,
@@ -304,7 +304,7 @@ private fun RedesignedSetRow(
     setData: RedesignedSetData,
     context: ExerciseCardContext,
     onUpdateSet: (RedesignedSetData) -> Unit,
-    onAnomalyDetected: ((String, Int) -> Unit)? = null // (value, setIndex) callback
+    onAnomalyDetected: ((String, String, Int, String?) -> Unit)? = null // (value, type, setIndex, previousDisplay) callback
 ) {
     val haptic = LocalHapticFeedback.current
     
@@ -334,7 +334,7 @@ private fun RedesignedSetRow(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = setData.previousValue ?: "-",
+                text = setData.previousDisplay ?: "-",
                 style = TextStyle(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp
@@ -352,11 +352,7 @@ private fun RedesignedSetRow(
                 var hasAnomaly = false
                 if (newValue.isNotEmpty() && newValue.toDoubleOrNull() != null) {
                     val weightValue = newValue.toDouble()
-                    // Parse previous value format: "50 x 10" where 50 is weight, 10 is reps
-                    val previousWeight = setData.previousValue
-                        ?.split(" x ")
-                        ?.firstOrNull()
-                        ?.let { parseLeadingNumber(it) }
+                    val previousWeight = setData.previousWeight
                     
                     // Check if we have a valid previous weight (not 0 or null)
                     if (previousWeight != null && previousWeight > 0) {
@@ -364,7 +360,7 @@ private fun RedesignedSetRow(
                         if (ratio >= 2.0) { // Only check upward spikes, not downward
                             hasAnomaly = true
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onAnomalyDetected?.invoke(newValue, setNumber - 1)
+                            onAnomalyDetected?.invoke(newValue, "weight", setNumber - 1, setData.previousDisplay)
                         }
                     }
                 }
@@ -393,18 +389,14 @@ private fun RedesignedSetRow(
                         return@RedesignedInputField // Don't update if above limit
                     }
                     
-                    // Parse previous value format: "50 x 10" where 50 is weight, 10 is reps
-                    val previousReps = setData.previousValue
-                        ?.split(" x ")
-                        ?.lastOrNull()
-                        ?.let { parseLeadingNumber(it)?.toInt() }
+                    val previousReps = setData.previousReps
                     
                     if (previousReps != null && previousReps > 0) {
                         val ratio = repsValue.toFloat() / previousReps
                         if (ratio >= 2.0f) { // Only check upward spikes, not downward
                             hasAnomaly = true
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onAnomalyDetected?.invoke(newValue, setNumber - 1)
+                            onAnomalyDetected?.invoke(newValue, "reps", setNumber - 1, setData.previousDisplay)
                         }
                     }
                 }
@@ -435,13 +427,6 @@ private fun RedesignedSetRow(
             Box(modifier = Modifier.size(24.dp))
         }
     }
-}
-
-private fun parseLeadingNumber(text: String): Double? {
-    return Regex("""[+-]?(?:\d+(?:\.\d+)?|\.\d+)""")
-        .find(text)
-        ?.value
-        ?.toDoubleOrNull()
 }
 
 /**
@@ -806,7 +791,7 @@ private fun SwipeToDismissSetRow(
     context: ExerciseCardContext,
     onUpdateSet: (RedesignedSetData) -> Unit,
     onRemoveSet: () -> Unit,
-    onAnomalyDetected: ((String, Int) -> Unit)? = null
+    onAnomalyDetected: ((String, String, Int, String?) -> Unit)? = null
 ) {
     val haptic = LocalHapticFeedback.current
     val dismissState = rememberSwipeToDismissBoxState(
@@ -896,6 +881,9 @@ data class RedesignedSetData(
     val weight: String = "",
     val reps: String = "",
     val previousValue: String? = null,
+    val previousDisplay: String? = previousValue,
+    val previousWeight: Double? = null,
+    val previousReps: Int? = null,
     val isCompleted: Boolean = false,
     val notes: String? = null,
     val hasWeightAnomaly: Boolean = false,

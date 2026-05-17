@@ -374,23 +374,18 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
         val homeAuthorIds = (listOf(viewerId) + followedUserIds).distinct()
         val sinceTimestamp = System.currentTimeMillis() - FOLLOWING_FEED_RETENTION_MILLIS
         var hydrated = 0
+        Timber.i(
+            "[FOLLOWING_DEBUG] viewer=$viewerId followingIds=${followedUserIds.joinToString()} " +
+                "homeAuthorIds=${homeAuthorIds.joinToString()} since=$sinceTimestamp"
+        )
         for (authorId in homeAuthorIds) {
-            val query = firestore.collection("workout_posts")
-                .whereEqualTo("userId", authorId)
+            val documents = fetchHomePostDocumentsForAuthor(viewerId, authorId)
+            Timber.i(
+                "[FOLLOWING_DEBUG] viewer=$viewerId author=$authorId fetchedDocs=${documents.size} " +
+                    "isViewer=${authorId == viewerId}"
+            )
 
-            val visiblePostsQuery = if (authorId == viewerId) {
-                query
-            } else {
-                query.whereIn("visibility", listOf("PUBLIC", "FOLLOWERS"))
-            }
-
-            val snapshot = visiblePostsQuery
-                .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                .limit(FOLLOWING_POST_SYNC_LIMIT.toLong())
-                .get()
-                .await()
-
-            for (doc in snapshot.documents.sortedByDescending { it.data?.longValue("createdAt") ?: 0L }) {
+            for (doc in documents.sortedByDescending { it.data?.longValue("createdAt") ?: 0L }) {
                 checkCancellation()
                 val post = remotePostToEntity(doc.id, doc.data ?: continue) ?: continue
                 val isViewerPost = post.userId == viewerId
@@ -408,6 +403,40 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
 
         Timber.i("[POST-SYNC] Hydrated $hydrated home posts for viewer and followed users")
         hydrated
+    }
+
+    private suspend fun fetchHomePostDocumentsForAuthor(
+        viewerId: String,
+        authorId: String
+    ): List<com.google.firebase.firestore.DocumentSnapshot> {
+        val collection = firestore.collection("workout_posts")
+        val limit = FOLLOWING_POST_SYNC_LIMIT.toLong()
+        return if (authorId == viewerId) {
+            collection
+                .whereEqualTo("userId", authorId)
+                .limit(limit)
+                .get()
+                .await()
+                .documents
+        } else {
+            listOf("PUBLIC", "FOLLOWERS").flatMap { visibility ->
+                try {
+                    collection
+                        .whereEqualTo("userId", authorId)
+                        .whereEqualTo("visibility", visibility)
+                        .limit(limit)
+                        .get()
+                        .await()
+                        .documents
+                } catch (e: Exception) {
+                    Timber.w(
+                        e,
+                        "[FOLLOWING_DEBUG] Failed following hydration query viewer=$viewerId author=$authorId visibility=$visibility"
+                    )
+                    emptyList()
+                }
+            }.distinctBy { it.id }
+        }
     }
 
     private suspend fun ensureAuthorProfileForPublicPost(authorId: String) {

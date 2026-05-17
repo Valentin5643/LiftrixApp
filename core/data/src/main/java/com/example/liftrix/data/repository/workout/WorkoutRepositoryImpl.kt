@@ -1,5 +1,6 @@
 package com.example.liftrix.data.repository.workout
 
+import android.util.Log
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.local.dao.WorkoutPostDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
@@ -201,8 +202,18 @@ class WorkoutRepositoryImpl @Inject constructor(
                         workout.userId
                     )
                     val exerciseId = exerciseDao.insertExercise(exerciseEntity)
+                    Log.d(
+                        "PREV_SAVE",
+                        "Saving exercise: workoutId=${workout.id.value} exerciseRowId=$exerciseId " +
+                            "exerciseId=${exercise.libraryExercise.id} name=${exercise.libraryExercise.name}"
+                    )
                     
                     exercise.sets.forEachIndexed { setIndex, set ->
+                        Log.d(
+                            "PREV_SAVE",
+                            "Saving set: exerciseId=${exercise.libraryExercise.id} name=${exercise.libraryExercise.name} " +
+                                "weight=${set.weight?.kilograms} reps=${set.reps?.count} completedAt=${set.completedAt}"
+                        )
                         val setEntity = ExerciseSetEntity(
                             userId = workout.userId,
                             exerciseId = exerciseId,
@@ -214,7 +225,12 @@ class WorkoutRepositoryImpl @Inject constructor(
                             completedAt = set.completedAt?.toEpochMilli()
                         )
                         
-                    exerciseSetDao.insertSet(setEntity)
+                        val setRowId = exerciseSetDao.insertSet(setEntity)
+                        Log.d(
+                            "PREV_DB_WRITE",
+                            "DB write completed for ${exercise.libraryExercise.id} setRowId=$setRowId " +
+                                "weight=${setEntity.weightKg} reps=${setEntity.reps} completedAt=${setEntity.completedAt}"
+                        )
                     }
                 }
                 validateExerciseConsistency(workout, entity.exercisesJson)
@@ -442,9 +458,19 @@ class WorkoutRepositoryImpl @Inject constructor(
                         throw RuntimeException("Failed to map exercise to entity during update: ${e.message}", e)
                     }
                     val exerciseId = exerciseDao.insertExercise(exerciseEntity)
+                    Log.d(
+                        "PREV_SAVE",
+                        "Saving exercise: workoutId=${workout.id.value} exerciseRowId=$exerciseId " +
+                            "exerciseId=${exercise.libraryExercise.id} name=${exercise.libraryExercise.name}"
+                    )
                     
                     // Create ExerciseSetEntity records for each set
                     exercise.sets.forEachIndexed { setIndex, set ->
+                        Log.d(
+                            "PREV_SAVE",
+                            "Saving set: exerciseId=${exercise.libraryExercise.id} name=${exercise.libraryExercise.name} " +
+                                "weight=${set.weight?.kilograms} reps=${set.reps?.count} completedAt=${set.completedAt}"
+                        )
                         val setEntity = ExerciseSetEntity(
                             userId = workout.userId,
                             exerciseId = exerciseId,
@@ -457,7 +483,12 @@ class WorkoutRepositoryImpl @Inject constructor(
                         )
                         
                         
-                        exerciseSetDao.insertSet(setEntity)
+                        val setRowId = exerciseSetDao.insertSet(setEntity)
+                        Log.d(
+                            "PREV_DB_WRITE",
+                            "DB write completed for ${exercise.libraryExercise.id} setRowId=$setRowId " +
+                                "weight=${setEntity.weightKg} reps=${setEntity.reps} completedAt=${setEntity.completedAt}"
+                        )
                     }
                 }
                 validateExerciseConsistency(workout, entity.exercisesJson)
@@ -1630,6 +1661,10 @@ class WorkoutRepositoryImpl @Inject constructor(
         ) {
             withContext(Dispatchers.IO) {
                 val normalizedExerciseName = exerciseName.normalizedExerciseIdentifierOrNull()
+                Log.d(
+                    "PREV_QUERY",
+                    "Querying previous set for $exerciseId exerciseName=$exerciseName userId=$userId limit=$limit excludeWorkoutId=$excludeWorkoutId"
+                )
                 Timber.tag("PREV_SET_QUERY").d(
                     "SQL=WorkoutDao.getLastCompletedWorkoutsWithExercise userId=$userId exerciseId=$exerciseId exerciseName=$exerciseName limit=$limit excludeWorkoutId=$excludeWorkoutId"
                 )
@@ -1642,6 +1677,10 @@ class WorkoutRepositoryImpl @Inject constructor(
                 )
                 Timber.tag("PREV_SET_QUERY").d(
                     "canonicalRows=${normalizedWorkoutEntities.size} exerciseId=$exerciseId"
+                )
+                Log.d(
+                    "PREV_QUERY",
+                    "Canonical query rows=${normalizedWorkoutEntities.size} for $exerciseId"
                 )
 
                 val legacyNameWorkoutEntities = if (
@@ -1657,6 +1696,10 @@ class WorkoutRepositoryImpl @Inject constructor(
                         limit = limit,
                         excludeWorkoutId = excludeWorkoutId
                     ).also { rows ->
+                        Log.d(
+                            "PREV_QUERY",
+                            "Fallback display-name query rows=${rows.size} for $exerciseName"
+                        )
                         Timber.tag("PREV_SET_QUERY").d(
                             "legacyNameRows=${rows.size} exerciseName=$exerciseName"
                         )
@@ -1687,6 +1730,10 @@ class WorkoutRepositoryImpl @Inject constructor(
                     }.filter { entity ->
                         entity.containsExerciseInJsonFallback(exerciseId, exerciseName)
                     }.also { rows ->
+                        Log.d(
+                            "PREV_QUERY",
+                            "JSON fallback rows=${rows.size} for $exerciseId exerciseName=$exerciseName"
+                        )
                         Timber.tag("PREV_SET_QUERY").d(
                             "jsonFallbackRows=${rows.size} exerciseId=$exerciseId exerciseName=$exerciseName"
                         )
@@ -1700,8 +1747,24 @@ class WorkoutRepositoryImpl @Inject constructor(
                 Timber.tag(if (workoutEntities.isEmpty()) "PREV_SET_EMPTY" else "PREV_SET_QUERY").d(
                     "rowsReturned=${workoutEntities.size} exerciseId=$exerciseId exerciseName=$exerciseName canonicalRows=${normalizedWorkoutEntities.size} legacyNameRows=${legacyNameWorkoutEntities.size}"
                 )
+                if (workoutEntities.isEmpty()) {
+                    Log.d("PREV_QUERY_EMPTY", "No rows returned for $exerciseId exerciseName=$exerciseName userId=$userId")
+                }
                 workoutEntities.map { entity ->
                     workoutMapper.toDomain(entity).also { workout ->
+                        workout.exercises
+                            .firstOrNull { exercise ->
+                                exercise.libraryExercise.id == exerciseId ||
+                                    exercise.libraryExercise.name.normalizedExerciseIdentifierOrNull() == normalizedExerciseName
+                            }
+                            ?.sets
+                            ?.firstOrNull { set -> set.completedAt != null && set.weight != null }
+                            ?.let { set ->
+                                Log.d(
+                                    "PREV_QUERY_RESULT",
+                                    "Found previous weight=${set.weight?.kilograms} for $exerciseId workoutId=${workout.id.value}"
+                                )
+                            }
                         val matched = workout.exercises.map { exercise ->
                             "${exercise.libraryExercise.id}|${exercise.libraryExercise.name}"
                         }

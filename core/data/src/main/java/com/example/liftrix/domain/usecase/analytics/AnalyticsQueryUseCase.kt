@@ -312,7 +312,7 @@ class AnalyticsQueryUseCase @Inject constructor(
 
             // 🚀 CRITICAL-002 Phase 3: Check cache first
             val exerciseKey = exerciseIds?.sorted()?.joinToString(",") ?: "ALL"
-            val cacheKey = cacheKey(userId, "ONE_RM", exerciseKey, timeRange.name)
+            val cacheKey = cacheKey(userId, "ONE_RM", exerciseKey, timeRange.name, includeEstimated)
             getCached<OneRmProgressionData>(cacheKey)?.let { return@liftrixCatching it }
 
             Timber.d("Getting 1RM progression for user: $userId, exercises: ${exerciseIds?.size ?: "all"}, timeRange: $timeRange")

@@ -1,12 +1,10 @@
 package com.example.liftrix.ui.theme
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocal
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.ProvidedValue
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.remember
 import com.example.liftrix.domain.service.WeightUnitManager
+import com.example.liftrix.ui.common.LocalWeightUnitManager as SharedLocalWeightUnitManager
 
 
 /**
@@ -46,6 +44,7 @@ fun ProvideWeightUnitManager(
 ) {
     CompositionLocalProvider(
         LocalWeightUnitManager provides weightUnitManager,
+        SharedLocalWeightUnitManager provides weightUnitManager,
         content = content
     )
 }
@@ -78,9 +77,10 @@ fun rememberFormattedWeight(
     precision: Int = 1
 ): String {
     val weightUnitManager = rememberWeightUnitManager()
-    return remember(weight, storedUnit, precision, weightUnitManager) {
-        weightUnitManager?.formatWeight(weight, storedUnit, precision) 
-            ?: "${if (precision == 0) weight.toInt().toString() else "%.${precision}f".format(weight)} ${storedUnit.symbol}"
+    return if (weightUnitManager != null) {
+        weightUnitManager.rememberWeightDisplay(weight, storedUnit, precision)
+    } else {
+        "${if (precision == 0) weight.toInt().toString() else "%.${precision}f".format(weight)} ${storedUnit.symbol}"
     }
 }
 
@@ -97,9 +97,10 @@ fun rememberFormattedWeightCompact(
     storedUnit: com.example.liftrix.domain.model.WeightUnit
 ): String {
     val weightUnitManager = rememberWeightUnitManager()
-    return remember(weight, storedUnit, weightUnitManager) {
-        weightUnitManager?.formatWeightCompact(weight, storedUnit)
-            ?: "${weight.toInt()} ${storedUnit.symbol}"
+    return if (weightUnitManager != null) {
+        weightUnitManager.rememberWeightDisplayCompact(weight, storedUnit)
+    } else {
+        "${weight.toInt()} ${storedUnit.symbol}"
     }
 }
 

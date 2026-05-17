@@ -9,6 +9,7 @@ import com.example.liftrix.domain.repository.SettingsRepository
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -52,6 +53,7 @@ class WeightUnitManager @Inject constructor(
     // Cache for recent conversions to improve performance
     private val conversionCache = mutableMapOf<String, Double>()
     private var lastCacheClear = System.currentTimeMillis()
+    private var unitObservationJob: Job? = null
     
     init {
         startUnitObservation()
@@ -63,13 +65,14 @@ class WeightUnitManager @Inject constructor(
      */
     suspend fun initialize() {
         try {
-            val userId = authQueryUseCase(waitForAuth = false).getOrNull() ?: return
+            val userId = authQueryUseCase(waitForAuth = true).getOrNull() ?: return
             val userSettings = settingsRepository.getUserSettings(userId.value)
                 .filterNotNull()
                 .map { it.weightUnit }
                 .distinctUntilChanged()
             
-            serviceScope.launch {
+            unitObservationJob?.cancel()
+            unitObservationJob = serviceScope.launch {
                 userSettings.collect { unit ->
                     _currentUnit.value = unit
                     clearConversionCache()

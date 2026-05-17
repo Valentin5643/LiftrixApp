@@ -18,8 +18,9 @@ class LegacyFollowFirestoreDataSource @Inject constructor(
     }
 
     suspend fun syncRelationship(relationship: FollowRelationshipEntity) {
+        val relationshipId = relationshipId(relationship.followerId, relationship.followingId)
         val data = mapOf(
-            "id" to relationship.id,
+            "id" to relationshipId,
             "followerId" to relationship.followerId,
             "followingId" to relationship.followingId,
             "status" to relationship.status,
@@ -29,7 +30,7 @@ class LegacyFollowFirestoreDataSource @Inject constructor(
             "syncedAt" to System.currentTimeMillis()
         )
         firestore.collection(FOLLOW_RELATIONSHIPS_COLLECTION)
-            .document(relationship.id)
+            .document(relationshipId)
             .set(data)
             .await()
     }
@@ -92,4 +93,7 @@ class LegacyFollowFirestoreDataSource @Inject constructor(
         }
         return profileData.data
     }
+
+    private fun relationshipId(followerId: String, followingId: String): String =
+        "${followerId}_${followingId}"
 }

@@ -113,6 +113,7 @@ import com.example.liftrix.feature.settings.navigation.ContentModerationPolicyRo
 import com.example.liftrix.feature.settings.navigation.DashboardCustomizationRoute
 import com.example.liftrix.feature.settings.navigation.DataPortabilityRoute
 import com.example.liftrix.feature.settings.navigation.EmailChangeRoute
+import com.example.liftrix.feature.settings.navigation.ExportProgressReportRoute
 import com.example.liftrix.feature.settings.navigation.HelpArticleRoute
 import com.example.liftrix.feature.settings.navigation.HelpCenterRoute
 import com.example.liftrix.feature.settings.navigation.NotificationSettingsRoute
@@ -545,6 +546,9 @@ fun UnifiedNavigationContainer(
                         onNavigateToDataPortability = {
                             navController.navigate(LiftrixRoute.DataPortability)
                         },
+                        onNavigateToExportProgressReport = {
+                            navController.navigate(LiftrixRoute.ExportProgressReport)
+                        },
                         onNavigateToAIChatSettings = {
                             navController.navigate(LiftrixRoute.AIChatSettings)
                         },
@@ -771,6 +775,14 @@ fun UnifiedNavigationContainer(
 
                 composable<LiftrixRoute.DataPortability> {
                     DataPortabilityRoute(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+
+                composable<LiftrixRoute.ExportProgressReport> {
+                    ExportProgressReportRoute(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }
@@ -1541,6 +1553,7 @@ private fun NavigationAwareTopAppBar(
         "ContentModerationPolicy" to "Moderation Policy",
         "RefundSubscriptionPolicy" to "Refund Policy",
         "DataPortability" to "Data Portability",
+        "ExportProgressReport" to "Progress Report",
         "AIChatSettings" to "AI Settings",
         "AdminBanManagement" to "Ban Management",
         "UpgradeToPremium" to "Premium",

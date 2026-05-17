@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
 import kotlinx.datetime.LocalDate
 import com.example.liftrix.domain.util.DomainLogger as Timber
+import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -428,12 +429,22 @@ class WorkoutQueryUseCase @Inject constructor(
         val normalizedExerciseName = exerciseName.normalizedExerciseIdentifierOrNull()
         val previousSets = linkedMapOf<Int, PreviousSetInfo>()
         workouts.forEach { workout ->
-            val exercise = workout.exercises.firstOrNull { exercise ->
-                exercise.libraryExercise.id == exerciseId
-            } ?: workout.exercises.firstOrNull { exercise ->
-                normalizedExerciseName != null &&
-                    exercise.libraryExercise.name.normalizedExerciseIdentifierOrNull() == normalizedExerciseName
-            } ?: return@forEach
+            val exercise = workout.exercises.firstMatchingExercise(
+                exerciseId = exerciseId,
+                normalizedExerciseName = normalizedExerciseName
+            ) ?: run {
+                Timber.d(
+                    "[PREV_SET_EXTRACT_EMPTY] No exercise match in workout=${workout.id.value} " +
+                        "queryId=$exerciseId queryName=$exerciseName candidates=${workout.exercises.toDebugIdentifiers()}"
+                )
+                return@forEach
+            }
+
+            Timber.d(
+                "[PREV_SET_EXTRACT_MATCH] workout=${workout.id.value} queryId=$exerciseId " +
+                    "queryName=$exerciseName matchedId=${exercise.libraryExercise.id} " +
+                    "matchedName=${exercise.libraryExercise.name} sets=${exercise.sets.size}"
+            )
 
             val workoutDate = runCatching { LocalDate.parse(workout.date.toString()) }
                 .getOrElse {
@@ -443,7 +454,6 @@ class WorkoutQueryUseCase @Inject constructor(
 
             exercise.sets
                 .asSequence()
-                .filter { set -> set.completedAt != null }
                 .filter { set -> set.weight != null || set.reps != null }
                 .filter { set -> set.weight?.kilograms?.let { it.isFinite() && it >= 0.0 } != false }
                 .filter { set -> set.reps?.count?.let { it > 0 } != false }
@@ -452,6 +462,12 @@ class WorkoutQueryUseCase @Inject constructor(
                         .thenByDescending { it.completedAt }
                 )
                 .forEach { set ->
+                    Timber.d(
+                        "[PREV_SET_RESULT] Found previous weight: ${set.weight?.kilograms} " +
+                            "for $exerciseId from workout=${workout.id.value} " +
+                            "matchedId=${exercise.libraryExercise.id} matchedName=${exercise.libraryExercise.name} " +
+                            "set=${set.setNumber} reps=${set.reps?.count} completedAt=${set.completedAt}"
+                    )
                     previousSets.putIfAbsent(
                         set.setNumber,
                         PreviousSetInfo.create(
@@ -464,11 +480,38 @@ class WorkoutQueryUseCase @Inject constructor(
                 }
         }
 
+        if (previousSets.isEmpty()) {
+            Timber.d("[PREV_SET_EMPTY] No history found for $exerciseId exerciseName=$exerciseName")
+        }
+
         return previousSets
     }
 
+    private fun List<com.example.liftrix.domain.model.Exercise>.firstMatchingExercise(
+        exerciseId: String,
+        normalizedExerciseName: String?
+    ): com.example.liftrix.domain.model.Exercise? {
+        return firstOrNull { exercise ->
+            exercise.libraryExercise.id == exerciseId
+        } ?: firstOrNull { exercise ->
+            normalizedExerciseName != null &&
+                exercise.libraryExercise.name.normalizedExerciseIdentifierOrNull() == normalizedExerciseName
+        }
+    }
+
+    private fun List<com.example.liftrix.domain.model.Exercise>.toDebugIdentifiers(): List<String> =
+        map { exercise -> "${exercise.libraryExercise.id}|${exercise.libraryExercise.name}" }
+
     private fun String?.normalizedExerciseIdentifierOrNull(): String? =
-        this?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
+        this
+            ?.lowercase(Locale.US)
+            ?.replace(Regex("[^a-z0-9]+"), " ")
+            ?.split(" ")
+            ?.filter { it.isNotBlank() }
+            ?.map { token -> token.removeSuffix("s") }
+            ?.joinToString(" ")
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
 
     // ============== WORKOUT DURATION ESTIMATION ==============
 

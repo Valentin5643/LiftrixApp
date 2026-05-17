@@ -22,6 +22,7 @@ import com.example.liftrix.data.service.AbusePreventionService
 import com.example.liftrix.data.service.RateLimitingService
 import com.example.liftrix.data.repository.SyncPreferencesRepositoryImpl
 import com.example.liftrix.data.repository.PersonalRecordRepositoryImpl
+import com.example.liftrix.data.repository.export.ProgressReportRepositoryImpl
 import com.example.liftrix.data.repository.exercise.ExerciseRepositoryImpl
 import com.example.liftrix.data.repository.template.TemplateRepositoryImpl
 import com.example.liftrix.data.repository.workout.WorkoutRepositoryImpl
@@ -43,6 +44,7 @@ import com.example.liftrix.domain.repository.social.BlockRepository
 import com.example.liftrix.domain.repository.social.ReportRepository
 import com.example.liftrix.domain.repository.SyncPreferencesRepository
 import com.example.liftrix.domain.repository.PersonalRecordRepository
+import com.example.liftrix.domain.repository.export.ProgressReportRepository
 import com.example.liftrix.domain.repository.exercise.ExerciseRepository
 import com.example.liftrix.domain.repository.template.TemplateRepository
 import com.example.liftrix.domain.repository.sharing.TemplateShareRepository
@@ -207,6 +209,12 @@ abstract class RepositoryModule {
     abstract fun bindPersonalRecordRepository(
         personalRecordRepositoryImpl: PersonalRecordRepositoryImpl
     ): PersonalRecordRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindProgressReportRepository(
+        progressReportRepositoryImpl: ProgressReportRepositoryImpl
+    ): ProgressReportRepository
 
     // ========================================
     // FEATURE-SPECIFIC REPOSITORIES

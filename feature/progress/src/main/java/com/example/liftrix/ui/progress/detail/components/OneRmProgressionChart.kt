@@ -23,10 +23,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import com.example.liftrix.domain.model.analytics.OneRmDataPoint
 import com.example.liftrix.ui.progress.detail.OneRmDetailViewModel
 import com.example.liftrix.ui.theme.ChartColorsV2
-import kotlin.math.cos
-import kotlin.math.sin
+import kotlinx.datetime.daysUntil
 
 /**
  * Data class for chart points
@@ -498,16 +498,32 @@ private fun prepareChartData(
     showEstimated: Boolean
 ): List<ChartPoint> {
     if (data.progressionPoints.isEmpty()) return emptyList()
-    
-    val allValues = data.progressionPoints.map { it.bestOneRm }
+
+    val sortedPoints = data.progressionPoints.sortedWith(
+        compareBy<OneRmDataPoint> { it.date }
+            .thenBy { it.exerciseId.orEmpty() }
+    )
+    val allValues = sortedPoints.mapNotNull { it.chartValue(showEstimated) }
     val minValue = allValues.minOrNull() ?: 0f
     val maxValue = allValues.maxOrNull() ?: 0f
     val valueRange = maxValue - minValue
-    
-    return data.progressionPoints.mapIndexed { index, point ->
-        val normalizedX = index.toFloat() / (data.progressionPoints.size - 1).coerceAtLeast(1)
-        val value = point.bestOneRm
-        val normalizedY = if (valueRange > 0) (value - minValue) / valueRange else 0f
+    val minDate = sortedPoints.minOf { it.date }
+    val maxDate = sortedPoints.maxOf { it.date }
+    val dateRangeDays = minDate.daysUntil(maxDate)
+
+    return sortedPoints.mapNotNull { point ->
+        val value = point.chartValue(showEstimated) ?: return@mapNotNull null
+        val normalizedX = if (dateRangeDays > 0) {
+            minDate.daysUntil(point.date).toFloat() / dateRangeDays.toFloat()
+        } else {
+            0.5f
+        }
+        val normalizedY = if (valueRange > 0f) {
+            val verticalPadding = 0.08f
+            verticalPadding + ((value - minValue) / valueRange) * (1f - verticalPadding * 2f)
+        } else {
+            0.5f
+        }
         
         ChartPoint(
             x = normalizedX,
@@ -518,6 +534,14 @@ private fun prepareChartData(
             exerciseName = point.exerciseName ?: ""
         )
     }
+}
+
+private fun OneRmDataPoint.chartValue(showEstimated: Boolean): Float? {
+    return if (showEstimated) {
+        bestOneRm
+    } else {
+        actualOneRm ?: bestOneRm
+    }.takeIf { it > 0f }
 }
 
 /**

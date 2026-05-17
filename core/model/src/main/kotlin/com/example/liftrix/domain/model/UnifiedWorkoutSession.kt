@@ -436,7 +436,7 @@ data class UnifiedWorkoutSession(
     ): WorkoutTemplate {
         val templateExercises = exercises.map { sessionExercise ->
             TemplateExercise(
-                exerciseId = sessionExercise.exerciseId,
+                exerciseId = sessionExercise.libraryExerciseId,
                 name = sessionExercise.name,
                 primaryMuscle = sessionExercise.primaryMuscle,
                 equipment = sessionExercise.equipment,

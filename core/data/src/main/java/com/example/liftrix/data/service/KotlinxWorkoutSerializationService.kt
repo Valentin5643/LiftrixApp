@@ -13,8 +13,16 @@ import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.Equipment
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -325,9 +333,21 @@ class KotlinxWorkoutSerializationService @Inject constructor(
                         Timber.d("🔍 SET-CONVERSION: Converting setDto - repsCount=${setDto.repsCount}, weightKg=${setDto.weightKg}")
                     }
 
-                    val reps = setDto.repsCount?.let { Reps(it) }
-                    val weight = setDto.weightKg?.let { Weight.fromKilograms(it) }
-                    val completedAt = setDto.completedAtEpochMilli?.let { Instant.ofEpochMilli(it) }
+                    val repsCount = setDto.repsCount
+                        ?: setDto.reps.countValue()
+                        ?: setDto.actualReps.countValue()
+                        ?: setDto.targetReps.countValue()
+                        ?: setDto.repsValue.countValue()
+                    val weightKg = setDto.weightKg
+                        ?: setDto.weight.kilogramsValue()
+                        ?: setDto.actualWeight.kilogramsValue()
+                        ?: setDto.targetWeight.kilogramsValue()
+                    val completedAtEpochMilli = setDto.completedAtEpochMilli
+                        ?: setDto.completedAt.epochMilliValue()
+
+                    val reps = repsCount?.let { Reps(it) }
+                    val weight = weightKg?.let { Weight.fromKilograms(it) }
+                    val completedAt = completedAtEpochMilli?.let { Instant.ofEpochMilli(it) }
 
                     // Skip sets that have no metrics (empty/placeholder sets)
                     if (reps == null && weight == null) {
@@ -451,8 +471,77 @@ data class SerializableExerciseSet(
     val weightKg: Double? = null,
     val rpeValue: Int? = null,
     val completedAtEpochMilli: Long? = null,
+    val reps: JsonElement? = null,
+    val weight: JsonElement? = null,
+    val actualReps: JsonElement? = null,
+    val targetReps: JsonElement? = null,
+    val repsValue: JsonElement? = null,
+    val actualWeight: JsonElement? = null,
+    val targetWeight: JsonElement? = null,
+    val completedAt: JsonElement? = null,
     val notes: String? = null
 )
+
+private fun JsonElement?.countValue(): Int? {
+    return numberField("count")?.toInt()
+        ?: primitiveInt()
+}
+
+private fun JsonElement?.kilogramsValue(): Double? {
+    return numberField("kilograms")
+        ?: numberField("kg")
+        ?: numberField("value")
+        ?: primitiveDouble()
+}
+
+private fun JsonElement?.epochMilliValue(): Long? {
+    if (this == null) return null
+
+    primitiveLong()?.let { return it }
+    primitiveInstantString()?.let { return it.toEpochMilli() }
+
+    val obj = asObjectOrNull() ?: return null
+    obj["epochMilli"]?.primitiveLong()?.let { return it }
+    obj["epochMillis"]?.primitiveLong()?.let { return it }
+    obj["milliseconds"]?.primitiveLong()?.let { return it }
+    obj["seconds"]?.primitiveLong()?.let { seconds ->
+        return seconds * 1000L
+    }
+
+    return null
+}
+
+private fun JsonElement?.numberField(fieldName: String): Double? {
+    val obj = asObjectOrNull() ?: return null
+    return obj[fieldName].primitiveDouble()
+}
+
+private fun JsonElement?.primitiveInt(): Int? =
+    runCatching {
+        this?.jsonPrimitive?.intOrNull
+            ?: this?.jsonPrimitive?.contentOrNull?.toIntOrNull()
+    }.getOrNull()
+
+private fun JsonElement?.primitiveDouble(): Double? =
+    runCatching {
+        this?.jsonPrimitive?.doubleOrNull
+            ?: this?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
+    }.getOrNull()
+
+private fun JsonElement?.primitiveLong(): Long? =
+    runCatching {
+        this?.jsonPrimitive?.longOrNull
+            ?: this?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+    }.getOrNull()
+
+private fun JsonElement?.primitiveInstantString(): Instant? =
+    runCatching {
+        val content = this?.jsonPrimitive?.contentOrNull ?: return@runCatching null
+        Instant.parse(content)
+    }.getOrNull()
+
+private fun JsonElement?.asObjectOrNull(): JsonObject? =
+    runCatching { this?.jsonObject }.getOrNull()
 
 /**
  * JSON validation result with performance metrics.

@@ -89,6 +89,7 @@ fun SettingsScreen(
     onNavigateToContentModerationPolicy: (() -> Unit)? = null,
     onNavigateToRefundSubscriptionPolicy: (() -> Unit)? = null,
     onNavigateToDataPortability: (() -> Unit)? = null,
+    onNavigateToExportProgressReport: (() -> Unit)? = null,
     onNavigateToAIChatSettings: (() -> Unit)? = null,
     onNavigateToAdminBanManagement: (() -> Unit)? = null,
     onNavigateToUpgradeToPremium: (() -> Unit)? = null,
@@ -126,6 +127,7 @@ fun SettingsScreen(
         val stableOnNavigateToContentModerationPolicy = remember(onNavigateToContentModerationPolicy) { onNavigateToContentModerationPolicy }
         val stableOnNavigateToRefundSubscriptionPolicy = remember(onNavigateToRefundSubscriptionPolicy) { onNavigateToRefundSubscriptionPolicy }
         val stableOnNavigateToDataPortability = remember(onNavigateToDataPortability) { onNavigateToDataPortability }
+        val stableOnNavigateToExportProgressReport = remember(onNavigateToExportProgressReport) { onNavigateToExportProgressReport }
         val stableOnNavigateToAIChatSettings = remember(onNavigateToAIChatSettings) { onNavigateToAIChatSettings }
         
         // Optimized LaunchedEffect with stable key
@@ -187,6 +189,7 @@ fun SettingsScreen(
                             onNavigateToTermsOfService = stableOnNavigateToTermsOfService,
                             onNavigateToAIDisclaimer = stableOnNavigateToAIDisclaimer,
                             onNavigateToDataPortability = stableOnNavigateToDataPortability,
+                            onNavigateToExportProgressReport = stableOnNavigateToExportProgressReport,
                             onNavigateToHelpCenter = stableOnNavigateToHelpCenter,
                             onNavigateToContactSupport = stableOnNavigateToContactSupport,
                             onNavigateToAbout = stableOnNavigateToAbout,
@@ -276,6 +279,7 @@ private fun SettingsContent(
     onNavigateToContentModerationPolicy: (() -> Unit)? = null,
     onNavigateToRefundSubscriptionPolicy: (() -> Unit)? = null,
     onNavigateToDataPortability: (() -> Unit)? = null,
+    onNavigateToExportProgressReport: (() -> Unit)? = null,
     onNavigateToHelpCenter: (() -> Unit)? = null,
     onNavigateToContactSupport: (() -> Unit)? = null,
     onNavigateToAbout: (() -> Unit)? = null,
@@ -294,6 +298,7 @@ private fun SettingsContent(
     val stableOnNavigateToContentModerationPolicy = remember(onNavigateToContentModerationPolicy) { onNavigateToContentModerationPolicy }
     val stableOnNavigateToRefundSubscriptionPolicy = remember(onNavigateToRefundSubscriptionPolicy) { onNavigateToRefundSubscriptionPolicy }
     val stableOnNavigateToDataPortability = remember(onNavigateToDataPortability) { onNavigateToDataPortability }
+    val stableOnNavigateToExportProgressReport = remember(onNavigateToExportProgressReport) { onNavigateToExportProgressReport }
     val stableOnNavigateToHelpCenter = remember(onNavigateToHelpCenter) { onNavigateToHelpCenter }
     val stableOnNavigateToContactSupport = remember(onNavigateToContactSupport) { onNavigateToContactSupport }
     val stableOnNavigateToAbout = remember(onNavigateToAbout) { onNavigateToAbout }
@@ -347,6 +352,7 @@ private fun SettingsContent(
                     onNavigateToContentModerationPolicy = stableOnNavigateToContentModerationPolicy,
                     onNavigateToRefundSubscriptionPolicy = stableOnNavigateToRefundSubscriptionPolicy,
                     onNavigateToDataPortability = stableOnNavigateToDataPortability,
+                    onNavigateToExportProgressReport = stableOnNavigateToExportProgressReport,
                     onNavigateToAdminBanManagement = onNavigateToAdminBanManagement,
                     onNavigateToHelpCenter = stableOnNavigateToHelpCenter,
                     onNavigateToContactSupport = stableOnNavigateToContactSupport,
@@ -413,6 +419,7 @@ private fun SettingsCategoryContent(
     onNavigateToContentModerationPolicy: (() -> Unit)? = null,
     onNavigateToRefundSubscriptionPolicy: (() -> Unit)? = null,
     onNavigateToDataPortability: (() -> Unit)? = null,
+    onNavigateToExportProgressReport: (() -> Unit)? = null,
     onNavigateToAdminBanManagement: (() -> Unit)? = null,
     onNavigateToHelpCenter: (() -> Unit)? = null,
     onNavigateToContactSupport: (() -> Unit)? = null,
@@ -459,7 +466,9 @@ private fun SettingsCategoryContent(
                     onNavigateToCommunityGuidelines = onNavigateToCommunityGuidelines,
                     onNavigateToContentModerationPolicy = onNavigateToContentModerationPolicy,
                     onNavigateToDataPortability = onNavigateToDataPortability,
-                    onNavigateToAdminBanManagement = onNavigateToAdminBanManagement
+                    onNavigateToExportProgressReport = onNavigateToExportProgressReport,
+                    onNavigateToAdminBanManagement = onNavigateToAdminBanManagement,
+                    onNavigateToUpgradeToPremium = onNavigateToUpgradeToPremium
                 )
             }
             
@@ -697,7 +706,9 @@ private fun PrivacySettings(
     onNavigateToCommunityGuidelines: (() -> Unit)? = null,
     onNavigateToContentModerationPolicy: (() -> Unit)? = null,
     onNavigateToDataPortability: (() -> Unit)? = null,
-    onNavigateToAdminBanManagement: (() -> Unit)? = null
+    onNavigateToExportProgressReport: (() -> Unit)? = null,
+    onNavigateToAdminBanManagement: (() -> Unit)? = null,
+    onNavigateToUpgradeToPremium: (() -> Unit)? = null
 ) {
     // Stable callbacks to prevent unnecessary recompositions
     val stableOnEvent = remember(onEvent) { onEvent }
@@ -712,7 +723,9 @@ private fun PrivacySettings(
     val stableOnNavigateToCommunityGuidelines = remember(onNavigateToCommunityGuidelines) { onNavigateToCommunityGuidelines }
     val stableOnNavigateToContentModerationPolicy = remember(onNavigateToContentModerationPolicy) { onNavigateToContentModerationPolicy }
     val stableOnNavigateToDataPortability = remember(onNavigateToDataPortability) { onNavigateToDataPortability }
+    val stableOnNavigateToExportProgressReport = remember(onNavigateToExportProgressReport) { onNavigateToExportProgressReport }
     val stableOnNavigateToAdminBanManagement = remember(onNavigateToAdminBanManagement) { onNavigateToAdminBanManagement }
+    val stableOnNavigateToUpgradeToPremium = remember(onNavigateToUpgradeToPremium) { onNavigateToUpgradeToPremium }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -841,6 +854,21 @@ private fun PrivacySettings(
             onClick = {
                 stableOnEvent(SettingsEvent.NavigateToDataPortability)
                 stableOnNavigateToDataPortability?.invoke()
+            }
+        )
+
+        SettingsNavigationItem(
+            title = "Export Progress Report",
+            subtitle = "Generate a privacy-safe progress PDF",
+            icon = Icons.Default.PictureAsPdf,
+            onClick = {
+                stableOnEvent(SettingsEvent.NavigateToExportProgressReport)
+                if (uiState.hasPremiumAccess) {
+                    stableOnNavigateToExportProgressReport?.invoke()
+                } else {
+                    stableOnEvent(SettingsEvent.UpgradeSubscription)
+                    stableOnNavigateToUpgradeToPremium?.invoke()
+                }
             }
         )
 

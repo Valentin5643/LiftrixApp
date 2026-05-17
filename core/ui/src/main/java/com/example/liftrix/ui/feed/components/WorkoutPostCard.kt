@@ -13,7 +13,6 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,14 +28,10 @@ import com.example.liftrix.domain.model.social.MediaItem
 import com.example.liftrix.domain.model.social.MediaType
 import com.example.liftrix.domain.model.social.WorkoutPost
 import com.example.liftrix.domain.model.WeightUnit
-import com.example.liftrix.domain.service.WeightUnitManager
+import com.example.liftrix.ui.common.LocalWeightUnitManager
 import com.example.liftrix.ui.components.DynamicProfileImage
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.theme.LiftrixSpacing
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
 import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.*
@@ -280,8 +275,9 @@ private fun WorkoutSummaryCard(
     onWorkoutClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val weightUnitManager = rememberFeedWeightUnitManager()
-    weightUnitManager?.currentUnit?.collectAsState()
+    val weightUnitManager = LocalWeightUnitManager.current
+    val currentWeightUnit = weightUnitManager?.currentUnit?.collectAsState()?.value
+        ?: WeightUnit.getSystemDefault()
 
     Column(
         modifier = modifier
@@ -304,8 +300,8 @@ private fun WorkoutSummaryCard(
             // Volume
             val volumeText = post.totalVolume?.let { volume ->
                 weightUnitManager?.formatWeight(volume, WeightUnit.KILOGRAMS, precision = 0)
-                    ?: WeightUnit.KILOGRAMS.formatWeight(volume, precision = 0)
-            } ?: "0 kg".also {
+                    ?: currentWeightUnit.formatWeight(volume, precision = 0)
+            } ?: currentWeightUnit.formatWeight(0.0, precision = 0).also {
                 Timber.w("UI-MAPPER-DEBUG: post.totalVolume is null! Post ID: ${post.id}, workout ID: ${post.workoutId}")
             }
             
@@ -344,25 +340,6 @@ private fun WorkoutSummaryCard(
                 modifier = Modifier.fillMaxWidth()
             )
         }
-    }
-}
-
-@EntryPoint
-@InstallIn(SingletonComponent::class)
-private interface FeedWeightUnitEntryPoint {
-    fun weightUnitManager(): WeightUnitManager
-}
-
-@Composable
-private fun rememberFeedWeightUnitManager(): WeightUnitManager? {
-    val applicationContext = LocalContext.current.applicationContext
-    return remember(applicationContext) {
-        runCatching {
-            EntryPointAccessors.fromApplication(
-                applicationContext,
-                FeedWeightUnitEntryPoint::class.java
-            ).weightUnitManager()
-        }.getOrNull()
     }
 }
 

@@ -89,6 +89,12 @@ interface FollowRelationshipDao {
     suspend fun getFollowingUserIds(userId: String): List<String>
 
     @Query("""
+        SELECT following_id FROM follow_relationships
+        WHERE follower_id = :userId AND status = 'ACCEPTED'
+    """)
+    fun observeFollowingUserIds(userId: String): Flow<List<String>>
+
+    @Query("""
         SELECT follower_id FROM follow_relationships
         WHERE following_id = :userId AND status = 'ACCEPTED'
     """)

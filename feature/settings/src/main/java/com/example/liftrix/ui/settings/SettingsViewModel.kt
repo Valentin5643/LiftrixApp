@@ -189,6 +189,7 @@ class SettingsViewModel @Inject constructor(
             is SettingsEvent.SubscriptionPurchaseCompleted -> handleSubscriptionPurchaseCompleted()
             is SettingsEvent.ExportDataRequested -> handleDataExport()
             is SettingsEvent.NavigateToDataPortability -> handleDataPortabilityNavigation()
+            is SettingsEvent.NavigateToExportProgressReport -> handleExportProgressReportNavigation()
             is SettingsEvent.DeleteAccountRequested -> handleAccountDeletion()
             is SettingsEvent.DeleteAccountDialogDismissed -> dismissDeleteAccountDialog()
             is SettingsEvent.DeleteAccountConfirmed -> confirmAccountDeletion(
@@ -1125,6 +1126,14 @@ class SettingsViewModel @Inject constructor(
      */
     private fun handleDataPortabilityNavigation() {
         trackDataAction("navigate_to_data_portability")
+        // Navigation will be handled by the UI layer through callbacks
+    }
+
+    /**
+     * Handles navigation to progress report export screen.
+     */
+    private fun handleExportProgressReportNavigation() {
+        trackDataAction("navigate_to_export_progress_report")
         // Navigation will be handled by the UI layer through callbacks
     }
 

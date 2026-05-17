@@ -278,6 +278,11 @@ sealed class SettingsEvent : ViewModelEvent {
      * Should navigate to data import/export screen.
      */
     object NavigateToDataPortability : SettingsEvent()
+
+    /**
+     * Triggered when user wants to navigate to local progress report PDF export.
+     */
+    object NavigateToExportProgressReport : SettingsEvent()
     
     /**
      * Triggered when user requests account deletion.

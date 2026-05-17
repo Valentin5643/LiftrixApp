@@ -158,6 +158,7 @@ private fun ActiveWorkoutContent(
     val weightUnitManager = rememberWeightUnitManager()
     val observedWeightUnit = weightUnitManager?.currentUnit?.collectAsStateWithLifecycle()
     val currentWeightUnit = observedWeightUnit?.value ?: WeightUnit.KILOGRAMS
+    val previousSetData by viewModel.previousSetData.collectAsStateWithLifecycle()
     val exerciseMenuStates = remember { mutableStateMapOf<String, Boolean>() }
     val exerciseNotes = remember { mutableStateMapOf<String, String>() }
     var showReorderDialog by remember { mutableStateOf(false) }
@@ -388,6 +389,17 @@ private fun ActiveWorkoutContent(
                         leadingIconResId = muscleGroupIconResId(exercise.primaryMuscle),
                         leadingIconContentDescription = muscleGroupIconContentDescription(exercise.primaryMuscle),
                         sets = exercise.sets.mapIndexed { setIndex, set ->
+                            val previousExerciseData = previousSetData[exercise.exerciseId.value]
+                            val previousSetInfo = previousExerciseData?.getPreviousSetInfo(setIndex + 1)
+                            val previousExerciseWeightKilograms = previousExerciseData
+                                ?.previousSets
+                                ?.values
+                                ?.firstOrNull { it.weight != null }
+                                ?.weight
+                            val previousWeightForInput = previousExerciseWeightKilograms?.let { kilograms ->
+                                weightUnitManager?.convertForDisplay(kilograms, WeightUnit.KILOGRAMS)
+                                    ?: currentWeightUnit.convertFromKilograms(kilograms)
+                            }
                             RedesignedSetData(
                                 weight = set.actualWeight?.kilograms
                                     ?.let {
@@ -408,13 +420,13 @@ private fun ActiveWorkoutContent(
                                     ?: "",
                                 reps = set.actualReps?.toString()
                                     ?: set.targetReps?.toString() ?: "",
-                                previousValue = viewModel.getPreviousValueForSet(
-                                    exerciseId = exercise.exerciseId.value,
-                                    setNumber = setIndex + 1
-                                )?.let { previousValue ->
-                                    weightUnitManager?.formatWeightText(previousValue)
-                                        ?: previousValue
-                                },
+                                previousDisplay = formatPreviousWeightDisplay(
+                                    kilograms = previousExerciseWeightKilograms,
+                                    weightUnitManager = weightUnitManager,
+                                    fallbackUnit = currentWeightUnit
+                                ),
+                                previousWeight = previousWeightForInput,
+                                previousReps = previousSetInfo?.reps,
                                 isCompleted = set.completedAt != null,
                                 setId = "${exercise.exerciseId.value}_${setIndex}",
                                 hasWeightAnomaly = false,
@@ -451,23 +463,12 @@ private fun ActiveWorkoutContent(
                         onNotesClick = { showNotesDialog = true },
                         context = ExerciseCardContext.ACTIVE_WORKOUT,
                         weightUnit = currentWeightUnit,
-                        onAnomalyDetected = { value, setIdx ->
+                        onAnomalyDetected = { value, type, setIdx, previousDisplay ->
                             // Prepare anomaly dialog data
                             anomalyDetails = Triple(
                                 value,
-                                if (value.toDoubleOrNull() != null) "weight" else "reps",
-                                exercise.sets.getOrNull(setIdx)?.let { set ->
-                                    buildString {
-                                        val prevWeight = set.targetWeight?.kilograms ?: 0
-                                        val displayPrevWeight =
-                                            weightUnitManager?.formatWeightCompact(
-                                                prevWeight.toDouble(),
-                                                WeightUnit.KILOGRAMS
-                                            ) ?: "$prevWeight kg"
-                                        val prevReps = set.targetReps ?: 0
-                                        append("$displayPrevWeight x $prevReps")
-                                    }
-                                }
+                                type,
+                                previousDisplay
                             )
                             anomalyExerciseName = exercise.name
                             anomalySetIndex = setIdx
@@ -640,7 +641,7 @@ private fun ActiveWorkoutContent(
                             val updatedSet = if (anomalyDetails!!.second == "weight") {
                                 set.copy(
                                     actualWeight = correctedValue.toDoubleOrNull()?.let {
-                                        com.example.liftrix.domain.model.Weight.fromKilograms(it)
+                                        Weight.fromValue(it, currentWeightUnit)
                                     }
                                 )
                             } else {
@@ -907,3 +908,25 @@ private fun formatWeightInputValue(
             else -> String.format(Locale.US, "%.2f", displayValue)
         }
     }
+
+private fun formatPreviousWeightDisplay(
+    kilograms: Double?,
+    weightUnitManager: WeightUnitManager?,
+    fallbackUnit: WeightUnit
+): String? {
+    kilograms ?: return null
+
+    return if (kilograms == 0.0) {
+        "Bodyweight"
+    } else {
+        weightUnitManager?.formatWeightCompact(kilograms, WeightUnit.KILOGRAMS)
+            ?: run {
+                val displayValue = fallbackUnit.convertFromKilograms(kilograms)
+                val formatted = when {
+                    displayValue == displayValue.toInt().toDouble() -> displayValue.toInt().toString()
+                    else -> String.format(Locale.US, "%.1f", displayValue)
+                }
+                "$formatted ${fallbackUnit.symbol}"
+            }
+    }
+}
