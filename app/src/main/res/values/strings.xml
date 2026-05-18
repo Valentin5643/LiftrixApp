@@ -67,4 +67,14 @@
     <string name="visibility_private_description">Only you can see this post</string>
     
     <!-- Firebase configuration - moved to BuildConfig for security -->
+
+    <!-- Home screen widgets -->
+    <string name="widget_streak_name">Liftrix Streak</string>
+    <string name="widget_streak_description">Compact workout streak in weeks</string>
+    <string name="widget_consistency_name">Liftrix Volume</string>
+    <string name="widget_consistency_description">30-day volume and weekday rhythm</string>
+    <string name="widget_dashboard_name">Liftrix Volume Dashboard</string>
+    <string name="widget_dashboard_description">30-day volume with weekday training rhythm</string>
+    <string name="widget_private_state">Private</string>
+    <string name="widget_zero_volume">0 kg</string>
 </resources>

@@ -863,12 +863,7 @@ private fun PrivacySettings(
             icon = Icons.Default.PictureAsPdf,
             onClick = {
                 stableOnEvent(SettingsEvent.NavigateToExportProgressReport)
-                if (uiState.hasPremiumAccess) {
-                    stableOnNavigateToExportProgressReport?.invoke()
-                } else {
-                    stableOnEvent(SettingsEvent.UpgradeSubscription)
-                    stableOnNavigateToUpgradeToPremium?.invoke()
-                }
+                stableOnNavigateToExportProgressReport?.invoke()
             }
         )
 

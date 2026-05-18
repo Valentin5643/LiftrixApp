@@ -53,6 +53,8 @@ data class ProgressReportData(
     val range: ProgressReportResolvedDateRange,
     val title: String,
     val summary: ProgressReportSummaryMetrics,
+    val privacyOptions: ProgressReportPrivacyOptions,
+    val privacyApplied: List<String>,
     val strengthRows: List<ProgressReportStrengthRow>,
     val weeklyVolumeRows: List<ProgressReportWeeklyVolumeRow>,
     val muscleGroupRows: List<ProgressReportMuscleGroupRow>,
@@ -62,14 +64,22 @@ data class ProgressReportData(
     val aiSummary: ProgressReportAiSummary,
     val syncStatus: ProgressReportSyncStatus,
     val isMinimalReport: Boolean
-)
+) {
+    companion object {
+        const val NO_WORKOUT_DATA_MESSAGE =
+            "Not enough workout data for a full progress report. Complete more workouts to generate better insights."
+    }
+}
 
 data class ProgressReportSummaryMetrics(
     val workoutsCompleted: Int,
     val totalVolumeKg: Double,
     val activeTrainingDays: Int,
+    val restDays: Int,
     val newPersonalRecords: Int,
     val bestStreakDays: Int,
+    val consistencyScore: Int,
+    val mostActiveDay: String?,
     val estimatedOneRmImprovementKg: Double?,
     val averageWorkoutsPerWeek: Double,
     val averageDurationMinutes: Long?

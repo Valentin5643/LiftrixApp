@@ -49,6 +49,16 @@ Active widgets returned by `AnalyticsWidget.getAllWidgets()` in the prior root g
 
 Deprecated/hidden widgets should not be newly surfaced. Removed IDs are centralized in `AnalyticsWidget.DEPRECATED_WIDGET_IDS`.
 
+## Native Home Screen Widgets
+
+Android launcher widgets live in `app/src/main/java/com/example/liftrix/widget` because Glance rendering and app widget receivers are platform entry points owned by `:app`.
+
+- Native widgets render compact display-ready snapshots from local Room-backed workout analytics data.
+- Reads must remain scoped by `userId` / `user_id`; widgets must not read Firebase directly.
+- `LiftrixWidgetUpdateScheduler` owns immediate, post-workout, periodic, and logout clear/update refreshes.
+- `CompleteWorkoutSessionUseCase` notifies native widgets through the `HomeWidgetUpdateNotifier` domain boundary so domain code does not import Android widget APIs.
+- Widget taps should use existing typed workout navigation through `MainActivity` and `UnifiedNavigationContainer`; do not add a route unless the active graph cannot express the target.
+
 ## Detail Routes
 
 Use type-safe navigation:

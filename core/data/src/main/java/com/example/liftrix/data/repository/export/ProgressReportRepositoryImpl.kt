@@ -3,6 +3,7 @@ package com.example.liftrix.data.repository.export
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.model.export.ProgressReportData
 import com.example.liftrix.domain.model.export.ProgressReportRequest
 import com.example.liftrix.domain.model.export.ProgressReportResult
 import com.example.liftrix.domain.repository.export.ProgressReportRepository
@@ -33,6 +34,13 @@ class ProgressReportRepositoryImpl @Inject constructor(
             }
         ) {
             val data = dataBuilder.build(userId, request)
+            if (data.summary.workoutsCompleted == 0) {
+                throw LiftrixError.ValidationError(
+                    field = "workouts",
+                    violations = listOf(ProgressReportData.NO_WORKOUT_DATA_MESSAGE),
+                    errorMessage = ProgressReportData.NO_WORKOUT_DATA_MESSAGE
+                )
+            }
             val pdfBytes = pdfReportGenerator.generateChartlessProgressReport(data).getOrThrow()
             val fileName = "Liftrix_Progress_Report_${request.generatedAt.toLocalDate().format(DateTimeFormatter.ISO_DATE)}.pdf"
             val cacheFile = fileManager.saveProgressReportToCache(fileName, pdfBytes).getOrThrow()

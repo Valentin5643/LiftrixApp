@@ -171,7 +171,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 @Composable
 fun UnifiedNavigationContainer(
     navController: NavHostController = rememberNavController(),
-    viewModel: UnifiedNavigationViewModel = hiltViewModel()
+    viewModel: UnifiedNavigationViewModel = hiltViewModel(),
+    pendingWidgetWorkoutNavigation: Boolean = false,
+    onWidgetWorkoutNavigationConsumed: () -> Unit = {}
 ) {
     // Session management handled by viewModel
     val currentSession by viewModel.currentSession.collectAsState()
@@ -180,6 +182,21 @@ fun UnifiedNavigationContainer(
     
     // State for workout creation modal
     var showWorkoutCreationModal by remember { mutableStateOf(false) }
+
+    LaunchedEffect(pendingWidgetWorkoutNavigation) {
+        if (pendingWidgetWorkoutNavigation) {
+            val session = currentSession
+            if (session?.isLive() == true) {
+                navController.navigateToActiveWorkout(
+                    templateId = session.templateId,
+                    isBlankWorkout = false
+                )
+            } else {
+                navController.navigateToWorkout()
+            }
+            onWidgetWorkoutNavigationConsumed()
+        }
+    }
     
     Scaffold(
         modifier = Modifier.fillMaxSize(),

@@ -42,6 +42,7 @@ import com.example.liftrix.data.service.FirebaseStorageUrlResolver
 import com.example.liftrix.ui.common.LocalFirebaseStorageUrlResolver
 import com.example.liftrix.ui.common.LocalProfileImageCache
 import com.example.liftrix.service.ProfileImageCache
+import com.example.liftrix.widget.LiftrixWidgetActions
 import androidx.compose.runtime.CompositionLocalProvider
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -57,11 +58,14 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var profileImageCache: ProfileImageCache
+
+    private var pendingWidgetWorkoutNavigation by mutableStateOf(false)
     
     override fun onCreate(savedInstanceState: Bundle?) {
         ThemeManager.getInstance(this).applyCurrentThemeToPlatform()
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        captureWidgetNavigationRequest(intent)
         
         // Initialize WeightUnitManager
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
@@ -89,6 +93,10 @@ class MainActivity : ComponentActivity() {
                             color = MaterialTheme.colorScheme.background
                         ) {
                             MainContent(
+                                pendingWidgetWorkoutNavigation = pendingWidgetWorkoutNavigation,
+                                onWidgetWorkoutNavigationConsumed = {
+                                    pendingWidgetWorkoutNavigation = false
+                                },
                                 onNavigateToAuth = {
                                     navigateToAuthActivity()
                                 }
@@ -97,6 +105,21 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        captureWidgetNavigationRequest(intent)
+    }
+
+    private fun captureWidgetNavigationRequest(intent: Intent?) {
+        if (
+            intent?.action == LiftrixWidgetActions.ACTION_OPEN_WORKOUT ||
+            intent?.hasExtra(LiftrixWidgetActions.EXTRA_WIDGET_SOURCE) == true
+        ) {
+            pendingWidgetWorkoutNavigation = true
         }
     }
     
@@ -110,6 +133,8 @@ class MainActivity : ComponentActivity() {
 }
 @Composable
 fun MainContent(
+    pendingWidgetWorkoutNavigation: Boolean = false,
+    onWidgetWorkoutNavigationConsumed: () -> Unit = {},
     onNavigateToAuth: () -> Unit,
     viewModel: MainViewModel = hiltViewModel()
 ) {
@@ -133,6 +158,8 @@ fun MainContent(
         is MainViewModel.AuthenticationState.Authenticated -> {
             AuthenticatedContent(
                 user = currentState.user,
+                pendingWidgetWorkoutNavigation = pendingWidgetWorkoutNavigation,
+                onWidgetWorkoutNavigationConsumed = onWidgetWorkoutNavigationConsumed,
                 onNavigateToAuth = onNavigateToAuth
             )
         }
@@ -162,6 +189,8 @@ fun LoadingScreen() {
 @Composable
 fun AuthenticatedContent(
     user: com.example.liftrix.domain.model.User,
+    pendingWidgetWorkoutNavigation: Boolean = false,
+    onWidgetWorkoutNavigationConsumed: () -> Unit = {},
     onNavigateToAuth: () -> Unit,
     viewModel: MainViewModel = hiltViewModel()
 ) {
@@ -205,6 +234,9 @@ fun AuthenticatedContent(
         LoadingScreen()
     } else {
         // Main navigation with type-safe navigation system
-        UnifiedNavigationContainer()
+        UnifiedNavigationContainer(
+            pendingWidgetWorkoutNavigation = pendingWidgetWorkoutNavigation,
+            onWidgetWorkoutNavigationConsumed = onWidgetWorkoutNavigationConsumed
+        )
     }
 }

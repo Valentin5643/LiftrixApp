@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widget_background">#0F0F0F</color>
+    <color name="widget_page_background">#0B0C0B</color>
+    <color name="widget_surface">#17191A</color>
+    <color name="widget_on_background">#FFFFFF</color>
+    <color name="widget_on_surface_variant">#B3B3B3</color>
+    <color name="widget_on_surface_subtle">#888888</color>
+    <color name="widget_brand">#00BCD4</color>
+    <color name="widget_brand_soft">#083E4D</color>
+    <color name="primary_teal">#00BCD4</color>
+    <color name="dark_teal_container">#083E4D</color>
+    <color name="widget_teal_light">#67E8F9</color>
+    <color name="widget_streak">#00BCD4</color>
+    <color name="widget_success">#00BCD4</color>
+    <color name="widget_pr">#00BCD4</color>
+    <color name="widget_material_highlight">#00000000</color>
+    <color name="widget_material_glow">#3800BCD4</color>
+    <color name="widget_material_stroke">#2A2A2A</color>
+    <color name="widget_material_chip">#17191A</color>
+    <color name="widget_material_icon_well">#083E4D</color>
+    <color name="widget_muted_track">#12FFFFFF</color>
+    <color name="widget_panel_fill">#17191A</color>
+    <color name="widget_panel_stroke">#2A2A2A</color>
+    <color name="widget_orbit_ring">#00BCD4</color>
+    <color name="widget_inactive_bar">#1AFFFFFF</color>
+    <color name="bar_empty">#1AFFFFFF</color>
+    <color name="widget_active_bar_bottom">#0891B2</color>
+    <color name="widget_zero_value">#888888</color>
+</resources>

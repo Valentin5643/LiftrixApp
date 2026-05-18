@@ -18,6 +18,7 @@ import com.example.liftrix.sync.SyncCoordinator
 import com.example.liftrix.sync.StartupRestoreGate
 import com.example.liftrix.domain.usecase.settings.InitializeUserThemeUseCase
 import com.example.liftrix.ui.theme.ThemeManager
+import com.example.liftrix.widget.LiftrixWidgetUpdateScheduler
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -57,6 +58,9 @@ class LiftrixApp : Application(), Configuration.Provider {
 
     @Inject
     lateinit var startupRestoreGate: StartupRestoreGate
+
+    @Inject
+    lateinit var liftrixWidgetUpdateScheduler: LiftrixWidgetUpdateScheduler
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -393,8 +397,14 @@ class LiftrixApp : Application(), Configuration.Provider {
                     
                     // Also schedule periodic sync for ongoing synchronization
                     syncCoordinator.schedulePeriodicSync(currentUser.uid)
+                    liftrixWidgetUpdateScheduler.enqueueRefresh(
+                        reason = "app_start_authenticated",
+                        userId = currentUser.uid
+                    )
+                    liftrixWidgetUpdateScheduler.enqueuePeriodicRefresh(currentUser.uid)
                 } else {
                     startupRestoreGate.resetForAuthPending("app_startup_no_current_user")
+                    liftrixWidgetUpdateScheduler.clearAndUpdateAll()
                     Timber.d("No authenticated user found, sync will be initialized after authentication")
                 }
                 
@@ -447,10 +457,22 @@ class LiftrixApp : Application(), Configuration.Provider {
                             
                             // Schedule periodic sync for ongoing synchronization
                             syncCoordinator.schedulePeriodicSync(user.uid)
+                            liftrixWidgetUpdateScheduler.enqueueRefresh(
+                                reason = "auth_state_authenticated",
+                                userId = user.uid
+                            )
+                            liftrixWidgetUpdateScheduler.enqueuePeriodicRefresh(user.uid)
                         }
                     } else {
                         startupRestoreGate.resetForAuthPending("auth_listener_signed_out")
                         Timber.d("User signed out, canceling sync operations")
+                        applicationScope.launch {
+                            try {
+                                liftrixWidgetUpdateScheduler.clearAndUpdateAll()
+                            } catch (e: Exception) {
+                                Timber.e(e, "Failed to clear native home widgets after sign out")
+                            }
+                        }
                         // 🔥 ENHANCED: Cancel all sync operations for previous user
                         // Note: We don't have the userId here, so we rely on WorkManager tagging
                         // The sync coordinator should handle cleanup when users sign out

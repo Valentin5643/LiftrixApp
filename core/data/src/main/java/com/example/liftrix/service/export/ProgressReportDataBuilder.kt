@@ -12,6 +12,7 @@ import com.example.liftrix.domain.model.export.ProgressReportData
 import com.example.liftrix.domain.model.export.ProgressReportDateRange
 import com.example.liftrix.domain.model.export.ProgressReportMuscleGroupRow
 import com.example.liftrix.domain.model.export.ProgressReportPersonalRecordRow
+import com.example.liftrix.domain.model.export.ProgressReportPrivacyOptions
 import com.example.liftrix.domain.model.export.ProgressReportRequest
 import com.example.liftrix.domain.model.export.ProgressReportResolvedDateRange
 import com.example.liftrix.domain.model.export.ProgressReportStrengthRow
@@ -22,9 +23,11 @@ import com.example.liftrix.domain.model.export.ProgressReportWorkoutRow
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
+import java.time.format.TextStyle
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.max
@@ -61,9 +64,14 @@ class ProgressReportDataBuilder @Inject constructor(
         val bestStreak = calculateBestStreak(workouts)
         val avgWorkoutsPerWeek = calculateAverageWorkoutsPerWeek(workouts.size, range)
         val averageDuration = workouts.mapNotNull { durationMinutes(it) }.takeIf { it.isNotEmpty() }?.average()?.roundToInt()?.toLong()
+        val totalDays = (ChronoUnit.DAYS.between(range.start, range.end) + 1).toInt().coerceAtLeast(activeDays)
+        val restDays = (totalDays - activeDays).coerceAtLeast(0)
+        val consistencyScore = calculateConsistencyScore(activeDays, totalDays, avgWorkoutsPerWeek)
+        val mostActiveDay = findMostActiveDay(workouts)
         val strengthRows = buildStrengthRows(oneRmData, performanceHistory)
         val weeklyVolumeRows = buildWeeklyVolumeRows(dailyVolume, workouts)
         val consistencyRows = buildConsistencyRows(workouts, range)
+        val privacyApplied = buildPrivacyApplied(request.privacyOptions)
         val prRows = prs.take(18).map { record ->
             ProgressReportPersonalRecordRow(
                 date = Instant.ofEpochMilli(record.achievedAt).atZone(ZoneId.systemDefault()).toLocalDate(),
@@ -85,8 +93,11 @@ class ProgressReportDataBuilder @Inject constructor(
             workoutsCompleted = workouts.size,
             totalVolumeKg = totalVolume,
             activeTrainingDays = activeDays,
+            restDays = restDays,
             newPersonalRecords = prs.size,
             bestStreakDays = bestStreak,
+            consistencyScore = consistencyScore,
+            mostActiveDay = mostActiveDay,
             estimatedOneRmImprovementKg = strengthRows.sumOf { it.improvementKg }.takeIf { it > 0.0 },
             averageWorkoutsPerWeek = avgWorkoutsPerWeek,
             averageDurationMinutes = averageDuration
@@ -97,6 +108,8 @@ class ProgressReportDataBuilder @Inject constructor(
             range = range,
             title = "${range.label} Training Summary",
             summary = summary,
+            privacyOptions = request.privacyOptions,
+            privacyApplied = privacyApplied,
             strengthRows = if (request.includeOptions.strengthProgress) strengthRows else emptyList(),
             weeklyVolumeRows = if (request.includeOptions.volumeAnalysis) weeklyVolumeRows else emptyList(),
             muscleGroupRows = if (request.includeOptions.volumeAnalysis) muscleGroups.take(8).map {
@@ -230,6 +243,31 @@ class ProgressReportDataBuilder @Inject constructor(
     private fun calculateAverageWorkoutsPerWeek(workoutCount: Int, range: ProgressReportResolvedDateRange): Double {
         val days = ChronoUnit.DAYS.between(range.start, range.end).coerceAtLeast(1) + 1
         return workoutCount / (days / 7.0)
+    }
+
+    private fun calculateConsistencyScore(activeDays: Int, totalDays: Int, averageWorkoutsPerWeek: Double): Int {
+        if (totalDays <= 0 || activeDays <= 0) return 0
+        val activeDayScore = activeDays.toDouble() / totalDays * 100.0
+        val frequencyScore = (averageWorkoutsPerWeek / 3.0 * 100.0).coerceAtMost(100.0)
+        return ((activeDayScore * 0.4) + (frequencyScore * 0.6)).roundToInt().coerceIn(0, 100)
+    }
+
+    private fun findMostActiveDay(workouts: List<WorkoutEntity>): String? {
+        val day = workouts
+            .groupingBy { it.date.dayOfWeek }
+            .eachCount()
+            .maxWithOrNull(compareBy<Map.Entry<DayOfWeek, Int>> { it.value }.thenBy { it.key.value })
+            ?.key
+            ?: return null
+        return day.getDisplayName(TextStyle.FULL, Locale.getDefault())
+    }
+
+    private fun buildPrivacyApplied(privacyOptions: ProgressReportPrivacyOptions): List<String> {
+        return buildList {
+            add(if (privacyOptions.hideBodyweight) "Bodyweight hidden" else "Bodyweight not collected in this report")
+            add(if (privacyOptions.hidePersonalNotes) "Personal notes hidden" else "Personal notes not collected in this report")
+            add(if (privacyOptions.hideEmailAccountInfo) "Email and account info hidden" else "Email and account info not collected in this report")
+        }
     }
 
     private fun durationMinutes(workout: WorkoutEntity): Long? {

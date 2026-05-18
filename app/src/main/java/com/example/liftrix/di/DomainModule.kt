@@ -76,6 +76,12 @@ abstract class DomainModule {
         impl: com.example.liftrix.service.GymBuddyWorkoutCompletionNotifier
     ): com.example.liftrix.service.WorkoutCompletionNotifier
 
+    @dagger.Binds
+    @javax.inject.Singleton
+    abstract fun bindHomeWidgetUpdateNotifier(
+        impl: com.example.liftrix.service.HomeWidgetUpdateNotifierImpl
+    ): com.example.liftrix.service.HomeWidgetUpdateNotifier
+
     // --- Analytics Services ---
 
     @dagger.Binds

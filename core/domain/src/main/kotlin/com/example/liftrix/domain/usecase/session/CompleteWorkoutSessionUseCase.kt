@@ -6,6 +6,7 @@ import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.service.CacheInvalidationService
+import com.example.liftrix.service.HomeWidgetUpdateNotifier
 import com.example.liftrix.service.WorkoutCompletionNotifier
 import kotlinx.coroutines.delay
 import com.example.liftrix.domain.util.DomainLogger as Timber
@@ -15,7 +16,8 @@ class CompleteWorkoutSessionUseCase @Inject constructor(
     private val workoutRepository: WorkoutRepository,
     private val cacheManager: CacheManager,
     private val cacheInvalidationService: CacheInvalidationService,
-    private val workoutCompletionNotifier: WorkoutCompletionNotifier
+    private val workoutCompletionNotifier: WorkoutCompletionNotifier,
+    private val homeWidgetUpdateNotifier: HomeWidgetUpdateNotifier
 ) {
 
     suspend operator fun invoke(
@@ -35,6 +37,7 @@ class CompleteWorkoutSessionUseCase @Inject constructor(
                 val sideEffects = listOf(
                     createAutomaticWorkoutPost(savedWorkout),
                     invalidateWorkoutRelatedCache(savedWorkout),
+                    enqueueNativeHomeWidgetRefresh(savedWorkout),
                     notifyGymBuddiesWorkoutCompleted(savedWorkout)
                 )
 
@@ -151,6 +154,25 @@ class CompleteWorkoutSessionUseCase @Inject constructor(
         }
     }
 
+    private suspend fun enqueueNativeHomeWidgetRefresh(
+        workout: Workout
+    ): CompletionSideEffectStatus {
+        return try {
+            homeWidgetUpdateNotifier.enqueueWorkoutCompletedRefresh(workout.userId)
+            CompletionSideEffectStatus(
+                effect = CompletionSideEffect.NATIVE_HOME_WIDGET_REFRESH,
+                state = CompletionSideEffectState.SUCCESS
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to enqueue native home widget refresh")
+            CompletionSideEffectStatus(
+                effect = CompletionSideEffect.NATIVE_HOME_WIDGET_REFRESH,
+                state = CompletionSideEffectState.FAILED,
+                detail = e.message
+            )
+        }
+    }
+
     private suspend fun fallbackCacheInvalidation(userId: String): Boolean {
         return try {
             Timber.d("Fallback cache invalidation for user: $userId")
@@ -182,6 +204,7 @@ data class CompletionSideEffectStatus(
 enum class CompletionSideEffect {
     AUTO_POST,
     CACHE_INVALIDATION,
+    NATIVE_HOME_WIDGET_REFRESH,
     GYM_BUDDY_NOTIFICATION
 }
 

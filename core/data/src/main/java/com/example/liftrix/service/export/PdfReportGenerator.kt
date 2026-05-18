@@ -180,6 +180,7 @@ class PdfReportGenerator @Inject constructor() {
             y = drawKeyValue(canvas, "Range", "${data.range.start} to ${data.range.end}", y)
             y = drawKeyValue(canvas, "Source", "Generated offline from local training data", y)
             y = drawKeyValue(canvas, "Sync", formatSyncStatus(data), y)
+            y = drawKeyValue(canvas, "Privacy", data.privacyApplied.joinToString(", "), y)
             y += 20f
             val metrics = listOf(
                 "Workouts" to data.summary.workoutsCompleted.toString(),
@@ -286,6 +287,10 @@ class PdfReportGenerator @Inject constructor() {
             val canvas = page.canvas
             drawProgressPageChrome(canvas, "Consistency", 4)
             var y = MARGIN_TOP + 55f
+            y = drawKeyValue(canvas, "Consistency score", "${data.summary.consistencyScore} / 100", y)
+            y = drawKeyValue(canvas, "Most active day", data.summary.mostActiveDay ?: "Not enough data", y)
+            y = drawKeyValue(canvas, "Active days", data.summary.activeTrainingDays.toString(), y)
+            y = drawKeyValue(canvas, "Rest days", data.summary.restDays.toString(), y)
             y = drawKeyValue(canvas, "Average workouts per week", "%.1f".format(data.summary.averageWorkoutsPerWeek), y)
             y = drawKeyValue(canvas, "Best streak", "${data.summary.bestStreakDays} days", y)
             y = drawKeyValue(canvas, "Average duration", data.summary.averageDurationMinutes?.let { "$it minutes" } ?: "Not enough data", y)
@@ -301,7 +306,7 @@ class PdfReportGenerator @Inject constructor() {
             y += 20f
             drawWrappedText(
                 canvas,
-                if (data.summary.averageWorkoutsPerWeek >= 3.0) "Training frequency is strong for this range." else "A repeatable weekly schedule would improve consistency.",
+                buildConsistencyInsight(data),
                 MARGIN_LEFT,
                 y,
                 CONTENT_WIDTH,
@@ -331,9 +336,27 @@ class PdfReportGenerator @Inject constructor() {
                 listOf("Date", "Exercise", "New PR", "Previous"),
                 data.personalRecordRows.map {
                     listOf(it.date.toString(), it.exerciseName, "${it.recordType}: ${it.newValue}", it.previousValue ?: "-")
-                }.ifEmpty { listOf(listOf("No new records", "-", "-", "-")) }
+                }.ifEmpty { listOf(listOf("No new records", "-", "-", "-")) },
+                maxRows = 8
             )
-            if (data.workoutRows.size >= 24) {
+            y += 20f
+            canvas.drawText("Detailed workouts", MARGIN_LEFT, y, createPaint(SUBHEADING_SIZE, TEXT_PRIMARY, Typeface.DEFAULT_BOLD))
+            y += 24f
+            y = drawTable(
+                canvas,
+                y,
+                listOf("Date", "Workout", "Duration", "Sync"),
+                data.workoutRows.map {
+                    listOf(
+                        it.date.toString(),
+                        it.name,
+                        it.durationMinutes?.let { minutes -> "$minutes min" } ?: "-",
+                        if (it.synced) "Synced" else "Pending"
+                    )
+                }.ifEmpty { listOf(listOf("Workout list not included", "-", "-", "-")) },
+                maxRows = 8
+            )
+            if (data.workoutRows.size > 8) {
                 y += 16f
                 drawWrappedText(
                     canvas,
@@ -429,11 +452,21 @@ class PdfReportGenerator @Inject constructor() {
         return yPosition + 24f
     }
 
+    private fun buildConsistencyInsight(data: ProgressReportData): String {
+        return when {
+            data.summary.workoutsCompleted == 0 -> ProgressReportData.NO_WORKOUT_DATA_MESSAGE
+            data.summary.consistencyScore >= 80 -> "Consistency is strong in this range, with regular active days and stable training frequency."
+            data.summary.averageWorkoutsPerWeek >= 3.0 -> "Training frequency is strong for this range; keep rest days planned around harder sessions."
+            else -> "A repeatable weekly schedule would improve consistency and make future trends easier to read."
+        }
+    }
+
     private fun drawTable(
         canvas: Canvas,
         yPosition: Float,
         headers: List<String>,
-        rows: List<List<String>>
+        rows: List<List<String>>,
+        maxRows: Int = 12
     ): Float {
         val headerPaint = createPaint(CAPTION_SIZE, TEXT_PRIMARY, Typeface.DEFAULT_BOLD)
         val bodyPaint = createPaint(CAPTION_SIZE, TEXT_SECONDARY, Typeface.DEFAULT)
@@ -449,7 +482,7 @@ class PdfReportGenerator @Inject constructor() {
             canvas.drawText(header.take(22), MARGIN_LEFT + index * colWidth + 6f, y, headerPaint)
         }
         y += 24f
-        rows.take(12).forEach { row ->
+        rows.take(maxRows).forEach { row ->
             row.take(columns).forEachIndexed { index, value ->
                 canvas.drawText(value.take(24), MARGIN_LEFT + index * colWidth + 6f, y, bodyPaint)
             }
