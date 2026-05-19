@@ -2,9 +2,6 @@ package com.example.liftrix.ui.feed
 
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.plus
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.example.liftrix.domain.model.common.LiftrixResult
@@ -151,7 +148,7 @@ class FeedViewModel @Inject constructor(
                 error = null
             )
         ).let { flow ->
-            viewModelScope.launch(Dispatchers.IO + SupervisorJob()) {
+            viewModelScope.launch {
                 flow.collect { newState ->
                     updateState { newState }
                 }
@@ -174,7 +171,7 @@ class FeedViewModel @Inject constructor(
     }
 
     private fun toggleLike(postId: String) {
-        viewModelScope.launch(Dispatchers.IO + SupervisorJob()) {
+        viewModelScope.launch {
             val userId = authQueryUseCase(waitForAuth = false).fold(
                 onSuccess = { it?.value },
                 onFailure = { null }

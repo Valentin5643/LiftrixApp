@@ -98,7 +98,8 @@ class WorkoutRepositoryImpl @Inject constructor(
     private val offlineQueueManager: OfflineQueueManager,
     private val canonicalJsonAdapter: CanonicalWorkoutJsonAdapter,
     private val kotlinxSerializer: KotlinxWorkoutSerializationService,
-    private val exerciseConsistencyValidator: ExerciseConsistencyValidator
+    private val exerciseConsistencyValidator: ExerciseConsistencyValidator,
+    private val applicationScope: CoroutineScope
 ) : WorkoutRepository,
     WorkoutHistoryRepository,
     WorkoutAnalyticsDataRepository,
@@ -553,7 +554,7 @@ class WorkoutRepositoryImpl @Inject constructor(
 
     override fun getRecentWorkouts(userId: String, limit: Int): Flow<LiftrixResult<List<Workout>>> {
         // Check total workout count on startup
-        CoroutineScope(Dispatchers.IO).launch {
+        applicationScope.launch {
             try {
                 val totalCount = workoutDao.getWorkoutCountForUser(userId)
                 Timber.d("WORKOUT-DEBUG: Total workouts for user: $totalCount")
@@ -1579,7 +1580,7 @@ class WorkoutRepositoryImpl @Inject constructor(
             
             
             // Trigger sync coordinator for background sync
-            CoroutineScope(Dispatchers.IO).launch {
+            applicationScope.launch {
                 val syncResult = syncScheduler.triggerEntitySync(workout.userId, "workout")
                 
                 // 🚀 CRITICAL FIX: Also trigger public profile sync to update workout count

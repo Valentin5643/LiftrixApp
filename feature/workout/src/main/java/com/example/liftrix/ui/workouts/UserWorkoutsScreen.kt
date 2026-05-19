@@ -1,5 +1,6 @@
-package com.example.liftrix.ui.workouts
+﻿package com.example.liftrix.ui.workouts
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -42,8 +43,8 @@ fun UserWorkoutsScreen(
     modifier: Modifier = Modifier,
     viewModel: UserWorkoutsViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val workoutPosts by viewModel.userWorkouts.collectAsState(initial = emptyList())
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val workoutPosts by viewModel.userWorkouts.collectAsStateWithLifecycle(initialValue = emptyList())
     
     // Pull-to-refresh state
     val isRefreshing = uiState.isLoading
@@ -222,3 +223,4 @@ private fun EmptyWorkoutState(
         )
     }
 }
+

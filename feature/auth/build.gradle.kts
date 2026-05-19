@@ -35,4 +35,7 @@ dependencies {
 
     ksp(libs.hilt.compiler)
     debugImplementation(libs.androidx.ui.tooling)
+
+    testImplementation(libs.junit)
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
 }

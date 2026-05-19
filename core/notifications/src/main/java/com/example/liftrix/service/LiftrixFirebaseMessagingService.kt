@@ -18,7 +18,7 @@ import com.example.liftrix.service.NotificationActionService
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.UUID
@@ -41,13 +41,14 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
     @Inject lateinit var notificationHandler: NotificationHandler
     @Inject lateinit var analyticsTracker: AnalyticsTracker
     @Inject lateinit var authQueryUseCase: AuthQueryUseCase
+    @Inject lateinit var applicationScope: CoroutineScope
     
     override fun onNewToken(token: String) {
         super.onNewToken(token)
         
         Timber.d("New FCM token received: ${token.take(20)}...")
         
-        GlobalScope.launch {
+        applicationScope.launch {
             val userIdResult = authQueryUseCase(waitForAuth = false)
 
             userIdResult.fold(
@@ -93,7 +94,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
         // Check if app is in foreground
         if (isAppInForeground()) {
             // Show in-app notification
-            GlobalScope.launch {
+            applicationScope.launch {
                 notificationHandler.showInApp(message)
             }
         } else {

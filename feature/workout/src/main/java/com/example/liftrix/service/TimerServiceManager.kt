@@ -9,7 +9,10 @@ import com.example.liftrix.domain.model.RestTimer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,6 +35,7 @@ class TimerServiceManager @Inject constructor(
     private var timerService: WorkoutTimerService? = null
     private var isBound = false
     private var isBindingInProgress = false
+    private var serviceStateJob: Job? = null
     
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
@@ -55,12 +59,7 @@ class TimerServiceManager @Inject constructor(
                 isBindingInProgress = false
                 _connectionState.value = ConnectionState.Connected
                 
-                // Subscribe to service state updates
-                managerScope.launch {
-                    timerService?.serviceState?.collect { state ->
-                        _timerState.value = state
-                    }
-                }
+                collectServiceState(currentService = binder.getService())
                 
                 Timber.d("TimerServiceManager connected to WorkoutTimerService")
             } catch (e: Exception) {
@@ -69,6 +68,7 @@ class TimerServiceManager @Inject constructor(
         }
         
         override fun onServiceDisconnected(name: ComponentName?) {
+            cancelServiceStateCollection()
             timerService = null
             isBound = false
             isBindingInProgress = false
@@ -131,6 +131,7 @@ class TimerServiceManager @Inject constructor(
         return try {
             if (isBound) {
                 context.unbindService(serviceConnection)
+                cancelServiceStateCollection()
                 timerService = null
                 isBound = false
                 isBindingInProgress = false
@@ -242,13 +243,56 @@ class TimerServiceManager @Inject constructor(
             Result.failure(e)
         }
     }
+
+    private fun collectServiceState(currentService: WorkoutTimerService) {
+        serviceStateJob?.cancel()
+        serviceStateJob = collectServiceState(
+            serviceState = currentService.serviceState,
+            isCurrentService = { timerService === currentService && isBound }
+        )
+    }
+
+    private fun collectServiceState(
+        serviceState: Flow<WorkoutTimerService.TimerServiceState>,
+        isCurrentService: () -> Boolean
+    ): Job = managerScope.launch {
+        serviceState.collect { state ->
+            if (isCurrentService()) {
+                _timerState.value = state
+            }
+        }
+    }
+
+    private fun cancelServiceStateCollection() {
+        serviceStateJob?.cancel()
+        serviceStateJob = null
+    }
+
+    private suspend fun cancelAndJoinServiceStateCollection() {
+        serviceStateJob?.cancelAndJoin()
+        serviceStateJob = null
+    }
     
     private fun handleConnectionError(exception: Throwable) {
+        cancelServiceStateCollection()
         timerService = null
         isBound = false
         isBindingInProgress = false
         _connectionState.value = ConnectionState.Error(exception)
         _timerState.value = WorkoutTimerService.TimerServiceState()
         Timber.e(exception, "TimerServiceManager connection error")
+    }
+
+    internal fun collectServiceStateForTest(
+        serviceState: Flow<WorkoutTimerService.TimerServiceState>,
+        isCurrentService: () -> Boolean = { true }
+    ): Job {
+        serviceStateJob?.cancel()
+        serviceStateJob = collectServiceState(serviceState, isCurrentService)
+        return serviceStateJob ?: error("Service state collection was not started")
+    }
+
+    internal suspend fun cancelServiceStateCollectionForTest() {
+        cancelAndJoinServiceStateCollection()
     }
 }

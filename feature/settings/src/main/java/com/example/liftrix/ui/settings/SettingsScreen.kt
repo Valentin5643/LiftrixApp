@@ -1,5 +1,6 @@
-package com.example.liftrix.ui.settings
+﻿package com.example.liftrix.ui.settings
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -100,7 +101,7 @@ fun SettingsScreen(
     PerformanceOptimizations.AnimationPerformanceMonitor.MonitorAnimation(
         key = "SettingsScreen"
     ) {
-        val uiState by viewModel.uiState.collectAsState()
+        val uiState by viewModel.uiState.collectAsStateWithLifecycle()
         
         
         // Stable callbacks to prevent unnecessary recompositions
@@ -1157,3 +1158,4 @@ private fun SettingsScreenPreview() {
         }
     }
 }
+

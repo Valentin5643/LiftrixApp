@@ -1,5 +1,6 @@
-package com.example.liftrix.ui.social
+﻿package com.example.liftrix.ui.social
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -49,7 +50,7 @@ fun FriendsScreen(
     modifier: Modifier = Modifier,
     viewModel: SocialViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     
     // Handle navigation events
@@ -955,3 +956,4 @@ private fun FriendsScreenPreview() {
         )
     }
 }
+

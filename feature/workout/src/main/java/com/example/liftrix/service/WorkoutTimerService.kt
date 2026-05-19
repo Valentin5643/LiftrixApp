@@ -136,7 +136,7 @@ class WorkoutTimerService : Service() {
                     startForeground(
                         NOTIFICATION_ID, 
                         createNotification(), 
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
                     )
                 } else {
                     startForeground(NOTIFICATION_ID, createNotification())

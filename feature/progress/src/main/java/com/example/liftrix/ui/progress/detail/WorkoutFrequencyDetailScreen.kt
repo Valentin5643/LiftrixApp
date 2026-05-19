@@ -1,5 +1,6 @@
-package com.example.liftrix.ui.progress.detail
+﻿package com.example.liftrix.ui.progress.detail
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -46,9 +47,9 @@ fun WorkoutFrequencyDetailScreen(
     modifier: Modifier = Modifier,
     viewModel: WorkoutFrequencyDetailViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val selectedTimeRange by viewModel.timeRange.collectAsState()
-    val consistencyScore by viewModel.consistencyScore.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val selectedTimeRange by viewModel.timeRange.collectAsStateWithLifecycle()
+    val consistencyScore by viewModel.consistencyScore.collectAsStateWithLifecycle()
 
     LaunchedEffect(timeRange) {
         if (selectedTimeRange != timeRange) {
@@ -349,7 +350,7 @@ private fun StreamlinedFrequencyInsights(data: WorkoutFrequencyDetailViewModel.W
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "⚠️ ${data.daysSinceLastWorkout} days since last workout",
+                    text = "âš ï¸ ${data.daysSinceLastWorkout} days since last workout",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onErrorContainer
                 )
@@ -370,7 +371,7 @@ private fun StreamlinedFrequencyInsights(data: WorkoutFrequencyDetailViewModel.W
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "🔥 Great consistency! Keep it up!",
+                    text = "ðŸ”¥ Great consistency! Keep it up!",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onTertiaryContainer
                 )
@@ -382,3 +383,4 @@ private fun StreamlinedFrequencyInsights(data: WorkoutFrequencyDetailViewModel.W
 // Note: WeeklyPatternsContent and RestDayAnalysisContent removed 
 // Their functionality is now consolidated into StreamlinedFrequencyInsights
 // This reduces cognitive load while maintaining essential information
+

@@ -11,7 +11,11 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import timber.log.Timber
 import kotlin.time.Duration.Companion.minutes
 import javax.inject.Qualifier
 import javax.inject.Singleton
@@ -29,6 +33,13 @@ annotation class DefaultDispatcher
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class IoDispatcher
+
+/**
+ * Qualifier for app-lifetime background work.
+ */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class ApplicationScope
 
 /**
  * Dagger Hilt module for core application services and utilities.
@@ -77,6 +88,27 @@ abstract class CoreModule {
         @Provides
         @IoDispatcher
         fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
+
+        @Provides
+        @Singleton
+        fun provideCoroutineExceptionHandler(): CoroutineExceptionHandler =
+            CoroutineExceptionHandler { _, throwable ->
+                Timber.e(throwable, "Unhandled application coroutine failure")
+            }
+
+        @Provides
+        @Singleton
+        @ApplicationScope
+        fun provideApplicationScope(
+            @DefaultDispatcher defaultDispatcher: CoroutineDispatcher,
+            exceptionHandler: CoroutineExceptionHandler
+        ): CoroutineScope = CoroutineScope(SupervisorJob() + defaultDispatcher + exceptionHandler)
+
+        @Provides
+        @Singleton
+        fun provideUnqualifiedApplicationScope(
+            @ApplicationScope applicationScope: CoroutineScope
+        ): CoroutineScope = applicationScope
         
         /**
          * Provides CacheManager singleton for service-layer caching.

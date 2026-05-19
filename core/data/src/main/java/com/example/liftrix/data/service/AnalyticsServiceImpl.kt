@@ -8,6 +8,7 @@ import com.google.firebase.analytics.ktx.logEvent
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
+import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -146,30 +147,32 @@ class AnalyticsServiceImpl @Inject constructor(
         private const val USER_PROP_ONBOARDING_COMPLETED = "onboarding_completed"
         
         // Crashlytics custom keys
-        private const val CRASHLYTICS_USER_ID = "user_id"
+        private const val CRASHLYTICS_USER_ID = "user_pseudonymous_id"
         private const val CRASHLYTICS_SUBSCRIPTION_TIER = "subscription_tier"
         private const val CRASHLYTICS_APP_VERSION = "app_version"
     }
 
     override suspend fun setUserProperties(user: User): Result<Unit> {
         return try {
+            val pseudonymousUserId = user.uid.toPseudonymousUserId()
+
             // Set Firebase Analytics user properties
-            firebaseAnalytics.setUserId(user.uid)
+            firebaseAnalytics.setUserId(pseudonymousUserId)
             firebaseAnalytics.setUserProperty(USER_PROP_SUBSCRIPTION_TIER, user.subscriptionTier.name.lowercase())
             firebaseAnalytics.setUserProperty(USER_PROP_IS_PREMIUM, user.isPremium.toString())
             firebaseAnalytics.setUserProperty(USER_PROP_IS_ANONYMOUS, user.isAnonymous.toString())
             firebaseAnalytics.setUserProperty(USER_PROP_ONBOARDING_COMPLETED, user.onboardingCompleted.toString())
             
-            // Set Crashlytics user properties
-            firebaseCrashlytics.setUserId(user.uid)
-            firebaseCrashlytics.setCustomKey("user_id", user.uid)
-            firebaseCrashlytics.setCustomKey("subscription_tier", user.subscriptionTier.name)
+            // Set minimal Crashlytics context without raw account identifiers.
+            firebaseCrashlytics.setUserId(pseudonymousUserId)
+            firebaseCrashlytics.setCustomKey(CRASHLYTICS_USER_ID, pseudonymousUserId)
+            firebaseCrashlytics.setCustomKey(CRASHLYTICS_SUBSCRIPTION_TIER, user.subscriptionTier.name)
             firebaseCrashlytics.setCustomKey("is_premium", user.isPremium.toString())
             
-            Timber.d("User properties set successfully for user: ${user.uid}")
+            Timber.d("User properties set successfully")
             Result.success(Unit)
         } catch (exception: Exception) {
-            Timber.e(exception, "Failed to set user properties for user: ${user.uid}")
+            Timber.e(exception, "Failed to set user properties")
             Result.failure(exception)
         }
     }
@@ -190,7 +193,7 @@ class AnalyticsServiceImpl @Inject constructor(
             firebaseCrashlytics.setCustomKey("current_workout_id", workoutId)
             firebaseCrashlytics.setCustomKey("workout_phase", "started")
             
-            Timber.d("Workout start logged: $workoutId for user: $userId")
+            Timber.d("Workout start logged: $workoutId")
             Result.success(Unit)
         } catch (exception: Exception) {
             Timber.e(exception, "Failed to log workout start: $workoutId")
@@ -409,7 +412,7 @@ class AnalyticsServiceImpl @Inject constructor(
                 param(FirebaseAnalytics.Param.CONTENT_TYPE, "social_interaction")
             }
             
-            Timber.d("Friend request sent logged: $userId -> $targetUserId")
+            Timber.d("Friend request sent logged")
             Result.success(Unit)
         } catch (exception: Exception) {
             Timber.e(exception, "Failed to log friend request sent")
@@ -430,7 +433,7 @@ class AnalyticsServiceImpl @Inject constructor(
             }
             
             val action = if (accepted) "accepted" else "declined"
-            Timber.d("Friend request $action logged: $userId -> $targetUserId")
+            Timber.d("Friend request $action logged")
             Result.success(Unit)
         } catch (exception: Exception) {
             Timber.e(exception, "Failed to log friend request response")
@@ -597,8 +600,8 @@ class AnalyticsServiceImpl @Inject constructor(
             
             // Clear Crashlytics user context
             firebaseCrashlytics.setUserId("")
-            firebaseCrashlytics.setCustomKey("user_id", "")
-            firebaseCrashlytics.setCustomKey("subscription_tier", "")
+            firebaseCrashlytics.setCustomKey(CRASHLYTICS_USER_ID, "")
+            firebaseCrashlytics.setCustomKey(CRASHLYTICS_SUBSCRIPTION_TIER, "")
             firebaseCrashlytics.setCustomKey("current_workout_id", "")
             firebaseCrashlytics.setCustomKey("workout_phase", "")
             
@@ -927,7 +930,7 @@ class AnalyticsServiceImpl @Inject constructor(
                 param("timestamp", System.currentTimeMillis())
             }
             
-            Timber.d("UI redesign feature flag evaluation logged: userId=$userId, enabled=$enabled, rollout=$rolloutPercentage%")
+            Timber.d("UI redesign feature flag evaluation logged: enabled=$enabled, rollout=$rolloutPercentage%")
             Result.success(Unit)
         } catch (exception: Exception) {
             Timber.e(exception, "Failed to log UI redesign feature flag evaluation")
@@ -1120,7 +1123,7 @@ class AnalyticsServiceImpl @Inject constructor(
                 param("timestamp", System.currentTimeMillis())
             }
             
-            Timber.d("UI redesign feedback logged: userId=$userId, rating=$rating, category=$category")
+            Timber.d("UI redesign feedback logged: rating=$rating, category=$category")
             Result.success(Unit)
         } catch (exception: Exception) {
             Timber.e(exception, "Failed to log UI redesign user feedback")
@@ -1194,11 +1197,19 @@ class AnalyticsServiceImpl @Inject constructor(
                 param("timestamp", System.currentTimeMillis())
             }
             
-            Timber.d("UI redesign A/B test assignment logged: user=$userId, group=$group")
+            Timber.d("UI redesign A/B test assignment logged: group=$group")
             Result.success(Unit)
         } catch (exception: Exception) {
             Timber.e(exception, "Failed to log UI redesign A/B test assignment")
             Result.failure(exception)
         }
+    }
+
+    private fun String.toPseudonymousUserId(): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(toByteArray(Charsets.UTF_8))
+            .joinToString(separator = "") { "%02x".format(it) }
+
+        return "liftrix-${digest.take(32)}"
     }
 } 

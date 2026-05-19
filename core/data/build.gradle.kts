@@ -76,4 +76,7 @@ dependencies {
 
     add("kspDebug", libs.hilt.compiler)
     add("kspRelease", libs.hilt.compiler)
+
+    testImplementation(libs.junit)
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
 }

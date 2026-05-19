@@ -72,6 +72,7 @@ class PdfReportGenerator @Inject constructor() {
         private const val TEXT_PRIMARY = 0xFF000000.toInt()
         private const val TEXT_SECONDARY = 0xFF666666.toInt()
         private const val BACKGROUND_COLOR = 0xFFF5F5F5.toInt()
+        private val REPORT_LOCALE: Locale = Locale.ENGLISH
         
         // Chart dimensions
         private const val CHART_HEIGHT = 200f
@@ -176,19 +177,24 @@ class PdfReportGenerator @Inject constructor() {
             var y = MARGIN_TOP + 45f
             y = drawWrappedText(canvas, data.title, MARGIN_LEFT, y, CONTENT_WIDTH, createPaint(TITLE_SIZE, TEXT_PRIMARY, Typeface.DEFAULT_BOLD), 30f)
             y += 14f
-            y = drawKeyValue(canvas, "Generated", data.generatedAt.format(DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm")), y)
-            y = drawKeyValue(canvas, "Range", "${data.range.start} to ${data.range.end}", y)
-            y = drawKeyValue(canvas, "Source", "Generated offline from local training data", y)
+            y = drawKeyValue(canvas, "Generated", data.generatedAt.format(DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm", REPORT_LOCALE)), y)
+            y = drawKeyValue(canvas, "Range", "${formatReportDate(data.range.start)} to ${formatReportDate(data.range.end)}", y)
+            y = drawKeyValue(canvas, "Source", "Local device data - Not synced to cloud", y)
             y = drawKeyValue(canvas, "Sync", formatSyncStatus(data), y)
             y = drawKeyValue(canvas, "Privacy", data.privacyApplied.joinToString(", "), y)
             y += 20f
+            val sessionLabel = if (data.summary.rawWorkoutEntries > data.summary.workoutsCompleted) {
+                "${data.summary.workoutsCompleted} sessions (${data.summary.rawWorkoutEntries} entries)"
+            } else {
+                data.summary.workoutsCompleted.toString()
+            }
             val metrics = listOf(
-                "Workouts" to data.summary.workoutsCompleted.toString(),
-                "Total volume" to "${"%.0f".format(data.summary.totalVolumeKg)} kg",
+                "Sessions" to sessionLabel,
+                "Weighted volume" to formatVolumeSummary(data),
                 "Active days" to data.summary.activeTrainingDays.toString(),
-                "New PRs" to data.summary.newPersonalRecords.toString(),
+                "PR events" to data.summary.newPersonalRecords.toString(),
                 "Best streak" to "${data.summary.bestStreakDays} days",
-                "1RM gain" to (data.summary.estimatedOneRmImprovementKg?.let { "${"%.1f".format(it)} kg" } ?: "Not enough data")
+                "1RM progress" to data.summary.oneRmStatusLabel
             )
             drawMetricGrid(canvas, y, metrics)
         } finally {
@@ -213,17 +219,18 @@ class PdfReportGenerator @Inject constructor() {
                 rows = data.strengthRows.map {
                     listOf(
                         it.exerciseName,
-                        "${"%.1f".format(it.startEstimatedOneRmKg)} kg",
-                        "${"%.1f".format(it.bestEstimatedOneRmKg)} kg",
-                        "${"%.1f".format(it.improvementKg)} kg"
+                        formatKg(it.startEstimatedOneRmKg, 1),
+                        formatKg(it.bestEstimatedOneRmKg, 1),
+                        if (it.improvementKg > 0.0) formatKg(it.improvementKg, 1) else "Baseline"
                     )
-                }.ifEmpty { listOf(listOf("Not enough strength data yet", "-", "-", "-")) }
+                }.ifEmpty { listOf(listOf("Log same weighted exercise in 2+ sessions", "-", "-", "-")) }
             )
             y += 24f
             drawWrappedText(
                 canvas,
-                data.strengthRows.firstOrNull()?.let { "Top strength improvement came from ${it.exerciseName}, with an estimated ${"%.1f".format(it.improvementKg)} kg increase." }
-                    ?: "Complete more weighted sets to unlock strength progression insights.",
+                data.strengthRows.firstOrNull { it.improvementKg > 0.0 }?.let { "Top strength improvement came from ${it.exerciseName}, with an estimated ${formatKg(it.improvementKg, 1)} increase." }
+                    ?: data.summary.estimatedOneRmBaselineKg?.let { "Baseline estimated 1RM is ${formatKg(it, 1)}. Log this lift again to calculate progress." }
+                    ?: "Log weighted exercises in the 1-10 rep range to see estimated 1RM progress.",
                 MARGIN_LEFT,
                 y,
                 CONTENT_WIDTH,
@@ -248,24 +255,41 @@ class PdfReportGenerator @Inject constructor() {
             y = drawTable(
                 canvas,
                 y,
-                listOf("Week", "Workouts", "Volume", "Sets"),
+                listOf("Week", "Sessions", "Active days", "Weighted volume", "Reps", "Sets"),
                 data.weeklyVolumeRows.map {
-                    listOf(it.weekLabel, it.workoutCount.toString(), "${"%.0f".format(it.totalVolumeKg)} kg", it.setCount.toString())
-                }.ifEmpty { listOf(listOf("No weekly volume", "-", "-", "-")) }
+                    listOf(
+                        it.weekLabel,
+                        it.workoutCount.toString(),
+                        it.activeDays.toString(),
+                        formatWeightedVolume(it.totalVolumeKg, it.repCount),
+                        it.repCount.takeIf { reps -> reps > 0 }?.toString() ?: "-",
+                        it.setCount.toString()
+                    )
+                }.ifEmpty { listOf(listOf("No weekly activity", "-", "-", "-", "-", "-")) }
             )
             y += 24f
             y = drawTable(
                 canvas,
                 y,
-                listOf("Muscle group", "Volume", "Exercises", "Sets"),
+                listOf("Muscle group", "Weighted volume", "Reps", "Exercises", "Sets"),
                 data.muscleGroupRows.map {
-                    listOf(it.muscleGroup, "${"%.0f".format(it.totalVolumeKg)} kg", it.exerciseCount.toString(), it.setCount.toString())
-                }.ifEmpty { listOf(listOf("No muscle data", "-", "-", "-")) }
+                    listOf(
+                        it.muscleGroup,
+                        formatWeightedVolume(it.totalVolumeKg, it.repCount),
+                        it.repCount.takeIf { reps -> reps > 0 }?.toString() ?: "-",
+                        it.exerciseCount.toString(),
+                        it.setCount.toString()
+                    )
+                }.ifEmpty { listOf(listOf("No muscle mapping available", "-", "-", "-", "-")) }
             )
             y += 20f
             drawWrappedText(
                 canvas,
-                "Volume is calculated from local completed sets only. Rows are summarized to keep the report within six pages.",
+                if (data.summary.totalVolumeKg <= 0.0 && data.summary.totalReps > 0) {
+                    "No external weight logged - showing rep-based activity from local completed sets."
+                } else {
+                    "Weighted volume is calculated from completed sets with external load. Reps and sets remain visible for bodyweight or unweighted activity."
+                },
                 MARGIN_LEFT,
                 y,
                 CONTENT_WIDTH,
@@ -288,17 +312,26 @@ class PdfReportGenerator @Inject constructor() {
             drawProgressPageChrome(canvas, "Consistency", 4)
             var y = MARGIN_TOP + 55f
             y = drawKeyValue(canvas, "Consistency score", "${data.summary.consistencyScore} / 100", y)
+            y = drawKeyValue(canvas, "Score window", data.summary.consistencyWindowLabel, y)
             y = drawKeyValue(canvas, "Most active day", data.summary.mostActiveDay ?: "Not enough data", y)
             y = drawKeyValue(canvas, "Active days", data.summary.activeTrainingDays.toString(), y)
             y = drawKeyValue(canvas, "Rest days", data.summary.restDays.toString(), y)
-            y = drawKeyValue(canvas, "Average workouts per week", "%.1f".format(data.summary.averageWorkoutsPerWeek), y)
+            y = drawKeyValue(canvas, "Average workouts per week", formatDecimal(data.summary.averageWorkoutsPerWeek, 1), y)
+            data.summary.activeWeekAverageWorkouts?.let { activeAverage ->
+                y = drawKeyValue(canvas, "Active-week average", formatDecimal(activeAverage, 1), y)
+            }
             y = drawKeyValue(canvas, "Best streak", "${data.summary.bestStreakDays} days", y)
-            y = drawKeyValue(canvas, "Average duration", data.summary.averageDurationMinutes?.let { "$it minutes" } ?: "Not enough data", y)
+            y = drawKeyValue(
+                canvas,
+                "Average duration",
+                data.summary.averageDurationMinutes?.let { "$it minutes (${data.summary.validDurationWorkoutCount} recorded)" } ?: "Enable duration tracking to see workout length trends",
+                y
+            )
             y += 18f
             y = drawTable(
                 canvas,
                 y,
-                listOf("Week", "Workouts", "Active days"),
+                listOf("Week", "Sessions", "Active days"),
                 data.consistencyRows.map {
                     listOf(it.weekLabel, it.workoutCount.toString(), it.activeDays.toString())
                 }.ifEmpty { listOf(listOf("No consistency data", "-", "-")) }
@@ -335,7 +368,7 @@ class PdfReportGenerator @Inject constructor() {
                 y,
                 listOf("Date", "Exercise", "New PR", "Previous"),
                 data.personalRecordRows.map {
-                    listOf(it.date.toString(), it.exerciseName, "${it.recordType}: ${it.newValue}", it.previousValue ?: "-")
+                    listOf(formatReportDate(it.date), it.exerciseName, "${it.recordType}: ${it.newValue}", it.previousValue ?: "First recorded")
                 }.ifEmpty { listOf(listOf("No new records", "-", "-", "-")) },
                 maxRows = 8
             )
@@ -348,7 +381,7 @@ class PdfReportGenerator @Inject constructor() {
                 listOf("Date", "Workout", "Duration", "Sync"),
                 data.workoutRows.map {
                     listOf(
-                        it.date.toString(),
+                        formatReportDate(it.date),
                         it.name,
                         it.durationMinutes?.let { minutes -> "$minutes min" } ?: "-",
                         if (it.synced) "Synced" else "Pending"
@@ -368,6 +401,16 @@ class PdfReportGenerator @Inject constructor() {
                     16f
                 )
             }
+            y += 18f
+            drawWrappedText(
+                canvas,
+                "Estimated 1RM is less reliable above 10 reps.",
+                MARGIN_LEFT,
+                y,
+                CONTENT_WIDTH,
+                createPaint(CAPTION_SIZE, TEXT_SECONDARY, Typeface.DEFAULT),
+                16f
+            )
         } finally {
             pdfDocument.finishPage(page)
         }
@@ -455,6 +498,7 @@ class PdfReportGenerator @Inject constructor() {
     private fun buildConsistencyInsight(data: ProgressReportData): String {
         return when {
             data.summary.workoutsCompleted == 0 -> ProgressReportData.NO_WORKOUT_DATA_MESSAGE
+            data.summary.hasUnusuallyHighWorkoutFrequency -> "This period has unusually high workout frequency; bulk logging or imports may make weekly averages look higher than normal training."
             data.summary.consistencyScore >= 80 -> "Consistency is strong in this range, with regular active days and stable training frequency."
             data.summary.averageWorkoutsPerWeek >= 3.0 -> "Training frequency is strong for this range; keep rest days planned around harder sessions."
             else -> "A repeatable weekly schedule would improve consistency and make future trends easier to read."
@@ -479,16 +523,21 @@ class PdfReportGenerator @Inject constructor() {
         var y = yPosition
         canvas.drawRoundRect(android.graphics.RectF(MARGIN_LEFT, y - 16f, MARGIN_LEFT + CONTENT_WIDTH, y + 10f), 6f, 6f, rowPaint)
         headers.forEachIndexed { index, header ->
-            canvas.drawText(header.take(22), MARGIN_LEFT + index * colWidth + 6f, y, headerPaint)
+            canvas.drawText(ellipsize(header, 22), MARGIN_LEFT + index * colWidth + 6f, y, headerPaint)
         }
         y += 24f
         rows.take(maxRows).forEach { row ->
             row.take(columns).forEachIndexed { index, value ->
-                canvas.drawText(value.take(24), MARGIN_LEFT + index * colWidth + 6f, y, bodyPaint)
+                canvas.drawText(ellipsize(value, 24), MARGIN_LEFT + index * colWidth + 6f, y, bodyPaint)
             }
             y += 22f
         }
         return y
+    }
+
+    private fun ellipsize(value: String, maxChars: Int): String {
+        if (value.length <= maxChars) return value
+        return value.take((maxChars - 3).coerceAtLeast(1)) + "..."
     }
 
     private fun drawBadgeRow(canvas: Canvas, yPosition: Float, data: ProgressReportData): Float {
@@ -544,7 +593,7 @@ class PdfReportGenerator @Inject constructor() {
 
     private fun drawProgressReportFooter(canvas: Canvas, pageNumber: Int) {
         val footerPaint = createPaint(CAPTION_SIZE, TEXT_SECONDARY, Typeface.DEFAULT)
-        val footerText = "Generated by Liftrix · page $pageNumber / 6"
+        val footerText = "Generated by Liftrix - page $pageNumber / 6"
         val textWidth = footerPaint.measureText(footerText)
         canvas.drawText(footerText, PAGE_WIDTH / 2 - textWidth / 2, PAGE_HEIGHT - MARGIN_BOTTOM + 20f, footerPaint)
     }
@@ -552,9 +601,43 @@ class PdfReportGenerator @Inject constructor() {
     private fun formatSyncStatus(data: ProgressReportData): String {
         val pending = if (data.syncStatus.pendingSyncItems == 0) "No pending sync items" else "${data.syncStatus.pendingSyncItems} pending sync items"
         val lastSync = data.syncStatus.lastSyncTimestampMillis?.let {
-            SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(it))
-        } ?: "Never synced"
+            SimpleDateFormat("MMM dd, yyyy", REPORT_LOCALE).format(Date(it))
+        } ?: if (data.syncStatus.syncedWorkoutCount > 0) {
+            "Synced workouts present; account sync time unavailable"
+        } else {
+            "Never synced"
+        }
         return "$pending, last sync: $lastSync"
+    }
+
+    private fun formatDecimal(value: Double, digits: Int): String {
+        return String.format(REPORT_LOCALE, "%.${digits}f", value)
+    }
+
+    private fun formatKg(value: Double, digits: Int): String {
+        return "${formatDecimal(value, digits)} kg"
+    }
+
+    private fun formatWeightedVolume(weightedVolumeKg: Double, reps: Int): String {
+        return when {
+            weightedVolumeKg > 0.0 -> formatKg(weightedVolumeKg, 0)
+            reps > 0 -> "No external weight"
+            else -> "-"
+        }
+    }
+
+    private fun formatVolumeSummary(data: ProgressReportData): String {
+        return when {
+            data.summary.totalVolumeKg > 0.0 && data.summary.totalReps > 0 ->
+                "${formatKg(data.summary.totalVolumeKg, 0)} + ${data.summary.totalReps} reps"
+            data.summary.totalVolumeKg > 0.0 -> formatKg(data.summary.totalVolumeKg, 0)
+            data.summary.totalReps > 0 -> "Bodyweight / rep-based activity"
+            else -> "No set activity logged"
+        }
+    }
+
+    private fun formatReportDate(date: java.time.LocalDate): String {
+        return date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy", REPORT_LOCALE))
     }
     
     /**

@@ -1,4 +1,4 @@
-package com.example.liftrix
+﻿package com.example.liftrix
 
 import android.content.Intent
 import android.os.Bundle
@@ -199,7 +199,7 @@ fun AuthenticatedContent(
     // Verify profile exists before showing main UI
     LaunchedEffect(user.uid) {
         try {
-            Timber.d("User authenticated in MainActivity: ${user.uid}")
+            Timber.d("User authenticated in MainActivity")
 
             // Check if profile exists, wait up to 5 seconds for it to be created
             var attempts = 0
@@ -209,18 +209,18 @@ fun AuthenticatedContent(
                 val hasProfile = viewModel.checkProfileExists(user.uid)
 
                 if (hasProfile) {
-                    Timber.i("Profile verified for user: ${user.uid}")
+                    Timber.i("Profile verified for current user")
                     profileCheckComplete = true
                     break
                 } else {
-                    Timber.d("Profile not found yet for user: ${user.uid}, attempt ${attempts + 1}/$maxAttempts")
+                    Timber.d("Profile not found yet for current user, attempt ${attempts + 1}/$maxAttempts")
                     kotlinx.coroutines.delay(500) // Wait 500ms between checks
                     attempts++
                 }
             }
 
             if (!profileCheckComplete) {
-                Timber.w("Profile verification timeout for user: ${user.uid}, proceeding anyway")
+                Timber.w("Profile verification timeout for current user, proceeding anyway")
                 profileCheckComplete = true // Proceed anyway after timeout
             }
         } catch (e: Exception) {
@@ -240,3 +240,4 @@ fun AuthenticatedContent(
         )
     }
 }
+

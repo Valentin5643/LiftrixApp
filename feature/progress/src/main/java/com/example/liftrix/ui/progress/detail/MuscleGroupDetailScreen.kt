@@ -1,5 +1,6 @@
-package com.example.liftrix.ui.progress.detail
+﻿package com.example.liftrix.ui.progress.detail
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -44,9 +45,9 @@ fun MuscleGroupDetailScreen(
     modifier: Modifier = Modifier,
     viewModel: MuscleGroupDetailViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val selectedMuscleGroup by viewModel.selectedMuscleGroup.collectAsState()
-    val currentTimeRange by viewModel.timeRange.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val selectedMuscleGroup by viewModel.selectedMuscleGroup.collectAsStateWithLifecycle()
+    val currentTimeRange by viewModel.timeRange.collectAsStateWithLifecycle()
     
     // Initialize with route parameters
     LaunchedEffect(muscleGroup, timeRange) {
@@ -375,3 +376,4 @@ private fun MuscleGroupControlsCard(
         }
     }
 }
+

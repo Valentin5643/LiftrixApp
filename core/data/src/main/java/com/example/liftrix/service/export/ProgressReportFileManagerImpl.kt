@@ -2,6 +2,8 @@ package com.example.liftrix.service.export
 
 import android.content.ContentValues
 import android.content.Context
+import android.os.Build
+import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import com.example.liftrix.domain.model.common.LiftrixResult
@@ -60,19 +62,29 @@ class ProgressReportFileManagerImpl @Inject constructor(
     ) {
         val sourceFile = File(filePath)
         val values = ContentValues().apply {
-            put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-            put(MediaStore.Downloads.MIME_TYPE, PDF_MIME_TYPE)
-            put(MediaStore.Downloads.IS_PENDING, 1)
+            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+            put(MediaStore.MediaColumns.MIME_TYPE, PDF_MIME_TYPE)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
         }
         val resolver = context.contentResolver
-        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+        val downloadsUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            MediaStore.Downloads.EXTERNAL_CONTENT_URI
+        } else {
+            MediaStore.Files.getContentUri("external")
+        }
+        val uri = resolver.insert(downloadsUri, values)
             ?: throw IllegalStateException("Downloads provider did not return a URI")
         resolver.openOutputStream(uri)?.use { output ->
             sourceFile.inputStream().use { input -> input.copyTo(output) }
         } ?: throw IllegalStateException("Could not open Downloads output stream")
-        values.clear()
-        values.put(MediaStore.Downloads.IS_PENDING, 0)
-        resolver.update(uri, values, null, null)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            values.clear()
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+        }
         ProgressReportFileActionMetadata(
             uriString = uri.toString(),
             mimeType = PDF_MIME_TYPE,

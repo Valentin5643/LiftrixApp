@@ -2,7 +2,7 @@ package com.example.liftrix.analytics
 
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.core.time.TimeProvider
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -26,7 +26,8 @@ import javax.inject.Singleton
 @Singleton
 class UxMetricsTracker @Inject constructor(
     private val analyticsService: AnalyticsService,
-    private val timeProvider: TimeProvider
+    private val timeProvider: TimeProvider,
+    private val applicationScope: CoroutineScope
 ) {
     
     companion object {
@@ -60,6 +61,7 @@ class UxMetricsTracker @Inject constructor(
     private val workflowStartTimes = mutableMapOf<String, Long>()
     private val interactionCounts = mutableMapOf<String, Int>()
     private val errorCounts = mutableMapOf<String, Int>()
+    private val workflowLock = Any()
     
     /**
      * Starts tracking for a new workflow.
@@ -69,14 +71,16 @@ class UxMetricsTracker @Inject constructor(
      */
     fun startWorkflowTracking(workflowId: String) {
         val currentTime = timeProvider.currentTimeMillis()
-        workflowStartTimes[workflowId] = currentTime
-        interactionCounts[workflowId] = 0
-        errorCounts[workflowId] = 0
+        synchronized(workflowLock) {
+            workflowStartTimes[workflowId] = currentTime
+            interactionCounts[workflowId] = 0
+            errorCounts[workflowId] = 0
+        }
         
         Timber.d("Started UX tracking for workflow: $workflowId at $currentTime")
         
         // Log workflow start event
-        GlobalScope.launch {
+        applicationScope.launch {
             analyticsService.logEvent(
                 eventName = EVENT_WORKFLOW_STARTED,
                 parameters = mapOf(
@@ -95,12 +99,15 @@ class UxMetricsTracker @Inject constructor(
      * @param interactionType Type of interaction (e.g., "button_press", "text_input", "navigation")
      */
     fun trackInteraction(workflowId: String, interactionType: String) {
-        val currentCount = interactionCounts.getOrDefault(workflowId, 0) + 1
-        interactionCounts[workflowId] = currentCount
+        val currentCount = synchronized(workflowLock) {
+            val updated = interactionCounts.getOrDefault(workflowId, 0) + 1
+            interactionCounts[workflowId] = updated
+            updated
+        }
         
         Timber.v("UX interaction in $workflowId: $interactionType (count: $currentCount)")
         
-        GlobalScope.launch {
+        applicationScope.launch {
             analyticsService.logEvent(
                 eventName = EVENT_WORKFLOW_INTERACTION,
                 parameters = mapOf(
@@ -120,12 +127,15 @@ class UxMetricsTracker @Inject constructor(
      * @param errorType Type of error encountered
      */
     fun trackError(workflowId: String, errorType: String) {
-        val currentErrorCount = errorCounts.getOrDefault(workflowId, 0) + 1
-        errorCounts[workflowId] = currentErrorCount
+        val currentErrorCount = synchronized(workflowLock) {
+            val updated = errorCounts.getOrDefault(workflowId, 0) + 1
+            errorCounts[workflowId] = updated
+            updated
+        }
         
         Timber.w("UX error in $workflowId: $errorType (error count: $currentErrorCount)")
         
-        GlobalScope.launch {
+        applicationScope.launch {
             analyticsService.logEvent(
                 eventName = "ux_workflow_error",
                 parameters = mapOf(
@@ -145,15 +155,19 @@ class UxMetricsTracker @Inject constructor(
      * @param successful Whether the workflow completed successfully
      */
     fun completeWorkflowTracking(workflowId: String, successful: Boolean) {
-        val startTime = workflowStartTimes[workflowId]
+        val (startTime, totalInteractions, totalErrors) = synchronized(workflowLock) {
+            Triple(
+                workflowStartTimes[workflowId],
+                interactionCounts[workflowId] ?: 0,
+                errorCounts[workflowId] ?: 0
+            )
+        }
         if (startTime == null) {
             Timber.w("Attempting to complete workflow $workflowId that was never started")
             return
         }
         
         val completionTime = timeProvider.currentTimeMillis() - startTime
-        val totalInteractions = interactionCounts[workflowId] ?: 0
-        val totalErrors = errorCounts[workflowId] ?: 0
         
         // Calculate metrics
         val efficiencyScore = calculateEfficiencyScore(completionTime, totalInteractions, totalErrors)
@@ -163,7 +177,7 @@ class UxMetricsTracker @Inject constructor(
         Timber.i("Completed UX tracking for $workflowId - Time: ${completionTime}ms, Interactions: $totalInteractions, Efficiency: $efficiencyScore, Cognitive Load: $cognitiveLoadScore")
         
         // Log workflow completion
-        GlobalScope.launch {
+        applicationScope.launch {
             analyticsService.logEvent(
                 eventName = EVENT_WORKFLOW_COMPLETED,
                 parameters = mapOf(
@@ -178,7 +192,7 @@ class UxMetricsTracker @Inject constructor(
         }
         
         // Log cognitive load measurement
-        GlobalScope.launch {
+        applicationScope.launch {
             analyticsService.logEvent(
                 eventName = EVENT_COGNITIVE_LOAD_MEASUREMENT,
                 parameters = mapOf(
@@ -190,9 +204,11 @@ class UxMetricsTracker @Inject constructor(
         }
         
         // Clean up tracking data
-        workflowStartTimes.remove(workflowId)
-        interactionCounts.remove(workflowId)
-        errorCounts.remove(workflowId)
+        synchronized(workflowLock) {
+            workflowStartTimes.remove(workflowId)
+            interactionCounts.remove(workflowId)
+            errorCounts.remove(workflowId)
+        }
     }
     
     /**
@@ -270,11 +286,16 @@ class UxMetricsTracker @Inject constructor(
      * @return Map of current metrics or null if workflow not active
      */
     fun getCurrentWorkflowMetrics(workflowId: String): Map<String, Any>? {
-        val startTime = workflowStartTimes[workflowId] ?: return null
+        val (startTime, interactions, errors) = synchronized(workflowLock) {
+            Triple(
+                workflowStartTimes[workflowId],
+                interactionCounts[workflowId] ?: 0,
+                errorCounts[workflowId] ?: 0
+            )
+        }
+        if (startTime == null) return null
         val currentTime = timeProvider.currentTimeMillis()
         val elapsedTime = currentTime - startTime
-        val interactions = interactionCounts[workflowId] ?: 0
-        val errors = errorCounts[workflowId] ?: 0
         
         return mapOf(
             "workflow_id" to workflowId,

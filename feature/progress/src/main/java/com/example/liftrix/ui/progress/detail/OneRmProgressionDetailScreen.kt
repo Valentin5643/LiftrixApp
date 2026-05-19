@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.ui.components.cards.LiftrixCard
@@ -25,6 +26,9 @@ import com.example.liftrix.ui.common.components.EmptyState
 import com.example.liftrix.ui.progress.detail.components.AnalyticsDetailScreen
 import com.example.liftrix.ui.progress.detail.components.ExerciseFilterSheet
 import com.example.liftrix.ui.progress.detail.components.OneRmProgressionChart
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import timber.log.Timber
 
 /**
@@ -38,7 +42,7 @@ import timber.log.Timber
  * - Export functionality
  * - Loading, error, and empty states
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, FlowPreview::class)
 @Composable
 fun OneRmProgressionDetailScreen(
     navController: NavController,
@@ -47,12 +51,12 @@ fun OneRmProgressionDetailScreen(
     modifier: Modifier = Modifier,
     viewModel: OneRmDetailViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val selectedExerciseIds by viewModel.selectedExerciseIds.collectAsState()
-    val currentTimeRange by viewModel.timeRange.collectAsState()
-    val showEstimated by viewModel.showEstimated.collectAsState()
-    val showExerciseFilter by viewModel.showExerciseFilter.collectAsState()
-    val availableExercises by viewModel.availableExercises.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val selectedExerciseIds by viewModel.selectedExerciseIds.collectAsStateWithLifecycle()
+    val currentTimeRange by viewModel.timeRange.collectAsStateWithLifecycle()
+    val showEstimated by viewModel.showEstimated.collectAsStateWithLifecycle()
+    val showExerciseFilter by viewModel.showExerciseFilter.collectAsStateWithLifecycle()
+    val availableExercises by viewModel.availableExercises.collectAsStateWithLifecycle()
     
     // Initialize with route parameters
     LaunchedEffect(exerciseIds, timeRange) {
@@ -162,6 +166,7 @@ fun OneRmProgressionDetailScreen(
 /**
  * Content for the 1RM progression screen when data is successfully loaded
  */
+@OptIn(FlowPreview::class)
 @Composable
 private fun OneRmProgressionContent(
     data: OneRmDetailViewModel.OneRmProgressionData,
@@ -181,9 +186,14 @@ private fun OneRmProgressionContent(
         }
     }
     
-    // Save scroll position when it changes
-    LaunchedEffect(scrollState.value) {
-        viewModel.saveScrollPosition(scrollState.value)
+    // Save scroll position after scrolling settles instead of restarting per pixel.
+    LaunchedEffect(scrollState) {
+        snapshotFlow { scrollState.value }
+            .distinctUntilChanged()
+            .debounce(300)
+            .collect { position ->
+                viewModel.saveScrollPosition(position)
+            }
     }
     
     Column(

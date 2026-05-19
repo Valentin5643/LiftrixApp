@@ -179,4 +179,7 @@ interface ExerciseLibraryDao {
      */
     @Query("SELECT * FROM exercise_library WHERE id IN (:ids)")
     suspend fun getExercisesByIds(ids: List<String>): List<ExerciseLibraryEntity>
+
+    @Query("SELECT * FROM exercise_library WHERE name IN (:names)")
+    suspend fun getExercisesByNames(names: List<String>): List<ExerciseLibraryEntity>
 } 

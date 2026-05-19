@@ -1,5 +1,6 @@
-package com.example.liftrix.ui.workout.details
+﻿package com.example.liftrix.ui.workout.details
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
@@ -46,7 +47,7 @@ fun WorkoutDetailsScreen(
     onNavigateToShareWorkout: (String) -> Unit = {},
     viewModel: WorkoutDetailsViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     
     LaunchedEffect(workoutId, ownerId) {
         viewModel.loadWorkoutDetails(workoutId, ownerId)
@@ -792,3 +793,4 @@ private fun formatRestTime(duration: Duration): String {
         else -> String.format("%ds", seconds)
     }
 }
+

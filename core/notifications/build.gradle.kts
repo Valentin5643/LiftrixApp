@@ -27,4 +27,6 @@ dependencies {
 
     add("kspDebug", libs.hilt.compiler)
     add("kspRelease", libs.hilt.compiler)
+
+    testImplementation(libs.junit)
 }

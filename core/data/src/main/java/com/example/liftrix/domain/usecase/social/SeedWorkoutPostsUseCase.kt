@@ -162,7 +162,7 @@ class SeedWorkoutPostsUseCase @Inject constructor(
             id = workoutId,
             userId = userId,
             name = workoutName,
-            date = LocalDate.ofInstant(end, ZoneId.systemDefault()),
+            date = end.atZone(ZoneId.systemDefault()).toLocalDate(),
             exercisesJson = exercisesJson,
             status = WorkoutStatus.COMPLETED,
             startTime = start,

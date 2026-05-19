@@ -87,6 +87,10 @@ class ExerciseQueryUseCase @Inject constructor(
         }
     }
 
+    suspend fun getExerciseById(exerciseId: String): LiftrixResult<ExerciseLibrary?> = withContext(Dispatchers.IO) {
+        exerciseRepository.getExerciseById(exerciseId)
+    }
+
     /**
      * Retrieves exercises filtered by user's recent usage.
      * Replaces GetExerciseLibraryUseCase.getRecentExercises()

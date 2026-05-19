@@ -12,6 +12,7 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.WorkManager
 import com.example.liftrix.BuildConfig
+import com.example.liftrix.core.logging.ReleaseLoggingTree
 import com.example.liftrix.domain.repository.WidgetPreferencesRepository
 import com.example.liftrix.service.CacheWarmingService
 import com.example.liftrix.sync.SyncCoordinator
@@ -105,7 +106,11 @@ class LiftrixApp : Application(), Configuration.Provider {
         INSTANCE = this
 
         // Initialize Timber for logging
-        Timber.plant(Timber.DebugTree())
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        } else {
+            Timber.plant(ReleaseLoggingTree())
+        }
 
         ThemeManager.getInstance(this).applyCurrentThemeToPlatform()
 
@@ -428,7 +433,7 @@ class LiftrixApp : Application(), Configuration.Provider {
                                 initializeUserThemeUseCase(user.uid)
                                 Timber.d("Theme initialized successfully for user: ${user.uid}")
                             } catch (e: Exception) {
-                                Timber.e(e, "Failed to initialize theme for user: ${user.uid}")
+                                Timber.e(e, "Failed to initialize theme for current user")
                             }
                             
                             // 🔥 NEW: Trigger startup sync on login to ensure all workouts are synchronized
@@ -449,10 +454,10 @@ class LiftrixApp : Application(), Configuration.Provider {
                                 if (syncResult.isSuccess) {
                                     Timber.i("Login sync initiated successfully for user: ${user.uid}")
                                 } else {
-                                    Timber.w("Login sync failed for user: ${user.uid}")
+                                    Timber.w("Login sync failed for current user")
                                 }
                             } catch (e: Exception) {
-                                Timber.e(e, "Failed to trigger login sync for user: ${user.uid}")
+                                Timber.e(e, "Failed to trigger login sync for current user")
                             }
                             
                             // Schedule periodic sync for ongoing synchronization

@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.analytics.VolumeGrouping
@@ -26,6 +27,9 @@ import com.example.liftrix.ui.common.components.EmptyState
 import com.example.liftrix.ui.progress.detail.components.AnalyticsDetailScreen
 import com.example.liftrix.ui.progress.components.GlobalTimeRangeSelector
 import com.example.liftrix.ui.progress.components.charts.ModernVolumeChart
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import timber.log.Timber
 
 /**
@@ -40,7 +44,7 @@ import timber.log.Timber
  * - Export functionality
  * - Loading, error, and empty states
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, FlowPreview::class)
 @Composable
 fun VolumeAnalysisDetailScreen(
     navController: NavController,
@@ -49,11 +53,11 @@ fun VolumeAnalysisDetailScreen(
     modifier: Modifier = Modifier,
     viewModel: VolumeAnalysisDetailViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val currentGroupBy by viewModel.groupBy.collectAsState()
-    val currentTimeRange by viewModel.timeRange.collectAsState()
-    val showProjections by viewModel.showProjections.collectAsState()
-    val isExporting by viewModel.isExporting.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val currentGroupBy by viewModel.groupBy.collectAsStateWithLifecycle()
+    val currentTimeRange by viewModel.timeRange.collectAsStateWithLifecycle()
+    val showProjections by viewModel.showProjections.collectAsStateWithLifecycle()
+    val isExporting by viewModel.isExporting.collectAsStateWithLifecycle()
 
     // Initialize with passed parameters
     LaunchedEffect(groupBy, timeRange) {
@@ -116,6 +120,7 @@ fun VolumeAnalysisDetailScreen(
     }
 }
 
+@OptIn(FlowPreview::class)
 @Composable
 private fun VolumeAnalysisContent(
     data: VolumeAnalysisDetailViewModel.VolumeAnalysisData,
@@ -139,9 +144,14 @@ private fun VolumeAnalysisContent(
         }
     }
     
-    // Save scroll position when it changes
-    LaunchedEffect(scrollState.value) {
-        viewModel.saveScrollPosition(scrollState.value)
+    // Save scroll position after scrolling settles instead of restarting per pixel.
+    LaunchedEffect(scrollState) {
+        snapshotFlow { scrollState.value }
+            .distinctUntilChanged()
+            .debounce(300)
+            .collect { position ->
+                viewModel.saveScrollPosition(position)
+            }
     }
     
     Column(

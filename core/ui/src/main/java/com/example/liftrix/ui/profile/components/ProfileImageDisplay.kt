@@ -1,4 +1,4 @@
-package com.example.liftrix.ui.profile.components
+﻿package com.example.liftrix.ui.profile.components
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -79,7 +79,7 @@ fun ProfileImageDisplay(
     // Load image when URL key or userId changes (prevents redundant loads on recomposition)
     LaunchedEffect(urlKey, userId) {
         if (!imageUrl.isNullOrBlank() && userId != null) {
-            Timber.d("PFP_DEBUG: ProfileImageDisplay starting load for user $userId with URL: $imageUrl")
+            Timber.d("PFP_DEBUG: ProfileImageDisplay starting load for current user with URL: $imageUrl")
             scope.launch {
                 try {
                     isLoading = true
@@ -88,20 +88,20 @@ fun ProfileImageDisplay(
                     // Resolve storage path to URL if needed
                     val resolvedUrl = if (imageUrl.isStoragePath()) {
                         if (urlResolver != null) {
-                            Timber.d("PFP_DEBUG: Resolving storage path to URL for user $userId | path=$imageUrl")
+                            Timber.d("PFP_DEBUG: Resolving storage path to URL for current user | path=<redacted>")
                             urlResolver.resolveUrl(imageUrl)
                         } else {
-                            Timber.w("PFP_DEBUG: Storage path provided but no urlResolver available for user $userId | path=$imageUrl")
+                            Timber.w("PFP_DEBUG: Storage path provided but no urlResolver available for current user | path=<redacted>")
                             null
                         }
                     } else {
-                        Timber.d("PFP_DEBUG: Using URL directly for user $userId | url=$imageUrl")
+                        Timber.d("PFP_DEBUG: Using URL directly for current user | url=<redacted>")
                         imageUrl
                     }
 
                     if (resolvedUrl != null && profileImageCache != null) {
                         // Use ProfileImageCache singleton for optimized loading
-                        Timber.d("PFP_DEBUG: Using shared ProfileImageCache for user $userId | resolvedUrl=$resolvedUrl")
+                        Timber.d("PFP_DEBUG: Using shared ProfileImageCache for current user | resolvedUrl=<redacted>")
 
                         val bitmap = profileImageCache.loadImage(resolvedUrl, userId)
                         
@@ -109,31 +109,31 @@ fun ProfileImageDisplay(
                         hasError = bitmap == null
                         
                         if (bitmap != null) {
-                            Timber.d("PFP_DEBUG: ✅ ProfileImageDisplay cache hit for user $userId | bitmap=${bitmap.width}x${bitmap.height}")
+                            Timber.d("PFP_DEBUG: âœ… ProfileImageDisplay cache hit for current user | bitmap=${bitmap.width}x${bitmap.height}")
                         } else {
-                            Timber.w("PFP_DEBUG: ❌ ProfileImageDisplay cache miss for user $userId | resolvedUrl: $resolvedUrl")
+                            Timber.w("PFP_DEBUG: âŒ ProfileImageDisplay cache miss for current user | resolvedUrl=<redacted>")
                         }
                     } else {
                         if (profileImageCache == null) {
-                            Timber.e("PFP_DEBUG: ❌ ProfileImageCache not provided via CompositionLocal for user $userId")
+                            Timber.e("PFP_DEBUG: âŒ ProfileImageCache not provided via CompositionLocal for current user")
                         }
                         if (resolvedUrl == null) {
-                            Timber.w("PFP_DEBUG: ❌ Failed to resolve URL for user $userId | originalInput: $imageUrl")
+                            Timber.w("PFP_DEBUG: âŒ Failed to resolve URL for current user | originalInput=<redacted>")
                         }
                         hasError = true
                         loadedImage = null
                     }
                 } catch (e: Exception) {
-                    Timber.e("PFP_DEBUG: 💥 ProfileImageDisplay failed to load image for user $userId from URL: $imageUrl | Error: ${e.message}", e)
+                    Timber.e("PFP_DEBUG: ðŸ’¥ ProfileImageDisplay failed to load image for current user from URL=<redacted> | Error: ${e.message}", e)
                     hasError = true
                     loadedImage = null
                 } finally {
                     isLoading = false
-                    Timber.d("PFP_DEBUG: ProfileImageDisplay loading completed for user $userId | hasError=$hasError | hasImage=${loadedImage != null}")
+                    Timber.d("PFP_DEBUG: ProfileImageDisplay loading completed for current user | hasError=$hasError | hasImage=${loadedImage != null}")
                 }
             }
         } else {
-            Timber.d("PFP_DEBUG: 🔤 ProfileImageDisplay no image URL for user $userId (imageUrl='$imageUrl'), showing initials fallback")
+            Timber.d("PFP_DEBUG: ðŸ”¤ ProfileImageDisplay no image URL for current user (imageUrl='$imageUrl'), showing initials fallback")
             isLoading = false
             loadedImage = null
             hasError = false
@@ -291,3 +291,4 @@ fun LargeProfileImage(
         contentDescription = "Large profile picture"
     )
 }
+

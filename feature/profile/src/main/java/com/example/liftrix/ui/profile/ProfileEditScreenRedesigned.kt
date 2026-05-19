@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -47,14 +48,22 @@ fun ProfileEditScreenRedesigned(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     // Edit state
-    var displayName by remember { mutableStateOf("") }
-    var bio by remember { mutableStateOf("") }
-    var age by remember { mutableStateOf("") }
-    var weight by remember { mutableStateOf("") }
-    var isPublic by remember { mutableStateOf(true) }
-    var selectedGoals by remember { mutableStateOf(setOf<FitnessGoal>()) }
-    var selectedEquipment by remember { mutableStateOf(setOf<Equipment>()) }
-    var otherEquipment by remember { mutableStateOf("") }
+    var displayName by rememberSaveable { mutableStateOf("") }
+    var bio by rememberSaveable { mutableStateOf("") }
+    var age by rememberSaveable { mutableStateOf("") }
+    var weight by rememberSaveable { mutableStateOf("") }
+    var isPublic by rememberSaveable { mutableStateOf(true) }
+    var hasDraftEdits by rememberSaveable { mutableStateOf(false) }
+    var initializedProfileUserId by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedGoalNames by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    var selectedEquipmentNames by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    var otherEquipment by rememberSaveable { mutableStateOf("") }
+    val selectedGoals = remember(selectedGoalNames) {
+        FitnessGoal.values().filter { it.name in selectedGoalNames }.toSet()
+    }
+    val selectedEquipment = remember(selectedEquipmentNames) {
+        Equipment.values().filter { it.name in selectedEquipmentNames }.toSet()
+    }
 
     // Track original values for change detection
     var originalProfile by remember { mutableStateOf<ProfileFormData?>(null) }
@@ -68,17 +77,22 @@ fun ProfileEditScreenRedesigned(
     // Initialize fields when profile loads
     LaunchedEffect(uiState.profile) {
         uiState.profile?.let { profile ->
+            if (hasDraftEdits && initializedProfileUserId == profile.userId) {
+                return@LaunchedEffect
+            }
             displayName = profile.displayName
             bio = profile.bio ?: ""
             age = profile.age?.toString() ?: ""
             weight = profile.weight?.value?.toString() ?: ""
             isPublic = profile.isPublic
-            selectedGoals = profile.fitnessGoals.toSet()
-            selectedEquipment = profile.availableEquipment.toSet()
+            selectedGoalNames = profile.fitnessGoals.map { it.name }
+            selectedEquipmentNames = profile.availableEquipment.map { it.name }
             otherEquipment = profile.otherEquipment ?: ""
+            initializedProfileUserId = profile.userId
 
             // Store original values
             originalProfile = ProfileFormData(
+                userId = profile.userId,
                 displayName = displayName,
                 bio = bio,
                 age = age,
@@ -88,6 +102,7 @@ fun ProfileEditScreenRedesigned(
                 selectedEquipment = selectedEquipment,
                 otherEquipment = otherEquipment
             )
+            hasDraftEdits = false
         }
     }
 
@@ -267,6 +282,7 @@ fun ProfileEditScreenRedesigned(
                     OutlinedTextField(
                         value = displayName,
                         onValueChange = {
+                            hasDraftEdits = true
                             displayName = it
                             displayNameError = null
                         },
@@ -280,6 +296,7 @@ fun ProfileEditScreenRedesigned(
                     OutlinedTextField(
                         value = bio,
                         onValueChange = {
+                            hasDraftEdits = true
                             bio = it
                             bioError = null
                         },
@@ -301,6 +318,7 @@ fun ProfileEditScreenRedesigned(
                         OutlinedTextField(
                             value = age,
                             onValueChange = {
+                                hasDraftEdits = true
                                 age = it
                                 ageError = null
                             },
@@ -317,6 +335,7 @@ fun ProfileEditScreenRedesigned(
                         OutlinedTextField(
                             value = weight,
                             onValueChange = {
+                                hasDraftEdits = true
                                 weight = it
                                 weightError = null
                             },
@@ -343,7 +362,10 @@ fun ProfileEditScreenRedesigned(
                 MultiSelectChipGroup(
                     items = FitnessGoal.values().toList(),
                     selectedItems = selectedGoals,
-                    onSelectionChange = { selectedGoals = it },
+                    onSelectionChange = {
+                        hasDraftEdits = true
+                        selectedGoalNames = it.map { goal -> goal.name }
+                    },
                     itemLabel = { it.displayName },
                     helperText = "Select one or more fitness goals to personalize your experience"
                 )
@@ -362,14 +384,20 @@ fun ProfileEditScreenRedesigned(
                     MultiSelectChipGroup(
                         items = Equipment.values().toList(),
                         selectedItems = selectedEquipment,
-                        onSelectionChange = { selectedEquipment = it },
+                        onSelectionChange = {
+                            hasDraftEdits = true
+                            selectedEquipmentNames = it.map { equipment -> equipment.name }
+                        },
                         itemLabel = { it.displayName },
                         helperText = "Select the equipment you have access to for better workout recommendations"
                     )
 
                     OutlinedTextField(
                         value = otherEquipment,
-                        onValueChange = { otherEquipment = it },
+                        onValueChange = {
+                            hasDraftEdits = true
+                            otherEquipment = it
+                        },
                         label = { Text("Other Equipment") },
                         supportingText = { Text("${otherEquipment.length}/200 characters") },
                         maxLines = 2,
@@ -410,7 +438,10 @@ fun ProfileEditScreenRedesigned(
                         }
                         Switch(
                             checked = isPublic,
-                            onCheckedChange = { isPublic = it }
+                            onCheckedChange = {
+                                hasDraftEdits = true
+                                isPublic = it
+                            }
                         )
                     }
 
@@ -452,6 +483,7 @@ fun ProfileEditScreenRedesigned(
  * Data class to track original profile values for change detection
  */
 private data class ProfileFormData(
+    val userId: String,
     val displayName: String,
     val bio: String,
     val age: String,

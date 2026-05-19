@@ -1,5 +1,6 @@
-package com.example.liftrix.ui.settings
+﻿package com.example.liftrix.ui.settings
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -55,7 +56,7 @@ fun NotificationSettingsScreen(
     showTopBar: Boolean = true,
     viewModel: NotificationSettingsViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     
     // Stable callbacks
     val stableOnEvent = remember(viewModel) { viewModel::handleEvent }
@@ -1005,3 +1006,4 @@ private fun NotificationSettingsScreenPreview() {
         }
     }
 }
+

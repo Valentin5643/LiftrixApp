@@ -54,6 +54,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.json.Json
 import timber.log.Timber
 import javax.inject.Singleton
@@ -375,26 +376,29 @@ abstract class FirebaseModule {
         @Singleton
         fun provideUxMetricsTracker(
             analyticsService: AnalyticsService,
-            timeProvider: TimeProvider
+            timeProvider: TimeProvider,
+            @ApplicationScope applicationScope: CoroutineScope
         ): UxMetricsTracker {
-            return UxMetricsTracker(analyticsService, timeProvider)
+            return UxMetricsTracker(analyticsService, timeProvider, applicationScope)
         }
 
         @Provides
         @Singleton
         fun provideTaskCompletionTracker(
             analyticsService: AnalyticsService,
-            timeProvider: TimeProvider
+            timeProvider: TimeProvider,
+            @ApplicationScope applicationScope: CoroutineScope
         ): TaskCompletionTracker {
-            return TaskCompletionTracker(analyticsService, timeProvider)
+            return TaskCompletionTracker(analyticsService, timeProvider, applicationScope)
         }
 
         @Provides
         @Singleton
         fun provideCognitiveLoadMeasurement(
-            analyticsService: AnalyticsService
+            analyticsService: AnalyticsService,
+            @ApplicationScope applicationScope: CoroutineScope
         ): CognitiveLoadMeasurement {
-            return CognitiveLoadMeasurement(analyticsService)
+            return CognitiveLoadMeasurement(analyticsService, applicationScope)
         }
 
         // ========================================

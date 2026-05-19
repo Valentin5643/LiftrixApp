@@ -58,6 +58,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import kotlinx.coroutines.flow.flowOf
@@ -187,16 +188,22 @@ fun ProgressDashboardScreen(
     // REMOVED: Screen-level timeout monitoring - now handled properly in ViewModel
     // The ViewModel now monitors timeout from actual fetch start, not screen init
 
-    // Set up navigation callbacks for AnalyticsWidgetViewModel
-    // Use remember to create stable callbacks that don't change on every recomposition
+    val currentVolumeDetailCallback by rememberUpdatedState(onNavigateToVolumeDetail)
+    val currentOneRmDetailCallback by rememberUpdatedState(onNavigateToOneRmDetail)
+    val currentMuscleGroupDetailCallback by rememberUpdatedState(onNavigateToMuscleGroupDetail)
+    val currentFrequencyDetailCallback by rememberUpdatedState(onNavigateToFrequencyDetail)
+    val currentExerciseRankingDetailCallback by rememberUpdatedState(onNavigateToExerciseRankingDetail)
+    val currentDashboardCustomizationCallback by rememberUpdatedState(onNavigateToDashboardCustomization)
+
+    // Set up navigation callbacks for AnalyticsWidgetViewModel.
     val stableCallbacks = remember {
         NavigationCallbacks(
-            onNavigateToVolumeDetail = onNavigateToVolumeDetail,
-            onNavigateToOneRmDetail = onNavigateToOneRmDetail,
-            onNavigateToMuscleGroupDetail = onNavigateToMuscleGroupDetail,
-            onNavigateToFrequencyDetail = onNavigateToFrequencyDetail,
-            onNavigateToExerciseRankingDetail = onNavigateToExerciseRankingDetail,
-            onNavigateToDashboardCustomization = onNavigateToDashboardCustomization
+            onNavigateToVolumeDetail = { currentVolumeDetailCallback() },
+            onNavigateToOneRmDetail = { currentOneRmDetailCallback() },
+            onNavigateToMuscleGroupDetail = { currentMuscleGroupDetailCallback() },
+            onNavigateToFrequencyDetail = { currentFrequencyDetailCallback() },
+            onNavigateToExerciseRankingDetail = { currentExerciseRankingDetailCallback() },
+            onNavigateToDashboardCustomization = { currentDashboardCustomizationCallback() }
         )
     }
     

@@ -54,7 +54,7 @@ class SerializationPerformanceMonitor @Inject constructor() {
 
         // Keep only recent metrics
         if (performanceData.size > MAX_METRICS_HISTORY) {
-            performanceData.removeFirst()
+            performanceData.removeAt(0)
         }
 
         // Log performance warnings

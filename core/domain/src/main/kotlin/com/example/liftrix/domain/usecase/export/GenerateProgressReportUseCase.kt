@@ -6,17 +6,14 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.export.ProgressReportDateRange
 import com.example.liftrix.domain.model.export.ProgressReportRequest
 import com.example.liftrix.domain.model.export.ProgressReportResult
-import com.example.liftrix.domain.repository.SubscriptionRepository
 import com.example.liftrix.domain.repository.export.ProgressReportRepository
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import javax.inject.Inject
 
 class GenerateProgressReportUseCase @Inject constructor(
-    private val repository: ProgressReportRepository,
-    private val subscriptionRepository: SubscriptionRepository
+    private val repository: ProgressReportRepository
 ) {
     suspend operator fun invoke(
         userId: String,
@@ -35,21 +32,6 @@ class GenerateProgressReportUseCase @Inject constructor(
                     field = "progress_report_request",
                     violations = validation,
                     errorMessage = validation.first()
-                )
-            )
-        }
-
-        val hasPremium = try {
-            subscriptionRepository.hasActivePremiumSubscription(userId).first()
-        } catch (_: Exception) {
-            false
-        }
-
-        if (!hasPremium) {
-            return@withContext liftrixFailure(
-                LiftrixError.PermissionError(
-                    errorMessage = "Progress report export requires Liftrix Premium.",
-                    permission = "premium_progress_report"
                 )
             )
         }

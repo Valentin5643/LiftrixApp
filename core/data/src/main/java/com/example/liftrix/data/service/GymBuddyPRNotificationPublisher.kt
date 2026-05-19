@@ -76,10 +76,9 @@ class GymBuddyPRNotificationPublisher @Inject constructor(
     }
 
     private fun PersonalRecordEntity.buildCooldownKey(toUserId: String): String {
-        val achievedDate = LocalDate.ofInstant(
-            Instant.ofEpochMilli(achievedAt),
-            ZoneId.systemDefault()
-        )
+        val achievedDate = Instant.ofEpochMilli(achievedAt)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
         return listOf(
             userId,
             toUserId,

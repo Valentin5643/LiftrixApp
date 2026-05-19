@@ -1,5 +1,6 @@
-package com.example.liftrix.ui.social
+﻿package com.example.liftrix.ui.social
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -43,7 +44,7 @@ fun UserSearchScreen(
     modifier: Modifier = Modifier,
     viewModel: UserSearchViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showFilters by remember { mutableStateOf(false) }
 
     Column(
@@ -559,3 +560,4 @@ private fun UserSearchScreenPreview() {
         )
     }
 }
+

@@ -2,9 +2,6 @@ package com.example.liftrix.ui.chat
 
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.plus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -80,7 +77,7 @@ class ChatbotViewModel @Inject constructor(
      * Sets up real-time message observation and checks usage limits.
      */
     private fun loadInitialData() {
-        viewModelScope.launch(Dispatchers.IO + SupervisorJob()) {
+        viewModelScope.launch {
             try {
                 // Get authenticated user ID
                 authQueryUseCase(waitForAuth = false).fold(
@@ -784,7 +781,7 @@ class ChatbotViewModel @Inject constructor(
         notes: String?
     ) {
         userId?.let { uid ->
-            viewModelScope.launch(Dispatchers.IO) {
+            viewModelScope.launch {
                 try {
                     aiMessageReportService.reportMessage(
                         userId = uid,

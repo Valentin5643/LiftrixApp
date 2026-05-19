@@ -1,4 +1,4 @@
-package com.example.liftrix.ui.navigation
+﻿package com.example.liftrix.ui.navigation
 
 import android.content.Intent
 import android.net.Uri
@@ -75,7 +75,7 @@ class DeepLinkHandler @Inject constructor() {
                 else -> handleUnknownLink(uri, navController)
             }
         } catch (e: Exception) {
-            Timber.e(e, "Error processing deep link: $uri")
+            Timber.e(e, "Error processing deep link")
             handleErrorLink(uri, navController)
         }
     }
@@ -146,7 +146,7 @@ class DeepLinkHandler @Inject constructor() {
             val action = actionMatch.groupValues[2]
             
             if (!isValidUserId(userId)) {
-                Timber.w("Invalid user ID in profile link: $userId")
+                Timber.w("Invalid user ID in profile link")
                 return false
             }
             
@@ -159,11 +159,11 @@ class DeepLinkHandler @Inject constructor() {
             val userId = match.groupValues[1]
             
             if (!isValidUserId(userId)) {
-                Timber.w("Invalid user ID in profile link: $userId")
+                Timber.w("Invalid user ID in profile link")
                 return false
             }
             
-            Timber.i("Navigating to profile: $userId")
+            Timber.i("Navigating to profile")
             navController.navigateFromDeepLink(LiftrixRoute.PublicProfile(userId))
             return true
         }
@@ -172,7 +172,7 @@ class DeepLinkHandler @Inject constructor() {
     }
     
     private fun handleProfileWithAction(userId: String, action: String, navController: NavController): Boolean {
-        Timber.i("Navigating to profile: $userId with action: $action")
+        Timber.i("Navigating to profile with action: $action")
         
         // Navigate to profile with the specified action
         navController.navigateFromDeepLink(
@@ -244,7 +244,7 @@ class DeepLinkHandler @Inject constructor() {
             path.startsWith("/share/profile/") -> {
                 val userId = path.removePrefix("/share/profile/").takeIf { it.isNotBlank() }
                 if (userId != null && isValidUserId(userId)) {
-                    Timber.i("Navigating to shared profile: $userId")
+                    Timber.i("Navigating to shared profile")
                     navController.navigateFromDeepLink(LiftrixRoute.PublicProfile(userId))
                     return true
                 }
@@ -274,22 +274,22 @@ class DeepLinkHandler @Inject constructor() {
         val userId = path.removePrefix("/qr/").takeIf { it.isNotBlank() }
         
         if (userId != null && isValidUserId(userId)) {
-            Timber.i("Navigating to QR profile: $userId")
+            Timber.i("Navigating to QR profile")
             navController.navigateFromDeepLink(LiftrixRoute.PublicProfile(userId))
             return true
         }
         
-        Timber.w("Invalid user ID in QR link: $userId")
+        Timber.w("Invalid user ID in QR link")
         return false
     }
     
     private fun handleUnknownLink(uri: Uri, navController: NavController): Boolean {
-        Timber.w("Unknown deep link format: $uri")
+        Timber.w("Unknown deep link format")
         
         // Try to extract any user ID from query parameters as fallback
         val userIdParam = uri.getQueryParameter("user_id") ?: uri.getQueryParameter("profile")
         if (userIdParam != null && isValidUserId(userIdParam)) {
-            Timber.i("Fallback navigation to profile from query parameter: $userIdParam")
+            Timber.i("Fallback navigation to profile from query parameter")
             navController.navigateFromDeepLink(LiftrixRoute.PublicProfile(userIdParam))
             return true
         }
@@ -301,7 +301,7 @@ class DeepLinkHandler @Inject constructor() {
     }
     
     private fun handleErrorLink(uri: Uri, navController: NavController): Boolean {
-        Timber.e("Error handling deep link, navigating to home: $uri")
+        Timber.e("Error handling deep link, navigating to home")
         navController.navigateFromDeepLink(LiftrixRoute.Home)
         return false
     }

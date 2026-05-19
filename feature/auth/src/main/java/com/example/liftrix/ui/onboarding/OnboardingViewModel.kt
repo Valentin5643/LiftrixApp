@@ -658,7 +658,24 @@ class OnboardingViewModel @Inject constructor(
                     savedStateHandle[KEY_WEIGHT_UNIT] = currentState.profileData.weightUnit.name
                     savedStateHandle[KEY_OTHER_EQUIPMENT] = currentState.profileData.otherEquipmentInput
                     savedStateHandle[KEY_PREFER_NOT_SAY_WEIGHT] = currentState.profileData.preferNotToSayWeight
-                    // Note: Collections are more complex - would need serialization for full state
+                    savedStateHandle[KEY_DISPLAY_NAME] = currentState.profileData.displayName
+                    savedStateHandle[KEY_BIO] = currentState.profileData.bio
+                    savedStateHandle[KEY_AGE_ERROR] = currentState.profileData.ageError
+                    savedStateHandle[KEY_WEIGHT_ERROR] = currentState.profileData.weightError
+                    savedStateHandle[KEY_OTHER_EQUIPMENT_ERROR] = currentState.profileData.otherEquipmentError
+                    savedStateHandle[KEY_GOALS_ERROR] = currentState.profileData.goalsError
+                    savedStateHandle[KEY_SELECTED_EQUIPMENT] = ArrayList(
+                        currentState.profileData.selectedEquipment.map { it.name }
+                    )
+                    savedStateHandle[KEY_SELECTED_GOALS] = ArrayList(
+                        currentState.profileData.selectedGoals.map { it.name }
+                    )
+                    savedStateHandle[KEY_GOAL_PRIORITY_NAMES] = ArrayList(
+                        currentState.profileData.goalsPriority.keys.map { it.name }
+                    )
+                    savedStateHandle[KEY_GOAL_PRIORITY_VALUES] = ArrayList(
+                        currentState.profileData.goalsPriority.values
+                    )
                     Timber.d("State saved to handle")
                 }
                 else -> {
@@ -714,15 +731,39 @@ class OnboardingViewModel @Inject constructor(
                 val weightUnitName = savedStateHandle.get<String>(KEY_WEIGHT_UNIT) ?: WeightUnit.KILOGRAMS.name
                 val otherEquipment = savedStateHandle.get<String>(KEY_OTHER_EQUIPMENT) ?: ""
                 val preferNotSayWeight = savedStateHandle.get<Boolean>(KEY_PREFER_NOT_SAY_WEIGHT) ?: false
-                
+                val selectedEquipment = savedStateHandle.get<ArrayList<String>>(KEY_SELECTED_EQUIPMENT)
+                    .orEmpty()
+                    .mapNotNull { name -> runCatching { Equipment.valueOf(name) }.getOrNull() }
+                    .toSet()
+                val selectedGoals = savedStateHandle.get<ArrayList<String>>(KEY_SELECTED_GOALS)
+                    .orEmpty()
+                    .mapNotNull { name -> runCatching { FitnessGoal.valueOf(name) }.getOrNull() }
+                    .toSet()
+                val goalPriorityNames = savedStateHandle.get<ArrayList<String>>(KEY_GOAL_PRIORITY_NAMES).orEmpty()
+                val goalPriorityValues = savedStateHandle.get<ArrayList<Int>>(KEY_GOAL_PRIORITY_VALUES).orEmpty()
+                val goalsPriority = goalPriorityNames.zip(goalPriorityValues)
+                    .mapNotNull { (name, priority) ->
+                        runCatching { FitnessGoal.valueOf(name) }.getOrNull()?.let { it to priority }
+                    }
+                    .toMap()
+
                 val weightUnit = WeightUnit.valueOf(weightUnitName)
                 
                 val profileData = UserProfileData.createInitial(userId).copy(
+                    displayName = savedStateHandle.get<String>(KEY_DISPLAY_NAME) ?: "",
+                    bio = savedStateHandle.get<String>(KEY_BIO) ?: "",
                     ageInput = ageInput,
+                    ageError = savedStateHandle.get<String>(KEY_AGE_ERROR),
                     weightInput = weightInput,
                     weightUnit = weightUnit,
+                    weightError = savedStateHandle.get<String>(KEY_WEIGHT_ERROR),
                     otherEquipmentInput = otherEquipment,
-                    preferNotToSayWeight = preferNotSayWeight
+                    otherEquipmentError = savedStateHandle.get<String>(KEY_OTHER_EQUIPMENT_ERROR),
+                    preferNotToSayWeight = preferNotSayWeight,
+                    selectedEquipment = selectedEquipment,
+                    selectedGoals = selectedGoals,
+                    goalsPriority = goalsPriority,
+                    goalsError = savedStateHandle.get<String>(KEY_GOALS_ERROR)
                 )
                 
                 _state.value = OnboardingState.StepActive(
@@ -755,6 +796,16 @@ class OnboardingViewModel @Inject constructor(
             savedStateHandle.remove<String>(KEY_WEIGHT_UNIT)
             savedStateHandle.remove<String>(KEY_OTHER_EQUIPMENT)
             savedStateHandle.remove<Boolean>(KEY_PREFER_NOT_SAY_WEIGHT)
+            savedStateHandle.remove<String>(KEY_DISPLAY_NAME)
+            savedStateHandle.remove<String>(KEY_BIO)
+            savedStateHandle.remove<String>(KEY_AGE_ERROR)
+            savedStateHandle.remove<String>(KEY_WEIGHT_ERROR)
+            savedStateHandle.remove<String>(KEY_OTHER_EQUIPMENT_ERROR)
+            savedStateHandle.remove<String>(KEY_GOALS_ERROR)
+            savedStateHandle.remove<ArrayList<String>>(KEY_SELECTED_EQUIPMENT)
+            savedStateHandle.remove<ArrayList<String>>(KEY_SELECTED_GOALS)
+            savedStateHandle.remove<ArrayList<String>>(KEY_GOAL_PRIORITY_NAMES)
+            savedStateHandle.remove<ArrayList<Int>>(KEY_GOAL_PRIORITY_VALUES)
             Timber.d("Saved state cleared")
         } catch (e: Exception) {
             Timber.e(e, "Failed to clear saved state")
@@ -825,5 +876,15 @@ class OnboardingViewModel @Inject constructor(
         private const val KEY_WEIGHT_UNIT = "onboarding_weight_unit"
         private const val KEY_OTHER_EQUIPMENT = "onboarding_other_equipment"
         private const val KEY_PREFER_NOT_SAY_WEIGHT = "onboarding_prefer_not_say_weight"
+        private const val KEY_DISPLAY_NAME = "onboarding_display_name"
+        private const val KEY_BIO = "onboarding_bio"
+        private const val KEY_AGE_ERROR = "onboarding_age_error"
+        private const val KEY_WEIGHT_ERROR = "onboarding_weight_error"
+        private const val KEY_OTHER_EQUIPMENT_ERROR = "onboarding_other_equipment_error"
+        private const val KEY_GOALS_ERROR = "onboarding_goals_error"
+        private const val KEY_SELECTED_EQUIPMENT = "onboarding_selected_equipment"
+        private const val KEY_SELECTED_GOALS = "onboarding_selected_goals"
+        private const val KEY_GOAL_PRIORITY_NAMES = "onboarding_goal_priority_names"
+        private const val KEY_GOAL_PRIORITY_VALUES = "onboarding_goal_priority_values"
     }
 } 

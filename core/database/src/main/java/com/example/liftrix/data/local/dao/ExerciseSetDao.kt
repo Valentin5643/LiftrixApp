@@ -239,6 +239,7 @@ interface ExerciseSetDao {
     @Query("""
         SELECT 
             e.exercise_library_id,
+            el.name as exercise_name,
             es.weight_kg,
             es.reps,
             COALESCE(es.completed_at, CAST(strftime('%s', w.date) AS INTEGER) * 1000) as completed_at,
@@ -246,10 +247,12 @@ interface ExerciseSetDao {
         FROM exercise_sets es
         JOIN exercises e ON es.exercise_id = e.id
         JOIN workouts w ON e.workout_id = w.id
+        JOIN exercise_library el ON e.exercise_library_id = el.id
         WHERE w.user_id = :userId
         AND e.exercise_library_id IN (:exerciseLibraryIds)
+        AND el.equipment != 'BODYWEIGHT_ONLY'
         AND es.weight_kg > 0
-        AND es.reps > 0
+        AND es.reps BETWEEN 1 AND 10
         AND (
             (es.completed_at IS NOT NULL AND DATE(es.completed_at / 1000, 'unixepoch') BETWEEN :startDate AND :endDate)
             OR 
@@ -290,6 +293,7 @@ interface ExerciseSetDao {
         JOIN workouts w ON e.workout_id = w.id
         JOIN exercise_library el ON e.exercise_library_id = el.id
         WHERE w.user_id = :userId
+        AND el.equipment != 'BODYWEIGHT_ONLY'
         AND es.weight_kg > 0
         AND es.reps > 0
         AND (
@@ -329,6 +333,7 @@ interface ExerciseSetDao {
         JOIN workouts w ON e.workout_id = w.id
         JOIN exercise_library el ON e.exercise_library_id = el.id
         WHERE w.user_id = :userId
+        AND el.equipment != 'BODYWEIGHT_ONLY'
         AND es.weight_kg > 0
         AND es.reps > 0
         AND (
@@ -360,6 +365,7 @@ interface ExerciseSetDao {
     @Query("""
         SELECT 
             e.exercise_library_id,
+            el.name as exercise_name,
             es.weight_kg,
             es.reps,
             COALESCE(es.completed_at, CAST(strftime('%s', w.date) AS INTEGER) * 1000) as completed_at,
@@ -367,9 +373,11 @@ interface ExerciseSetDao {
         FROM exercise_sets es
         JOIN exercises e ON es.exercise_id = e.id
         JOIN workouts w ON e.workout_id = w.id
+        JOIN exercise_library el ON e.exercise_library_id = el.id
         WHERE w.user_id = :userId
+        AND el.equipment != 'BODYWEIGHT_ONLY'
         AND es.weight_kg > 0
-        AND es.reps > 0
+        AND es.reps BETWEEN 1 AND 10
         AND (
             (es.completed_at IS NOT NULL AND DATE(es.completed_at / 1000, 'unixepoch') BETWEEN :startDate AND :endDate)
             OR 
@@ -405,6 +413,7 @@ interface ExerciseSetDao {
         JOIN workouts w ON e.workout_id = w.id
         JOIN exercise_library el ON e.exercise_library_id = el.id
         WHERE w.user_id = :userId
+        AND el.equipment != 'BODYWEIGHT_ONLY'
         AND es.weight_kg > 0
         AND es.reps > 0
         AND (
@@ -442,6 +451,7 @@ interface ExerciseSetDao {
         JOIN workouts w ON e.workout_id = w.id
         JOIN exercise_library el ON e.exercise_library_id = el.id
         WHERE w.user_id = :userId
+        AND el.equipment != 'BODYWEIGHT_ONLY'
         AND es.weight_kg > 0
         AND es.reps > 0
         AND (
@@ -477,7 +487,9 @@ interface ExerciseSetDao {
         FROM exercise_sets es
         JOIN exercises e ON es.exercise_id = e.id
         JOIN workouts w ON e.workout_id = w.id
+        JOIN exercise_library el ON e.exercise_library_id = el.id
         WHERE w.user_id = :userId
+        AND el.equipment != 'BODYWEIGHT_ONLY'
         AND es.weight_kg > 0
         AND es.reps > 0
         AND (
@@ -494,6 +506,63 @@ interface ExerciseSetDao {
         startDate: String,
         endDate: String
     ): List<DailyVolumeResult>
+
+    @Query("""
+        SELECT
+            COALESCE(DATE(es.completed_at / 1000, 'unixepoch'), w.date) as date,
+            SUM(es.reps) as total_reps,
+            COUNT(es.id) as total_sets,
+            COUNT(DISTINCT e.exercise_library_id) as exercise_count
+        FROM exercise_sets es
+        JOIN exercises e ON es.exercise_id = e.id
+        JOIN workouts w ON e.workout_id = w.id
+        WHERE w.user_id = :userId
+        AND w.status = 'COMPLETED'
+        AND es.reps > 0
+        AND (
+            (es.completed_at IS NOT NULL AND DATE(es.completed_at / 1000, 'unixepoch') BETWEEN :startDate AND :endDate)
+            OR
+            (es.completed_at IS NULL AND DATE(w.date) BETWEEN :startDate AND :endDate)
+        )
+        GROUP BY COALESCE(DATE(es.completed_at / 1000, 'unixepoch'), w.date)
+        ORDER BY date ASC
+    """)
+    @UserScoped
+    suspend fun getDailyRepActivityData(
+        userId: String,
+        startDate: String,
+        endDate: String
+    ): List<DailyRepActivityResult>
+
+    @Query("""
+        SELECT
+            el.primary_muscle_group,
+            SUM(es.reps) as total_reps,
+            COUNT(DISTINCT e.exercise_library_id) as exercise_count,
+            COUNT(es.id) as total_sets
+        FROM exercise_sets es
+        JOIN exercises e ON es.exercise_id = e.id
+        JOIN workouts w ON e.workout_id = w.id
+        JOIN exercise_library el ON e.exercise_library_id = el.id
+        WHERE w.user_id = :userId
+        AND w.status = 'COMPLETED'
+        AND es.reps > 0
+        AND (
+            (es.completed_at IS NOT NULL AND DATE(es.completed_at / 1000, 'unixepoch') BETWEEN :startDate AND :endDate)
+            OR
+            (es.completed_at IS NULL AND DATE(w.date) BETWEEN :startDate AND :endDate)
+        )
+        GROUP BY el.primary_muscle_group
+        ORDER BY total_reps DESC
+        LIMIT :limit
+    """)
+    @UserScoped
+    suspend fun getRepActivityByMuscleGroup(
+        userId: String,
+        startDate: String,
+        endDate: String,
+        limit: Int = 50
+    ): List<MuscleGroupRepActivityResult>
 
     /**
      * Gets normalized exercise performance aggregates for ranking and analytics.
@@ -519,8 +588,9 @@ interface ExerciseSetDao {
         JOIN exercise_library el ON e.exercise_library_id = el.id
         WHERE w.user_id = :userId
         AND w.status = 'COMPLETED'
+        AND el.equipment != 'BODYWEIGHT_ONLY'
         AND es.weight_kg > 0
-        AND es.reps > 0
+        AND es.reps BETWEEN 1 AND 10
         AND (
             (es.completed_at IS NOT NULL AND DATE(es.completed_at / 1000, 'unixepoch') BETWEEN :startDate AND :endDate)
             OR
@@ -545,6 +615,7 @@ interface ExerciseSetDao {
         SELECT
             COALESCE(DATE(es.completed_at / 1000, 'unixepoch'), w.date) as date,
             e.exercise_library_id,
+            el.name as exercise_name,
             SUM(es.weight_kg * es.reps) as total_volume,
             COUNT(es.id) as total_sets,
             MAX(es.weight_kg) as max_weight,
@@ -553,16 +624,18 @@ interface ExerciseSetDao {
         FROM exercise_sets es
         JOIN exercises e ON es.exercise_id = e.id
         JOIN workouts w ON e.workout_id = w.id
+        JOIN exercise_library el ON e.exercise_library_id = el.id
         WHERE w.user_id = :userId
         AND w.status = 'COMPLETED'
+        AND el.equipment != 'BODYWEIGHT_ONLY'
         AND es.weight_kg > 0
-        AND es.reps > 0
+        AND es.reps BETWEEN 1 AND 10
         AND (
             (es.completed_at IS NOT NULL AND DATE(es.completed_at / 1000, 'unixepoch') BETWEEN :startDate AND :endDate)
             OR
             (es.completed_at IS NULL AND DATE(w.date) BETWEEN :startDate AND :endDate)
         )
-        GROUP BY COALESCE(DATE(es.completed_at / 1000, 'unixepoch'), w.date), e.exercise_library_id
+        GROUP BY COALESCE(DATE(es.completed_at / 1000, 'unixepoch'), w.date), e.exercise_library_id, el.name
         ORDER BY date ASC
     """)
     @UserScoped
@@ -635,8 +708,9 @@ interface ExerciseSetDao {
             JOIN workouts w ON e.workout_id = w.id
             JOIN exercise_library el ON e.exercise_library_id = el.id
             WHERE w.user_id = :userId
+            AND el.equipment != 'BODYWEIGHT_ONLY'
             AND es.weight_kg > 0
-            AND es.reps > 0
+            AND es.reps BETWEEN 1 AND 10
             AND (
                 (es.completed_at IS NOT NULL AND DATE(es.completed_at / 1000, 'unixepoch') BETWEEN :startDate AND :endDate)
                 OR 
@@ -666,6 +740,7 @@ interface ExerciseSetDao {
  */
 data class OneRmResult(
     val exercise_library_id: String,
+    val exercise_name: String,
     val weight_kg: Float,
     val reps: Int,
     val completed_at: Long,
@@ -702,6 +777,26 @@ data class DailyVolumeResult(
     val total_volume: Double,
     val total_sets: Int,
     val exercise_count: Int
+)
+
+/**
+ * Data class for rep-based activity when no external load is logged.
+ */
+data class DailyRepActivityResult(
+    val date: String,
+    val total_reps: Int,
+    val total_sets: Int,
+    val exercise_count: Int
+)
+
+/**
+ * Data class for muscle group activity when no external load is logged.
+ */
+data class MuscleGroupRepActivityResult(
+    val primary_muscle_group: String,
+    val total_reps: Int,
+    val exercise_count: Int,
+    val total_sets: Int
 )
 
 /**
@@ -772,6 +867,7 @@ data class ExercisePerformanceResult(
 data class ExercisePerformanceHistoryResult(
     val date: String,
     val exercise_library_id: String,
+    val exercise_name: String,
     val total_volume: Double,
     val total_sets: Int,
     val max_weight: Double,

@@ -55,4 +55,11 @@ dependencies {
 
     add("kspDebug", libs.room.compiler)
     add("kspRelease", libs.room.compiler)
+
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.runner)
+    androidTestImplementation(libs.room.testing)
+    androidTestImplementation(libs.androidx.sqlite.framework)
+    androidTestImplementation("androidx.annotation:annotation-jvm:1.8.1")
+    androidTestImplementation("androidx.tracing:tracing:1.2.0")
 }

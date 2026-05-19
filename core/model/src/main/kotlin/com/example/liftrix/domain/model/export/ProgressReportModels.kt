@@ -73,16 +73,25 @@ data class ProgressReportData(
 
 data class ProgressReportSummaryMetrics(
     val workoutsCompleted: Int,
+    val rawWorkoutEntries: Int = workoutsCompleted,
     val totalVolumeKg: Double,
+    val totalReps: Int = 0,
+    val totalSets: Int = 0,
     val activeTrainingDays: Int,
     val restDays: Int,
     val newPersonalRecords: Int,
     val bestStreakDays: Int,
     val consistencyScore: Int,
+    val consistencyWindowLabel: String = "Based on the selected report range",
     val mostActiveDay: String?,
     val estimatedOneRmImprovementKg: Double?,
+    val estimatedOneRmBaselineKg: Double? = null,
+    val oneRmStatusLabel: String = "Log weighted lifts to calculate 1RM progress",
     val averageWorkoutsPerWeek: Double,
-    val averageDurationMinutes: Long?
+    val averageDurationMinutes: Long?,
+    val validDurationWorkoutCount: Int = 0,
+    val activeWeekAverageWorkouts: Double? = null,
+    val hasUnusuallyHighWorkoutFrequency: Boolean = false
 )
 
 data class ProgressReportStrengthRow(
@@ -96,15 +105,18 @@ data class ProgressReportStrengthRow(
 data class ProgressReportWeeklyVolumeRow(
     val weekLabel: String,
     val workoutCount: Int,
+    val activeDays: Int = 0,
     val totalVolumeKg: Double,
-    val setCount: Int
+    val setCount: Int,
+    val repCount: Int = 0
 )
 
 data class ProgressReportMuscleGroupRow(
     val muscleGroup: String,
     val totalVolumeKg: Double,
     val exerciseCount: Int,
-    val setCount: Int
+    val setCount: Int,
+    val repCount: Int = 0
 )
 
 data class ProgressReportConsistencyRow(
@@ -142,7 +154,8 @@ data class ProgressReportAiSummary(
 data class ProgressReportSyncStatus(
     val pendingSyncItems: Int,
     val lastSyncTimestampMillis: Long?,
-    val generatedOffline: Boolean = true
+    val generatedOffline: Boolean = true,
+    val syncedWorkoutCount: Int = 0
 )
 
 data class ProgressReportResult(

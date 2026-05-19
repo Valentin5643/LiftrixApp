@@ -1,5 +1,6 @@
-package com.example.liftrix.ui.progress.detail
+﻿package com.example.liftrix.ui.progress.detail
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -50,11 +51,11 @@ fun ExerciseRankingDetailScreen(
     modifier: Modifier = Modifier,
     viewModel: ExerciseRankingDetailViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val currentSortBy by viewModel.sortBy.collectAsState()
-    val currentLimit by viewModel.limit.collectAsState()
-    val showPlateaus by viewModel.showPlateaus.collectAsState()
-    val isExporting by viewModel.isExporting.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val currentSortBy by viewModel.sortBy.collectAsStateWithLifecycle()
+    val currentLimit by viewModel.limit.collectAsStateWithLifecycle()
+    val showPlateaus by viewModel.showPlateaus.collectAsStateWithLifecycle()
+    val isExporting by viewModel.isExporting.collectAsStateWithLifecycle()
 
     // Initialize with passed parameters
     LaunchedEffect(sortBy, limit) {
@@ -410,7 +411,7 @@ private fun ExerciseRankingItem(
                     )
                     if (showPlateau) {
                         Text(
-                            text = "⚠ Plateau detected",
+                            text = "âš  Plateau detected",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error
                         )
@@ -442,3 +443,4 @@ private fun ExerciseRankingItem(
         }
     }
 }
+

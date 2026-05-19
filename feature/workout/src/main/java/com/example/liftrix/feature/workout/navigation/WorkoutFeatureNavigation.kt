@@ -2,11 +2,14 @@ package com.example.liftrix.feature.workout.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
 import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.model.WorkoutId
+import com.example.liftrix.domain.usecase.exercise.ExerciseQueryUseCase
 import com.example.liftrix.ui.workout.WorkoutScreen
 import com.example.liftrix.ui.workout.active.RedesignedActiveWorkoutScreen
 import com.example.liftrix.ui.workout.completion.PostCreationScreen
@@ -23,6 +26,27 @@ import com.example.liftrix.ui.workout.edit.EditWorkoutViewModel
 import com.example.liftrix.ui.workout.edit.RedesignedEditWorkoutScreen
 import com.example.liftrix.ui.workout.selection.ExerciseSelectionScreen
 import com.example.liftrix.ui.workouts.UserWorkoutsScreen
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface WorkoutNavigationEntryPoint {
+    fun exerciseQueryUseCase(): ExerciseQueryUseCase
+}
+
+@Composable
+private fun rememberExerciseQueryUseCase(): ExerciseQueryUseCase {
+    val applicationContext = LocalContext.current.applicationContext
+    return remember(applicationContext) {
+        EntryPointAccessors.fromApplication(
+            applicationContext,
+            WorkoutNavigationEntryPoint::class.java
+        ).exerciseQueryUseCase()
+    }
+}
 
 @Composable
 fun WorkoutRoute(
@@ -93,12 +117,10 @@ fun ExerciseSelectionRoute(
         onExerciseSelected = { exerciseLibrary ->
             if (isForTemplate) {
                 if (replaceExerciseIndex != null) {
-                    backStackEntry.savedStateHandle.set(
-                        "replace_exercise",
-                        Pair(replaceExerciseIndex, exerciseLibrary)
-                    )
+                    backStackEntry.savedStateHandle.set("replace_exercise_index", replaceExerciseIndex)
+                    backStackEntry.savedStateHandle.set("replace_exercise_id", exerciseLibrary.id)
                 } else {
-                    backStackEntry.savedStateHandle.set("selected_exercise", exerciseLibrary)
+                    backStackEntry.savedStateHandle.set("selected_exercise_id", exerciseLibrary.id)
                 }
                 onNavigateBack()
             } else {
@@ -221,26 +243,34 @@ fun EditWorkoutRoute(
     onNavigateToPostCreation: (String) -> Unit,
     viewModel: EditWorkoutViewModel = hiltViewModel()
 ) {
+    val exerciseQueryUseCase = rememberExerciseQueryUseCase()
+
     LaunchedEffect(backStackEntry.savedStateHandle) {
-        backStackEntry.savedStateHandle.getStateFlow<Pair<Int, ExerciseLibrary>?>(
-            "replace_exercise",
+        backStackEntry.savedStateHandle.getStateFlow<String?>(
+            "replace_exercise_id",
             null
-        ).collect { replacementData ->
-            if (replacementData != null) {
-                viewModel.replaceExercise(replacementData.first, replacementData.second)
-                backStackEntry.savedStateHandle.remove<Pair<Int, ExerciseLibrary>>("replace_exercise")
+        ).collect { replacementExerciseId ->
+            val replacementIndex = backStackEntry.savedStateHandle.get<Int>("replace_exercise_index")
+            if (replacementExerciseId != null && replacementIndex != null) {
+                exerciseQueryUseCase.getExerciseById(replacementExerciseId).onSuccess { exercise ->
+                    if (exercise != null) {
+                        viewModel.replaceExercise(replacementIndex, exercise)
+                    }
+                }
+                backStackEntry.savedStateHandle.remove<String>("replace_exercise_id")
+                backStackEntry.savedStateHandle.remove<Int>("replace_exercise_index")
             }
         }
     }
 
     LaunchedEffect(backStackEntry.savedStateHandle) {
-        backStackEntry.savedStateHandle.getStateFlow<ExerciseLibrary?>(
-            "selected_exercise",
+        backStackEntry.savedStateHandle.getStateFlow<String?>(
+            "selected_exercise_id",
             null
-        ).collect { selectedExercise ->
-            if (selectedExercise != null) {
-                viewModel.handleEvent(EditWorkoutEvent.AddExercise(selectedExercise.id))
-                backStackEntry.savedStateHandle.remove<ExerciseLibrary>("selected_exercise")
+        ).collect { selectedExerciseId ->
+            if (selectedExerciseId != null) {
+                viewModel.handleEvent(EditWorkoutEvent.AddExercise(selectedExerciseId))
+                backStackEntry.savedStateHandle.remove<String>("selected_exercise_id")
             }
         }
     }

@@ -36,4 +36,6 @@ dependencies {
 
     ksp(libs.hilt.compiler)
     debugImplementation(libs.androidx.ui.tooling)
+
+    testImplementation(libs.junit)
 }

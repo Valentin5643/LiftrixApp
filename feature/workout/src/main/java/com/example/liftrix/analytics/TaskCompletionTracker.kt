@@ -3,7 +3,7 @@ package com.example.liftrix.analytics
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.core.time.TimeProvider
 import com.example.liftrix.domain.model.common.LiftrixResult
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -27,7 +27,8 @@ import javax.inject.Singleton
 @Singleton
 class TaskCompletionTracker @Inject constructor(
     private val analyticsService: AnalyticsService,
-    private val timeProvider: TimeProvider
+    private val timeProvider: TimeProvider,
+    private val applicationScope: CoroutineScope
 ) {
     
     companion object {
@@ -62,6 +63,7 @@ class TaskCompletionTracker @Inject constructor(
     }
     
     private val activeTaskData = mutableMapOf<String, TaskData>()
+    private val taskLock = Any()
     
     /**
      * Starts tracking for a new task.
@@ -80,11 +82,13 @@ class TaskCompletionTracker @Inject constructor(
             retryCount = 0
         )
         
-        activeTaskData[taskId] = taskData
+        synchronized(taskLock) {
+            activeTaskData[taskId] = taskData
+        }
         
         Timber.d("Started task completion tracking: $taskType ($taskId) at $currentTime")
         
-        GlobalScope.launch {
+        applicationScope.launch {
             analyticsService.logEvent(
                 eventName = EVENT_TASK_STARTED,
                 parameters = mapOf(
@@ -104,7 +108,7 @@ class TaskCompletionTracker @Inject constructor(
      * @param progressPercentage Completion percentage (0-100)
      */
     fun trackTaskProgress(taskId: String, progressPercentage: Int) {
-        val taskData = activeTaskData[taskId]
+        val taskData = synchronized(taskLock) { activeTaskData[taskId] }
         if (taskData == null) {
             Timber.w("Attempting to track progress for unknown task: $taskId")
             return
@@ -112,7 +116,7 @@ class TaskCompletionTracker @Inject constructor(
         
         Timber.v("Task progress for ${taskData.taskType}: $progressPercentage%")
         
-        GlobalScope.launch {
+        applicationScope.launch {
             analyticsService.logEvent(
                 eventName = EVENT_TASK_PROGRESS,
                 parameters = mapOf(
@@ -132,12 +136,13 @@ class TaskCompletionTracker @Inject constructor(
      * @param retryReason Reason for the retry
      */
     fun trackTaskRetry(taskId: String, retryReason: String) {
-        val taskData = activeTaskData[taskId] ?: return
-        taskData.retryCount++
+        val taskData = synchronized(taskLock) {
+            activeTaskData[taskId]?.also { it.retryCount++ }
+        } ?: return
         
         Timber.i("Task retry for ${taskData.taskType}: $retryReason (retry #${taskData.retryCount})")
         
-        GlobalScope.launch {
+        applicationScope.launch {
             analyticsService.logEvent(
                 eventName = "task_retry",
                 parameters = mapOf(
@@ -158,12 +163,13 @@ class TaskCompletionTracker @Inject constructor(
      * @param errorType Type of error encountered
      */
     fun trackTaskError(taskId: String, errorType: String) {
-        val taskData = activeTaskData[taskId] ?: return
-        taskData.errorCount++
+        val taskData = synchronized(taskLock) {
+            activeTaskData[taskId]?.also { it.errorCount++ }
+        } ?: return
         
         Timber.w("Task error for ${taskData.taskType}: $errorType (error #${taskData.errorCount})")
         
-        GlobalScope.launch {
+        applicationScope.launch {
             analyticsService.logEvent(
                 eventName = "task_error",
                 parameters = mapOf(
@@ -185,7 +191,7 @@ class TaskCompletionTracker @Inject constructor(
      * @param completionResult Final result of the task
      */
     fun trackTaskCompletion(taskId: String, taskType: String, completionResult: TaskCompletionResult) {
-        val taskData = activeTaskData[taskId]
+        val taskData = synchronized(taskLock) { activeTaskData[taskId] }
         if (taskData == null) {
             Timber.w("Attempting to complete unknown task: $taskId")
             return
@@ -195,7 +201,7 @@ class TaskCompletionTracker @Inject constructor(
         
         Timber.i("Completed task ${taskData.taskType}: ${completionResult.status} in ${completionTime}ms with ${taskData.errorCount} errors and ${taskData.retryCount} retries")
         
-        GlobalScope.launch {
+        applicationScope.launch {
             analyticsService.logEvent(
                 eventName = EVENT_TASK_COMPLETED,
                 parameters = mapOf(
@@ -210,7 +216,9 @@ class TaskCompletionTracker @Inject constructor(
         }
         
         // Clean up tracking data
-        activeTaskData.remove(taskId)
+        synchronized(taskLock) {
+            activeTaskData.remove(taskId)
+        }
     }
     
     /**
@@ -222,7 +230,7 @@ class TaskCompletionTracker @Inject constructor(
      * @param progressPercentage How far the user got before abandoning
      */
     fun trackTaskAbandonment(taskId: String, reason: String, progressPercentage: Int = 0) {
-        val taskData = activeTaskData[taskId]
+        val taskData = synchronized(taskLock) { activeTaskData[taskId] }
         if (taskData == null) {
             Timber.w("Attempting to abandon unknown task: $taskId")
             return
@@ -232,7 +240,7 @@ class TaskCompletionTracker @Inject constructor(
         
         Timber.w("Task abandoned: ${taskData.taskType} after ${timeSpent}ms at $progressPercentage% - Reason: $reason")
         
-        GlobalScope.launch {
+        applicationScope.launch {
             analyticsService.logEvent(
                 eventName = EVENT_TASK_ABANDONED,
                 parameters = mapOf(
@@ -248,7 +256,9 @@ class TaskCompletionTracker @Inject constructor(
         }
         
         // Clean up tracking data
-        activeTaskData.remove(taskId)
+        synchronized(taskLock) {
+            activeTaskData.remove(taskId)
+        }
     }
     
     /**
@@ -302,7 +312,7 @@ class TaskCompletionTracker @Inject constructor(
      * @return Current task metrics or null if not active
      */
     fun getActiveTaskMetrics(taskId: String): Map<String, Any>? {
-        val taskData = activeTaskData[taskId] ?: return null
+        val taskData = synchronized(taskLock) { activeTaskData[taskId] } ?: return null
         val currentTime = timeProvider.currentTimeMillis()
         val elapsedTime = currentTime - taskData.startTime
         

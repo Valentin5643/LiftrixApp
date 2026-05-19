@@ -1,11 +1,9 @@
-package com.example.liftrix.service.sync
+﻿package com.example.liftrix.service.sync
 
 import android.content.Context
 import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
@@ -271,8 +269,7 @@ sealed class SyncStrategy {
                     }
 
                     WidgetComplexity.MODERATE -> {
-                        // Use smart polling with shorter interval for moderate widgets
-                        val workRequest = PeriodicWorkRequestBuilder<AnalyticsSyncWorker>(30, TimeUnit.SECONDS)
+                        val workRequest = OneTimeWorkRequestBuilder<AnalyticsSyncWorker>()
                             .setConstraints(Constraints.Builder()
                                 .setRequiredNetworkType(NetworkType.CONNECTED)
                                 .build())
@@ -281,14 +278,11 @@ sealed class SyncStrategy {
                                 "widgetType" to widget.id,
                                 "priority" to "HIGH"
                             ))
+                            .setInitialDelay(30, TimeUnit.SECONDS)
                             .build()
 
-                        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                            "realtime_sync_${widget.id}",
-                            ExistingPeriodicWorkPolicy.REPLACE,
-                            workRequest
-                        )
-                        Timber.d("SyncStrategy: Queued periodic sync for moderate widget: ${widget.id}")
+                        WorkManager.getInstance(context).enqueue(workRequest)
+                        Timber.d("SyncStrategy: Queued delayed one-time sync for moderate widget: ${widget.id}")
                     }
 
                     WidgetComplexity.COMPLEX -> {

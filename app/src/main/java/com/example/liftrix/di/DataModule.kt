@@ -11,6 +11,8 @@ import com.example.liftrix.BuildConfig
 import com.example.liftrix.core.security.DatabaseEncryption
 import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.data.local.dao.*
+import com.example.liftrix.data.local.migrations.MIGRATION_7_8
+import com.example.liftrix.data.local.migrations.MIGRATION_8_9
 import com.example.liftrix.data.local.seed.ExerciseLibrarySeedData
 import com.example.liftrix.data.local.seed.MetDataSeedService
 import com.example.liftrix.data.mapper.WorkoutPostMapper
@@ -24,7 +26,6 @@ import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.runBlocking
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import timber.log.Timber
-import java.io.File
 import javax.inject.Singleton
 import kotlin.time.Duration.Companion.minutes
 
@@ -71,6 +72,8 @@ private val Context.onboardingDataStore: DataStore<Preferences> by preferencesDa
 abstract class DataModule {
 
     companion object {
+        private const val ENCRYPTED_DATABASE_NAME = "liftrix_database_encrypted"
+
         // ========================================
         // DATABASE SECTION (Room + SQLCipher)
         // ========================================
@@ -99,12 +102,13 @@ abstract class DataModule {
             val database = Room.databaseBuilder(
                 context.applicationContext,
                 LiftrixDatabase::class.java,
-                "liftrix_database_encrypted" // Encrypted database name
+                ENCRYPTED_DATABASE_NAME
             )
                 .openHelperFactory(factory) // 🔒 Enable SQLCipher encryption
                 .setTransactionExecutor(Dispatchers.IO.asExecutor())
                 .setQueryExecutor(Dispatchers.IO.asExecutor())
                 .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING) // WAL mode for better data persistence
+                .addMigrations(MIGRATION_7_8, MIGRATION_8_9)
                 // 🛡️ DATABASE LIFECYCLE: Add callback for database lifecycle events
                 .addCallback(object : RoomDatabase.Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
@@ -146,9 +150,9 @@ abstract class DataModule {
                         // In development, attempt recovery by clearing corrupted database
                         if (BuildConfig.DEBUG) {
                             try {
-                                val dbFile = File(context.getDatabasePath("liftrix_database").absolutePath)
+                                val dbFile = context.getDatabasePath(ENCRYPTED_DATABASE_NAME)
                                 if (dbFile.exists()) {
-                                    dbFile.delete()
+                                    context.deleteDatabase(ENCRYPTED_DATABASE_NAME)
                                     Timber.w("Cleared corrupted database file for recovery")
                                     // Retry database initialization after clearing
                                     database.openHelper.readableDatabase.version

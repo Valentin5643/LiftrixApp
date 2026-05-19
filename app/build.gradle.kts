@@ -188,9 +188,9 @@ android {
             buildConfigField("String", "GOOGLE_CLIENT_ID", "\"${project.findProperty("GOOGLE_CLIENT_ID_RELEASE") ?: ""}\"")
             signingConfig = signingConfigs.getByName("release")  // ADD THIS LINE
 
-            // Temporarily disable local Crashlytics mapping uploads when release builds hang.
+            // Release mapping upload is required so production crashes remain retraceable.
             configure<CrashlyticsExtension> {
-                mappingFileUploadEnabled = false
+                mappingFileUploadEnabled = true
             }
         }
         

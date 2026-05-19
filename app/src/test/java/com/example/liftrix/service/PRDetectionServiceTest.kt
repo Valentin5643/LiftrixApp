@@ -175,6 +175,101 @@ class PRDetectionServiceTest {
             prs.any { it.exerciseName == testExerciseLibrary.name })
     }
 
+    @Test
+    fun `detectPersonalRecords should not emit weighted PRs for bodyweight only exercise`() = runTest {
+        val bodyweightExercise = testExerciseLibrary.copy(
+            id = "bodyweight-squat",
+            name = "Bodyweight Squat",
+            equipment = Equipment.BODYWEIGHT_ONLY
+        )
+        val workout = Workout(
+            id = WorkoutId("bodyweight-workout"),
+            userId = testUserId,
+            name = "Bodyweight Day",
+            date = java.time.LocalDate.now(),
+            exercises = listOf(
+                Exercise(
+                    id = ExerciseId("bodyweight-squat"),
+                    workoutId = WorkoutId("bodyweight-workout"),
+                    libraryExercise = bodyweightExercise,
+                    orderIndex = 0,
+                    sets = listOf(createExerciseSet(500.0, 15, 1)),
+                    createdAt = java.time.Instant.now()
+                )
+            ),
+            status = WorkoutStatus.COMPLETED,
+            startTime = java.time.Instant.now(),
+            endTime = java.time.Instant.now().plusSeconds(1800),
+            createdAt = java.time.Instant.now(),
+            updatedAt = java.time.Instant.now()
+        )
+
+        val result = prDetectionService.detectPersonalRecords(workout, testUserId)
+
+        assertTrue(result.isSuccess)
+        val prs = result.getOrNull()!!
+        assertTrue(prs.any { it.prType == PRType.REPS && it.exerciseName == "Bodyweight Squat" })
+        assertTrue(prs.none { it.prType == PRType.ONE_RM || it.prType == PRType.MAX_WEIGHT || it.prType == PRType.VOLUME })
+        assertTrue(prs.all { it.weight == null })
+    }
+
+    @Test
+    fun `detectPersonalRecords should suppress one rm PR above reliable rep threshold`() = runTest {
+        val workout = createWorkout(
+            "high-rep-workout",
+            testExerciseId,
+            listOf(createExerciseSet(100.0, 11, 1)),
+            daysAgo = 0
+        )
+
+        val result = prDetectionService.detectPersonalRecords(workout, testUserId)
+
+        assertTrue(result.isSuccess)
+        assertTrue(result.getOrNull()!!.none { it.prType == PRType.ONE_RM })
+    }
+
+    @Test
+    fun `detectPersonalRecords should deduplicate repeated same-session records`() = runTest {
+        val bodyweightExercise = testExerciseLibrary.copy(
+            id = "bodyweight-squat",
+            name = "Bodyweight Squat",
+            equipment = Equipment.BODYWEIGHT_ONLY
+        )
+        val now = java.time.Instant.now()
+        val workout = Workout(
+            id = WorkoutId("duplicate-pr-workout"),
+            userId = testUserId,
+            name = "Duplicate PR Day",
+            date = java.time.LocalDate.now(),
+            exercises = listOf(
+                Exercise(
+                    id = ExerciseId("bodyweight-squat"),
+                    workoutId = WorkoutId("duplicate-pr-workout"),
+                    libraryExercise = bodyweightExercise,
+                    orderIndex = 0,
+                    sets = listOf(
+                        createExerciseSet(0.0, 15, 1),
+                        createExerciseSet(0.0, 15, 2),
+                        createExerciseSet(0.0, 12, 3)
+                    ),
+                    createdAt = now
+                )
+            ),
+            status = WorkoutStatus.COMPLETED,
+            startTime = now,
+            endTime = now.plusSeconds(1800),
+            createdAt = now,
+            updatedAt = now
+        )
+
+        val result = prDetectionService.detectPersonalRecords(workout, testUserId)
+
+        assertTrue(result.isSuccess)
+        val repsPrs = result.getOrNull()!!.filter { it.prType == PRType.REPS }
+        assertEquals(1, repsPrs.size)
+        assertEquals(15, repsPrs.single().reps)
+    }
+
     // ==========================================
     // Edge Cases and Error Handling
     // ==========================================

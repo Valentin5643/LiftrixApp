@@ -101,32 +101,31 @@ fun WorkoutTemplateScreen(
     }
     
     // Handle selected exercise from navigation
-    val selectedExercise = savedStateHandle?.get<com.example.liftrix.domain.model.ExerciseLibrary>("selected_exercise")
+    val selectedExerciseId = savedStateHandle?.get<String>("selected_exercise_id")
     
     // 🔥 CRITICAL DEBUG: Log template savedStateHandle activity
     timber.log.Timber.d("🔥 TEMPLATE-RECEIVE-DEBUG: savedStateHandle available? ${savedStateHandle != null}")
-    timber.log.Timber.d("🔥 TEMPLATE-RECEIVE-DEBUG: selectedExercise from savedStateHandle: ${selectedExercise?.name ?: "null"}")
+    timber.log.Timber.d("🔥 TEMPLATE-RECEIVE-DEBUG: selectedExerciseId from savedStateHandle: ${selectedExerciseId ?: "null"}")
     
-    LaunchedEffect(selectedExercise) {
-        timber.log.Timber.d("🔥 TEMPLATE-RECEIVE-DEBUG: LaunchedEffect triggered, selectedExercise: ${selectedExercise?.name ?: "null"}")
+    LaunchedEffect(selectedExerciseId) {
+        timber.log.Timber.d("🔥 TEMPLATE-RECEIVE-DEBUG: LaunchedEffect triggered, selectedExerciseId: ${selectedExerciseId ?: "null"}")
         
-        selectedExercise?.let { exercise ->
-            timber.log.Timber.d("🔥 TEMPLATE-RECEIVE-DEBUG: About to call viewModel.addExerciseFromLibrary for: ${exercise.name}")
-            timber.log.Timber.d("🔥 TEMPLATE-RECEIVE-DEBUG: Exercise ID: ${exercise.id}")
+        selectedExerciseId?.let { exerciseId ->
+            timber.log.Timber.d("🔥 TEMPLATE-RECEIVE-DEBUG: About to call viewModel.addExerciseById for: $exerciseId")
             
             try {
-                viewModel.addExerciseFromLibrary(exercise)
-                timber.log.Timber.d("🔥 TEMPLATE-RECEIVE-DEBUG: viewModel.addExerciseFromLibrary completed successfully")
+                viewModel.addExerciseById(exerciseId, isCustomExercise = false)
+                timber.log.Timber.d("🔥 TEMPLATE-RECEIVE-DEBUG: viewModel.addExerciseById completed successfully")
                 
                 // Clear the saved state to prevent re-adding the same exercise
-                savedStateHandle?.remove<com.example.liftrix.domain.model.ExerciseLibrary>("selected_exercise")
-                timber.log.Timber.d("🔥 TEMPLATE-RECEIVE-DEBUG: Cleared selected_exercise from savedStateHandle")
+                savedStateHandle?.remove<String>("selected_exercise_id")
+                timber.log.Timber.d("🔥 TEMPLATE-RECEIVE-DEBUG: Cleared selected_exercise_id from savedStateHandle")
                 
             } catch (e: Exception) {
-                timber.log.Timber.e(e, "🔥 TEMPLATE-RECEIVE-DEBUG: Error in viewModel.addExerciseFromLibrary")
+                timber.log.Timber.e(e, "🔥 TEMPLATE-RECEIVE-DEBUG: Error in viewModel.addExerciseById")
             }
         } ?: run {
-            timber.log.Timber.d("🔥 TEMPLATE-RECEIVE-DEBUG: selectedExercise is null, no action taken")
+            timber.log.Timber.d("🔥 TEMPLATE-RECEIVE-DEBUG: selectedExerciseId is null, no action taken")
         }
     }
 
@@ -338,4 +337,3 @@ private fun ExerciseSelectionCard(
         }
     }
 }
-

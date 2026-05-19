@@ -1,7 +1,7 @@
 package com.example.liftrix.analytics
 
 import com.example.liftrix.domain.service.AnalyticsService
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -26,7 +26,8 @@ import kotlin.math.pow
  */
 @Singleton
 class CognitiveLoadMeasurement @Inject constructor(
-    private val analyticsService: AnalyticsService
+    private val analyticsService: AnalyticsService,
+    private val applicationScope: CoroutineScope
 ) {
     
     companion object {
@@ -88,7 +89,7 @@ class CognitiveLoadMeasurement @Inject constructor(
         )
         
         // Log cognitive load calculation
-        GlobalScope.launch {
+        applicationScope.launch {
             analyticsService.logEvent(
                 eventName = EVENT_COGNITIVE_LOAD_CALCULATED,
                 parameters = mapOf(
@@ -105,7 +106,7 @@ class CognitiveLoadMeasurement @Inject constructor(
         
         // Check if thresholds exceeded
         if (totalLoad > HIGH_LOAD_THRESHOLD) {
-            GlobalScope.launch {
+            applicationScope.launch {
                 analyticsService.logEvent(
                     eventName = EVENT_LOAD_THRESHOLD_EXCEEDED,
                     parameters = mapOf(
@@ -295,7 +296,7 @@ class CognitiveLoadMeasurement @Inject constructor(
         )
         
         // Log baseline comparison
-        GlobalScope.launch {
+        applicationScope.launch {
             analyticsService.logEvent(
                 eventName = EVENT_BASELINE_COMPARISON,
                 parameters = mapOf(

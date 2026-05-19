@@ -194,7 +194,7 @@ class MemoizationCache<K, V>(
      */
     private fun evictLeastRecentlyUsed() {
         if (accessOrder.isNotEmpty()) {
-            val lruKey = accessOrder.removeFirst()
+            val lruKey = accessOrder.removeAt(0)
             cache.remove(lruKey)
             evictions++
         }

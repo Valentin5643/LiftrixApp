@@ -262,7 +262,7 @@ class SyncCoordinator @Inject constructor(
             immediateSync
         )
         Timber.tag("FreshLoginRestoreDebug").i(
-            "operation=SYNC_COORDINATOR_IMMEDIATE_ENQUEUED userId=$userId uniqueWork=${UNIFIED_SYNC_WORK_NAME}_immediate_$userId policy=REPLACE mode=unified timestamp=${System.currentTimeMillis()}"
+            "operation=SYNC_COORDINATOR_IMMEDIATE_ENQUEUED userId=$userId uniqueWork=${UNIFIED_SYNC_WORK_NAME}_immediate_$userId policy=KEEP mode=unified timestamp=${System.currentTimeMillis()}"
         )
         
         startWorkMonitoring(operation, "${UNIFIED_SYNC_WORK_NAME}_immediate_$userId", userId)
@@ -295,7 +295,7 @@ class SyncCoordinator @Inject constructor(
             .then(listOf(workoutSync, templateSync, achievementSync, workoutPostSync))
             .enqueue()
         Timber.tag("FreshLoginRestoreDebug").i(
-            "operation=SYNC_COORDINATOR_IMMEDIATE_ENQUEUED userId=$userId uniqueWork=${IMMEDIATE_SYNC_WORK_NAME}_$userId policy=REPLACE mode=legacy workers=profile,user_public,follow,workout,template,achievement,workout_post timestamp=${System.currentTimeMillis()}"
+            "operation=SYNC_COORDINATOR_IMMEDIATE_ENQUEUED userId=$userId uniqueWork=${IMMEDIATE_SYNC_WORK_NAME}_$userId policy=KEEP mode=legacy workers=profile,user_public,follow,workout,template,achievement,workout_post timestamp=${System.currentTimeMillis()}"
         )
         
         startWorkMonitoring(operation, "${IMMEDIATE_SYNC_WORK_NAME}_$userId", userId)

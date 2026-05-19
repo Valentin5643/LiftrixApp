@@ -80,18 +80,18 @@ fun RedesignedCreateTemplateScreen(
     
     // Handle selected exercise from navigation
     val savedStateHandle = navBackStackEntry?.savedStateHandle
-    val selectedExercise = savedStateHandle?.get<com.example.liftrix.domain.model.ExerciseLibrary>("selected_exercise")
+    val selectedExerciseId = savedStateHandle?.get<String>("selected_exercise_id")
     
-    Timber.d("🔥 REDESIGNED-TEMPLATE: selectedExercise from savedStateHandle: ${selectedExercise?.name} (ID: ${selectedExercise?.id})")
+    Timber.d("🔥 REDESIGNED-TEMPLATE: selectedExerciseId from savedStateHandle: $selectedExerciseId")
     
-    LaunchedEffect(selectedExercise) {
-        selectedExercise?.let { exercise ->
-            Timber.d("🔥 REDESIGNED-TEMPLATE: Adding exercise: ${exercise.name} to template")
-            viewModel.addExerciseFromLibrary(exercise)
+    LaunchedEffect(selectedExerciseId) {
+        selectedExerciseId?.let { exerciseId ->
+            Timber.d("🔥 REDESIGNED-TEMPLATE: Adding exercise ID to template: $exerciseId")
+            viewModel.addExerciseById(exerciseId, isCustomExercise = false)
             
             // Clear the saved state to prevent re-adding the same exercise
-            savedStateHandle?.remove<com.example.liftrix.domain.model.ExerciseLibrary>("selected_exercise")
-            Timber.d("🔥 REDESIGNED-TEMPLATE: selectedExercise cleared from savedStateHandle")
+            savedStateHandle?.remove<String>("selected_exercise_id")
+            Timber.d("🔥 REDESIGNED-TEMPLATE: selectedExerciseId cleared from savedStateHandle")
         }
     }
     

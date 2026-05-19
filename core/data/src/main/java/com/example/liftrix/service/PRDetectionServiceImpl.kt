@@ -22,6 +22,7 @@ import javax.inject.Singleton
 import kotlin.math.max
 import kotlin.math.pow
 import java.time.LocalDate
+import java.util.Locale
 
 /**
  * Implementation of PRDetectionService for identifying personal records
@@ -106,7 +107,7 @@ class PRDetectionServiceImpl @Inject constructor(
         
         // PR validation constants
         private const val MIN_REPS_FOR_PR = 1
-        private const val MAX_REPS_FOR_1RM_CALC = 20 // Beyond this, 1RM estimates become unreliable
+        private const val MAX_REPS_FOR_1RM_CALC = 10 // Above this, 1RM estimates are unreliable for PRs
         private const val MIN_WEIGHT_FOR_PR = 1.0 // 1kg minimum for weighted exercises
     }
 
@@ -135,8 +136,9 @@ class PRDetectionServiceImpl @Inject constructor(
             personalRecords.addAll(exercisePRs)
         }
         
-        Timber.d("Detected ${personalRecords.size} personal records in workout")
-        personalRecords
+        val deduplicatedRecords = deduplicatePersonalRecords(personalRecords)
+        Timber.d("Detected ${deduplicatedRecords.size} personal records in workout")
+        deduplicatedRecords
     }
 
     override suspend fun isPersonalRecord(
@@ -227,25 +229,31 @@ class PRDetectionServiceImpl @Inject constructor(
         val personalRecords = mutableListOf<PersonalRecord>()
         
         // Check each set for potential PRs
+        val isBodyweightOnly = exercise.libraryExercise.equipment ==
+            com.example.liftrix.domain.model.Equipment.BODYWEIGHT_ONLY
         for (set in exercise.sets) {
             if (set.isCompleted && (set.reps?.count ?: 0) >= MIN_REPS_FOR_PR) {
-                val weight = set.weight?.kilograms?.takeIf { it >= MIN_WEIGHT_FOR_PR }
+                val weight = set.weight?.kilograms?.takeIf { !isBodyweightOnly && it >= MIN_WEIGHT_FOR_PR }
                 
                 // Check for different types of PRs
-                checkFor1RMPR(exercise.libraryExercise.name, weight, set.reps?.count ?: 0, userId, achievedAt)?.let { pr ->
-                    personalRecords.add(pr)
-                }
-                
-                checkForVolumeRP(exercise.libraryExercise.name, weight, set.reps?.count ?: 0, userId, achievedAt)?.let { pr ->
-                    personalRecords.add(pr)
+                if (!isBodyweightOnly) {
+                    checkFor1RMPR(exercise.libraryExercise.name, weight, set.reps?.count ?: 0, userId, achievedAt)?.let { pr ->
+                        personalRecords.add(pr)
+                    }
+
+                    checkForVolumeRP(exercise.libraryExercise.name, weight, set.reps?.count ?: 0, userId, achievedAt)?.let { pr ->
+                        personalRecords.add(pr)
+                    }
                 }
                 
                 checkForRepsPR(exercise.libraryExercise.name, weight, set.reps?.count ?: 0, userId, achievedAt)?.let { pr ->
                     personalRecords.add(pr)
                 }
                 
-                checkForMaxWeightPR(exercise.libraryExercise.name, weight, set.reps?.count ?: 0, userId, achievedAt)?.let { pr ->
-                    personalRecords.add(pr)
+                if (!isBodyweightOnly) {
+                    checkForMaxWeightPR(exercise.libraryExercise.name, weight, set.reps?.count ?: 0, userId, achievedAt)?.let { pr ->
+                        personalRecords.add(pr)
+                    }
                 }
             }
         }
@@ -542,5 +550,27 @@ class PRDetectionServiceImpl @Inject constructor(
             }
         )
     }
-}
 
+    private fun deduplicatePersonalRecords(records: List<PersonalRecord>): List<PersonalRecord> {
+        return records
+            .groupBy { record ->
+                listOf(
+                    record.exerciseName.trim().lowercase(Locale.ROOT),
+                    record.prType.name,
+                    record.achievedAt.toString()
+                ).joinToString("|")
+            }
+            .values
+            .mapNotNull { duplicates -> duplicates.maxByOrNull { it.recordValue() } }
+            .sortedByDescending { it.recordValue() }
+    }
+
+    private fun PersonalRecord.recordValue(): Double {
+        return when (prType) {
+            PRType.ONE_RM -> estimatedOneRM ?: weight ?: 0.0
+            PRType.VOLUME -> volume ?: 0.0
+            PRType.REPS -> reps.toDouble()
+            PRType.MAX_WEIGHT -> weight ?: 0.0
+        }
+    }
+}

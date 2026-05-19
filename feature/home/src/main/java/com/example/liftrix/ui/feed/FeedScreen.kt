@@ -15,6 +15,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
@@ -44,7 +45,7 @@ fun FeedScreen(
     onEditWorkout: (String) -> Unit,
     feedViewModel: FeedViewModel = hiltViewModel()
 ) {
-    val feedUiState by feedViewModel.uiState.collectAsState()
+    val feedUiState by feedViewModel.uiState.collectAsStateWithLifecycle()
     val posts = feedViewModel.posts.collectAsLazyPagingItems()
     val context = LocalContext.current
     

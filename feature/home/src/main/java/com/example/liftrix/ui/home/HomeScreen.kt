@@ -210,7 +210,7 @@ private fun EnhancedHomeContent(
     modifier: Modifier = Modifier
 ) {
     // Get feed state from FeedViewModel
-    val feedUiState by feedViewModel.uiState.collectAsState()
+    val feedUiState by feedViewModel.uiState.collectAsStateWithLifecycle()
     val posts = feedViewModel.posts.collectAsLazyPagingItems()
     
     // Create a local UI state for feed tab selection

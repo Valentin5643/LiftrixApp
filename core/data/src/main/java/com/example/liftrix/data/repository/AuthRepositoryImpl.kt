@@ -1,4 +1,4 @@
-package com.example.liftrix.data.repository
+﻿package com.example.liftrix.data.repository
 
 import com.example.liftrix.config.OfflineArchitectureFlags
 import com.example.liftrix.core.error.FirebaseErrorMapper
@@ -28,6 +28,7 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
 import androidx.room.withTransaction
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
@@ -53,7 +54,8 @@ class AuthRepositoryImpl @Inject constructor(
     private val subscriptionDao: com.example.liftrix.data.local.dao.SubscriptionDao,
     private val offlineQueueManager: com.example.liftrix.data.sync.OfflineQueueManager,
     private val legacyAuthDataSource: LegacyAuthFirestoreDataSource,
-    private val consentManagementService: com.example.liftrix.domain.service.ConsentManagementService
+    private val consentManagementService: com.example.liftrix.domain.service.ConsentManagementService,
+    private val applicationScope: CoroutineScope
 ) : AuthRepository {
 
     override val currentUser: Flow<User?> = callbackFlow {
@@ -111,7 +113,7 @@ class AuthRepositoryImpl @Inject constructor(
             errorMapper = { throwable -> FirebaseErrorMapper.handleFirebaseError(throwable) }
         ) {
             Timber.tag("FreshLoginRestoreDebug").d(
-                "operation=EMAIL_LOGIN_START firebaseCurrentUserId=${firebaseAuth.currentUser?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                "operation=EMAIL_LOGIN_START firebaseCurrentUserId=<redacted> timestamp=${System.currentTimeMillis()}"
             )
             val authResult = firebaseAuth.signInWithEmailAndPassword(email, password).await()
             val firebaseUser = authResult.user
@@ -119,7 +121,7 @@ class AuthRepositoryImpl @Inject constructor(
             
             val user = UserMapper.fromFirebaseUser(firebaseUser)
             Timber.tag("FreshLoginRestoreDebug").i(
-                "operation=LOGIN_SUCCESS provider=email userId=${user.uid} firebaseCurrentUserId=${firebaseAuth.currentUser?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                "operation=LOGIN_SUCCESS provider=email userId=${user.uid} firebaseCurrentUserId=<redacted> timestamp=${System.currentTimeMillis()}"
             )
             
             // Check if user profile exists in Firestore
@@ -127,7 +129,7 @@ class AuthRepositoryImpl @Inject constructor(
             
             if (!profileExists) {
                 // Create profile if it doesn't exist (handles users created before fix)
-                Timber.w("User profile not found, creating one for uid: ${user.uid}")
+                Timber.w("User profile not found, creating one for current user")
                 createUserProfile(user).fold(
                     onSuccess = {
                         Timber.i("User profile created successfully for uid: ${user.uid}")
@@ -204,7 +206,7 @@ class AuthRepositoryImpl @Inject constructor(
         // SEAMLESS FIRST-TIME FIX: Separate Firebase Auth from profile operations
         return try {
             Timber.tag("FreshLoginRestoreDebug").d(
-                "operation=GOOGLE_LOGIN_START firebaseCurrentUserId=${firebaseAuth.currentUser?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                "operation=GOOGLE_LOGIN_START firebaseCurrentUserId=<redacted> timestamp=${System.currentTimeMillis()}"
             )
             // ONBOARDING FIX: Clear any potential stale anonymous auth state
             val wasAnonymous = firebaseAuth.currentUser?.isAnonymous == true
@@ -226,9 +228,9 @@ class AuthRepositoryImpl @Inject constructor(
 
             val user = UserMapper.fromFirebaseUser(firebaseUser)
             Timber.tag("FreshLoginRestoreDebug").i(
-                "operation=LOGIN_SUCCESS provider=google userId=${user.uid} firebaseCurrentUserId=${firebaseAuth.currentUser?.uid ?: "null"} isNewUser=${authResult.additionalUserInfo?.isNewUser == true} timestamp=${System.currentTimeMillis()}"
+                "operation=LOGIN_SUCCESS provider=google userId=${user.uid} firebaseCurrentUserId=<redacted> isNewUser=${authResult.additionalUserInfo?.isNewUser == true} timestamp=${System.currentTimeMillis()}"
             )
-            Timber.i("[GMAIL-AUTH] ✅ Google authentication successful for user: ${user.uid}")
+            Timber.i("[GMAIL-AUTH] âœ… Google authentication successful for current user")
             Timber.d("[GMAIL-AUTH]   - Email: ${user.email}")
             Timber.d("[GMAIL-AUTH]   - Display Name: ${user.displayName}")
             Timber.d("[GMAIL-AUTH]   - Is New User: ${authResult.additionalUserInfo?.isNewUser == true}")
@@ -237,14 +239,14 @@ class AuthRepositoryImpl @Inject constructor(
             Timber.d("Verifying Firestore auth state synchronization after Google sign-in")
             val authSyncResult = ensureFirestoreAuthSynchronization(user.uid)
             if (!authSyncResult) {
-                Timber.w("Failed to synchronize Firestore auth state for user ${user.uid}, will retry in background")
+                Timber.w("Failed to synchronize Firestore auth state for current user, will retry in background")
             }
 
             // Step 2: Handle profile creation/update gracefully (non-blocking)
             handleProfileOperationsGracefully(user)
             
             // Step 3: Always trigger sync regardless of profile creation status
-            Timber.d("[GMAIL-AUTH] 🔄 Triggering login sync for user: ${user.uid}")
+            Timber.d("[GMAIL-AUTH] ðŸ”„ Triggering login sync for current user")
             triggerLoginSync(user.uid)
             
             // Step 4: Always return successful authentication
@@ -267,18 +269,18 @@ class AuthRepositoryImpl @Inject constructor(
             val profileExists = checkUserProfileExists(user.uid)
             
             if (!profileExists) {
-                Timber.i("[GMAIL-AUTH] 🔨 Creating profile for new Google user: ${user.uid}")
+                Timber.i("[GMAIL-AUTH] ðŸ”¨ Creating profile for new Google current user")
                 Timber.d("[GMAIL-AUTH]   - Will create user profile in Firestore")
                 Timber.d("[GMAIL-AUTH]   - Will create social profile for discoverability")
                 // Try to create profile, but don't fail authentication if it fails
                 createUserProfile(user).fold(
                     onSuccess = {
-                        Timber.i("[GMAIL-AUTH] ✅ Profile created successfully for Google user: ${user.uid}")
+                        Timber.i("[GMAIL-AUTH] âœ… Profile created successfully for Google current user")
                         Timber.d("[GMAIL-AUTH]   - User profile saved to Firestore users collection")
                         Timber.d("[GMAIL-AUTH]   - User should now be searchable and discoverable")
                     },
                     onFailure = { error ->
-                        Timber.w("[GMAIL-AUTH] ⚠️ Profile creation failed for Google user ${user.uid}: $error")
+                        Timber.w("[GMAIL-AUTH] Profile creation failed for Google user: $error")
                         Timber.w("[GMAIL-AUTH]   - User may not appear in search until profile is created")
                         Timber.w("[GMAIL-AUTH]   - Will retry profile creation in background")
                         // Schedule background profile creation retry
@@ -286,18 +288,18 @@ class AuthRepositoryImpl @Inject constructor(
                     }
                 )
             } else {
-                Timber.d("[GMAIL-AUTH] ✅ Profile exists for Google user: ${user.uid}")
+                Timber.d("[GMAIL-AUTH] âœ… Profile exists for Google current user")
                 Timber.d("[GMAIL-AUTH]   - User should already be discoverable in search")
                 Timber.d("[GMAIL-AUTH]   - Updating last sign-in time")
                 // Update last sign-in time, but don't fail if this fails either
                 try {
                     updateLastSignInTime(user.uid)
                 } catch (updateError: Exception) {
-                    Timber.w(updateError, "Failed to update last sign-in time for ${user.uid}, continuing with authentication")
+                    Timber.w(updateError, "Failed to update last sign-in time, continuing with authentication")
                 }
             }
         } catch (profileError: Exception) {
-            Timber.w(profileError, "Profile operations failed for Google user ${user.uid}, but authentication will still succeed")
+            Timber.w(profileError, "Profile operations failed for Google user, but authentication will still succeed")
             // Schedule background profile creation as fallback
             scheduleBackgroundProfileCreation(user)
         }
@@ -400,16 +402,16 @@ class AuthRepositoryImpl @Inject constructor(
                 updateLastSignInTimeLegacy(uid)
             }
         } catch (exception: Exception) {
-            Timber.e(exception, "CRITICAL: Failed to update last sign-in time for user $uid")
+            Timber.e(exception, "CRITICAL: Failed to update last sign-in time")
             
             // Enhanced error logging for debugging Firestore permission issues
             when {
                 exception.message?.contains("PERMISSION_DENIED") == true -> {
-                    Timber.e("Firestore PERMISSION_DENIED: Check security rules for users/$uid write permissions")
+                    Timber.e("Firestore PERMISSION_DENIED: Check security rules for user document write permissions")
                     Timber.e("Attempted to write fields: userId, last_sign_in_at, updated_at")
                 }
                 exception.message?.contains("NOT_FOUND") == true -> {
-                    Timber.e("User document not found: users/$uid - user may need to be created first")
+                    Timber.e("User document not found - user may need to be created first")
                 }
                 else -> {
                     Timber.e("Unexpected Firestore error: ${exception.javaClass.simpleName} - ${exception.message}")
@@ -429,7 +431,7 @@ class AuthRepositoryImpl @Inject constructor(
     private suspend fun createUserProfileRoomFirst(user: User): LiftrixResult<Unit> {
         return liftrixCatching(
             errorMapper = { throwable ->
-                Timber.e(throwable, "Room-first profile creation failed for user ${user.uid}")
+                Timber.e(throwable, "Room-first profile creation failed for current user")
                 FirebaseErrorMapper.handleFirebaseError(throwable)
             }
         ) {
@@ -494,13 +496,13 @@ class AuthRepositoryImpl @Inject constructor(
     private suspend fun createUserProfileLegacy(user: User): LiftrixResult<Unit> {
         return liftrixCatching(
             errorMapper = { throwable ->
-                Timber.e(throwable, "Profile creation failed for user ${user.uid}")
+                Timber.e(throwable, "Profile creation failed for current user")
                 when {
                     throwable.message?.contains("PERMISSION_DENIED") == true -> {
                         Timber.e("PERMISSION_DENIED: Firestore security rules rejected profile creation")
-                        Timber.e("User ID: ${user.uid}")
-                        Timber.e("Auth UID: ${firebaseAuth.currentUser?.uid}")
-                        Timber.e("Are they equal? ${user.uid == firebaseAuth.currentUser?.uid}")
+                        Timber.e("User ID present: ${user.uid.isNotBlank()}")
+                        Timber.e("Auth UID present: ${firebaseAuth.currentUser?.uid?.isNotBlank() == true}")
+                        Timber.e("Auth IDs match: ${user.uid == firebaseAuth.currentUser?.uid}")
                     }
                 }
                 FirebaseErrorMapper.handleFirebaseError(throwable)
@@ -510,7 +512,7 @@ class AuthRepositoryImpl @Inject constructor(
 
             val authValidationResult = validateFirestoreAuthState(user.uid)
             if (!authValidationResult) {
-                throw IllegalStateException("Firestore auth state validation failed for user ${user.uid}")
+                throw IllegalStateException("Firestore auth state validation failed for current user")
             }
 
             val userDto = UserMapper.toUserDto(user)
@@ -560,9 +562,9 @@ class AuthRepositoryImpl @Inject constructor(
                 "version" to 1L
             )
 
-            Timber.d("[PROFILE-CREATE] 📦 Committing batch write for profile creation: ${user.uid}")
+            Timber.d("[PROFILE-CREATE] ðŸ“¦ Committing batch write for profile creation: ${user.uid}")
             legacyAuthDataSource.createUserProfile(user.uid, userMap, initialSettings, initialSubscription)
-            Timber.i("[PROFILE-CREATE] ✅ Batch write successful for profile creation: ${user.uid}")
+            Timber.i("[PROFILE-CREATE] âœ… Batch write successful for profile creation: ${user.uid}")
             Timber.i("[PROFILE-CREATE]   - User profile is now available for search and discovery")
             Timber.i("[PROFILE-CREATE]   - Profile should sync to social_profiles collection via workers")
         }
@@ -1024,10 +1026,9 @@ class AuthRepositoryImpl @Inject constructor(
      */
     private fun scheduleBackgroundProfileCreation(user: User) {
         try {
-            Timber.i("Scheduling background profile creation for user: ${user.uid}")
+            Timber.i("Scheduling background profile creation for current user")
             
-            // Use coroutine scope to avoid blocking the authentication process
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()).launch {
+            applicationScope.launch {
                 // Add a small delay to avoid immediate retry of a potentially failing operation
                 kotlinx.coroutines.delay(2000) // 2 second delay
                 
@@ -1037,12 +1038,12 @@ class AuthRepositoryImpl @Inject constructor(
                 
                 while (retryAttempts < maxRetries) {
                     try {
-                        Timber.d("Background profile creation attempt ${retryAttempts + 1}/$maxRetries for user: ${user.uid}")
+                        Timber.d("Background profile creation attempt ${retryAttempts + 1}/$maxRetries for current user")
                         
                         // Check if profile was created by another process in the meantime
                         val profileExists = checkUserProfileExists(user.uid)
                         if (profileExists) {
-                            Timber.i("Profile already exists for user ${user.uid}, background creation no longer needed")
+                            Timber.i("Profile already exists for current user, background creation no longer needed")
                             return@launch
                         }
                         
@@ -1050,18 +1051,18 @@ class AuthRepositoryImpl @Inject constructor(
                         val result = createUserProfile(user)
                         result.fold(
                             onSuccess = {
-                                Timber.i("Background profile creation successful for user: ${user.uid}")
+                                Timber.i("Background profile creation successful for current user")
                                 return@launch // Success, exit the retry loop
                             },
                             onFailure = { error ->
                                 lastError = Exception(error.toString())
                                 retryAttempts++
-                                Timber.w("Background profile creation attempt $retryAttempts failed for user ${user.uid}: $error")
+                                Timber.w("Background profile creation attempt $retryAttempts failed for current user: $error")
                                 
                                 if (retryAttempts < maxRetries) {
                                     // Exponential backoff: 5s, 15s, 45s
                                     val backoffDelay = (5000 * 3.0.pow((retryAttempts - 1).toDouble())).toLong()
-                                    Timber.d("Waiting ${backoffDelay}ms before next retry for user: ${user.uid}")
+                                    Timber.d("Waiting ${backoffDelay}ms before next retry for current user")
                                     kotlinx.coroutines.delay(backoffDelay)
                                 }
                             }
@@ -1069,7 +1070,7 @@ class AuthRepositoryImpl @Inject constructor(
                     } catch (e: Exception) {
                         lastError = e
                         retryAttempts++
-                        Timber.w(e, "Exception during background profile creation attempt $retryAttempts for user: ${user.uid}")
+                        Timber.w(e, "Exception during background profile creation attempt $retryAttempts for current user")
                         
                         if (retryAttempts < maxRetries) {
                             val backoffDelay = (5000 * 3.0.pow((retryAttempts - 1).toDouble())).toLong()
@@ -1080,13 +1081,13 @@ class AuthRepositoryImpl @Inject constructor(
                 
                 // All retry attempts failed
                 if (retryAttempts >= maxRetries) {
-                    Timber.e(lastError, "All background profile creation attempts failed for user: ${user.uid}. Profile creation will be attempted on next login.")
+                    Timber.e(lastError, "All background profile creation attempts failed for current user. Profile creation will be attempted on next login.")
                     // The user is still authenticated and can use the app, but their profile might be incomplete
                     // This will be resolved on next login attempt or by periodic sync workers
                 }
             }
         } catch (e: Exception) {
-            Timber.e(e, "Failed to schedule background profile creation for user: ${user.uid}")
+            Timber.e(e, "Failed to schedule background profile creation for current user")
         }
     }
 
@@ -1096,14 +1097,13 @@ class AuthRepositoryImpl @Inject constructor(
     private fun triggerLoginSync(userId: String) {
         try {
             Timber.tag("FreshLoginRestoreDebug").d(
-                "operation=LOGIN_SYNC_REQUESTED userId=$userId firebaseCurrentUserId=${firebaseAuth.currentUser?.uid ?: "null"} direction=Firebase->Room_then_Room->Firebase timestamp=${System.currentTimeMillis()}"
+                "operation=LOGIN_SYNC_REQUESTED userId=<redacted> firebaseCurrentUserId=<redacted> direction=Firebase->Room_then_Room->Firebase timestamp=${System.currentTimeMillis()}"
             )
             
-            // Use coroutine scope to avoid blocking the login process
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()).launch {
+            applicationScope.launch {
                 try {
                     Timber.tag("FreshLoginRestoreDebug").d(
-                        "operation=LOGIN_SYNC_STARTED userId=$userId firebaseCurrentUserId=${firebaseAuth.currentUser?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+                        "operation=LOGIN_SYNC_STARTED userId=<redacted> firebaseCurrentUserId=<redacted> timestamp=${System.currentTimeMillis()}"
                     )
                     // Schedule periodic sync for this user (if not already scheduled)
                     syncScheduler.schedulePeriodicSync(userId)
@@ -1111,25 +1111,25 @@ class AuthRepositoryImpl @Inject constructor(
                     // Trigger immediate bidirectional sync to fetch remote data
                     val syncResult = syncScheduler.triggerImmediateSync(userId)
                     Timber.tag("FreshLoginRestoreDebug").d(
-                        "operation=LOGIN_SYNC_TRIGGER_RETURNED userId=$userId enqueued=${syncResult.isSuccess} timestamp=${System.currentTimeMillis()}"
+                        "operation=LOGIN_SYNC_TRIGGER_RETURNED userId=<redacted> enqueued=${syncResult.isSuccess} timestamp=${System.currentTimeMillis()}"
                     )
                     
                     syncResult.fold(
                         onSuccess = {
                         },
                         onFailure = { error ->
-                            Timber.w("[LOGIN-SYNC] ⚠️ Login sync failed, but user can still proceed: $error")
+                            Timber.w("[LOGIN-SYNC] âš ï¸ Login sync failed, but user can still proceed: $error")
                             Timber.w("[LOGIN-SYNC]   - User will need to manually refresh or sync will retry in background")
                         }
                     )
                 } catch (e: Exception) {
-                    Timber.e(e, "[LOGIN-SYNC] ❌ Error during login sync for user: $userId")
+                    Timber.e(e, "[LOGIN-SYNC] âŒ Error during login sync for current user")
                     // Don't fail login if sync fails - it will retry in background
                 }
             }
             
         } catch (e: Exception) {
-            Timber.e(e, "[LOGIN-SYNC] ❌ Failed to initiate login sync for user: $userId")
+            Timber.e(e, "[LOGIN-SYNC] âŒ Failed to initiate login sync for current user")
             // Don't fail the login process if sync setup fails
         }
     }
@@ -1153,7 +1153,7 @@ class AuthRepositoryImpl @Inject constructor(
                     // Validate auth state by attempting to get a fresh token
                     val currentUser = firebaseAuth.currentUser
                     if (currentUser?.uid != userId) {
-                        Timber.w("Firebase Auth user mismatch on attempt ${attempts + 1}: expected $userId, got ${currentUser?.uid}")
+                        Timber.w("Firebase Auth user mismatch on attempt ${attempts + 1}")
                         attempts++
                         if (attempts < maxAttempts) {
                             val delayMs = baseDelayMs * (2.0.pow(attempts.toDouble())).toLong()
@@ -1183,7 +1183,7 @@ class AuthRepositoryImpl @Inject constructor(
 
                     try {
                         legacyAuthDataSource.verifyFirestoreAccess(userId)
-                        Timber.d("Firestore auth state synchronized successfully for user $userId on attempt ${attempts + 1}")
+                        Timber.d("Firestore auth state synchronized successfully for current user on attempt ${attempts + 1}")
                         return true
                     } catch (firestoreError: Exception) {
                         if (firestoreError.message?.contains("PERMISSION_DENIED") == true) {
@@ -1210,11 +1210,11 @@ class AuthRepositoryImpl @Inject constructor(
                 }
             }
             
-            Timber.w("Failed to verify Firestore auth synchronization after $maxAttempts attempts for user $userId")
+            Timber.w("Failed to verify Firestore auth synchronization after $maxAttempts attempts for current user")
             return false
             
         } catch (e: Exception) {
-            Timber.e(e, "Exception during Firestore auth synchronization check for user $userId")
+            Timber.e(e, "Exception during Firestore auth synchronization check for current user")
             return false
         }
     }
@@ -1235,7 +1235,7 @@ class AuthRepositoryImpl @Inject constructor(
                 return false
             }
             if (currentAuth.uid != userId) {
-                Timber.e("Firestore auth validation failed: UID mismatch - Firebase Auth: ${currentAuth.uid}, Expected: $userId")
+                Timber.e("Firestore auth validation failed: UID mismatch")
                 return false
             }
             
@@ -1251,12 +1251,13 @@ class AuthRepositoryImpl @Inject constructor(
                 }
             }
             
-            Timber.d("Firestore auth state validation successful for user: $userId")
+            Timber.d("Firestore auth state validation successful for current user")
             return true
             
         } catch (e: Exception) {
-            Timber.e(e, "Exception during Firestore auth state validation for user $userId")
+            Timber.e(e, "Exception during Firestore auth state validation for current user")
             return false
         }
     }
 }
+
