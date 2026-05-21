@@ -1,12 +1,11 @@
 package com.example.liftrix.ui.workout.edit
 
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
+import com.example.liftrix.domain.interactor.workout.WorkoutInteractor
 import com.example.liftrix.domain.model.*
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.workout.WorkoutCommandUseCase
-import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
 import com.example.liftrix.domain.usecase.workout.WorkoutSessionEditingData
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
@@ -35,9 +34,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class EditSessionViewModel @Inject constructor(
-    private val workoutQueryUseCase: WorkoutQueryUseCase,
-    private val workoutCommandUseCase: WorkoutCommandUseCase,
-    private val authQueryUseCase: AuthQueryUseCase
+    private val workoutInteractor: WorkoutInteractor,
+    private val authInteractor: AuthInteractor
 ) : ModernBaseViewModel<EditSessionUiState>(initialState = EditSessionUiState.Loading) {
 
     // Event flow for navigation and UI events
@@ -51,7 +49,7 @@ class EditSessionViewModel @Inject constructor(
     init {
         // Get current user ID
         viewModelScope.launch {
-            currentUserId = authQueryUseCase(waitForAuth = false).fold(
+            currentUserId = authInteractor.currentUser(waitForAuth = false).fold(
                 onSuccess = { userId -> userId.value },
                 onFailure = { null }
             )
@@ -77,11 +75,11 @@ class EditSessionViewModel @Inject constructor(
     private fun loadSession(sessionId: WorkoutId) {
         viewModelScope.launch {
             updateState { EditSessionUiState.Loading }
-            val userId = authQueryUseCase(waitForAuth = false).fold(
+            val userId = authInteractor.currentUser(waitForAuth = false).fold(
                 onSuccess = { it.value },
                 onFailure = { "" }
             )
-            val result = workoutQueryUseCase.getSessionForEditing(sessionId, userId)
+            val result = workoutInteractor.getSessionForEditing(sessionId, userId)
             result.onSuccess { editingData ->
                 originalEditingData = editingData
                 updateState {
@@ -189,7 +187,7 @@ class EditSessionViewModel @Inject constructor(
             val workoutFromSession = convertSessionToWorkout(currentData.session)
 
             viewModelScope.launch {
-                val result = workoutCommandUseCase.updateSession(
+                val result = workoutInteractor.updateSession(
                     updatedSession = workoutFromSession,
                     originalCreatedAt = originalData.originalCreatedAt
                 )

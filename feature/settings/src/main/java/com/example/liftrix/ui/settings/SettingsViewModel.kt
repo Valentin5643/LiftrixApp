@@ -3,17 +3,18 @@ package com.example.liftrix.ui.settings
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.interactor.account.AccountInteractor
+import com.example.liftrix.domain.interactor.admin.AdminInteractor
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
+import com.example.liftrix.domain.interactor.settings.SettingsInteractor
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SettingsRepository
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.domain.service.SettingsValidator
 import com.example.liftrix.service.ImageProcessingService
-import com.example.liftrix.domain.usecase.auth.AuthCommandUseCase
-import com.example.liftrix.domain.usecase.settings.SettingsQueryUseCase
 import com.example.liftrix.domain.usecase.profile.ProfileImageOperationsUseCase
 import com.example.liftrix.domain.usecase.profile.ProfileQueryUseCase
 import com.example.liftrix.domain.usecase.social.SocialProfileQueryUseCase
-import com.example.liftrix.domain.usecase.admin.CheckAdminPermissionsUseCase
 import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.ui.theme.ThemeManager
@@ -48,25 +49,25 @@ import javax.inject.Inject
  * 
  * @property getUserSettingsUseCase Use case for retrieving user settings
  * @property updateSettingsUseCase Use case for updating user settings
- * @property getSubscriptionStatusUseCase Use case for retrieving subscription status
- * @property authCommandUseCase Use case for comprehensive auth command operations
+ * @property settingsInteractor Interactor for settings and subscription queries
+ * @property authInteractor Interactor for comprehensive auth operations
  * @property authRepository Repository for authentication operations
  * @property analyticsService Service for tracking analytics events
  */
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val settingsQueryUseCase: SettingsQueryUseCase,
+    private val settingsInteractor: SettingsInteractor,
     private val settingsRepository: SettingsRepository,
     private val profileQueryUseCase: ProfileQueryUseCase,
     private val socialProfileQueryUseCase: SocialProfileQueryUseCase,
-    private val authCommandUseCase: AuthCommandUseCase,
-    private val accountCommandUseCase: com.example.liftrix.domain.usecase.account.AccountCommandUseCase,
+    private val authInteractor: AuthInteractor,
+    private val accountInteractor: AccountInteractor,
     private val profileImageOperationsUseCase: ProfileImageOperationsUseCase,
     private val imageProcessingService: ImageProcessingService,
     private val authRepository: AuthRepository,
     private val analyticsService: AnalyticsService,
     private val settingsValidator: SettingsValidator,
-    private val checkAdminPermissionsUseCase: CheckAdminPermissionsUseCase,
+    private val adminInteractor: AdminInteractor,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -229,7 +230,7 @@ class SettingsViewModel @Inject constructor(
                     kotlinx.coroutines.supervisorScope {
                         // Combine settings, profile, social profile, and subscription data loading
                         combine(
-                            settingsQueryUseCase(userId),
+                            settingsInteractor.userSettings(userId),
                             profileQueryUseCase(userId).map { Result.success(it) }.catch { emit(Result.failure(it)) },
                             kotlinx.coroutines.flow.flow {
                                 val socialProfileResult = socialProfileQueryUseCase.invoke(userId)
@@ -242,7 +243,7 @@ class SettingsViewModel @Inject constructor(
                                 )
                                 emit(com.example.liftrix.domain.model.common.liftrixFailure(error))
                             },
-                            settingsQueryUseCase.getSubscriptionStatus(userId)
+                            settingsInteractor.subscriptionStatus(userId)
                         ) { settingsResult, profileResult, socialProfileResult, subscriptionResult ->
                             SettingsLoadResult(settingsResult, profileResult, socialProfileResult, subscriptionResult)
                         }
@@ -886,7 +887,7 @@ class SettingsViewModel @Inject constructor(
             try {
                 Timber.d("Confirming sign out")
                 
-                val result = authCommandUseCase.signOutEnhanced()
+                val result = authInteractor.signOutEnhanced()
                 
                 result.fold(
                     onSuccess = {
@@ -1172,7 +1173,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             Timber.d("Initiating account deletion for user $userId with provider $reauthProvider, exportDataFirst=$exportDataFirst")
 
-            val result = accountCommandUseCase.deleteAccount(
+            val result = accountInteractor.deleteAccount(
                 reauthProvider = reauthProvider,
                 reauthPayload = reauthPayload,
                 exportDataFirst = exportDataFirst
@@ -1337,7 +1338,7 @@ class SettingsViewModel @Inject constructor(
             // Check admin permissions for current user
             val isAdmin = try {
                 currentUser?.uid?.let { userId ->
-                    checkAdminPermissionsUseCase(userId).getOrNull() ?: false
+                    adminInteractor.checkPermissions(userId).getOrNull() ?: false
                 } ?: false
             } catch (e: Exception) {
                 Timber.e(e, "Failed to check admin permissions")

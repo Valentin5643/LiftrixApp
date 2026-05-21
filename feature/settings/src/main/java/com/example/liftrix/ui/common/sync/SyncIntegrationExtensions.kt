@@ -6,12 +6,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.liftrix.domain.repository.SettingsRepository
 import com.example.liftrix.domain.repository.SyncRepository
 import com.example.liftrix.domain.repository.SyncStatusRepository
@@ -19,7 +19,7 @@ import com.example.liftrix.domain.service.CombinedSyncStatus
 import com.example.liftrix.domain.service.SyncStatus
 import com.example.liftrix.domain.sync.SyncScheduler
 import com.example.liftrix.ui.theme.LiftrixSpacing
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
@@ -44,17 +44,17 @@ fun WithSyncAwareness(
     onNavigateToSyncSettings: (() -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
-    val combinedSyncStatus by syncStatusViewModel.combinedSyncStatus.collectAsState(
-        initial = CombinedSyncStatus()
+    val combinedSyncStatus by syncStatusViewModel.combinedSyncStatus.collectAsStateWithLifecycle(
+        initialValue = CombinedSyncStatus()
     )
-    val currentUserId by syncStatusViewModel.currentUserId.collectAsState()
+    val currentUserId by syncStatusViewModel.currentUserId.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
 
     val unsyncedItemCount by remember(currentUserId) {
         flow {
             emit(syncStatusViewModel.getUnsyncedCount() + syncStatusViewModel.getUnsyncedAnalyticsCount())
         }
-    }.collectAsState(initial = 0)
+    }.collectAsStateWithLifecycle(initialValue = 0)
 
     val bannerStatus = when {
         combinedSyncStatus.workoutStatus is SyncStatus.Error -> combinedSyncStatus.workoutStatus
@@ -99,7 +99,7 @@ fun ProfileSyncIntegration(
     settingsRepository: SettingsRepository = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
-    val profileSyncStatus by syncStatusViewModel.syncStatus.collectAsState(initial = SyncStatus.Idle)
+    val profileSyncStatus by syncStatusViewModel.syncStatus.collectAsStateWithLifecycle(initialValue = SyncStatus.Idle)
     SyncControlBlock(
         userId = userId,
         combinedStatus = CombinedSyncStatus(profileSyncStatus, profileSyncStatus),
@@ -118,8 +118,8 @@ fun WorkoutSyncIntegration(
     settingsRepository: SettingsRepository = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
-    val combinedSyncStatus by syncStatusViewModel.combinedSyncStatus.collectAsState(
-        initial = CombinedSyncStatus()
+    val combinedSyncStatus by syncStatusViewModel.combinedSyncStatus.collectAsStateWithLifecycle(
+        initialValue = CombinedSyncStatus()
     )
 
     Column(modifier = modifier) {
@@ -146,7 +146,7 @@ fun ActiveWorkoutSyncIntegration(
     syncStatusViewModel: SyncStatusViewModel = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
-    val syncStatus by syncStatusViewModel.syncStatus.collectAsState(initial = SyncStatus.Idle)
+    val syncStatus by syncStatusViewModel.syncStatus.collectAsStateWithLifecycle(initialValue = SyncStatus.Idle)
     SyncStatusIndicator(
         syncStatus = syncStatus,
         showText = true,
@@ -162,8 +162,8 @@ fun ProgressDashboardSyncIntegration(
     syncStatusViewModel: SyncStatusViewModel = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
-    val combinedStatus by syncStatusViewModel.combinedSyncStatus.collectAsState(
-        initial = CombinedSyncStatus()
+    val combinedStatus by syncStatusViewModel.combinedSyncStatus.collectAsStateWithLifecycle(
+        initialValue = CombinedSyncStatus()
     )
 
     Column(modifier = modifier) {
@@ -189,8 +189,8 @@ fun SettingsSyncIntegration(
     settingsRepository: SettingsRepository = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
-    val combinedSyncStatus by syncStatusViewModel.combinedSyncStatus.collectAsState(
-        initial = CombinedSyncStatus()
+    val combinedSyncStatus by syncStatusViewModel.combinedSyncStatus.collectAsStateWithLifecycle(
+        initialValue = CombinedSyncStatus()
     )
 
     Column(modifier = modifier) {
@@ -221,7 +221,7 @@ private fun SyncControlBlock(
         flow {
             emit(syncStatusViewModel.getUnsyncedCount() + syncStatusViewModel.getUnsyncedAnalyticsCount())
         }
-    }.collectAsState(initial = 0)
+    }.collectAsStateWithLifecycle(initialValue = 0)
 
     ManualSyncControls(
         combinedStatus = combinedStatus,
@@ -279,8 +279,8 @@ fun TemplateSyncIntegration(
 
 @Composable
 private fun getLastSyncTime(userId: String, syncRepository: SyncRepository): LocalDateTime? {
-    val syncStatus by syncRepository.observeSyncStatus().collectAsState(
-        initial = com.example.liftrix.domain.repository.SyncStatus(
+    val syncStatus by syncRepository.observeSyncStatus().collectAsStateWithLifecycle(
+        initialValue = com.example.liftrix.domain.repository.SyncStatus(
             isSyncing = false,
             lastSyncTime = null,
             pendingItems = 0,
@@ -297,7 +297,7 @@ private fun getLastSyncTime(userId: String, syncRepository: SyncRepository): Loc
 
 @Composable
 private fun getAutoSyncEnabled(userId: String, settingsRepository: SettingsRepository): Boolean {
-    val userSettings by settingsRepository.getUserSettings(userId).collectAsState(initial = null)
+    val userSettings by settingsRepository.getUserSettings(userId).collectAsStateWithLifecycle(initialValue = null)
     return remember(userSettings) { userSettings?.autoSyncEnabled ?: true }
 }
 
@@ -332,32 +332,35 @@ private fun getSyncHistory(userId: String, syncRepository: SyncRepository): Stat
                 emit(emptyList())
             }
         }
-    }.collectAsState(initial = emptyList())
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
 }
 
 fun getProfileViewModelSyncStatus(
     userId: String,
-    syncStatusRepository: SyncStatusRepository
+    syncStatusRepository: SyncStatusRepository,
+    scope: CoroutineScope
 ) = syncStatusRepository.getSyncStatus(userId).stateIn(
-    scope = GlobalScope,
+    scope = scope,
     started = SharingStarted.WhileSubscribed(5000),
     initialValue = SyncStatus.Idle
 )
 
 fun getWorkoutViewModelSyncStatus(
     userId: String,
-    syncScheduler: SyncScheduler
+    syncScheduler: SyncScheduler,
+    scope: CoroutineScope
 ) = syncScheduler.observeWorkoutSyncStatus().stateIn(
-    scope = GlobalScope,
+    scope = scope,
     started = SharingStarted.WhileSubscribed(5000),
     initialValue = SyncStatus.Idle
 )
 
 fun getProgressDashboardViewModelAnalyticsSyncStatus(
     userId: String,
-    syncScheduler: SyncScheduler
+    syncScheduler: SyncScheduler,
+    scope: CoroutineScope
 ) = syncScheduler.observeAnalyticsSyncStatus().stateIn(
-    scope = GlobalScope,
+    scope = scope,
     started = SharingStarted.WhileSubscribed(5000),
     initialValue = SyncStatus.Idle
 )

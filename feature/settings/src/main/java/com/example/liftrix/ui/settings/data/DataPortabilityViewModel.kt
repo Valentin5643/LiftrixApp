@@ -3,17 +3,16 @@ package com.example.liftrix.ui.settings.data
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
+import com.example.liftrix.domain.interactor.export.DataPortabilityInteractor
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.export.ExportWorkoutsUseCase
 import com.example.liftrix.domain.usecase.export.ExportFormat
 import com.example.liftrix.domain.usecase.export.ExportRequest
 import com.example.liftrix.domain.usecase.export.ExportResult
 import com.example.liftrix.domain.usecase.export.ExportProgress
 import com.example.liftrix.domain.usecase.export.DataType
 import com.example.liftrix.domain.usecase.export.DateRange
-import com.example.liftrix.domain.usecase.data_import.DataImportUseCase
 import com.example.liftrix.domain.usecase.data_import.ImportValidation
 import com.example.liftrix.domain.usecase.data_import.ImportResult
 import com.example.liftrix.domain.usecase.data_import.ImportProgress
@@ -57,16 +56,14 @@ import javax.inject.Inject
  * - FIT: Fitness industry standard format
  * - TCX: Training Center XML format
  * 
- * @property exportWorkoutsUseCase Use case for exporting workout data
- * @property dataImportUseCase Use case for importing workout data
+ * @property dataPortabilityInteractor Interactor for importing and exporting workout data
  * @property getCurrentUserIdUseCase Use case for getting current user ID
  * @property errorHandler Centralized error handler
  */
 @HiltViewModel
 class DataPortabilityViewModel @Inject constructor(
-    private val exportWorkoutsUseCase: ExportWorkoutsUseCase,
-    private val dataImportUseCase: DataImportUseCase,
-    private val authQueryUseCase: AuthQueryUseCase,
+    private val dataPortabilityInteractor: DataPortabilityInteractor,
+    private val authInteractor: AuthInteractor,
     @ApplicationContext private val context: Context
 ) : ModernBaseViewModel<DataPortabilityUiState>(
     initialState = DataPortabilityUiState(
@@ -127,7 +124,7 @@ class DataPortabilityViewModel @Inject constructor(
     private fun loadCurrentUser() {
         viewModelScope.launch {
             try {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it.value },
                     onFailure = { null }
                 )
@@ -257,13 +254,13 @@ class DataPortabilityViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            val result = exportWorkoutsUseCase.invoke(userId, exportRequest)
+            val result = dataPortabilityInteractor.exportWorkouts(userId, exportRequest)
             result.fold(
                 onSuccess = { exportResult ->
                     currentExportId = exportResult.exportId
                     
                     // Track export progress
-                    exportWorkoutsUseCase.getExportProgress(exportResult.exportId)
+                    dataPortabilityInteractor.exportProgress(exportResult.exportId)
                         .onEach { progress ->
                             updateExportProgress(progress)
                         }
@@ -321,7 +318,7 @@ class DataPortabilityViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                exportWorkoutsUseCase.cancelExport(exportId, userId)
+                dataPortabilityInteractor.cancelExport(exportId, userId)
                 
                 updateState { currentState ->
                     when (val state = currentState.exportState) {
@@ -366,7 +363,7 @@ class DataPortabilityViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            val result = dataImportUseCase.validateFile(uri, inputStream)
+            val result = dataPortabilityInteractor.validateImportFile(uri, inputStream)
             result.fold(
                 onSuccess = { validation ->
                     updateState { currentState ->
@@ -473,13 +470,13 @@ class DataPortabilityViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            val result = dataImportUseCase.import(userId, uri, inputStream, importOptions)
+            val result = dataPortabilityInteractor.importData(userId, uri, inputStream, importOptions)
             result.fold(
                 onSuccess = { importResult ->
                     currentImportId = importResult.importId
 
                     // Track import progress
-                    dataImportUseCase.getImportProgress(importResult.importId)
+                    dataPortabilityInteractor.importProgress(importResult.importId)
                         .onEach { progress ->
                             updateImportProgress(progress)
                         }

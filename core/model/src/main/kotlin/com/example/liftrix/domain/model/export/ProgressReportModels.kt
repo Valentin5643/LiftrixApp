@@ -1,5 +1,6 @@
 package com.example.liftrix.domain.model.export
 
+import com.example.liftrix.domain.model.analytics.StrengthExerciseForecast
 import java.time.LocalDate
 import java.time.LocalDateTime
 
@@ -63,6 +64,7 @@ data class ProgressReportData(
     val workoutRows: List<ProgressReportWorkoutRow>,
     val aiSummary: ProgressReportAiSummary,
     val syncStatus: ProgressReportSyncStatus,
+    val strengthForecast: ProgressReportStrengthForecastSection? = null,
     val isMinimalReport: Boolean
 ) {
     companion object {
@@ -70,6 +72,13 @@ data class ProgressReportData(
             "Not enough workout data for a full progress report. Complete more workouts to generate better insights."
     }
 }
+
+data class ProgressReportStrengthForecastSection(
+    val generatedForExerciseId: String?,
+    val generatedForExerciseName: String?,
+    val forecast: StrengthExerciseForecast?,
+    val message: String
+)
 
 data class ProgressReportSummaryMetrics(
     val workoutsCompleted: Int,
@@ -137,7 +146,11 @@ data class ProgressReportWorkoutRow(
     val date: LocalDate,
     val name: String,
     val durationMinutes: Long?,
-    val synced: Boolean
+    val synced: Boolean,
+    val workoutId: String = "",
+    val volumeKg: Double = 0.0,
+    val repCount: Int = 0,
+    val setCount: Int = 0
 )
 
 data class ProgressReportAiSummary(

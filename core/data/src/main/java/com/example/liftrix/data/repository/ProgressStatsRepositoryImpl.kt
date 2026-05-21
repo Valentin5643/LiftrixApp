@@ -5,7 +5,6 @@ import com.example.liftrix.data.extensions.toDurationDataPoints
 import com.example.liftrix.data.extensions.toFrequencyDataPoints
 import com.example.liftrix.data.extensions.toVolumeDataPoints
 import com.example.liftrix.data.extensions.calculateProgressSummary
-import com.example.liftrix.data.local.dao.ExerciseDao
 import com.example.liftrix.data.local.dao.ExerciseSetDao
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.mapper.AnalyticsMapper
@@ -40,7 +39,6 @@ import java.time.ZoneId
 @Singleton
 class ProgressStatsRepositoryImpl @Inject constructor(
     private val workoutDao: WorkoutDao,
-    private val exerciseDao: ExerciseDao,
     private val exerciseSetDao: ExerciseSetDao,
     private val analyticsMapper: AnalyticsMapper,
     private val cacheManager: com.example.liftrix.core.cache.CacheManager,
@@ -170,37 +168,19 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         try {
             val startDateString = startDate.toString()
             val endDateString = endDate.toString()
-            
-            // Get exercise history for specific exercise
-            val exercises = exerciseDao.getExerciseHistoryInDateRange(userId, exerciseLibraryId, startDateString, endDateString)
-            
-            // Group by workout date and calculate volume
-            val volumeData = exercises.groupBy { exercise ->
-                // Get workout date for this exercise
-                workoutDao.getWorkoutByExerciseId(exercise.id, userId)?.date
+
+            val volumeData = exerciseSetDao.getDailyVolumeForExerciseFromView(
+                userId = userId,
+                exerciseLibraryId = exerciseLibraryId,
+                startDate = startDateString,
+                endDate = endDateString
+            ).map { row ->
+                VolumeDataPoint(
+                    date = kotlinx.datetime.LocalDate.parse(row.date),
+                    totalVolume = row.total_volume.toFloat(),
+                    exerciseCount = 1
+                )
             }
-                .filterKeys { it != null }
-                .map { (date, exerciseList) ->
-                    var totalVolume = 0f
-                    
-                    exerciseList.forEach { exercise ->
-                        val sets = exerciseSetDao.getSetsByExercise(exercise.id, userId)
-                        sets.forEach { set ->
-                            val weightKg = set.weightKg
-                            val reps = set.reps
-                            if (weightKg != null && reps != null) {
-                                totalVolume += weightKg * reps
-                            }
-                        }
-                    }
-                    
-                    VolumeDataPoint(
-                        date = kotlinx.datetime.LocalDate.parse(date!!.toString()),
-                        totalVolume = totalVolume,
-                        exerciseCount = exerciseList.size
-                    )
-                }
-                .sortedBy { it.date }
             
             emit(volumeData)
         } catch (e: Exception) {

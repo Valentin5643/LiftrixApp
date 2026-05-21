@@ -4,14 +4,14 @@ import androidx.compose.runtime.Stable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
+import com.example.liftrix.domain.interactor.workout.WorkoutInteractor
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.SessionExercise
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.service.PRDetectionService
-import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
 import com.example.liftrix.domain.model.WorkoutId
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.service.PRComparison
 import com.example.liftrix.domain.service.PersonalRecord
 import com.example.liftrix.domain.service.PrivacyEnforcementService
@@ -33,8 +33,8 @@ import javax.inject.Inject
 @HiltViewModel
 class WorkoutDetailsViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
-    private val workoutQueryUseCase: WorkoutQueryUseCase,
-    private val authQueryUseCase: AuthQueryUseCase,
+    private val workoutInteractor: WorkoutInteractor,
+    private val authInteractor: AuthInteractor,
     private val workoutRepository: WorkoutRepository,
     private val prDetectionService: PRDetectionService,
     private val privacyEnforcementService: PrivacyEnforcementService
@@ -48,7 +48,7 @@ class WorkoutDetailsViewModel @Inject constructor(
             _uiState.value = WorkoutDetailsUiState.Loading
 
             // Get current user ID
-            val currentUserId = authQueryUseCase(waitForAuth = false).fold(
+            val currentUserId = authInteractor.currentUser(waitForAuth = false).fold(
                 onSuccess = { it.value },
                 onFailure = {
                     _uiState.value = WorkoutDetailsUiState.Error(
@@ -63,7 +63,7 @@ class WorkoutDetailsViewModel @Inject constructor(
             var workoutOwnerId: String = currentUserId
 
             // Try to get workout as current user first
-            workoutQueryUseCase.getById(WorkoutId(workoutId), currentUserId).fold(
+            workoutInteractor.getById(WorkoutId(workoutId), currentUserId).fold(
                 onSuccess = { userWorkout ->
                     if (userWorkout != null) {
                         workout = userWorkout
@@ -79,7 +79,7 @@ class WorkoutDetailsViewModel @Inject constructor(
             // under its owner so the details screen can render it read-only.
             val socialOwnerId = ownerId?.takeIf { it.isNotBlank() && it != currentUserId }
             if (workout == null && socialOwnerId != null) {
-                workoutQueryUseCase.getById(WorkoutId(workoutId), socialOwnerId).fold(
+                workoutInteractor.getById(WorkoutId(workoutId), socialOwnerId).fold(
                     onSuccess = { socialWorkout ->
                         if (socialWorkout != null) {
                             workout = socialWorkout
@@ -96,7 +96,7 @@ class WorkoutDetailsViewModel @Inject constructor(
             // Official Liftrix seed posts use fixed public owners, so resolve those owners explicitly.
             if (workout == null) {
                 for (officialOwnerId in OFFICIAL_LIFTRIX_ACCOUNT_IDS) {
-                    workoutQueryUseCase.getById(WorkoutId(workoutId), officialOwnerId).fold(
+                    workoutInteractor.getById(WorkoutId(workoutId), officialOwnerId).fold(
                         onSuccess = { officialWorkout ->
                             if (officialWorkout != null) {
                                 workout = officialWorkout
@@ -236,7 +236,7 @@ class WorkoutDetailsViewModel @Inject constructor(
         exerciseLibraryIds: List<String>,
         currentWorkoutId: String
     ): Map<String, List<com.example.liftrix.domain.usecase.workout.PreviousSetData>>? {
-        return workoutQueryUseCase.getPreviousWorkoutData(
+        return workoutInteractor.getPreviousWorkoutData(
             userId = userId,
             exerciseLibraryIds = exerciseLibraryIds,
             excludeWorkoutId = currentWorkoutId

@@ -1,12 +1,11 @@
 package com.example.liftrix.ui.chat.settings
 
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
+import com.example.liftrix.domain.interactor.chat.ChatInteractor
 import com.example.liftrix.domain.model.chat.ChatPreferences
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.chat.ChatOperationsUseCase
 import com.example.liftrix.domain.usecase.chat.ExportFormat
-import com.example.liftrix.domain.usecase.chat.UpdateChatPreferencesUseCase
 import com.example.liftrix.domain.repository.ChatRepository
 import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.state.UiState
@@ -22,10 +21,9 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class AIChatSettingsViewModel @Inject constructor(
-    private val updateChatPreferencesUseCase: UpdateChatPreferencesUseCase,
-    private val chatOperationsUseCase: ChatOperationsUseCase,
+    private val chatInteractor: ChatInteractor,
     private val chatRepository: ChatRepository,
-    private val authQueryUseCase: AuthQueryUseCase
+    private val authInteractor: AuthInteractor
 ) : ModernBaseViewModel<AIChatSettingsUiState>(
     initialState = AIChatSettingsUiState()
 ) {
@@ -38,7 +36,7 @@ class AIChatSettingsViewModel @Inject constructor(
     
     private fun loadInitialData() {
         viewModelScope.launch {
-            val userId = authQueryUseCase(waitForAuth = true).fold(
+            val userId = authInteractor.currentUser(waitForAuth = true).fold(
                 onSuccess = { it.value },
                 onFailure = { error ->
                     Timber.e(error, "Failed to load AI chat settings user")
@@ -164,7 +162,7 @@ class AIChatSettingsViewModel @Inject constructor(
             // Optimistic update
             _uiState.value = _uiState.value.copy(preferences = updatedPreferences)
             
-            updateChatPreferencesUseCase(updatedPreferences).fold(
+            chatInteractor.updatePreferences(updatedPreferences).fold(
                 onSuccess = {
                     Timber.d("Successfully updated preferences")
                     _uiState.value = _uiState.value.copy(
@@ -192,7 +190,7 @@ class AIChatSettingsViewModel @Inject constructor(
                 showClearHistoryDialog = false
             )
             
-            chatOperationsUseCase.clearAllHistory(
+            chatInteractor.clearAllHistory(
                 confirmationText = confirmationText,
                 language = currentState.preferences?.preferredLanguage ?: "en"
             ).fold(
@@ -226,7 +224,7 @@ class AIChatSettingsViewModel @Inject constructor(
                 exportedData = null
             )
             
-            chatOperationsUseCase.exportHistory(format).fold(
+            chatInteractor.exportHistory(format).fold(
                 onSuccess = { exportData ->
                     Timber.i("Successfully exported chat history")
                     _uiState.value = _uiState.value.copy(
@@ -281,7 +279,7 @@ class AIChatSettingsViewModel @Inject constructor(
      */
     fun getRequiredConfirmationText(): String {
         val language = _uiState.value.preferences?.preferredLanguage ?: "en"
-        return chatOperationsUseCase.getRequiredConfirmationText(language)
+        return chatInteractor.requiredConfirmationText(language)
     }
 
 }

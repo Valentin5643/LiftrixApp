@@ -8,6 +8,7 @@ import androidx.room.Query
 import androidx.room.Update
 import com.example.liftrix.data.local.entity.WorkoutEntity
 import com.example.liftrix.annotations.UserScoped
+import com.example.liftrix.data.local.view.CompletedWorkoutMetricsView
 import kotlinx.coroutines.flow.Flow
 import timber.log.Timber
 import java.time.Instant
@@ -94,6 +95,21 @@ interface WorkoutDao {
         endDate: String,
         limit: Int = 10000
     ): List<WorkoutEntity>
+
+    @Query("""
+        SELECT * FROM completed_workout_metrics_view
+        WHERE user_id = :userId
+        AND workout_date BETWEEN :startDate AND :endDate
+        ORDER BY workout_date ASC
+        LIMIT :limit
+    """)
+    @UserScoped
+    suspend fun getCompletedWorkoutMetricsInDateRange(
+        userId: String,
+        startDate: String,
+        endDate: String,
+        limit: Int = 10000
+    ): List<CompletedWorkoutMetricsView>
 
     @Query("""
         SELECT * FROM workouts
@@ -515,6 +531,25 @@ interface WorkoutDao {
         startDate: String,
         endDate: String
     ): List<DailyVolumeResult>
+
+    @Query("""
+        SELECT
+            workout_date as date,
+            SUM(total_volume) as total_volume,
+            SUM(total_sets) as total_sets,
+            SUM(exercise_count) as exercise_count
+        FROM completed_workout_metrics_view
+        WHERE user_id = :userId
+        AND workout_date BETWEEN :startDate AND :endDate
+        GROUP BY workout_date
+        ORDER BY workout_date
+    """)
+    @UserScoped
+    suspend fun getDailyWorkoutMetricsFromView(
+        userId: String,
+        startDate: String,
+        endDate: String
+    ): List<DailyVolumeResult>
     
     
     /**
@@ -553,6 +588,18 @@ interface WorkoutDao {
     """)
     @UserScoped
     suspend fun getWorkoutStats(userId: String, since: String): WorkoutStatsResult
+
+    @Query("""
+        SELECT
+            AVG(duration_minutes) as avgDurationMinutes,
+            AVG(total_volume) as avgVolume,
+            COUNT(*) as workoutCount
+        FROM completed_workout_metrics_view
+        WHERE user_id = :userId
+        AND workout_date >= :since
+    """)
+    @UserScoped
+    suspend fun getWorkoutStatsFromView(userId: String, since: String): WorkoutStatsResult
     
     /**
      * Gets workout count by month for frequency analysis
@@ -599,6 +646,25 @@ interface WorkoutDao {
     """)
     @UserScoped
     suspend fun getMaxVolumeInDateRange(
+        userId: String,
+        startDate: String,
+        endDate: String
+    ): Double?
+
+    @Query("""
+        SELECT MAX(daily_volume) as maxVolume
+        FROM (
+            SELECT
+                workout_date,
+                SUM(total_volume) as daily_volume
+            FROM completed_workout_metrics_view
+            WHERE user_id = :userId
+            AND workout_date BETWEEN :startDate AND :endDate
+            GROUP BY workout_date
+        )
+    """)
+    @UserScoped
+    suspend fun getMaxDailyVolumeFromView(
         userId: String,
         startDate: String,
         endDate: String

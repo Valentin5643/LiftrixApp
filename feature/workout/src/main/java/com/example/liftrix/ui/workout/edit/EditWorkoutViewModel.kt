@@ -7,12 +7,10 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixSuccess
 import com.example.liftrix.domain.model.common.liftrixFailure
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
+import com.example.liftrix.domain.interactor.workout.TemplateInteractor
+import com.example.liftrix.domain.interactor.workout.WorkoutInteractor
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
-import com.example.liftrix.domain.usecase.workout.WorkoutCommandUseCase
-import com.example.liftrix.domain.usecase.template.TemplateCommandUseCase
-import com.example.liftrix.domain.usecase.template.TemplateQueryUseCase
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
@@ -64,12 +62,10 @@ private fun EditWorkoutUiState.dataOrNull(): EditWorkoutData? = when (this) {
  */
 @HiltViewModel
 class EditWorkoutViewModel @Inject constructor(
-    private val workoutQueryUseCase: WorkoutQueryUseCase,
-    private val templateQueryUseCase: TemplateQueryUseCase,
-    private val templateCommandUseCase: TemplateCommandUseCase,
-    private val workoutCommandUseCase: WorkoutCommandUseCase,
+    private val workoutInteractor: WorkoutInteractor,
+    private val templateInteractor: TemplateInteractor,
     private val workoutRepository: WorkoutRepository,
-    private val authQueryUseCase: AuthQueryUseCase
+    private val authInteractor: AuthInteractor
 ) : ModernBaseViewModel<EditWorkoutUiState>(initialState = EditWorkoutUiState.Loading) {
 
     // Event flow for navigation and UI events
@@ -86,7 +82,7 @@ class EditWorkoutViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             Timber.d("EDIT-WORKOUT-DEBUG: EditWorkoutViewModel init - Getting current user ID")
-            currentUserId = authQueryUseCase(waitForAuth = false).fold(
+            currentUserId = authInteractor.currentUser(waitForAuth = false).fold(
                 onSuccess = { userId: UserId -> userId },
                 onFailure = { _: Throwable -> null }
             )
@@ -130,7 +126,7 @@ class EditWorkoutViewModel @Inject constructor(
             viewModelScope.launch {
                 // Fetch user ID synchronously if not yet available
                 if (currentUserId == null) {
-                    currentUserId = authQueryUseCase(waitForAuth = false).fold(
+                    currentUserId = authInteractor.currentUser(waitForAuth = false).fold(
                         onSuccess = { userId: UserId -> userId },
                         onFailure = { _: Throwable -> null }
                     )
@@ -190,10 +186,10 @@ class EditWorkoutViewModel @Inject constructor(
 
             val result = if (isTemplate) {
                 Timber.d("EDIT-WORKOUT-DEBUG: Calling templateQueryUseCase.getById for template")
-                templateQueryUseCase.getById(workoutId.value, userId.value)
+                templateInteractor.getById(workoutId.value, userId.value)
             } else {
                 Timber.d("EDIT-WORKOUT-DEBUG: Calling workoutQueryUseCase.getById for regular workout")
-                workoutQueryUseCase.getById(workoutId, userId.value)
+                workoutInteractor.getById(workoutId, userId.value)
             }
 
             result.onSuccess { workout ->
@@ -427,7 +423,7 @@ class EditWorkoutViewModel @Inject constructor(
             }
 
             Timber.d("ADD-EXERCISE-DEBUG: Adding exercise $exerciseLibraryId to workout ${currentData.originalWorkout.id.value}")
-            val result = workoutCommandUseCase.addExercise(
+            val result = workoutInteractor.addExercise(
                 workoutId = currentData.originalWorkout.id,
                 exerciseLibraryId = exerciseLibraryId,
                 initialSets = 3
@@ -736,7 +732,7 @@ class EditWorkoutViewModel @Inject constructor(
                 )
 
                 val result = if (isTemplate) {
-                    templateCommandUseCase.updateFromEditedWorkout(updatedWorkout)
+                    templateInteractor.updateFromEditedWorkout(updatedWorkout)
                 } else {
                     workoutRepository.updateWorkout(updatedWorkout)
                 }
@@ -748,9 +744,9 @@ class EditWorkoutViewModel @Inject constructor(
                     )
 
                     val readBackResult = if (isTemplate) {
-                        templateQueryUseCase.getById(savedWorkout.id.value, savedWorkout.userId)
+                        templateInteractor.getById(savedWorkout.id.value, savedWorkout.userId)
                     } else {
-                        workoutQueryUseCase.getById(savedWorkout.id, savedWorkout.userId)
+                        workoutInteractor.getById(savedWorkout.id, savedWorkout.userId)
                     }
 
                     readBackResult.onSuccess { reloadedWorkout ->

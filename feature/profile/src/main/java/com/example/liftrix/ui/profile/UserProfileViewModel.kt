@@ -1,17 +1,15 @@
 package com.example.liftrix.ui.profile
 
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
+import com.example.liftrix.domain.interactor.social.SocialEngagementInteractor
+import com.example.liftrix.domain.interactor.social.SocialProfileInteractor
+import com.example.liftrix.domain.interactor.social.SocialRelationshipInteractor
 import com.example.liftrix.domain.model.social.PublicUserProfile
 import com.example.liftrix.domain.model.social.FollowStatus
-import com.example.liftrix.domain.usecase.social.SocialProfileQueryUseCase
 import com.example.liftrix.domain.usecase.social.GetPublicProfileRequest
-import com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase
 import com.example.liftrix.domain.usecase.social.FollowAction
 import com.example.liftrix.domain.model.social.ReportReason
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.social.PostEngagementUseCase
-import com.example.liftrix.domain.usecase.social.RecordShareUseCase
-import com.example.liftrix.domain.usecase.social.CopyWorkoutFromPostUseCase
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -50,19 +48,17 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class UserProfileViewModel @Inject constructor(
-    private val authQueryUseCase: AuthQueryUseCase,
-    private val socialProfileQueryUseCase: SocialProfileQueryUseCase,
-    private val socialRelationshipUseCase: SocialRelationshipUseCase,
+    private val authInteractor: AuthInteractor,
+    private val socialProfileInteractor: SocialProfileInteractor,
+    private val socialRelationshipInteractor: SocialRelationshipInteractor,
     private val platformShareAdapter: PlatformShareAdapter,
-    private val postEngagementUseCase: PostEngagementUseCase,
-    private val recordShareUseCase: RecordShareUseCase,
-    private val copyWorkoutFromPostUseCase: CopyWorkoutFromPostUseCase
+    private val socialEngagementInteractor: SocialEngagementInteractor
 ) : ModernBaseViewModel<UserProfileUiState>(initialState = UserProfileUiState()) {
     
     // Current user ID for follow operations
     private val currentUserId = flow {
         try {
-            val userId = authQueryUseCase(waitForAuth = false).fold(
+            val userId = authInteractor.currentUser(waitForAuth = false).fold(
                 onSuccess = { it },
                 onFailure = { null }
             )
@@ -112,7 +108,7 @@ class UserProfileViewModel @Inject constructor(
                 Timber.d("Loading profile for user: $userId (forceRefresh: $forceRefresh)")
                 
                 // Load profile data
-                val profileResult = socialProfileQueryUseCase.getPublicProfile(GetPublicProfileRequest(
+                val profileResult = socialProfileInteractor.getPublicProfile(GetPublicProfileRequest(
                     profileUserId = userId,
                     trackView = true
                 ))
@@ -187,7 +183,7 @@ class UserProfileViewModel @Inject constructor(
                 
                 Timber.d("Executing follow action: $action for user: ${profile.userId}")
 
-                val result = socialRelationshipUseCase.followAction(
+                val result = socialRelationshipInteractor.followAction(
                     targetUserId = profile.userId,
                     action = action,
                     context = "USER_PROFILE_VIEW"
@@ -256,7 +252,7 @@ class UserProfileViewModel @Inject constructor(
             try {
                 updateState { it.copy(isFollowActionLoading = true) }
 
-                val result = socialRelationshipUseCase.blockUser(
+                val result = socialRelationshipInteractor.blockUser(
                     targetUserId = profile.userId,
                     shouldBlock = true
                 )
@@ -439,7 +435,7 @@ class UserProfileViewModel @Inject constructor(
             try {
                 updateState { it.copy(isLoading = true) }
 
-                val result = socialRelationshipUseCase.reportUser(
+                val result = socialRelationshipInteractor.reportUser(
                     targetUserId = profile.userId,
                     reason = reason,
                     description = description ?: "Reported from profile view"
@@ -641,7 +637,7 @@ class UserProfileViewModel @Inject constructor(
                 Timber.d("Optimistic like update for post $postId: $newLikedState")
 
                 // Execute like toggle
-                val result = postEngagementUseCase.toggleLike(postId)
+                val result = socialEngagementInteractor.toggleLike(postId)
                 
                 result.fold(
                     onSuccess = { actualLikeState ->
@@ -732,7 +728,7 @@ class UserProfileViewModel @Inject constructor(
                 Timber.d("Optimistic save update for post $postId: $newSavedState")
 
                 // Execute save toggle
-                val result = postEngagementUseCase.toggleSave(postId)
+                val result = socialEngagementInteractor.toggleSave(postId)
                 
                 result.fold(
                     onSuccess = { actualSaveState ->
@@ -798,7 +794,7 @@ class UserProfileViewModel @Inject constructor(
             try {
                 updateState { it.copy(engagementLoadingPosts = it.engagementLoadingPosts + postId) }
 
-                val result = postEngagementUseCase.createComment(postId, content)
+                val result = socialEngagementInteractor.createComment(postId, content)
                 
                 result.fold(
                     onSuccess = { comment ->
@@ -850,7 +846,7 @@ class UserProfileViewModel @Inject constructor(
             try {
                 updateState { it.copy(engagementLoadingPosts = it.engagementLoadingPosts + postId) }
                 
-                val result = recordShareUseCase(postId, shareMethod)
+                val result = socialEngagementInteractor.recordShare(postId, shareMethod)
                 
                 result.fold(
                     onSuccess = {
@@ -902,7 +898,7 @@ class UserProfileViewModel @Inject constructor(
             try {
                 updateState { it.copy(engagementLoadingPosts = it.engagementLoadingPosts + postId) }
                 
-                val result = copyWorkoutFromPostUseCase(postId)
+                val result = socialEngagementInteractor.copyWorkoutFromPost(postId)
                 
                 result.fold(
                     onSuccess = { templateId ->
@@ -955,7 +951,7 @@ class UserProfileViewModel @Inject constructor(
             try {
                 updateState { it.copy(engagementLoadingPosts = it.engagementLoadingPosts + postId) }
                 
-                val result = postEngagementUseCase.getEngagementStatus(postId)
+                val result = socialEngagementInteractor.getEngagementStatus(postId)
                 
                 result.fold(
                     onSuccess = { engagementStatus ->

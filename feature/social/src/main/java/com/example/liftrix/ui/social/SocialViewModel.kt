@@ -6,15 +6,14 @@ import com.example.liftrix.domain.model.Friend
 import com.example.liftrix.domain.model.SharedWorkout
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.ui.common.event.ViewModelEvent
+import com.example.liftrix.domain.interactor.social.SocialDiscoveryInteractor
+import com.example.liftrix.domain.interactor.social.SocialRelationshipInteractor
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.social.FollowRepository
 import com.example.liftrix.domain.model.social.FollowRelationship
 import com.example.liftrix.domain.model.FriendStatus
 import com.example.liftrix.domain.service.AnalyticsService
-import com.example.liftrix.domain.usecase.social.SocialSearchUseCase
 import com.example.liftrix.domain.usecase.social.SearchUsersRequest
-import com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase
-import com.example.liftrix.domain.usecase.social.FeedGeneratorUseCase
 import com.example.liftrix.domain.usecase.social.FollowAction
 import com.example.liftrix.domain.model.social.SearchFilters
 import androidx.paging.PagingData
@@ -43,9 +42,8 @@ class SocialViewModel @Inject constructor(
     private val followRepository: FollowRepository,
     private val authRepository: AuthRepository,
     private val analyticsService: AnalyticsService,
-    private val socialSearchUseCase: SocialSearchUseCase,
-    private val feedGeneratorUseCase: FeedGeneratorUseCase,
-    private val socialRelationshipUseCase: SocialRelationshipUseCase
+    private val socialDiscoveryInteractor: SocialDiscoveryInteractor,
+    private val socialRelationshipInteractor: SocialRelationshipInteractor
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SocialUiState())
@@ -60,7 +58,7 @@ class SocialViewModel @Inject constructor(
         authRepository.currentUser
             .filterNotNull()
             .flatMapLatest { user ->
-                feedGeneratorUseCase(userId = user.uid, includeDiscovery = false)
+                socialDiscoveryInteractor.generateFeed(userId = user.uid, includeDiscovery = false)
             }
             .cachedIn(viewModelScope)
 
@@ -267,7 +265,7 @@ class SocialViewModel @Inject constructor(
                 useCache = true
             )
             
-            socialSearchUseCase.searchUsers(request).fold(
+            socialDiscoveryInteractor.searchUsers(request).fold(
                 onSuccess = { result ->
                     val users = result.users.map { searchResult ->
                         User(
@@ -439,7 +437,7 @@ class SocialViewModel @Inject constructor(
         viewModelScope.launch {
             val currentUserId = authRepository.getCurrentUserId() ?: return@launch
 
-            socialRelationshipUseCase.followAction(
+            socialRelationshipInteractor.followAction(
                 targetUserId = targetUserId,
                 action = FollowAction.FOLLOW,
                 context = "SOCIAL_FEED"
@@ -644,13 +642,13 @@ class SocialViewModel @Inject constructor(
                 Timber.d("DEBUG_FOLLOW_ACTION: Starting follow action for userId: $userId")
                 updateState { copy(isLoading = true) }
                 
-                val result = socialRelationshipUseCase.followAction(
+                val result = socialRelationshipInteractor.followAction(
                     targetUserId = userId,
                     action = FollowAction.FOLLOW,
                     context = "SOCIAL_SCREEN"
                 )
                 
-                Timber.d("DEBUG_FOLLOW_ACTION: socialRelationshipUseCase.follow result: ${if (result.isSuccess) "SUCCESS" else "FAILURE"}")
+                Timber.d("DEBUG_FOLLOW_ACTION: socialRelationshipInteractor.follow result: ${if (result.isSuccess) "SUCCESS" else "FAILURE"}")
                 
                 result.fold(
                     onSuccess = { followStatus ->
@@ -768,7 +766,7 @@ class SocialViewModel @Inject constructor(
                     useCache = true
                 )
                 
-                socialSearchUseCase.searchUsers(request).fold(
+                socialDiscoveryInteractor.searchUsers(request).fold(
                     onSuccess = { result ->
                         val users = result.users.map { searchResult ->
                             User(

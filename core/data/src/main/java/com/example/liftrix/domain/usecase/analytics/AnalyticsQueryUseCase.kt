@@ -5,6 +5,7 @@ import com.example.liftrix.data.local.dao.ExerciseSetDao
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.analytics.TimeRangeType
+import com.example.liftrix.domain.model.analytics.StrengthForecastResult
 import com.example.liftrix.domain.model.analytics.VolumeCalendarData
 import com.example.liftrix.domain.model.analytics.VolumeGrouping
 import com.example.liftrix.domain.model.common.LiftrixResult
@@ -13,6 +14,7 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.ProgressStatsRepository
 import com.example.liftrix.domain.repository.DashboardData
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
+import com.example.liftrix.domain.service.analytics.StrengthForecastService
 import com.example.liftrix.service.AnalyticsEngine
 import com.example.liftrix.service.ProgressDataService
 import kotlinx.coroutines.Dispatchers
@@ -99,7 +101,8 @@ class AnalyticsQueryUseCase @Inject constructor(
     private val progressStatsRepository: ProgressStatsRepository,
     private val workoutRepository: WorkoutRepository,
     private val analyticsEngine: AnalyticsEngine,
-    private val widgetCalculatorFactory: com.example.liftrix.domain.service.widget.WidgetCalculatorFactory
+    private val widgetCalculatorFactory: com.example.liftrix.domain.service.widget.WidgetCalculatorFactory,
+    private val strengthForecastService: StrengthForecastService
 ) {
     // ========================================
     // 🚀 CRITICAL-002 Phase 3: Analytics Caching Layer
@@ -392,6 +395,50 @@ class AnalyticsQueryUseCase @Inject constructor(
 
             Timber.d("1RM progression retrieved - ${oneRmData.exerciseProgressions.size} exercises")
             oneRmData
+        }
+    }
+
+    suspend fun getStrengthForecast(
+        userId: String,
+        selectedExerciseId: String? = null,
+        historyDays: Int = StrengthForecastService.DEFAULT_HISTORY_DAYS,
+        forecastDays: Int = StrengthForecastService.DEFAULT_FORECAST_DAYS
+    ): LiftrixResult<StrengthForecastResult> = withContext(Dispatchers.IO) {
+        return@withContext liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.BusinessLogicError(
+                    code = "STRENGTH_FORECAST_FAILED",
+                    errorMessage = "Failed to retrieve strength forecast: ${throwable.message}",
+                    analyticsContext = mapOf(
+                        "operation" to "getStrengthForecast",
+                        "userId" to userId,
+                        "selectedExerciseId" to (selectedExerciseId ?: "ALL")
+                    )
+                )
+            }
+        ) {
+            require(userId.isNotBlank()) { "User ID cannot be blank" }
+            val clampedHistoryDays = historyDays.coerceIn(7, 90)
+            val clampedForecastDays = forecastDays.coerceIn(7, 30)
+            val cacheKey = cacheKey(userId, "STRENGTH_FORECAST", selectedExerciseId ?: "ALL", clampedHistoryDays, clampedForecastDays)
+            getCached<StrengthForecastResult>(cacheKey)?.let { return@liftrixCatching it }
+
+            val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+            val startDate = today.minus(DatePeriod(days = clampedHistoryDays - 1))
+            val samples = exerciseSetDao.getStrengthForecastSetSamples(
+                userId = userId,
+                startDate = startDate.toString(),
+                endDate = today.toString()
+            )
+            val forecast = strengthForecastService.buildForecast(
+                samples = samples,
+                today = today,
+                selectedExerciseId = selectedExerciseId,
+                historyDays = clampedHistoryDays,
+                forecastDays = clampedForecastDays
+            )
+            putCache(cacheKey, forecast, CacheTTL.ONE_RM_PROGRESSION)
+            forecast
         }
     }
 

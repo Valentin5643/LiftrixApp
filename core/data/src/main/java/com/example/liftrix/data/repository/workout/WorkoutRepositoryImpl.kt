@@ -1383,26 +1383,22 @@ class WorkoutRepositoryImpl @Inject constructor(
             val startDateString = startDate.toString()
             val endDateString = endDate.toString()
             
-            val workoutEntities = workoutDao.getCompletedWorkoutsInDateRangeForUser(
+            val workoutMetrics = workoutDao.getCompletedWorkoutMetricsInDateRange(
                 userId = userId,
                 startDate = startDateString,
                 endDate = endDateString
             )
-            val exerciseCountsByWorkoutId = exerciseDao.getCompletedExerciseCountsByWorkout(
-                userId = userId,
-                startDate = startDateString,
-                endDate = endDateString
-            ).associate { result ->
-                result.workout_id to result.exercise_count
-            }
             
-            workoutEntities.map { entity ->
+            workoutMetrics.map { row ->
                 WorkoutData(
-                    id = entity.id,
-                    date = kotlinx.datetime.LocalDate.parse(entity.date.toString()),
-                    durationMinutes = calculateDurationMinutes(entity.startTime, entity.endTime),
-                    exerciseCount = exerciseCountsByWorkoutId[entity.id]
-                        ?: calculateExerciseCount(entity.exercisesJson)
+                    id = row.workoutId,
+                    date = kotlinx.datetime.LocalDate.parse(row.workoutDate),
+                    durationMinutes = row.durationMinutes,
+                    exerciseCount = if (row.exerciseCount > 0) {
+                        row.exerciseCount
+                    } else {
+                        calculateExerciseCount(row.exercisesJson)
+                    }
                 )
             }
         }.fold(

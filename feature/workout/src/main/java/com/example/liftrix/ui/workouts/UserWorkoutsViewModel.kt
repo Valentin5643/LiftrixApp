@@ -11,9 +11,9 @@ import com.example.liftrix.domain.model.social.PostVisibility
 import com.example.liftrix.domain.model.social.PostExercise
 import com.example.liftrix.domain.model.social.WorkoutSummary as SocialWorkoutSummary
 import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.repository.social.EngagementRepository
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.sharing.ShareToExternalPlatformUseCase
 import com.example.liftrix.domain.usecase.sharing.SharePlatform
 import com.example.liftrix.domain.usecase.sharing.ShareContentType
@@ -75,7 +75,7 @@ sealed class UserWorkoutsEvent {
 class UserWorkoutsViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository,
     private val engagementRepository: EngagementRepository,
-    private val authQueryUseCase: AuthQueryUseCase,
+    private val authInteractor: AuthInteractor,
     private val shareToExternalPlatformUseCase: ShareToExternalPlatformUseCase
 ) : ModernBaseViewModel<UserWorkoutsUiState>(
     initialState = UserWorkoutsUiState()
@@ -110,7 +110,7 @@ class UserWorkoutsViewModel @Inject constructor(
     
     private fun loadUserData() {
         viewModelScope.launch {
-            authQueryUseCase(waitForAuth = false).fold(
+            authInteractor.currentUser(waitForAuth = false).fold(
                 onSuccess = { userId ->
                     _uiState.update { it.copy(userId = userId.value) }
                 },
@@ -128,7 +128,7 @@ class UserWorkoutsViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
 
             try {
-                authQueryUseCase(waitForAuth = false).fold(
+                authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { userId ->
                         // 🔍 ENHANCED LOGGING: Track workout loading
                         Timber.d("[WORKOUTS-DEBUG] Loading workouts for user: ${userId.value}")
@@ -332,7 +332,7 @@ class UserWorkoutsViewModel @Inject constructor(
     
     fun shareWorkout(workoutId: String) {
         viewModelScope.launch {
-            authQueryUseCase(waitForAuth = false).fold(
+            authInteractor.currentUser(waitForAuth = false).fold(
                 onSuccess = { userId ->
                     // Get the workout details for sharing
                     val workout = _uiState.value.workoutPosts.find { it.id == workoutId }

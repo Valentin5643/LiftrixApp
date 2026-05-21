@@ -2,15 +2,19 @@ package com.example.liftrix.service.export
 
 import android.graphics.pdf.PdfDocument
 import android.graphics.Canvas
+import android.graphics.DashPathEffect
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Typeface
 import android.graphics.Color
+import com.example.liftrix.domain.model.analytics.StrengthForecastPointType
 import com.example.liftrix.domain.model.analytics.ProgressMetrics
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.export.ProgressReportData
+import kotlinx.datetime.daysUntil
 import timber.log.Timber
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
@@ -155,6 +159,7 @@ class PdfReportGenerator @Inject constructor() {
                 drawProgressConsistencyPage(pdfDocument, pageInfo, reportData)
                 drawProgressRecordsPage(pdfDocument, pageInfo, reportData)
                 drawProgressCoachPage(pdfDocument, pageInfo, reportData)
+                drawProgressStrengthForecastPage(pdfDocument, pageInfo, reportData)
 
                 val outputStream = ByteArrayOutputStream()
                 pdfDocument.writeTo(outputStream)
@@ -191,7 +196,7 @@ class PdfReportGenerator @Inject constructor() {
             val metrics = listOf(
                 "Sessions" to sessionLabel,
                 "Weighted volume" to formatVolumeSummary(data),
-                "Active days" to data.summary.activeTrainingDays.toString(),
+                "Unique active days" to data.summary.activeTrainingDays.toString(),
                 "PR events" to data.summary.newPersonalRecords.toString(),
                 "Best streak" to "${data.summary.bestStreakDays} days",
                 "1RM progress" to data.summary.oneRmStatusLabel
@@ -255,7 +260,7 @@ class PdfReportGenerator @Inject constructor() {
             y = drawTable(
                 canvas,
                 y,
-                listOf("Week", "Sessions", "Active days", "Weighted volume", "Reps", "Sets"),
+                listOf("Week", "Sessions", "Unique active days", "Weighted volume", "Reps", "Sets"),
                 data.weeklyVolumeRows.map {
                     listOf(
                         it.weekLabel,
@@ -301,6 +306,133 @@ class PdfReportGenerator @Inject constructor() {
         }
     }
 
+    private fun drawProgressStrengthForecastPage(
+        pdfDocument: PdfDocument,
+        pageInfo: PdfDocument.PageInfo,
+        data: ProgressReportData
+    ) {
+        val page = pdfDocument.startPage(pageInfo)
+        try {
+            val canvas = page.canvas
+            drawProgressPageChrome(canvas, "Strength Forecast", 7)
+            var y = MARGIN_TOP + 55f
+            val section = data.strengthForecast
+            y = drawWrappedText(
+                canvas,
+                section?.generatedForExerciseName?.let { "Forecast exercise: $it" } ?: "Strength Forecast",
+                MARGIN_LEFT,
+                y,
+                CONTENT_WIDTH,
+                createPaint(HEADING_SIZE, TEXT_PRIMARY, Typeface.DEFAULT_BOLD),
+                24f
+            )
+            y += 12f
+            val forecast = section?.forecast
+            if (forecast == null || forecast.forecastPoints.isEmpty()) {
+                drawWrappedText(
+                    canvas,
+                    section?.message ?: "Not enough data to generate forecast",
+                    MARGIN_LEFT,
+                    y,
+                    CONTENT_WIDTH,
+                    createPaint(BODY_SIZE, TEXT_SECONDARY, Typeface.DEFAULT),
+                    18f
+                )
+                return
+            }
+
+            drawForecastGraph(canvas, forecast, y)
+            y += CHART_HEIGHT + 36f
+            drawWrappedText(
+                canvas,
+                forecast.summary.message,
+                MARGIN_LEFT,
+                y,
+                CONTENT_WIDTH,
+                createPaint(BODY_SIZE, TEXT_SECONDARY, Typeface.DEFAULT),
+                18f
+            )
+        } finally {
+            pdfDocument.finishPage(page)
+        }
+    }
+
+    private fun drawForecastGraph(
+        canvas: Canvas,
+        forecast: com.example.liftrix.domain.model.analytics.StrengthExerciseForecast,
+        yPosition: Float
+    ) {
+        val points = forecast.allPoints
+        if (points.isEmpty()) return
+        val left = MARGIN_LEFT
+        val top = yPosition
+        val width = CONTENT_WIDTH
+        val height = CHART_HEIGHT
+        val values = points.map { it.estimatedOneRmKg }
+        val minValue = (values.minOrNull() ?: 0.0) - 2.5
+        val maxValue = (values.maxOrNull() ?: 1.0) + 2.5
+        val valueRange = (maxValue - minValue).takeIf { it > 0.0 } ?: 1.0
+        val firstDate = points.minOf { it.date }
+        val lastDate = points.maxOf { it.date }
+        val daySpan = firstDate.daysUntil(lastDate).coerceAtLeast(1)
+
+        fun pointOffset(point: com.example.liftrix.domain.model.analytics.StrengthForecastPoint): android.graphics.PointF {
+            val x = left + width * (firstDate.daysUntil(point.date).toFloat() / daySpan.toFloat())
+            val y = top + height * (1f - ((point.estimatedOneRmKg - minValue) / valueRange).toFloat())
+            return android.graphics.PointF(x, y)
+        }
+
+        val axisPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFE0E0E0.toInt()
+            strokeWidth = 1.5f
+            style = Paint.Style.STROKE
+        }
+        canvas.drawLine(left, top, left, top + height, axisPaint)
+        canvas.drawLine(left, top + height, left + width, top + height, axisPaint)
+
+        val historyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = PRIMARY_COLOR
+            strokeWidth = 3f
+            style = Paint.Style.STROKE
+        }
+        val forecastPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = PRIMARY_COLOR
+            strokeWidth = 3f
+            style = Paint.Style.STROKE
+            pathEffect = DashPathEffect(floatArrayOf(14f, 8f), 0f)
+        }
+        drawForecastPath(canvas, points.filter { it.type == StrengthForecastPointType.HISTORICAL }, historyPaint, ::pointOffset)
+        drawForecastPath(canvas, points.filter { it.type == StrengthForecastPointType.FORECAST }, forecastPaint, ::pointOffset)
+
+        val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = PRIMARY_COLOR }
+        points.forEach { point ->
+            val offset = pointOffset(point)
+            if (point.type == StrengthForecastPointType.HISTORICAL) {
+                dotPaint.style = Paint.Style.FILL
+                canvas.drawCircle(offset.x, offset.y, 4f, dotPaint)
+            } else {
+                dotPaint.style = Paint.Style.STROKE
+                dotPaint.strokeWidth = 2f
+                canvas.drawCircle(offset.x, offset.y, 4f, dotPaint)
+            }
+        }
+    }
+
+    private fun drawForecastPath(
+        canvas: Canvas,
+        points: List<com.example.liftrix.domain.model.analytics.StrengthForecastPoint>,
+        paint: Paint,
+        pointOffset: (com.example.liftrix.domain.model.analytics.StrengthForecastPoint) -> android.graphics.PointF
+    ) {
+        if (points.isEmpty()) return
+        val path = Path()
+        points.forEachIndexed { index, point ->
+            val offset = pointOffset(point)
+            if (index == 0) path.moveTo(offset.x, offset.y) else path.lineTo(offset.x, offset.y)
+        }
+        canvas.drawPath(path, paint)
+    }
+
     private fun drawProgressConsistencyPage(
         pdfDocument: PdfDocument,
         pageInfo: PdfDocument.PageInfo,
@@ -314,7 +446,7 @@ class PdfReportGenerator @Inject constructor() {
             y = drawKeyValue(canvas, "Consistency score", "${data.summary.consistencyScore} / 100", y)
             y = drawKeyValue(canvas, "Score window", data.summary.consistencyWindowLabel, y)
             y = drawKeyValue(canvas, "Most active day", data.summary.mostActiveDay ?: "Not enough data", y)
-            y = drawKeyValue(canvas, "Active days", data.summary.activeTrainingDays.toString(), y)
+            y = drawKeyValue(canvas, "Unique active days", data.summary.activeTrainingDays.toString(), y)
             y = drawKeyValue(canvas, "Rest days", data.summary.restDays.toString(), y)
             y = drawKeyValue(canvas, "Average workouts per week", formatDecimal(data.summary.averageWorkoutsPerWeek, 1), y)
             data.summary.activeWeekAverageWorkouts?.let { activeAverage ->
@@ -331,7 +463,7 @@ class PdfReportGenerator @Inject constructor() {
             y = drawTable(
                 canvas,
                 y,
-                listOf("Week", "Sessions", "Active days"),
+                listOf("Week", "Sessions", "Unique active days"),
                 data.consistencyRows.map {
                     listOf(it.weekLabel, it.workoutCount.toString(), it.activeDays.toString())
                 }.ifEmpty { listOf(listOf("No consistency data", "-", "-")) }
@@ -378,13 +510,14 @@ class PdfReportGenerator @Inject constructor() {
             y = drawTable(
                 canvas,
                 y,
-                listOf("Date", "Workout", "Duration", "Sync"),
+                listOf("Date", "Workout", "Duration", "Load", "Sets"),
                 data.workoutRows.map {
                     listOf(
                         formatReportDate(it.date),
-                        it.name,
+                        formatWorkoutRowName(it.name, it.workoutId),
                         it.durationMinutes?.let { minutes -> "$minutes min" } ?: "-",
-                        if (it.synced) "Synced" else "Pending"
+                        formatWorkoutRowLoad(it.volumeKg, it.repCount),
+                        it.setCount.takeIf { setCount -> setCount > 0 }?.toString() ?: "-"
                     )
                 }.ifEmpty { listOf(listOf("Workout list not included", "-", "-", "-")) },
                 maxRows = 8
@@ -616,6 +749,19 @@ class PdfReportGenerator @Inject constructor() {
 
     private fun formatKg(value: Double, digits: Int): String {
         return "${formatDecimal(value, digits)} kg"
+    }
+
+    private fun formatWorkoutRowName(name: String, workoutId: String): String {
+        val suffix = workoutId.takeIf { it.isNotBlank() }?.take(8) ?: return name
+        return "$name #$suffix"
+    }
+
+    private fun formatWorkoutRowLoad(volumeKg: Double, repCount: Int): String {
+        return when {
+            volumeKg > 0.0 -> formatKg(volumeKg, 0)
+            repCount > 0 -> "$repCount reps"
+            else -> "-"
+        }
     }
 
     private fun formatWeightedVolume(weightedVolumeKg: Double, reps: Int): String {

@@ -148,6 +148,8 @@ import com.example.liftrix.data.local.entity.UserConsentEntity
 import com.example.liftrix.data.local.entity.AccountRestrictionEntity
 import com.example.liftrix.data.local.entity.ModerationActionEntity
 import com.example.liftrix.data.local.entity.TemplateShareEventEntity
+import com.example.liftrix.data.local.view.CompletedWorkoutMetricsView
+import com.example.liftrix.data.local.view.ExerciseSetPerformanceView
 
 
 
@@ -223,7 +225,11 @@ import com.example.liftrix.data.local.entity.TemplateShareEventEntity
         ModerationActionEntity::class,
         TemplateShareEventEntity::class,
     ],
-    version = 9,
+    views = [
+        CompletedWorkoutMetricsView::class,
+        ExerciseSetPerformanceView::class,
+    ],
+    version = 10,
     exportSchema = true
 )
 @TypeConverters(

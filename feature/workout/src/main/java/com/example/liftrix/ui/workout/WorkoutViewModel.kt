@@ -7,15 +7,13 @@ import com.example.liftrix.domain.repository.workout.WorkoutSyncStatusRepository
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutTemplatePreview
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
+import com.example.liftrix.domain.interactor.workout.FolderInteractor
+import com.example.liftrix.domain.interactor.workout.TemplateInteractor
+import com.example.liftrix.domain.interactor.workout.WorkoutInteractor
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.template.TemplateRepository
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.repository.FolderRepository
-import com.example.liftrix.domain.usecase.workout.WorkoutCommandUseCase
-import com.example.liftrix.domain.usecase.folder.FolderOperationsUseCase
-import com.example.liftrix.domain.usecase.analytics.LogWorkoutEventUseCase
-import com.example.liftrix.domain.usecase.template.TemplateQueryUseCase
-import com.example.liftrix.domain.usecase.template.TemplateCommandUseCase
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.analytics.UxMetricsTracker
 import com.example.liftrix.analytics.TaskCompletionTracker
@@ -58,13 +56,11 @@ class WorkoutViewModel @Inject constructor(
     private val workoutTemplateRepository: TemplateRepository,
     private val folderRepository: FolderRepository,
     private val authRepository: AuthRepository,
-    private val authQueryUseCase: AuthQueryUseCase,
-    private val workoutCommandUseCase: WorkoutCommandUseCase,
-    private val folderOperationsUseCase: FolderOperationsUseCase,
-    private val templateQueryUseCase: TemplateQueryUseCase,
-    private val templateCommandUseCase: TemplateCommandUseCase,
+    private val authInteractor: AuthInteractor,
+    private val workoutInteractor: WorkoutInteractor,
+    private val folderInteractor: FolderInteractor,
+    private val templateInteractor: TemplateInteractor,
     private val syncStatusRepository: SyncStatusRepository,
-    private val logWorkoutEventUseCase: LogWorkoutEventUseCase,
     private val analyticsService: AnalyticsService,
     private val uxMetricsTracker: UxMetricsTracker,
     private val taskCompletionTracker: TaskCompletionTracker,
@@ -269,8 +265,8 @@ class WorkoutViewModel @Inject constructor(
 
                         // Start combined observation of folders and templates
                         combine(
-                            folderOperationsUseCase.invoke(user.uid),
-                            templateQueryUseCase(user.uid).map { Result.success(it) }
+                            folderInteractor(user.uid),
+                            templateInteractor(user.uid).map { Result.success(it) }
                         ) { foldersResult, templatesResult ->
                             // Process both results together
                             when {
@@ -362,8 +358,8 @@ class WorkoutViewModel @Inject constructor(
                     Timber.tag("StartupRestoreFix").d(
                         "[TEMPLATE-LOAD] operation=TEMPLATE_VIEWMODEL_RESTORE_EVENT_RECEIVED screen=WorkoutViewModel userId=${event.userId} restoredCount=${event.templateCount} restoreFinishedAt=${event.finishedAtMs} timestamp=${System.currentTimeMillis()}"
                     )
-                    val templates = templateQueryUseCase(event.userId).first()
-                    val folders = folderOperationsUseCase.invoke(event.userId).first().getOrElse {
+                    val templates = templateInteractor(event.userId).first()
+                    val folders = folderInteractor(event.userId).first().getOrElse {
                         Timber.e(it, "Failed to load folders after template restore for user ${event.userId}")
                         currentWorkoutData().folders
                     }
@@ -462,11 +458,11 @@ class WorkoutViewModel @Inject constructor(
 
             // Track previous status for analytics
             val previousStatus = workout.status
-            val result = workoutCommandUseCase.saveWorkout(workout)
+            val result = workoutInteractor.saveWorkout(workout)
 
             // Log analytics events based on workout status changes
             result.onSuccess {
-                logWorkoutEventUseCase.logWorkoutStatusChange(workout, previousStatus)
+                workoutInteractor.logWorkoutStatusChange(workout, previousStatus)
                     .onFailure { exception ->
                         Timber.e(exception, "Failed to log workout analytics event")
                         // Don't fail the save operation if analytics fails
@@ -494,7 +490,7 @@ class WorkoutViewModel @Inject constructor(
         viewModelScope.launch {
             updateState { WorkoutUiState.Loading }
 
-            val userIdResult = authQueryUseCase(waitForAuth = false)
+            val userIdResult = authInteractor.currentUser(waitForAuth = false)
             userIdResult.onSuccess { userId ->
                 val result = workoutSyncStatusRepository.syncNowForUser(userId.value)
 
@@ -534,7 +530,7 @@ class WorkoutViewModel @Inject constructor(
         viewModelScope.launch {
             // Note: No loading state since showLoading was false in original
 
-            val userIdResult = authQueryUseCase(waitForAuth = false)
+            val userIdResult = authInteractor.currentUser(waitForAuth = false)
             userIdResult.onSuccess { userId ->
                 val result = workoutSyncStatusRepository.getUnsyncedCountForUser(userId.value)
 
@@ -606,7 +602,7 @@ class WorkoutViewModel @Inject constructor(
     fun selectFolder(folderId: String?) {
         viewModelScope.launch {
             try {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it.value },
                     onFailure = {
                         Timber.e(it, "Failed to get user ID")
@@ -661,7 +657,7 @@ class WorkoutViewModel @Inject constructor(
     private fun refreshFolderState() {
         viewModelScope.launch {
             try {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it.value },
                     onFailure = {
                         Timber.e(it, "Failed to get user ID")
@@ -685,7 +681,7 @@ class WorkoutViewModel @Inject constructor(
         viewModelScope.launch {
             updateState { WorkoutUiState.Loading }
 
-            val userIdResult = authQueryUseCase(waitForAuth = false)
+            val userIdResult = authInteractor.currentUser(waitForAuth = false)
             userIdResult.onSuccess { userId ->
                 if (userId.value.isBlank()) {
                     val error = LiftrixError.UnknownError(
@@ -697,7 +693,7 @@ class WorkoutViewModel @Inject constructor(
                     return@launch
                 }
 
-                val result = folderOperationsUseCase.create(userId.value, folderName)
+                val result = folderInteractor.create(userId.value, folderName)
 
                 result.onSuccess { folder ->
                     Timber.d("New folder created: ${folder.name} (${folder.id.value})")
@@ -738,7 +734,7 @@ class WorkoutViewModel @Inject constructor(
         viewModelScope.launch {
             updateState { WorkoutUiState.Loading }
 
-            val result = templateCommandUseCase.moveToFolder(workoutTemplate, targetFolderId)
+            val result = templateInteractor.moveToFolder(workoutTemplate, targetFolderId)
 
             result.onSuccess { updatedTemplate ->
                 Timber.d("Workout '${updatedTemplate.name}' moved to folder '$targetFolderId'")
@@ -766,7 +762,7 @@ class WorkoutViewModel @Inject constructor(
             val currentData = currentWorkoutData()
             updateState { WorkoutUiState.Loading }
 
-            val result = templateCommandUseCase.delete(workoutTemplate.id)
+            val result = templateInteractor.delete(workoutTemplate.id)
 
             result.onSuccess {
                 Timber.d("Workout '${workoutTemplate.name}' deleted successfully")
@@ -793,7 +789,7 @@ class WorkoutViewModel @Inject constructor(
         viewModelScope.launch {
             updateState { WorkoutUiState.Loading }
 
-            val userIdResult = authQueryUseCase(waitForAuth = false)
+            val userIdResult = authInteractor.currentUser(waitForAuth = false)
             userIdResult.onSuccess { userId ->
                 if (userId.value.isBlank()) {
                     val error = LiftrixError.UnknownError(
@@ -805,7 +801,7 @@ class WorkoutViewModel @Inject constructor(
                     return@launch
                 }
 
-                val result = folderOperationsUseCase.delete(userId.value, folder.id)
+                val result = folderInteractor.delete(userId.value, folder.id)
 
                 result.onSuccess {
                     Timber.d("Folder '${folder.name}' deleted successfully")
@@ -845,7 +841,7 @@ class WorkoutViewModel @Inject constructor(
         viewModelScope.launch {
             updateState { WorkoutUiState.Loading }
 
-            val userIdResult = authQueryUseCase(waitForAuth = false)
+            val userIdResult = authInteractor.currentUser(waitForAuth = false)
             userIdResult.onSuccess { userId ->
                 if (userId.value.isBlank()) {
                     val error = LiftrixError.UnknownError(
@@ -938,7 +934,7 @@ class WorkoutViewModel @Inject constructor(
         viewModelScope.launch {
             updateState { WorkoutUiState.Loading }
 
-            val userIdResult = authQueryUseCase(waitForAuth = false)
+            val userIdResult = authInteractor.currentUser(waitForAuth = false)
             userIdResult.onSuccess { userId ->
                 if (userId.value.isBlank()) {
                     val error = LiftrixError.UnknownError(
@@ -973,7 +969,7 @@ class WorkoutViewModel @Inject constructor(
                     return@launch
                 }
 
-                val result = folderOperationsUseCase.reorder(userId.value, currentFolders, orderedFolderIds)
+                val result = folderInteractor.reorder(userId.value, currentFolders, orderedFolderIds)
 
                 result.onSuccess { reorderedFolders ->
                     // ✅ RACE CONDITION FIX: Use cached state instead of re-checking UI state

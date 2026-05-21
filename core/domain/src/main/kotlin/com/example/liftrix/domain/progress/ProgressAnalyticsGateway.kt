@@ -2,6 +2,7 @@ package com.example.liftrix.domain.progress
 
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.DashboardConfiguration
+import com.example.liftrix.domain.model.analytics.StrengthForecastResult
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.analytics.WidgetPreferences
 import com.example.liftrix.domain.model.common.LiftrixResult
@@ -42,6 +43,13 @@ interface ProgressDetailAnalyticsGateway {
         timeRange: TimeRangeType,
         includeEstimated: Boolean = true
     ): LiftrixResult<OneRmProgressionData>
+
+    suspend fun getStrengthForecast(
+        userId: String,
+        selectedExerciseId: String? = null,
+        historyDays: Int = 30,
+        forecastDays: Int = 14
+    ): LiftrixResult<StrengthForecastResult>
 
     suspend fun getWorkoutFrequency(userId: String, timeRange: TimeRangeType): LiftrixResult<WorkoutFrequencyData>
 

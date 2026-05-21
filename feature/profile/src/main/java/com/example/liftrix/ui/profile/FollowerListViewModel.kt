@@ -1,11 +1,11 @@
 package com.example.liftrix.ui.profile
 
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
+import com.example.liftrix.domain.interactor.social.SocialRelationshipInteractor
 import com.example.liftrix.domain.model.social.FollowRelationship
 import com.example.liftrix.domain.repository.social.FollowRepository
-import com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase
 import com.example.liftrix.domain.usecase.social.FollowAction
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -37,8 +37,8 @@ import javax.inject.Inject
 @HiltViewModel
 class FollowerListViewModel @Inject constructor(
     private val followRepository: FollowRepository,
-    private val socialRelationshipUseCase: SocialRelationshipUseCase,
-    private val authQueryUseCase: AuthQueryUseCase
+    private val socialRelationshipInteractor: SocialRelationshipInteractor,
+    private val authInteractor: AuthInteractor
 ) : ModernBaseViewModel<FollowerListUiState>(initialState = FollowerListUiState()) {
     
     // Search query flow with debouncing
@@ -47,7 +47,7 @@ class FollowerListViewModel @Inject constructor(
     // Current user ID for follow operations
     private val currentUserId = flow {
         try {
-            val userId = authQueryUseCase(waitForAuth = false).fold(
+            val userId = authInteractor.currentUser(waitForAuth = false).fold(
                 onSuccess = { it },
                 onFailure = { null }
             )
@@ -275,7 +275,7 @@ class FollowerListViewModel @Inject constructor(
                 
                 Timber.d("Toggling follow status: $action for user: $userId")
 
-                val result = socialRelationshipUseCase.followAction(
+                val result = socialRelationshipInteractor.followAction(
                     targetUserId = userId,
                     action = action
                 )

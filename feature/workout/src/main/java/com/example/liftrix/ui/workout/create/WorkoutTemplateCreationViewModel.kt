@@ -13,11 +13,11 @@ import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.model.TemplateExercise
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.exercise.ExerciseQueryUseCase
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
+import com.example.liftrix.domain.interactor.workout.ExerciseInteractor
+import com.example.liftrix.domain.interactor.workout.TemplateInteractor
+import com.example.liftrix.domain.interactor.workout.WorkoutInteractor
 import com.example.liftrix.domain.usecase.exercise.SearchableExercise
-import com.example.liftrix.domain.usecase.template.TemplateCommandUseCase
-import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
 import com.example.liftrix.domain.repository.template.TemplateRepository
 import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.model.WorkoutTemplateId
@@ -47,10 +47,10 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class WorkoutTemplateCreationViewModel @Inject constructor(
-    private val templateCommandUseCase: TemplateCommandUseCase,
-    private val authQueryUseCase: AuthQueryUseCase,
-    private val exerciseQueryUseCase: ExerciseQueryUseCase,
-    private val workoutQueryUseCase: WorkoutQueryUseCase,
+    private val templateInteractor: TemplateInteractor,
+    private val authInteractor: AuthInteractor,
+    private val exerciseInteractor: ExerciseInteractor,
+    private val workoutInteractor: WorkoutInteractor,
     private val workoutTemplateRepository: TemplateRepository,
     private val folderRepository: FolderRepository
 ) : ModernBaseViewModel<WorkoutTemplateCreationUiState>(
@@ -154,7 +154,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 // Wait for authentication to complete
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { error ->
                         Timber.e(error, "Failed to get current user ID")
@@ -270,7 +270,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
     private fun initializeDefaultFolder() {
         viewModelScope.launch {
             try {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = {
                         Timber.e("🔥 INIT-DEBUG: Failed to get userId for folder init")
@@ -326,7 +326,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
      */
     private suspend fun initializeDefaultFolderSync(): com.example.liftrix.domain.model.FolderId? {
         return try {
-            val userId = authQueryUseCase(waitForAuth = false).fold(
+            val userId = authInteractor.currentUser(waitForAuth = false).fold(
                 onSuccess = { it },
                 onFailure = {
                     Timber.e("🔥 FOLDER-INIT: Failed to get userId")
@@ -357,7 +357,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
             
             while (createAttempts < maxAttempts) {
                 createAttempts++
-                val userIdForFolder = authQueryUseCase(waitForAuth = false).fold(
+                val userIdForFolder = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = {
                         Timber.e("🔥 FOLDER-INIT: Failed to get userId in retry loop")
@@ -424,7 +424,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
      */
     private suspend fun initializeAvailableExercisesSync(): List<com.example.liftrix.domain.usecase.exercise.SearchableExercise> {
         return try {
-            val exercises = exerciseQueryUseCase.search("", Equipment.entries.toSet()).first()
+            val exercises = exerciseInteractor.search("", Equipment.entries.toSet()).first()
             exercises
         } catch (e: Exception) {
             Timber.e(e, "Failed to load exercises, returning empty list")
@@ -463,7 +463,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
      */
     private fun loadAvailableExercises() {
         viewModelScope.launch {
-            exerciseQueryUseCase.search("", Equipment.entries.toSet())
+            exerciseInteractor.search("", Equipment.entries.toSet())
                 .catch { error ->
                     Timber.e(error, "Error loading available exercises")
                 }
@@ -537,7 +537,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             try {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { error ->
                         Timber.e("🔥 CREATE-DEBUG: Failed to get userId: $error")
@@ -587,7 +587,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                         
                         try {
                             // Strategy 1: Check for existing folders first
-                            val userIdForFolder = authQueryUseCase(waitForAuth = false).fold(
+                            val userIdForFolder = authInteractor.currentUser(waitForAuth = false).fold(
                                 onSuccess = { it },
                                 onFailure = {
                                     Timber.e("🔥 CREATE-DEBUG: Failed to get userId for folder resolution")
@@ -611,7 +611,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                                 
                                 while (createAttempts < maxAttempts) {
                                     createAttempts++
-                                    val userIdForCreate = authQueryUseCase(waitForAuth = false).fold(
+                                    val userIdForCreate = authInteractor.currentUser(waitForAuth = false).fold(
                                         onSuccess = { it },
                                         onFailure = {
                                             Timber.e("🔥 CREATE-DEBUG: Failed to get userId for folder creation")
@@ -658,7 +658,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                 timber.log.Timber.d("🔥 TEMPLATE-VIEWMODEL-DEBUG: About to call TemplateCommandUseCase.create()")
                 timber.log.Timber.d("🔥 TEMPLATE-VIEWMODEL-DEBUG: Final parameters - userId: $userId, name: $templateName, folderId: $effectiveFolderId, exercises: ${exercisesToSave.size}")
 
-                val result = templateCommandUseCase.create(
+                val result = templateInteractor.create(
                     userId = userId.value,
                     name = templateName,
                     folderId = effectiveFolderId,
@@ -737,7 +737,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             try {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { error ->
                         logError(error, "updateTemplate_auth")
@@ -877,7 +877,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
     fun addExerciseById(exerciseId: String, isCustomExercise: Boolean) {
         viewModelScope.launch {
             try {
-                val exercises = exerciseQueryUseCase.search("", Equipment.entries.toSet()).first()
+                val exercises = exerciseInteractor.search("", Equipment.entries.toSet()).first()
                 val searchableExercise = exercises.find { searchable ->
                     when (searchable) {
                         is SearchableExercise.LibraryExercise -> !isCustomExercise && searchable.exercise.id == exerciseId
@@ -971,7 +971,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                 // Add a small delay to ensure the exercise is properly added to state first
                 kotlinx.coroutines.delay(50)
 
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { error ->
                         Timber.w("Failed to get userId for smart defaults: $error")
@@ -990,7 +990,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                     return@launch
                 }
                 
-                val defaultsResult = exerciseQueryUseCase.getExerciseDefaults(
+                val defaultsResult = exerciseInteractor.getExerciseDefaults(
                     exerciseId = templateExercise.exerciseId,
                     userId = userId.value,
                     exerciseLibrary = exerciseLibrary
@@ -1054,7 +1054,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
             try {
                 val currentData = uiState.value.dataOrNull()
                 if (currentData != null && currentData.exercises.isNotEmpty()) {
-                    val userId = authQueryUseCase(waitForAuth = false).fold(
+                    val userId = authInteractor.currentUser(waitForAuth = false).fold(
                         onSuccess = { it },
                         onFailure = { error ->
                             Timber.w("Failed to get userId for duration estimation: $error")
@@ -1070,7 +1070,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                         exercises = currentData.exercises
                     )
                     
-                    val durationResult = workoutQueryUseCase.estimateDuration(tempTemplate)
+                    val durationResult = workoutInteractor.estimateDuration(tempTemplate)
                     durationResult.fold(
                         onSuccess = { duration ->
                             val minutes = duration.toMinutes().toInt()
@@ -1144,7 +1144,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
 
             // Perform search
             viewModelScope.launch {
-                exerciseQueryUseCase.search(query, Equipment.entries.toSet())
+                exerciseInteractor.search(query, Equipment.entries.toSet())
                     .catch { error ->
                         Timber.e(error, "Error searching exercises")
                     }
@@ -1332,7 +1332,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
     fun loadTemplateForEditing(templateId: String) {
         viewModelScope.launch {
             try {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { error ->
                         Timber.e("Failed to get userId for loading template: $error")
@@ -1406,7 +1406,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
 
         folderLoadingJob = viewModelScope.launch {
             try {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { error ->
                         Timber.e("🔥 FOLDERS-DEBUG: Failed to get userId: $error")

@@ -59,6 +59,11 @@ Android launcher widgets live in `app/src/main/java/com/example/liftrix/widget` 
 - `CompleteWorkoutSessionUseCase` notifies native widgets through the `HomeWidgetUpdateNotifier` domain boundary so domain code does not import Android widget APIs.
 - Widget taps should use existing typed workout navigation through `MainActivity` and `UnifiedNavigationContainer`; do not add a route unless the active graph cannot express the target.
 
+## Progress Report Export
+
+- Progress-report export actions must declare API-level behavior for file save, share, and open paths.
+- Direct Downloads save below API 29 requires an explicit reviewed legacy permission path or a user-mediated document create flow.
+
 ## Detail Routes
 
 Use type-safe navigation:

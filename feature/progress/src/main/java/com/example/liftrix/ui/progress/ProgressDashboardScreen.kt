@@ -96,6 +96,7 @@ import com.example.liftrix.ui.progress.components.DashboardLayoutMode
 import com.example.liftrix.ui.common.rememberWindowSizeClass
 import com.example.liftrix.ui.progress.components.DailyCaloriesCard
 import com.example.liftrix.ui.progress.components.ProgressWeeklyCalorieTrendCard
+import com.example.liftrix.ui.progress.components.StrengthForecastCard
 
 
 
@@ -152,6 +153,7 @@ fun ProgressDashboardScreen(
     preferencesViewModel: UserPreferencesViewModel = hiltViewModel(),
     summaryViewModel: ProgressSummaryViewModel = hiltViewModel(),
     calorieViewModel: CalorieTrackingViewModel = hiltViewModel(),
+    strengthForecastViewModel: StrengthForecastViewModel = hiltViewModel(),
     featuresViewModel: FeatureConfigurationViewModel = hiltViewModel(),
     coordinator: ProgressDashboardCoordinator = hiltViewModel(),
     onNavigateToVolumeDetail: () -> Unit = {},
@@ -169,6 +171,7 @@ fun ProgressDashboardScreen(
             "UserPreferencesViewModel" to preferencesViewModel.uiState,
             "ProgressSummaryViewModel" to summaryViewModel.uiState,
             "CalorieTrackingViewModel" to calorieViewModel.uiState,
+            "StrengthForecastViewModel" to strengthForecastViewModel.uiState,
             "FeatureConfigurationViewModel" to featuresViewModel.uiState,
             "ProgressDashboardCoordinator" to coordinator.uiState
         )
@@ -180,6 +183,7 @@ fun ProgressDashboardScreen(
     val preferencesState by preferencesViewModel.uiState.collectAsStateWithLifecycle()
     val summaryState by summaryViewModel.uiState.collectAsStateWithLifecycle()
     val calorieState by calorieViewModel.uiState.collectAsStateWithLifecycle()
+    val strengthForecastState by strengthForecastViewModel.uiState.collectAsStateWithLifecycle()
     val featuresState by featuresViewModel.uiState.collectAsStateWithLifecycle()
     val coordinatorState by coordinator.uiState.collectAsStateWithLifecycle()
     
@@ -244,6 +248,7 @@ fun ProgressDashboardScreen(
             preferencesViewModel.handleCoordinatorEvent(event)
             summaryViewModel.handleCoordinatorEvent(event)
             calorieViewModel.handleCoordinatorEvent(event)
+            strengthForecastViewModel.handleCoordinatorEvent(event)
             featuresViewModel.handleCoordinatorEvent(event)
         }
     }
@@ -263,6 +268,7 @@ fun ProgressDashboardScreen(
             preferencesState = (preferencesState as? UiState.Success)?.data ?: UserPreferencesState(),
             summaryState = (summaryState as? UiState.Success)?.data ?: ProgressSummaryState(),
             calorieState = (calorieState as? UiState.Success)?.data ?: CalorieTrackingState(),
+            strengthForecastState = (strengthForecastState as? UiState.Success)?.data ?: StrengthForecastState(),
             featuresState = (featuresState as? UiState.Success)?.data ?: FeatureConfigurationState(),
             coordinatorState = (coordinatorState as? UiState.Success)?.data ?: CoordinatorState(),
             coordinator = coordinator,
@@ -271,6 +277,7 @@ fun ProgressDashboardScreen(
             onPreferencesEvent = preferencesViewModel::handleEvent,
             onSummaryEvent = summaryViewModel::handleEvent,
             onCalorieEvent = calorieViewModel::handleEvent,
+            onStrengthForecastEvent = strengthForecastViewModel::handleEvent,
             onFeaturesEvent = featuresViewModel::handleEvent,
             onCoordinatorEvent = coordinator::handleEvent,
             // Pass raw UiState for debugging
@@ -279,6 +286,7 @@ fun ProgressDashboardScreen(
             rawPreferencesState = preferencesState ?: UiState.Loading,
             rawSummaryState = summaryState ?: UiState.Loading,
             rawCalorieState = calorieState ?: UiState.Loading,
+            rawStrengthForecastState = strengthForecastState ?: UiState.Loading,
             rawFeaturesState = featuresState ?: UiState.Loading,
             rawCoordinatorState = coordinatorState ?: UiState.Loading
         )
@@ -295,6 +303,7 @@ private fun ProgressDashboardContent(
     preferencesState: UserPreferencesState,
     summaryState: ProgressSummaryState,
     calorieState: CalorieTrackingState,
+    strengthForecastState: StrengthForecastState,
     featuresState: FeatureConfigurationState,
     coordinatorState: CoordinatorState,
     coordinator: ProgressDashboardCoordinator,
@@ -303,6 +312,7 @@ private fun ProgressDashboardContent(
     onPreferencesEvent: (UserPreferencesEvent) -> Unit,
     onSummaryEvent: (ProgressSummaryEvent) -> Unit,
     onCalorieEvent: (CalorieTrackingEvent) -> Unit,
+    onStrengthForecastEvent: (StrengthForecastEvent) -> Unit,
     onFeaturesEvent: (FeatureConfigurationEvent) -> Unit,
     onCoordinatorEvent: (CoordinatorEvent) -> Unit,
     // Raw UiState for debugging
@@ -311,6 +321,7 @@ private fun ProgressDashboardContent(
     rawPreferencesState: UiState<UserPreferencesState>,
     rawSummaryState: UiState<ProgressSummaryState>,
     rawCalorieState: UiState<CalorieTrackingState>,
+    rawStrengthForecastState: UiState<StrengthForecastState>,
     rawFeaturesState: UiState<FeatureConfigurationState>,
     rawCoordinatorState: UiState<CoordinatorState>
 ) {
@@ -470,6 +481,15 @@ private fun ProgressDashboardContent(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+        }
+
+        item {
+            StrengthForecastCard(
+                state = strengthForecastState,
+                weightUnit = weightUnit,
+                onEvent = onStrengthForecastEvent,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         // Charts section with enhanced debugging

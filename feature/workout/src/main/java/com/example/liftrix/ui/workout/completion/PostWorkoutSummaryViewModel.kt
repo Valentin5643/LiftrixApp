@@ -3,6 +3,8 @@ package com.example.liftrix.ui.workout.completion
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
+import com.example.liftrix.domain.interactor.workout.WorkoutInteractor
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
@@ -14,9 +16,7 @@ import com.example.liftrix.domain.usecase.sharing.ShareRequest
 import com.example.liftrix.domain.usecase.sharing.SharePlatform
 import com.example.liftrix.domain.usecase.sharing.ShareContentType
 import com.example.liftrix.domain.usecase.sharing.ShareWorkoutData
-import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
 import com.example.liftrix.domain.model.WorkoutId
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,8 +34,8 @@ import javax.inject.Inject
 class PostWorkoutSummaryViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val workoutRepository: WorkoutRepository,
-    private val workoutQueryUseCase: WorkoutQueryUseCase,
-    private val authQueryUseCase: AuthQueryUseCase,
+    private val workoutInteractor: WorkoutInteractor,
+    private val authInteractor: AuthInteractor,
     private val prDetectionService: PRDetectionService,
     private val personalRecordRepository: PersonalRecordRepository,
     private val mediaProcessingService: MediaProcessingService,
@@ -52,7 +52,7 @@ class PostWorkoutSummaryViewModel @Inject constructor(
             _uiState.value = PostWorkoutUiState.Loading
 
             // Get current user ID
-            val userId = authQueryUseCase(waitForAuth = false).fold(
+            val userId = authInteractor.currentUser(waitForAuth = false).fold(
                 onSuccess = { it.value },
                 onFailure = {
                     _uiState.value = PostWorkoutUiState.Error(
@@ -63,7 +63,7 @@ class PostWorkoutSummaryViewModel @Inject constructor(
             )
 
             // Get workout details
-            workoutQueryUseCase.getById(WorkoutId(workoutId), userId).fold(
+            workoutInteractor.getById(WorkoutId(workoutId), userId).fold(
                 onSuccess = { workout ->
                     if (workout == null) {
                         _uiState.value = PostWorkoutUiState.Error(
@@ -155,7 +155,7 @@ class PostWorkoutSummaryViewModel @Inject constructor(
      */
     fun discardWorkout(workoutId: String, onSuccess: () -> Unit) {
         viewModelScope.launch {
-            val userId = currentUserId ?: authQueryUseCase(waitForAuth = false).fold(
+            val userId = currentUserId ?: authInteractor.currentUser(waitForAuth = false).fold(
                 onSuccess = { it.value },
                 onFailure = {
                     Timber.e("Cannot discard workout - user not authenticated")

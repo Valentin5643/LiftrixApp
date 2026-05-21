@@ -6,8 +6,7 @@ import com.example.liftrix.domain.model.social.SocialPrivacySettings
 import com.example.liftrix.domain.model.social.ProfileVisibility
 import com.example.liftrix.domain.model.social.WorkoutVisibility
 import com.example.liftrix.ui.social.onboarding.SocialOnboardingStep
-import com.example.liftrix.domain.usecase.social.SocialProfileQueryUseCase
-import com.example.liftrix.domain.usecase.social.SocialProfileCommandUseCase
+import com.example.liftrix.domain.interactor.social.SocialProfileInteractor
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -35,8 +34,7 @@ import javax.inject.Inject
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class SocialOnboardingViewModel @Inject constructor(
-    private val socialProfileCommandUseCase: SocialProfileCommandUseCase,
-    private val socialProfileQueryUseCase: SocialProfileQueryUseCase
+    private val socialProfileInteractor: SocialProfileInteractor
 ) : ModernBaseViewModel<SocialOnboardingUiState>(
     initialState = SocialOnboardingUiState(
         currentStep = SocialOnboardingStep.PRIVACY_INTRO,
@@ -165,7 +163,7 @@ class SocialOnboardingViewModel @Inject constructor(
 
     private fun checkUsernameAvailability(username: String) {
         viewModelScope.launch {
-            val result = socialProfileQueryUseCase.checkUsernameAvailability(username)
+            val result = socialProfileInteractor.checkUsernameAvailability(username)
             result.fold(
                 onSuccess = { isAvailable ->
                     val error = if (!isAvailable) {
@@ -201,7 +199,7 @@ class SocialOnboardingViewModel @Inject constructor(
         viewModelScope.launch {
             updateState { it.copy(isLoading = true) }
 
-            val result = socialProfileCommandUseCase.create(
+            val result = socialProfileInteractor.create(
                 username = state.username,
                 displayName = state.displayName,
                 bio = state.bio.takeIf { it.isNotBlank() }
@@ -268,7 +266,7 @@ class SocialOnboardingViewModel @Inject constructor(
         viewModelScope.launch {
             updateState { it.copy(isLoading = true) }
 
-            val result = socialProfileCommandUseCase.updatePrivacySettings(privacySettings)
+            val result = socialProfileInteractor.updatePrivacySettings(privacySettings)
             result.fold(
                 onSuccess = {
                     updateState { it.copy(isLoading = false) }

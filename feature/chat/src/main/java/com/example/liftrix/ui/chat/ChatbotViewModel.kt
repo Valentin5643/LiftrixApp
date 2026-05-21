@@ -16,14 +16,13 @@ import com.example.liftrix.domain.model.chat.ChatPreferences
 import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.chat.UsageLimits
 import com.example.liftrix.domain.service.Language as DomainLanguage
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
+import com.example.liftrix.domain.interactor.chat.ChatInteractor
 import com.example.liftrix.domain.usecase.ai.ChatIntent
 import com.example.liftrix.domain.usecase.ai.ModifyWorkoutProgramRequest
 import com.example.liftrix.domain.usecase.ai.WorkoutGenerationIntentClassifier
 import com.example.liftrix.domain.usecase.ai.WorkoutProgramGateway
 import com.example.liftrix.domain.model.ai.WorkoutModificationSaveMode
-import com.example.liftrix.domain.usecase.chat.SendChatMessageUseCase
-import com.example.liftrix.domain.usecase.chat.CheckUsageLimitsUseCase
 import com.example.liftrix.domain.repository.ChatRepository
 import com.example.liftrix.domain.service.AIMessageReportService
 import timber.log.Timber
@@ -49,10 +48,9 @@ import timber.log.Timber
  */
 @HiltViewModel
 class ChatbotViewModel @Inject constructor(
-    private val authQueryUseCase: AuthQueryUseCase,
+    private val authInteractor: AuthInteractor,
     private val chatRepository: ChatRepository,
-    private val sendChatMessageUseCase: SendChatMessageUseCase,
-    private val checkUsageLimitsUseCase: CheckUsageLimitsUseCase,
+    private val chatInteractor: ChatInteractor,
     private val workoutGenerationIntentClassifier: WorkoutGenerationIntentClassifier,
     private val workoutProgramGateway: WorkoutProgramGateway,
     private val aiMessageReportService: AIMessageReportService
@@ -80,9 +78,9 @@ class ChatbotViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 // Get authenticated user ID
-                authQueryUseCase(waitForAuth = false).fold(
+                authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { userIdResult ->
-                        userId = userIdResult?.value
+                        userId = userIdResult.value
                         if (userId != null) {
                             _uiState.value = _uiState.value.copy(isAiAccessEnabled = true)
                             observeChatPreferences(userId!!)
@@ -246,7 +244,7 @@ class ChatbotViewModel @Inject constructor(
                 // This prevents duplicate messages in the database
                 
                 // Use real AI integration - this will save both user and AI messages
-                sendChatMessageUseCase(
+                chatInteractor.sendMessage(
                     userId = userId!!,
                     message = content.trim(),
                     conversationId = currentConversationId,
@@ -811,7 +809,7 @@ class ChatbotViewModel @Inject constructor(
     private fun checkUsageLimits() {
         userId?.let { id ->
             viewModelScope.launch {
-                checkUsageLimitsUseCase.getUserUsageLimits(id).fold(
+                chatInteractor.usageLimits(id).fold(
                     onSuccess = { limits ->
                         Timber.tag(MONTHLY_USAGE_TAG).d(
                             "UI usage state update userId=%s dailyRemaining=%d monthlyRemaining=%d isNearDaily=%s isNearMonthly=%s showWarning=%s source=CheckUsageLimitsUseCase",

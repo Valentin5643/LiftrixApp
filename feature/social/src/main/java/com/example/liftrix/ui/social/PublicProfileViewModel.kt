@@ -1,12 +1,12 @@
 package com.example.liftrix.ui.social
 
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
+import com.example.liftrix.domain.interactor.social.SocialProfileInteractor
+import com.example.liftrix.domain.interactor.social.SocialRelationshipInteractor
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.PublicUserProfile
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.social.SocialProfileQueryUseCase
 import com.example.liftrix.domain.usecase.social.GetPublicProfileRequest
-import com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase
 import com.example.liftrix.domain.usecase.social.FollowAction
 import com.example.liftrix.domain.model.social.ReportReason
 import com.example.liftrix.domain.model.social.FollowStatus
@@ -33,9 +33,9 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class PublicProfileViewModel @Inject constructor(
-    private val socialProfileQueryUseCase: SocialProfileQueryUseCase,
-    private val socialRelationshipUseCase: SocialRelationshipUseCase,
-    private val authQueryUseCase: AuthQueryUseCase,
+    private val socialProfileInteractor: SocialProfileInteractor,
+    private val socialRelationshipInteractor: SocialRelationshipInteractor,
+    private val authInteractor: AuthInteractor,
     private val feedRepository: FeedRepository,
     private val engagementRepository: EngagementRepository
 ) : ModernBaseViewModel<PublicProfileUiState>(
@@ -101,7 +101,7 @@ class PublicProfileViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            val result = socialProfileQueryUseCase.getPublicProfile(
+            val result = socialProfileInteractor.getPublicProfile(
                 GetPublicProfileRequest(
                     profileUserId = userId,
                     trackView = true
@@ -152,7 +152,7 @@ class PublicProfileViewModel @Inject constructor(
     private fun loadUserPosts(userId: String) {
         viewModelScope.launch {
             // Get current user ID, or use empty string for anonymous viewing
-            val currentUserId = uiState.value.currentUserId ?: authQueryUseCase(waitForAuth = false).fold(
+            val currentUserId = uiState.value.currentUserId ?: authInteractor.currentUser(waitForAuth = false).fold(
                 onSuccess = { it.value },
                 onFailure = { "" }
             )
@@ -329,7 +329,7 @@ class PublicProfileViewModel @Inject constructor(
                 }
 
                 // Execute the follow action
-                val result = socialRelationshipUseCase.followAction(
+                val result = socialRelationshipInteractor.followAction(
                     targetUserId = currentProfile.userId,
                     action = followAction,
                     context = "PUBLIC_PROFILE"
@@ -408,7 +408,7 @@ class PublicProfileViewModel @Inject constructor(
      */
     private fun loadCurrentUserId() {
         viewModelScope.launch {
-            val currentUserId = authQueryUseCase(waitForAuth = false).fold(
+            val currentUserId = authInteractor.currentUser(waitForAuth = false).fold(
                 onSuccess = { it.value },
                 onFailure = { null }
             )
@@ -426,7 +426,7 @@ class PublicProfileViewModel @Inject constructor(
             try {
                 updateState { it.copy(isConnectionLoading = true) }
 
-                val result = socialRelationshipUseCase.blockUser(
+                val result = socialRelationshipInteractor.blockUser(
                     targetUserId = profile.userId,
                     shouldBlock = true
                 )
@@ -476,7 +476,7 @@ class PublicProfileViewModel @Inject constructor(
                 
                 // For now, we'll use INAPPROPRIATE_CONTENT as the default reason
                 // In a real app, you'd show a dialog to let the user select the reason
-                val result = socialRelationshipUseCase.reportUser(
+                val result = socialRelationshipInteractor.reportUser(
                     targetUserId = profile.userId,
                     reason = ReportReason.INAPPROPRIATE_CONTENT,
                     description = "Reported from profile view"

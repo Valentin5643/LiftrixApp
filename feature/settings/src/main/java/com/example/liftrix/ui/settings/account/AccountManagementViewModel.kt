@@ -2,14 +2,13 @@ package com.example.liftrix.ui.settings.account
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.interactor.account.AccountInteractor
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.service.AnalyticsService
-import com.example.liftrix.domain.usecase.account.AccountQueryUseCase
-import com.example.liftrix.domain.usecase.account.AccountCommandUseCase
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.UserAccountRepository
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,9 +25,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class AccountManagementViewModel @Inject constructor(
-    private val accountCommandUseCase: AccountCommandUseCase,
-    private val accountQueryUseCase: AccountQueryUseCase,
-    private val authQueryUseCase: AuthQueryUseCase,
+    private val accountInteractor: AccountInteractor,
+    private val authInteractor: AuthInteractor,
     private val authRepository: AuthRepository,
     private val userAccountRepository: UserAccountRepository,
     private val analyticsService: AnalyticsService
@@ -73,7 +71,7 @@ class AccountManagementViewModel @Inject constructor(
             updateState { copy(isLoading = true, error = null) }
 
             try {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it.value },
                     onFailure = { throw LiftrixError.AuthenticationError(
                         errorMessage = "User not authenticated",
@@ -83,7 +81,7 @@ class AccountManagementViewModel @Inject constructor(
 
                 currentUserId = userId
 
-                val result = accountQueryUseCase()
+                val result = accountInteractor.accountInfo()
 
                 result.fold(
                     onSuccess = { accountInfo ->
@@ -132,7 +130,7 @@ class AccountManagementViewModel @Inject constructor(
             updateState { copy(isUpdatingEmail = true, error = null) }
             
             try {
-                val result = accountCommandUseCase.updateEmail(newEmail, currentPassword)
+                val result = accountInteractor.updateEmail(newEmail, currentPassword)
                 
                 result.fold(
                     onSuccess = {
@@ -186,7 +184,7 @@ class AccountManagementViewModel @Inject constructor(
             updateState { copy(isUpdatingPassword = true, error = null) }
             
             try {
-                val result = accountCommandUseCase.updatePassword(currentPassword, newPassword)
+                val result = accountInteractor.updatePassword(currentPassword, newPassword)
                 
                 result.fold(
                     onSuccess = {
@@ -244,7 +242,7 @@ class AccountManagementViewModel @Inject constructor(
                         errorCode = "NO_USER"
                     )
                 
-                val result = accountCommandUseCase.updateUsername(newUsername)
+                val result = accountInteractor.updateUsername(newUsername)
                 
                 result.fold(
                     onSuccess = {
@@ -326,7 +324,7 @@ class AccountManagementViewModel @Inject constructor(
                     )
                 }
                 
-                val result = accountCommandUseCase.deleteAccount(
+                val result = accountInteractor.deleteAccount(
                     reauthProvider = "password",
                     reauthPayload = password
                 )

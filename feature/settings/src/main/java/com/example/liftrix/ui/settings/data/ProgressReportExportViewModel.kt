@@ -2,12 +2,11 @@ package com.example.liftrix.ui.settings.data
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
+import com.example.liftrix.domain.interactor.export.ProgressReportInteractor
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.export.ProgressReportDateRange
 import com.example.liftrix.domain.model.export.ProgressReportRequest
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.export.GenerateProgressReportUseCase
-import com.example.liftrix.domain.usecase.export.ProgressReportFileActionsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -21,9 +20,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ProgressReportExportViewModel @Inject constructor(
-    private val authQueryUseCase: AuthQueryUseCase,
-    private val generateProgressReportUseCase: GenerateProgressReportUseCase,
-    private val fileActionsUseCase: ProgressReportFileActionsUseCase
+    private val authInteractor: AuthInteractor,
+    private val progressReportInteractor: ProgressReportInteractor
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ProgressReportExportState())
     val uiState: StateFlow<ProgressReportExportState> = _uiState.asStateFlow()
@@ -54,7 +52,7 @@ class ProgressReportExportViewModel @Inject constructor(
 
     private fun loadCurrentUser() {
         viewModelScope.launch {
-            val userId = authQueryUseCase(waitForAuth = false).fold(
+            val userId = authInteractor.currentUser(waitForAuth = false).fold(
                 onSuccess = { it?.value },
                 onFailure = { null }
             )
@@ -78,7 +76,7 @@ class ProgressReportExportViewModel @Inject constructor(
         val request = buildRequest() ?: return
         updateState { copy(isGenerating = true, errorMessage = null, successMessage = null) }
         viewModelScope.launch {
-            generateProgressReportUseCase(userId, request).fold(
+            progressReportInteractor.generate(userId, request).fold(
                 onSuccess = { result ->
                     updateState {
                         copy(
@@ -105,7 +103,7 @@ class ProgressReportExportViewModel @Inject constructor(
     private fun openPdf() {
         val result = _uiState.value.result ?: return
         viewModelScope.launch {
-            fileActionsUseCase.open(result.filePath).fold(
+            progressReportInteractor.open(result.filePath).fold(
                 onSuccess = { metadata ->
                     _fileActionEvents.emit(
                         ProgressReportFileActionEvent.Open(
@@ -122,7 +120,7 @@ class ProgressReportExportViewModel @Inject constructor(
     private fun sharePdf() {
         val result = _uiState.value.result ?: return
         viewModelScope.launch {
-            fileActionsUseCase.share(result.filePath).fold(
+            progressReportInteractor.share(result.filePath).fold(
                 onSuccess = { metadata ->
                     _fileActionEvents.emit(
                         ProgressReportFileActionEvent.Share(
@@ -141,7 +139,7 @@ class ProgressReportExportViewModel @Inject constructor(
         val result = _uiState.value.result ?: return
         updateState { copy(isSavingToDownloads = true, errorMessage = null) }
         viewModelScope.launch {
-            fileActionsUseCase.saveToDownloads(result.filePath, result.fileName).fold(
+            progressReportInteractor.saveToDownloads(result.filePath, result.fileName).fold(
                 onSuccess = {
                     updateState {
                         copy(

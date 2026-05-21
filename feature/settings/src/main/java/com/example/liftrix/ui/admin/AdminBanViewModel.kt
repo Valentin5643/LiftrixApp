@@ -3,11 +3,11 @@ package com.example.liftrix.ui.admin
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.interactor.admin.AdminInteractor
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
 import com.example.liftrix.domain.model.admin.*
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.admin.*
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,14 +31,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class AdminBanViewModel @Inject constructor(
-    private val authQueryUseCase: AuthQueryUseCase,
-    private val checkAdminPermissionsUseCase: CheckAdminPermissionsUseCase,
-    private val searchUsersUseCase: SearchUsersUseCase,
-    private val banUserUseCase: BanUserUseCase,
-    private val unbanUserUseCase: UnbanUserUseCase,
-    private val getUserBanInfoUseCase: GetUserBanInfoUseCase,
-    private val listBannedUsersUseCase: ListBannedUsersUseCase,
-    private val getAdminLogsUseCase: GetAdminLogsUseCase
+    private val authInteractor: AuthInteractor,
+    private val adminInteractor: AdminInteractor
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -73,7 +67,7 @@ class AdminBanViewModel @Inject constructor(
      */
     fun checkAdminPermissions() {
         viewModelScope.launch {
-            val userId = authQueryUseCase(waitForAuth = false).fold(
+            val userId = authInteractor.currentUser(waitForAuth = false).fold(
                 onSuccess = { it?.value },
                 onFailure = { null }
             )
@@ -82,7 +76,7 @@ class AdminBanViewModel @Inject constructor(
                 return@launch
             }
             
-            checkAdminPermissionsUseCase(userId).fold(
+            adminInteractor.checkPermissions(userId).fold(
                 onSuccess = { isAdmin ->
                     _uiState.value = _uiState.value.copy(
                         isAdmin = isAdmin,
@@ -129,7 +123,7 @@ class AdminBanViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             
-            searchUsersUseCase(SearchUsersRequest(query = query, limit = 20)).fold(
+            adminInteractor.searchUsers(SearchUsersRequest(query = query, limit = 20)).fold(
                 onSuccess = { response ->
                     _uiState.value = _uiState.value.copy(
                         searchResults = response.users,
@@ -167,7 +161,7 @@ class AdminBanViewModel @Inject constructor(
                 banDuration = banDuration
             )
             
-            banUserUseCase(request).fold(
+            adminInteractor.banUser(request).fold(
                 onSuccess = { response ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
@@ -212,7 +206,7 @@ class AdminBanViewModel @Inject constructor(
                 reason = reason.ifBlank { "Appeal approved" }
             )
             
-            unbanUserUseCase(request).fold(
+            adminInteractor.unbanUser(request).fold(
                 onSuccess = { response ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
@@ -252,7 +246,7 @@ class AdminBanViewModel @Inject constructor(
      */
     private fun getUserBanInfo(userId: String) {
         viewModelScope.launch {
-            getUserBanInfoUseCase(userId).fold(
+            adminInteractor.getUserBanInfo(userId).fold(
                 onSuccess = { response ->
                     _uiState.value = _uiState.value.copy(
                         currentUserBanInfo = response
@@ -287,7 +281,7 @@ class AdminBanViewModel @Inject constructor(
                 severity = null // Load all severities
             )
             
-            listBannedUsersUseCase(request).fold(
+            adminInteractor.listBannedUsers(request).fold(
                 onSuccess = { response ->
                     _uiState.value = _uiState.value.copy(
                         bannedUsers = response.bannedUsers,
@@ -318,7 +312,7 @@ class AdminBanViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             
-            getAdminLogsUseCase(GetAdminLogsRequest(limit = 100)).fold(
+            adminInteractor.getAdminLogs(GetAdminLogsRequest(limit = 100)).fold(
                 onSuccess = { response ->
                     _uiState.value = _uiState.value.copy(
                         adminLogs = response,

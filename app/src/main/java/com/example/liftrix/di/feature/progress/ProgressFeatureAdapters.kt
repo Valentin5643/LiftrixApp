@@ -244,6 +244,9 @@ class AppProgressDetailAnalyticsGateway @Inject constructor(
     override suspend fun getOneRmProgression(userId: String, exerciseIds: List<String>?, timeRange: TimeRangeType, includeEstimated: Boolean): LiftrixResult<OneRmProgressionData> =
         query.getOneRmProgression(userId, exerciseIds, timeRange, includeEstimated).map { it.toProgress() }
 
+    override suspend fun getStrengthForecast(userId: String, selectedExerciseId: String?, historyDays: Int, forecastDays: Int) =
+        query.getStrengthForecast(userId, selectedExerciseId, historyDays, forecastDays)
+
     override suspend fun getWorkoutFrequency(userId: String, timeRange: TimeRangeType): LiftrixResult<WorkoutFrequencyData> =
         query.getWorkoutFrequency(userId, timeRange).map { it.toProgress() }
 

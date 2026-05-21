@@ -220,7 +220,7 @@ internal fun PremiumWeekPanel(
             days = days,
             modifier = GlanceModifier.fillMaxWidth(),
             compact = compact,
-            barWidth = if (compact) 22.dp else 22.dp,
+            barWidth = if (compact) 14.dp else 16.dp,
             barHeight = if (compact) 48.dp else 70.dp,
             spacing = if (compact) 4.dp else 5.dp,
             weightedColumns = true
@@ -262,7 +262,7 @@ internal fun PremiumWeekBlock(
             days = days,
             modifier = GlanceModifier.fillMaxWidth(),
             compact = compact,
-            barWidth = 22.dp,
+            barWidth = if (compact) 14.dp else 18.dp,
             barHeight = if (compact) 48.dp else 70.dp,
             spacing = if (compact) 4.dp else 5.dp,
             weightedColumns = compact
@@ -284,7 +284,7 @@ private fun PremiumDayCell(
     ) {
         val barModifier = if (weightedColumn) {
             GlanceModifier
-                .fillMaxWidth()
+                .width(barWidth)
                 .height(barHeight)
         } else {
             GlanceModifier

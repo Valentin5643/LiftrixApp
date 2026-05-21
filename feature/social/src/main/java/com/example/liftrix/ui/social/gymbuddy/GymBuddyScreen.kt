@@ -22,6 +22,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Image
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.liftrix.domain.model.social.GymBuddy
 import com.example.liftrix.domain.model.social.QRCodeData
 import com.example.liftrix.domain.model.social.QRUserProfile
@@ -39,7 +40,7 @@ fun GymBuddyScreen(
     modifier: Modifier = Modifier,
     viewModel: GymBuddyViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showQrSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {

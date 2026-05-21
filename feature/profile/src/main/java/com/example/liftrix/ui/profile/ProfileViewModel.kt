@@ -4,12 +4,10 @@ import android.graphics.Rect
 import androidx.compose.runtime.Stable
 import android.net.Uri
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
+import com.example.liftrix.domain.interactor.profile.ProfileInteractor
 import com.example.liftrix.domain.model.UserProfile
 import com.example.liftrix.domain.repository.ProfileRepository
-import com.example.liftrix.domain.usecase.profile.ProfileQueryUseCase
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.profile.ProfileImageOperationsUseCase
-import com.example.liftrix.domain.usecase.profile.ProfileCommandUseCase
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.domain.service.NetworkConnectivityMonitor
@@ -64,10 +62,8 @@ private sealed class ProfileDataState {
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val authQueryUseCase: AuthQueryUseCase,
-    private val profileQueryUseCase: ProfileQueryUseCase,
-    private val profileCommandUseCase: ProfileCommandUseCase,
-    private val profileImageOperationsUseCase: ProfileImageOperationsUseCase,
+    private val authInteractor: AuthInteractor,
+    private val profileInteractor: ProfileInteractor,
     private val profileRepository: ProfileRepository,
     private val auth: FirebaseAuth,
     private val networkConnectivityMonitor: NetworkConnectivityMonitor,
@@ -87,7 +83,7 @@ class ProfileViewModel @Inject constructor(
 
         while (retryCount <= maxRetries) {
             try {
-                val result = authQueryUseCase(waitForAuth = false)
+                val result = authInteractor.currentUser(waitForAuth = false)
                 result.fold(
                     onSuccess = { userId ->
                         Timber.d("[VIEWMODEL-STATE] currentUserId flow emitted (attempt ${retryCount + 1})")
@@ -135,7 +131,7 @@ class ProfileViewModel @Inject constructor(
                         emit(ProfileDataState.Loading)
                         
                         // Check if profile exists to set proper expectations
-                        val profileExists = profileQueryUseCase.hasProfile(userId.value).getOrElse { false }
+                        val profileExists = profileInteractor.hasProfile(userId.value).getOrElse { false }
 
                         if (profileExists) {
                             // Profile exists, start observing
@@ -337,8 +333,8 @@ class ProfileViewModel @Inject constructor(
                 }
 
                 // Check if profile exists in database
-                val hasProfile = profileQueryUseCase.hasProfile(userId.value).getOrElse { false }
-                val hasCompletedProfile = profileQueryUseCase.hasCompletedProfile(userId.value).getOrElse { false }
+                val hasProfile = profileInteractor.hasProfile(userId.value).getOrElse { false }
+                val hasCompletedProfile = profileInteractor.hasCompletedProfile(userId.value).getOrElse { false }
                 val profileData = profileRepository.getUserProfile(userId.value).getOrNull()
                 
                 updateState { currentState ->
@@ -367,7 +363,7 @@ class ProfileViewModel @Inject constructor(
                 updateState { it.copy(isLoading = true, error = null) }
 
                 // Add timeout and retry logic for getting user ID
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { error ->
                         Timber.e(error, "Failed to get current user ID during profile loading")
@@ -496,7 +492,7 @@ class ProfileViewModel @Inject constructor(
                 val imageBytes = inputStream.readBytes()
                 inputStream.close()
 
-                val result = profileImageOperationsUseCase.upload(
+                val result = profileInteractor.uploadImage(
                     userId = userId.value,
                     imageBytes = imageBytes
                 )
@@ -566,7 +562,7 @@ class ProfileViewModel @Inject constructor(
 
                 Timber.d("Starting image deletion")
 
-                val result = profileImageOperationsUseCase.delete(userId.value)
+                val result = profileInteractor.deleteImage(userId.value)
                 
                 if (result.isSuccess) {
                     updateState { 
@@ -711,7 +707,7 @@ class ProfileViewModel @Inject constructor(
 
                 Timber.d("[DATA-INTEGRITY] Saving profile - all checks passed")
 
-                val result = profileCommandUseCase.saveProfile(profile, strictValidation = false)
+                val result = profileInteractor.saveProfile(profile, strictValidation = false)
                 
                 if (result.isSuccess) {
                     // 🔍 FORENSIC LOGGING - Verify auth state after save
@@ -792,7 +788,7 @@ class ProfileViewModel @Inject constructor(
                 Timber.d("Updating privacy settings to public: $isPublic")
 
                 val updatedProfile = currentProfile.copy(isPublic = isPublic)
-                val result = profileCommandUseCase.saveProfile(updatedProfile, strictValidation = false)
+                val result = profileInteractor.saveProfile(updatedProfile, strictValidation = false)
                 
                 if (result.isSuccess) {
                     updateState { 

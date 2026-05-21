@@ -3,8 +3,8 @@ package com.example.liftrix.ui.settings
 import com.example.liftrix.domain.model.social.SocialPrivacySettings
 import com.example.liftrix.domain.model.social.ProfileVisibility
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
 import com.example.liftrix.domain.repository.social.SocialPrivacySettingsRepository
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.social.SocialProfileCommandUseCase
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
@@ -33,7 +33,7 @@ import javax.inject.Inject
 class PrivacySettingsViewModel @Inject constructor(
     private val privacySettingsRepository: SocialPrivacySettingsRepository,
     private val socialProfileCommandUseCase: SocialProfileCommandUseCase,
-    private val authQueryUseCase: AuthQueryUseCase
+    private val authInteractor: AuthInteractor
 ) : ModernBaseViewModel<PrivacySettingsUiState>(
     initialState = PrivacySettingsUiState(
         privacySettingsState = UiState.Loading,
@@ -80,7 +80,7 @@ class PrivacySettingsViewModel @Inject constructor(
     private fun loadPrivacySettings() {
         viewModelScope.launch {
             try {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it.value },
                     onFailure = { throw IllegalStateException("User not authenticated") }
                 )
@@ -136,7 +136,7 @@ class PrivacySettingsViewModel @Inject constructor(
     private fun observePrivacySettingsChanges() {
         viewModelScope.launch {
             try {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it.value },
                     onFailure = { throw IllegalStateException("User not authenticated") }
                 )
@@ -161,7 +161,7 @@ class PrivacySettingsViewModel @Inject constructor(
     private fun createDefaultSettings() {
         viewModelScope.launch {
             try {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it.value },
                     onFailure = { throw IllegalStateException("User not authenticated") }
                 )
@@ -325,7 +325,7 @@ class PrivacySettingsViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it.value },
                     onFailure = { throw IllegalStateException("User not authenticated") }
                 )

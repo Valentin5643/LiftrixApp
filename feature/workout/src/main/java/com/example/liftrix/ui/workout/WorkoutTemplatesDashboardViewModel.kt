@@ -2,10 +2,10 @@ package com.example.liftrix.ui.workout
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
+import com.example.liftrix.domain.interactor.workout.TemplateInteractor
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.repository.template.TemplateRepository
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.template.TemplateQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,9 +40,9 @@ sealed class WorkoutTemplatesDashboardUiState {
  */
 @HiltViewModel
 class WorkoutTemplatesDashboardViewModel @Inject constructor(
-    private val authQueryUseCase: AuthQueryUseCase,
+    private val authInteractor: AuthInteractor,
     private val workoutTemplateRepository: TemplateRepository,
-    private val templateQueryUseCase: TemplateQueryUseCase // 🔥 Consolidated use case
+    private val templateInteractor: TemplateInteractor
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<WorkoutTemplatesDashboardUiState>(
@@ -63,7 +63,7 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
                 _uiState.value = WorkoutTemplatesDashboardUiState.Loading
 
                 // Wait for authentication to complete, then load templates
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { error ->
                         Timber.e(error, "Failed to get current user ID")
@@ -106,7 +106,7 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
                 Timber.d("🔥 FOLDER-DASHBOARD: Loading templates for folder: $folderId")
                 _uiState.value = WorkoutTemplatesDashboardUiState.Loading
 
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { error ->
                         Timber.e(error, "Failed to get current user ID")
@@ -196,7 +196,7 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
     fun recordTemplateUsage(template: WorkoutTemplate) {
         viewModelScope.launch {
             try {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { return@launch }
                 )

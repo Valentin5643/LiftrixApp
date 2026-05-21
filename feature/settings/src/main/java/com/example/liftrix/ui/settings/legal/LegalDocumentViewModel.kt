@@ -1,10 +1,10 @@
 package com.example.liftrix.ui.settings.legal
 
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
+import com.example.liftrix.domain.interactor.legal.LegalDocumentInteractor
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.service.LegalDocumentService
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.legal.DownloadPdfUseCase
 import com.example.liftrix.domain.usecase.legal.DownloadPdfResult
 import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -32,8 +32,8 @@ import javax.inject.Inject
 @HiltViewModel
 class LegalDocumentViewModel @Inject constructor(
     private val legalDocumentService: LegalDocumentService,
-    private val authQueryUseCase: AuthQueryUseCase,
-    private val downloadPdfUseCase: DownloadPdfUseCase
+    private val authInteractor: AuthInteractor,
+    private val legalDocumentInteractor: LegalDocumentInteractor
 ) : ModernBaseViewModel<LegalDocumentUiState>(initialState = LegalDocumentUiState.Loading) {
     
     private val _sideEffects = MutableSharedFlow<LegalDocumentSideEffect>()
@@ -418,7 +418,7 @@ class LegalDocumentViewModel @Inject constructor(
             }
             
             try {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it.value },
                     onFailure = { throw LiftrixError.BusinessLogicError(
                         code = "USER_NOT_AUTHENTICATED",
@@ -441,7 +441,7 @@ class LegalDocumentViewModel @Inject constructor(
                 }
                 
                 // Start PDF download with progress tracking
-                downloadPdfUseCase(userId, documentType, displayName).collect { result ->
+                legalDocumentInteractor.downloadPdf(userId, documentType, displayName).collect { result ->
                     when (result) {
                         is DownloadPdfResult.Progress -> {
                             val data = getCurrentData().copy(
@@ -578,7 +578,7 @@ class LegalDocumentViewModel @Inject constructor(
                             onSuccess = { it },
                             onFailure = { error -> throw error }
                         )
-                        val userId = authQueryUseCase(waitForAuth = false).fold(
+                        val userId = authInteractor.currentUser(waitForAuth = false).fold(
                             onSuccess = { it.value },
                             onFailure = { throw LiftrixError.BusinessLogicError(
                                 code = "USER_NOT_AUTHENTICATED",
@@ -600,7 +600,7 @@ class LegalDocumentViewModel @Inject constructor(
                             onSuccess = { it },
                             onFailure = { error -> throw error }
                         )
-                        val userId = authQueryUseCase(waitForAuth = false).fold(
+                        val userId = authInteractor.currentUser(waitForAuth = false).fold(
                             onSuccess = { it.value },
                             onFailure = { throw LiftrixError.BusinessLogicError(
                                 code = "USER_NOT_AUTHENTICATED",
@@ -622,7 +622,7 @@ class LegalDocumentViewModel @Inject constructor(
                             onSuccess = { it },
                             onFailure = { error -> throw error }
                         )
-                        val userId = authQueryUseCase(waitForAuth = false).fold(
+                        val userId = authInteractor.currentUser(waitForAuth = false).fold(
                             onSuccess = { it.value },
                             onFailure = { throw LiftrixError.BusinessLogicError(
                                 code = "USER_NOT_AUTHENTICATED",

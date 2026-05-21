@@ -1,13 +1,13 @@
 package com.example.liftrix.ui.settings
 
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
 import com.example.liftrix.domain.model.analytics.*
 import kotlinx.datetime.Clock
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.usecase.analytics.WidgetPreferencesUseCase
 import com.example.liftrix.domain.usecase.analytics.WidgetMigrationUseCase
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.dataOrNull
@@ -36,13 +36,13 @@ import javax.inject.Inject
  *
  * @param widgetPreferencesUseCase Consolidated use case for widget preference operations (get/save/reset)
  * @param widgetMigrationUseCase Use case for fixing widget preference migration issues
- * @param authQueryUseCase Use case for retrieving authenticated user ID
+ * @param authInteractor Interactor for retrieving authenticated user ID
  */
 @HiltViewModel
 class WidgetSettingsViewModel @Inject constructor(
     private val widgetPreferencesUseCase: WidgetPreferencesUseCase,
     private val widgetMigrationUseCase: WidgetMigrationUseCase,
-    private val authQueryUseCase: AuthQueryUseCase
+    private val authInteractor: AuthInteractor
 ) : ModernBaseViewModel<WidgetSettingsUiState>(initialState = UiState.Loading) {
 
     // Current user ID - loaded from authentication
@@ -62,7 +62,7 @@ class WidgetSettingsViewModel @Inject constructor(
     private fun loadAuthenticatedUser() {
         viewModelScope.launch {
             try {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it.value },
                     onFailure = { error ->
                         Timber.e(error, "🔐 AUTH: Failed to load authenticated user ID")

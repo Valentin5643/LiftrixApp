@@ -19,10 +19,13 @@ import com.example.liftrix.domain.model.export.ProgressReportPrivacyOptions
 import com.example.liftrix.domain.model.export.ProgressReportRequest
 import com.example.liftrix.domain.model.export.ProgressReportResolvedDateRange
 import com.example.liftrix.domain.model.export.ProgressReportStrengthRow
+import com.example.liftrix.domain.model.export.ProgressReportStrengthForecastSection
 import com.example.liftrix.domain.model.export.ProgressReportSummaryMetrics
 import com.example.liftrix.domain.model.export.ProgressReportSyncStatus
 import com.example.liftrix.domain.model.export.ProgressReportWeeklyVolumeRow
 import com.example.liftrix.domain.model.export.ProgressReportWorkoutRow
+import com.example.liftrix.domain.model.analytics.StrengthForecastStatus
+import com.example.liftrix.domain.service.analytics.StrengthForecastService
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -43,7 +46,8 @@ class ProgressReportDataBuilder @Inject constructor(
     private val exerciseLibraryDao: ExerciseLibraryDao,
     private val personalRecordDao: PersonalRecordDao,
     private val syncQueueDao: SyncQueueDao,
-    private val syncPreferencesDao: SyncPreferencesDao
+    private val syncPreferencesDao: SyncPreferencesDao,
+    private val strengthForecastService: StrengthForecastService
 ) {
     private companion object {
         const val MAX_REPS_FOR_RELIABLE_ONE_RM = 10
@@ -60,10 +64,19 @@ class ProgressReportDataBuilder @Inject constructor(
         val reportSessions = groupReportSessions(workouts)
         val dailyVolume = exerciseSetDao.getDailyVolumeData(userId, start, end)
         val dailyRepActivity = exerciseSetDao.getDailyRepActivityData(userId, start, end)
+        val workoutSetActivity = exerciseSetDao.getWorkoutSetActivityData(userId, start, end)
+            .associateBy { it.workout_id }
         val muscleGroups = exerciseSetDao.getVolumeDataByMuscleGroup(userId, start, end)
         val muscleGroupRepActivity = exerciseSetDao.getRepActivityByMuscleGroup(userId, start, end)
         val oneRmData = exerciseSetDao.getAllOneRmData(userId, start, end)
         val performanceHistory = exerciseSetDao.getExercisePerformanceHistory(userId, start, end)
+        val forecastEndDate = request.generatedAt.toLocalDate()
+        val forecastStartDate = forecastEndDate.minusDays(29)
+        val forecastSamples = if (request.includeOptions.strengthProgress) {
+            exerciseSetDao.getStrengthForecastSetSamples(userId, forecastStartDate.toString(), forecastEndDate.toString())
+        } else {
+            emptyList()
+        }
         val prs = personalRecordDao.getPRsInDateRange(
             userId = userId,
             startDate = range.start.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
@@ -108,11 +121,16 @@ class ProgressReportDataBuilder @Inject constructor(
         val filteredPrs = filterReportPersonalRecords(prs, bodyweightExerciseNames)
         val prRows = buildPersonalRecordRows(filteredPrs)
         val workoutRows = workouts.takeLast(24).map { workout ->
+            val activity = workoutSetActivity[workout.id]
             ProgressReportWorkoutRow(
                 date = workout.date,
                 name = workout.name,
                 durationMinutes = durationMinutes(workout),
-                synced = workout.isSynced
+                synced = workout.isSynced,
+                workoutId = workout.id,
+                volumeKg = activity?.total_volume ?: 0.0,
+                repCount = activity?.total_reps ?: 0,
+                setCount = activity?.total_sets ?: 0
             )
         }
         val summary = ProgressReportSummaryMetrics(
@@ -139,6 +157,11 @@ class ProgressReportDataBuilder @Inject constructor(
                 (activeWeekAverageWorkouts?.let { it > UNUSUALLY_HIGH_WORKOUTS_PER_WEEK } == true)
         )
         val muscleGroupRows = buildMuscleGroupRows(muscleGroups, muscleGroupRepActivity)
+        val strengthForecast = if (request.includeOptions.strengthProgress) {
+            buildStrengthForecastSection(forecastSamples, forecastEndDate)
+        } else {
+            null
+        }
 
         return ProgressReportData(
             generatedAt = request.generatedAt,
@@ -160,7 +183,24 @@ class ProgressReportDataBuilder @Inject constructor(
                 generatedOffline = true,
                 syncedWorkoutCount = syncedWorkoutCount
             ),
+            strengthForecast = strengthForecast,
             isMinimalReport = workouts.size < 4
+        )
+    }
+
+    private fun buildStrengthForecastSection(
+        samples: List<com.example.liftrix.data.local.dao.StrengthForecastSetSampleResult>,
+        generatedDate: LocalDate
+    ): ProgressReportStrengthForecastSection {
+        val today = kotlinx.datetime.LocalDate(generatedDate.year, generatedDate.monthValue, generatedDate.dayOfMonth)
+        val result = strengthForecastService.buildForecast(samples, today)
+        val selected = result.exercises.firstOrNull { it.status == StrengthForecastStatus.READY }
+            ?: result.exercises.firstOrNull()
+        return ProgressReportStrengthForecastSection(
+            generatedForExerciseId = selected?.exerciseId,
+            generatedForExerciseName = selected?.exerciseName,
+            forecast = selected,
+            message = selected?.summary?.message ?: "Not enough data to generate forecast"
         )
     }
 
@@ -541,23 +581,17 @@ class ProgressReportDataBuilder @Inject constructor(
     private fun groupReportSessions(workouts: List<WorkoutEntity>): List<ReportSession> {
         return workouts
             .filterNot { isPlaceholderWorkout(it) }
-            .groupBy { workout ->
-                listOf(
-                    workout.date.toString(),
-                    workout.templateId?.takeIf { it.isNotBlank() } ?: workout.name.normalizedNameKey(),
-                    durationMinutes(workout)?.div(15L) ?: "missing-duration"
-                ).joinToString("|")
-            }
+            .groupBy { it.id }
             .values
-            .map { entries ->
-                val representative = entries.minByOrNull { it.createdAt } ?: entries.first()
+            .mapNotNull { entries ->
+                val representative = entries.maxByOrNull { it.updatedAt } ?: return@mapNotNull null
                 ReportSession(
                     date = representative.date,
                     name = representative.name,
                     entryCount = entries.size
                 )
             }
-            .sortedBy { it.date }
+            .sortedWith(compareBy<ReportSession> { it.date }.thenBy { it.name })
     }
 
     private fun isPlaceholderWorkout(workout: WorkoutEntity): Boolean {

@@ -5,9 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.ExerciseType
+import com.example.liftrix.domain.interactor.workout.ExerciseInteractor
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.usecase.exercise.CreateCustomExerciseInput
-import com.example.liftrix.domain.usecase.exercise.CreateCustomExerciseUseCase
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -27,7 +27,7 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class CustomExerciseCreationViewModel @Inject constructor(
-    private val createCustomExerciseUseCase: CreateCustomExerciseUseCase,
+    private val exerciseInteractor: ExerciseInteractor,
     private val authRepository: AuthRepository
 ) : ModernBaseViewModel<UiState<CustomExerciseFormState>>(initialState = UiState.Success(CustomExerciseFormState())) {
 
@@ -254,7 +254,7 @@ class CustomExerciseCreationViewModel @Inject constructor(
                     videoUrl = currentState.videoUrl.trim().takeIf { it.isNotBlank() }
                 )
 
-                createCustomExerciseUseCase(input).fold(
+                exerciseInteractor.createCustomExercise(input).fold(
                     onSuccess = { exercise ->
                         Timber.i("Successfully created custom exercise: ${exercise.id}")
                         // Show success state with exercise name

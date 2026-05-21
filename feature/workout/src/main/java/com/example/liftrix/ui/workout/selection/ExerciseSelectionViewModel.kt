@@ -6,9 +6,9 @@ import androidx.compose.runtime.Stable
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.ExerciseLibrary
+import com.example.liftrix.domain.interactor.workout.ExerciseInteractor
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.exercise.ExerciseRepository
-import com.example.liftrix.domain.usecase.exercise.ExerciseQueryUseCase
 import com.example.liftrix.domain.usecase.exercise.SearchableExercise
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
@@ -53,7 +53,7 @@ data class ExerciseSelectionUiState(
 @HiltViewModel
 class ExerciseSelectionViewModel @Inject constructor(
     private val exerciseRepository: ExerciseRepository,
-    private val exerciseQueryUseCase: ExerciseQueryUseCase,
+    private val exerciseInteractor: ExerciseInteractor,
     private val authRepository: AuthRepository
 ) : ViewModel() {
     
@@ -104,7 +104,7 @@ class ExerciseSelectionViewModel @Inject constructor(
         }
         .onStart { emit(FilterParams("", emptySet(), emptySet())) }
         .flatMapLatest { params ->
-            exerciseQueryUseCase.search(params.searchQuery, params.selectedEquipment)
+            exerciseInteractor.search(params.searchQuery, params.selectedEquipment)
         }
         .onEach { searchResults ->
             
@@ -192,7 +192,7 @@ class ExerciseSelectionViewModel @Inject constructor(
                     Timber.d("ExerciseSelectionViewModel: Loading recent exercises (attempt ${retryCount + 1}/$maxRetries)...")
                     
                     // Get a sample of exercises for recent list
-                    val allExercises = exerciseQueryUseCase.search("", Equipment.entries.toSet()).first()
+                    val allExercises = exerciseInteractor.search("", Equipment.entries.toSet()).first()
                     val recentExercises = allExercises.take(5)
                     
                     Timber.d("ExerciseSelectionViewModel: Loaded ${recentExercises.size} recent exercises from ${allExercises.size} total")

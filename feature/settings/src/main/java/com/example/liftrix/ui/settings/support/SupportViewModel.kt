@@ -2,12 +2,12 @@ package com.example.liftrix.ui.settings.support
 
 import android.net.Uri
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.interactor.auth.AuthInteractor
+import com.example.liftrix.domain.interactor.support.SupportInteractor
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.support.SupportCategory
 import com.example.liftrix.domain.service.AppInfoService
 import com.example.liftrix.domain.service.SupportService
-import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.support.AddReplyToSupportTicketUseCase
 import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.support.SupportEvent
 import com.example.liftrix.ui.support.SupportSideEffect
@@ -33,8 +33,8 @@ import javax.inject.Inject
 class SupportViewModel @Inject constructor(
     private val supportService: SupportService,
     private val appInfoService: AppInfoService,
-    private val authQueryUseCase: AuthQueryUseCase,
-    private val addReplyToSupportTicketUseCase: AddReplyToSupportTicketUseCase
+    private val authInteractor: AuthInteractor,
+    private val supportInteractor: SupportInteractor
 ) : ModernBaseViewModel<SupportUiState>(initialState = SupportUiState.Loading) {
     
     private val _sideEffects = MutableSharedFlow<SupportSideEffect>()
@@ -73,7 +73,7 @@ class SupportViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 // Get current user ID
-                val userId = authQueryUseCase(waitForAuth = false).fold(
+                val userId = authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { throw LiftrixError.AuthenticationError("User not authenticated") }
                 )
@@ -337,7 +337,7 @@ class SupportViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                addReplyToSupportTicketUseCase(
+                supportInteractor.addReply(
                     ticketId = ticketId,
                     content = content,
                     attachments = attachments

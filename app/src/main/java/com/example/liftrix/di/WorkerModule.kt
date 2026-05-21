@@ -8,19 +8,21 @@ import dagger.hilt.components.SingletonComponent
  * WorkerModule - WorkManager Integration
  *
  * ARCHITECTURE NOTES:
- * - Uses @HiltWorker pattern for all 15 sync workers
+ * - Uses @HiltWorker pattern for the current worker set
  * - Workers use @AssistedInject for Context and WorkerParameters
  * - BaseSyncWorker provides error handling, cancellation, and backoff
  * - WorkerServiceLocator provides fallback EntryPoint access (temporary HOTFIX)
  *
- * WORKER LIST (15 total):
+ * WORKER LIST (20 total at 2026-05-20 source check):
  * - MasterSyncWorker (orchestrates all sync operations every 15 min)
  * - AchievementSyncWorker, AnalyticsSyncWorker, ChatSyncWorker
+ * - DeadLetterCleanupWorker, DatabaseIntegrityWorker
  * - FollowRelationshipSyncWorker, GymBuddySyncWorker, ProfileSyncWorker
  * - SettingsSyncWorker, SettingsSyncWorkerV2 (dual versions during migration)
  * - SocialProfileSyncWorker, TemplateSyncWorker, UnifiedSyncWorker
  * - UserPublicSyncWorker, WorkoutPostSyncWorker, WorkoutSyncWorker
- * - ExportWorker (data export)
+ * - ExportWorker (data export), WidgetSyncWorker
+ * - LiftrixWidgetRefreshWorker
  *
  * INITIALIZATION:
  * - WorkManager initialized via Configuration.Provider in LiftrixApp

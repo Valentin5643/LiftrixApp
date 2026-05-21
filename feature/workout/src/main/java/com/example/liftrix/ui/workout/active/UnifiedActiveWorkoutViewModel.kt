@@ -13,13 +13,13 @@ import com.example.liftrix.domain.model.WorkoutTemplateId
 import com.example.liftrix.domain.repository.template.TemplateRepository
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.interactor.workout.SessionInteractor
+import com.example.liftrix.domain.interactor.workout.TemplateInteractor
+import com.example.liftrix.domain.interactor.workout.WorkoutInteractor
 import java.time.Instant
 import com.example.liftrix.service.TimerServiceManager
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import com.example.liftrix.service.WorkoutTimerService
-import com.example.liftrix.domain.usecase.session.SessionOperationsUseCase
-import com.example.liftrix.domain.usecase.template.TemplateCommandUseCase
-import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
 import com.example.liftrix.domain.usecase.workout.PreviousSetDataResponse
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,9 +51,9 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
     private val sessionManager: UnifiedWorkoutSessionManager,
     private val workoutTemplateRepository: TemplateRepository,
     private val authRepository: AuthRepository,
-    private val sessionOperationsUseCase: SessionOperationsUseCase,
-    private val templateCommandUseCase: TemplateCommandUseCase,
-    private val workoutQueryUseCase: WorkoutQueryUseCase,
+    private val sessionInteractor: SessionInteractor,
+    private val templateInteractor: TemplateInteractor,
+    private val workoutInteractor: WorkoutInteractor,
     private val timerServiceManager: TimerServiceManager
 ) : ViewModel() {
 
@@ -542,7 +542,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
             try {
                 // Use proper use case instead of direct session manager call
                 val exerciseId = ExerciseId.fromString(exerciseLibrary.id)
-                val result = sessionOperationsUseCase.addExercise(exerciseId)
+                val result = sessionInteractor.addExercise(exerciseId)
                 
                 result.fold(
                     onSuccess = {
@@ -1033,7 +1033,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                     _uiState.value = currentUiState.copy(showSaveQuickWorkoutDialog = false)
                 }
                 
-                val result = templateCommandUseCase.createFromSession(
+                val result = templateInteractor.createFromSession(
                     session = currentSession,
                     templateName = templateName,
                     templateDescription = "Created from Quick workout"
@@ -1145,7 +1145,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                     
                     // Launch concurrent requests for each exercise
                     previousDataRequests += async {
-                        workoutQueryUseCase.getPreviousSetData(
+                        workoutInteractor.getPreviousSetData(
                             userId = userId.value,
                             exerciseId = canonicalLibraryId, // 🔥 FIX: Use canonical library ID instead of display name
                             exerciseName = exercise.name,
@@ -1233,7 +1233,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                 // since it comes from the exercise selection. Add logging to verify.
                 Timber.d("[PREV_SET_REFRESH_FIX] Refreshing previous data for canonical ID: '$exerciseId'")
 
-                workoutQueryUseCase.getPreviousSetData(
+                workoutInteractor.getPreviousSetData(
                     userId = userId.value,
                     exerciseId = exerciseId, // Should already be canonical library ID
                     exerciseName = sessionExercise?.name,

@@ -10,7 +10,9 @@ import com.example.liftrix.data.local.dao.OneRmResult
 import com.example.liftrix.data.local.dao.PersonalRecordDao
 import com.example.liftrix.data.local.dao.SyncPreferencesDao
 import com.example.liftrix.data.local.dao.SyncQueueDao
+import com.example.liftrix.data.local.dao.StrengthForecastSetSampleResult
 import com.example.liftrix.data.local.dao.WorkoutDao
+import com.example.liftrix.data.local.dao.WorkoutSetActivityResult
 import com.example.liftrix.data.local.entity.ExerciseLibraryEntity
 import com.example.liftrix.data.local.entity.PersonalRecordEntity
 import com.example.liftrix.data.local.entity.WorkoutEntity
@@ -19,6 +21,7 @@ import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.WorkoutStatus
 import com.example.liftrix.domain.model.export.ProgressReportDateRange
 import com.example.liftrix.domain.model.export.ProgressReportRequest
+import com.example.liftrix.domain.service.analytics.StrengthForecastService
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -55,7 +58,8 @@ class ProgressReportDataBuilderTest {
             exerciseLibraryDao = exerciseLibraryDao,
             personalRecordDao = personalRecordDao,
             syncQueueDao = syncQueueDao,
-            syncPreferencesDao = syncPreferencesDao
+            syncPreferencesDao = syncPreferencesDao,
+            strengthForecastService = StrengthForecastService()
         )
     }
 
@@ -145,6 +149,52 @@ class ProgressReportDataBuilderTest {
     }
 
     @Test
+    fun `same day workouts remain separate sessions with per workout details`() = runTest {
+        val firstStart = Instant.parse("2026-05-18T09:00:00Z")
+        val secondStart = Instant.parse("2026-05-18T17:00:00Z")
+        stubCommonReportData(
+            workouts = listOf(
+                workout(
+                    id = "morning-session",
+                    name = "Upper Body",
+                    date = LocalDate.of(2026, 5, 18),
+                    start = firstStart,
+                    end = Instant.parse("2026-05-18T10:00:00Z")
+                ),
+                workout(
+                    id = "evening-session",
+                    name = "Upper Body",
+                    date = LocalDate.of(2026, 5, 18),
+                    start = secondStart,
+                    end = Instant.parse("2026-05-18T18:00:00Z")
+                )
+            ),
+            prs = emptyList(),
+            libraryRows = emptyList(),
+            dailyVolume = listOf(DailyVolumeResult("2026-05-18", total_volume = 1500.0, total_sets = 8, exercise_count = 3)),
+            dailyRepActivity = listOf(DailyRepActivityResult("2026-05-18", total_reps = 80, total_sets = 8, exercise_count = 3)),
+            workoutSetActivity = listOf(
+                WorkoutSetActivityResult("morning-session", total_volume = 500.0, total_reps = 30, total_sets = 3),
+                WorkoutSetActivityResult("evening-session", total_volume = 1000.0, total_reps = 50, total_sets = 5)
+            )
+        )
+
+        val data = builder.build(
+            USER_ID,
+            request(ProgressReportDateRange.Custom(LocalDate.of(2026, 5, 18), LocalDate.of(2026, 5, 18)))
+        )
+
+        assertEquals(2, data.summary.workoutsCompleted)
+        assertEquals(2, data.summary.rawWorkoutEntries)
+        assertEquals(1, data.summary.activeTrainingDays)
+        assertEquals(2, data.weeklyVolumeRows.single().workoutCount)
+        assertEquals(1, data.weeklyVolumeRows.single().activeDays)
+        assertEquals(1500.0, data.weeklyVolumeRows.single().totalVolumeKg, 0.01)
+        assertEquals(listOf(500.0, 1000.0), data.workoutRows.map { it.volumeKg })
+        assertEquals(listOf(3, 5), data.workoutRows.map { it.setCount })
+    }
+
+    @Test
     fun `strength rows populate repeated weighted exercise sessions by exercise name`() = runTest {
         stubCommonReportData(
             workouts = listOf(workout("workout-1"), workout("workout-2", date = LocalDate.of(2026, 5, 12))),
@@ -166,24 +216,47 @@ class ProgressReportDataBuilderTest {
         assertEquals(11.7, data.strengthRows.single().improvementKg, 0.1)
     }
 
+    @Test
+    fun `strength forecast section populates from local forecast samples`() = runTest {
+        stubCommonReportData(
+            workouts = listOf(workout("workout-1"), workout("workout-2", date = LocalDate.of(2026, 5, 18))),
+            prs = emptyList(),
+            libraryRows = emptyList(),
+            forecastSamples = listOf(
+                StrengthForecastSetSampleResult("bench", "Bench Press", "2026-05-05", 80f, 5, Instant.parse("2026-05-05T10:00:00Z").toEpochMilli()),
+                StrengthForecastSetSampleResult("bench", "Bench Press", "2026-05-18", 90f, 5, Instant.parse("2026-05-18T10:00:00Z").toEpochMilli())
+            )
+        )
+
+        val data = builder.build(USER_ID, request())
+
+        assertNotNull(data.strengthForecast)
+        assertEquals("Bench Press", data.strengthForecast?.generatedForExerciseName)
+        assertEquals(14, data.strengthForecast?.forecast?.forecastPoints?.size)
+    }
+
     private fun stubCommonReportData(
         workouts: List<WorkoutEntity>,
         prs: List<PersonalRecordEntity>,
         libraryRows: List<ExerciseLibraryEntity>,
         dailyVolume: List<DailyVolumeResult> = emptyList(),
         dailyRepActivity: List<DailyRepActivityResult> = emptyList(),
+        workoutSetActivity: List<WorkoutSetActivityResult> = emptyList(),
         muscleGroupRepActivity: List<MuscleGroupRepActivityResult> = emptyList(),
         oneRmData: List<OneRmResult> = emptyList(),
         performanceHistory: List<ExercisePerformanceHistoryResult> = emptyList(),
+        forecastSamples: List<StrengthForecastSetSampleResult> = emptyList(),
         lastSync: Long? = null
     ) {
         coEvery { workoutDao.getCompletedWorkoutsInDateRangeForUser(USER_ID, any(), any(), any()) } returns workouts
         coEvery { exerciseSetDao.getDailyVolumeData(USER_ID, any(), any()) } returns dailyVolume
         coEvery { exerciseSetDao.getDailyRepActivityData(USER_ID, any(), any()) } returns dailyRepActivity
+        coEvery { exerciseSetDao.getWorkoutSetActivityData(USER_ID, any(), any()) } returns workoutSetActivity
         coEvery { exerciseSetDao.getVolumeDataByMuscleGroup(USER_ID, any(), any(), any()) } returns emptyList()
         coEvery { exerciseSetDao.getRepActivityByMuscleGroup(USER_ID, any(), any(), any()) } returns muscleGroupRepActivity
         coEvery { exerciseSetDao.getAllOneRmData(USER_ID, any(), any()) } returns oneRmData
         coEvery { exerciseSetDao.getExercisePerformanceHistory(USER_ID, any(), any()) } returns performanceHistory
+        coEvery { exerciseSetDao.getStrengthForecastSetSamples(USER_ID, any(), any()) } returns forecastSamples
         coEvery { personalRecordDao.getPRsInDateRange(USER_ID, any(), any()) } returns prs
         coEvery { exerciseLibraryDao.getExercisesByNames(any()) } returns libraryRows
         coEvery { syncQueueDao.getPendingItemsCount(USER_ID) } returns 0
@@ -201,6 +274,7 @@ class ProgressReportDataBuilderTest {
 
     private fun workout(
         id: String,
+        name: String = "Workout $id",
         date: LocalDate = LocalDate.of(2026, 5, 10),
         start: Instant? = Instant.parse("2026-05-10T10:00:00Z"),
         end: Instant? = Instant.parse("2026-05-10T11:00:00Z"),
@@ -210,7 +284,7 @@ class ProgressReportDataBuilderTest {
         return WorkoutEntity(
             id = id,
             userId = USER_ID,
-            name = "Workout $id",
+            name = name,
             date = date,
             exercisesJson = "[]",
             status = WorkoutStatus.COMPLETED,
