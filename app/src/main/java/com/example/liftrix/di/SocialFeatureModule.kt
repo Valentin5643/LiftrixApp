@@ -166,9 +166,14 @@ abstract class SocialFeatureModule {
         @Singleton
         fun provideCacheInvalidationService(
             cacheManager: com.example.liftrix.core.cache.EnhancedCacheManager,
-            keyGenerator: com.example.liftrix.core.cache.CacheKeyGenerator
+            keyGenerator: com.example.liftrix.core.cache.CacheKeyGenerator,
+            analyticsQueryUseCase: com.example.liftrix.domain.usecase.analytics.AnalyticsQueryUseCase
         ): com.example.liftrix.service.CacheInvalidationService =
-            com.example.liftrix.service.CacheInvalidationServiceImpl(cacheManager, keyGenerator)
+            com.example.liftrix.service.CacheInvalidationServiceImpl(
+                cacheManager,
+                keyGenerator,
+                analyticsQueryUseCase
+            )
 
         @Provides
         @Singleton

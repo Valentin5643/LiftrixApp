@@ -24,7 +24,8 @@ data class StrengthExerciseForecast(
 data class StrengthForecastPoint(
     val date: LocalDate,
     val estimatedOneRmKg: Double,
-    val type: StrengthForecastPointType
+    val type: StrengthForecastPointType,
+    val timelineDay: Double? = null
 )
 
 enum class StrengthForecastPointType {

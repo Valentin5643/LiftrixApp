@@ -75,6 +75,20 @@ sealed class AnalyticsWidget(
         complexity = WidgetComplexity.MODERATE,
         priority = WidgetPriority.STANDARD
     )
+
+    /**
+     * Strength forecast widget
+     * Projects strength trends from recent logged sets.
+     */
+    @Serializable
+    data object StrengthForecast : AnalyticsWidget(
+        id = "strength_forecast",
+        displayName = "Strength Forecast",
+        description = "Forecast strength trends from recent logged sets",
+        category = WidgetCategory.CHARTS,
+        complexity = WidgetComplexity.MODERATE,
+        priority = WidgetPriority.STANDARD
+    )
     
     /**
      * Volume analytics widget - unified volume analysis 
@@ -252,6 +266,21 @@ sealed class AnalyticsWidget(
         category = WidgetCategory.ANALYTICS,
         complexity = WidgetComplexity.MODERATE
     )
+
+    /**
+     * Muscle heatmap widget
+     * Shows training intensity by muscle group on a vector body map.
+     */
+    @Serializable
+    data object MuscleHeatmap : AnalyticsWidget(
+        id = "muscle_heatmap",
+        displayName = "Muscle Heatmap",
+        description = "Visualize training intensity across muscle groups",
+        category = WidgetCategory.ANALYTICS,
+        complexity = WidgetComplexity.MODERATE,
+        priority = WidgetPriority.ESSENTIAL,
+        defaultEnabled = false
+    )
     
     /**
      * Monthly summary widget
@@ -332,19 +361,21 @@ sealed class AnalyticsWidget(
         
         // Active consolidated widgets
         StrengthAnalytics -> 1      // Primary strength widget
-        VolumeAnalytics -> 2        // Primary volume widget
+        StrengthForecast -> 2       // Forecast strength trend widget
+        VolumeAnalytics -> 3        // Primary volume widget
         
         // Other active widgets
-        FrequencyChart -> 3
-        ProgressChart -> 4
-        MonthlySummary -> 5
-        RecoveryMetrics -> 6
-        MuscleGroupDistribution -> 7
-        ExerciseRanking -> 8
-        WorkoutDuration -> 9
-        RecentAchievements -> 10
-        ConsistencyScore -> 11
-        ProgressiveOverload -> 12
+        FrequencyChart -> 4
+        ProgressChart -> 5
+        MonthlySummary -> 6
+        RecoveryMetrics -> 7
+        MuscleGroupDistribution -> 8
+        MuscleHeatmap -> 9
+        ExerciseRanking -> 10
+        WorkoutDuration -> 11
+        RecentAchievements -> 12
+        ConsistencyScore -> 13
+        ProgressiveOverload -> 14
     }
     
     /**
@@ -399,13 +430,13 @@ sealed class AnalyticsWidget(
          */
         fun getAllWidgets(): List<AnalyticsWidget> = listOf(
             // CHARTS Category
-            FrequencyChart, ProgressChart, WorkoutDuration,
+            StrengthForecast, FrequencyChart, ProgressChart, WorkoutDuration,
             
             // PROGRESS Category
             StrengthAnalytics, MonthlySummary, RecentAchievements,
             
             // ANALYTICS Category
-            VolumeAnalytics, RecoveryMetrics, MuscleGroupDistribution, ExerciseRanking,
+            VolumeAnalytics, RecoveryMetrics, MuscleGroupDistribution, MuscleHeatmap, ExerciseRanking,
             ConsistencyScore, ProgressiveOverload
         ).filter { !it.isDeprecated }
         
@@ -414,8 +445,8 @@ sealed class AnalyticsWidget(
          */
         fun getAllWidgetsIncludingDeprecated(): List<AnalyticsWidget> = listOf(
             // Active widgets
-            FrequencyChart, ProgressChart, StrengthAnalytics, MonthlySummary,
-            VolumeAnalytics, RecoveryMetrics, MuscleGroupDistribution,
+            StrengthForecast, FrequencyChart, ProgressChart, StrengthAnalytics, MonthlySummary,
+            VolumeAnalytics, RecoveryMetrics, MuscleGroupDistribution, MuscleHeatmap,
             ExerciseRanking, WorkoutDuration, RecentAchievements,
             ConsistencyScore, ProgressiveOverload,
             
@@ -492,10 +523,12 @@ sealed class AnalyticsWidget(
                 "VolumeLoadProgression" to "volume_load_progression",
                 "OneRMProgression" to "one_rm_progression",
                 "MuscleGroupDistribution" to "muscle_group_distribution",
+                "MuscleHeatmap" to "muscle_heatmap",
                 "MonthlySummary" to "monthly_summary",
                 "VolumeChart" to "volume_chart",
                 "FrequencyChart" to "frequency_chart",
                 "WorkoutStreak" to "workout_streak",
+                "StrengthForecast" to "strength_forecast",
                 
                 // Display name mappings
                 "Workout Frequency" to "workout_frequency",
@@ -510,10 +543,12 @@ sealed class AnalyticsWidget(
                 "Volume Progression" to "volume_load_progression",
                 "1RM Progression" to "one_rm_progression",
                 "Muscle Group Distribution" to "muscle_group_distribution",
+                "Muscle Heatmap" to "muscle_heatmap",
                 "Monthly Summary" to "monthly_summary",
                 "Volume Chart" to "volume_chart",
                 "Frequency Chart" to "frequency_chart",
-                "Workout Streak" to "workout_streak"
+                "Workout Streak" to "workout_streak",
+                "Strength Forecast" to "strength_forecast"
             )
             
             // Try legacy mapping lookup

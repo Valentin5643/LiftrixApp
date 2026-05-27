@@ -1,5 +1,6 @@
 package com.example.liftrix.domain.model.analytics
 
+import com.example.liftrix.domain.model.MuscleGroup
 import kotlinx.datetime.Instant
 import kotlinx.datetime.Clock
 import kotlinx.serialization.Serializable
@@ -223,6 +224,148 @@ data class AnalyticsWidgetData(
         confidence < 0.5f -> WidgetValidationResult.LOW_CONFIDENCE
         !isFresh() -> WidgetValidationResult.STALE_DATA
         else -> WidgetValidationResult.VALID
+    }
+}
+
+@Serializable
+data class MuscleHeatmapWidgetData(
+    override val widgetType: AnalyticsWidget = AnalyticsWidget.MuscleHeatmap,
+    override val lastUpdated: Instant = Clock.System.now(),
+    val gender: MuscleHeatmapGender = MuscleHeatmapGender.MALE,
+    val viewSide: MuscleHeatmapViewSide = MuscleHeatmapViewSide.FRONT,
+    val timeRange: TimeRangeType = TimeRangeType.MONTH,
+    val metric: MuscleHeatmapMetric = MuscleHeatmapMetric.VOLUME,
+    val colorMode: MuscleHeatmapColorMode = MuscleHeatmapColorMode.APP_GRADIENT,
+    val muscleValues: List<MuscleHeatmapMuscleValue> = emptyList(),
+    val topTrained: List<MuscleHeatmapMuscleValue> = emptyList(),
+    val recoveryCandidates: List<MuscleHeatmapMuscleValue> = emptyList(),
+    val totalValue: Float = 0f,
+    val isLoading: Boolean = false,
+    override val error: WidgetError? = null
+) : WidgetData {
+    override val isValid: Boolean = error == null
+
+    override fun getDisplayData(): DisplayData = DisplayData.Analytics(
+        insights = topTrained.take(3).map { value ->
+            Insight(
+                title = value.displayLabel,
+                description = "${metric.displayName}: ${value.formattedValue}",
+                confidence = value.normalizedIntensity,
+                category = InsightCategory.PERFORMANCE
+            )
+        },
+        recommendations = recoveryCandidates.take(3).map { value ->
+            Recommendation(
+                title = value.displayLabel,
+                description = "Low relative ${metric.displayName.lowercase()} in ${timeRange.displayName}",
+                priority = RecommendationPriority.LOW,
+                estimatedImpact = "Training balance"
+            )
+        },
+        metrics = mapOf(
+            "metric" to metric.displayName,
+            "timeRange" to timeRange.displayName,
+            "total" to totalValue.toString()
+        ),
+        confidence = if (muscleValues.any { it.rawValue > 0f }) 1f else 0f,
+        timeRange = timeRange.displayName
+    )
+
+    override fun validate(): WidgetValidationResult = when {
+        muscleValues.any { it.normalizedIntensity !in 0f..1f } -> WidgetValidationResult.INVALID_CURRENT_VALUE
+        !isFresh() -> WidgetValidationResult.STALE_DATA
+        else -> WidgetValidationResult.VALID
+    }
+
+    companion object {
+        fun empty(
+            gender: MuscleHeatmapGender = MuscleHeatmapGender.MALE,
+            viewSide: MuscleHeatmapViewSide = MuscleHeatmapViewSide.FRONT,
+            timeRange: TimeRangeType = TimeRangeType.MONTH,
+            metric: MuscleHeatmapMetric = MuscleHeatmapMetric.VOLUME,
+            colorMode: MuscleHeatmapColorMode = MuscleHeatmapColorMode.APP_GRADIENT
+        ): MuscleHeatmapWidgetData {
+            val emptyValues = MuscleGroup.getPrimaryMuscleGroups().map { muscleGroup ->
+                MuscleHeatmapMuscleValue(
+                    muscleGroup = muscleGroup,
+                    rawValue = 0f,
+                    normalizedIntensity = 0f,
+                    displayLabel = muscleGroup.displayName,
+                    formattedValue = metric.formatValue(0f)
+                )
+            }
+
+            return MuscleHeatmapWidgetData(
+                gender = gender,
+                viewSide = viewSide,
+                timeRange = timeRange,
+                metric = metric,
+                colorMode = colorMode,
+                muscleValues = emptyValues,
+                topTrained = emptyList(),
+                recoveryCandidates = emptyValues
+            )
+        }
+    }
+}
+
+@Serializable
+data class MuscleHeatmapMuscleValue(
+    val muscleGroup: MuscleGroup,
+    val rawValue: Float,
+    val normalizedIntensity: Float,
+    val displayLabel: String,
+    val formattedValue: String
+)
+
+@Serializable
+enum class MuscleHeatmapGender(val displayName: String, val configValue: String) {
+    MALE("Male", "male"),
+    FEMALE("Female", "female");
+
+    companion object {
+        fun fromConfig(value: String?): MuscleHeatmapGender =
+            entries.firstOrNull { it.configValue == value || it.name.equals(value, ignoreCase = true) } ?: MALE
+    }
+}
+
+@Serializable
+enum class MuscleHeatmapViewSide(val displayName: String, val configValue: String) {
+    FRONT("Front", "front"),
+    BACK("Back", "back");
+
+    companion object {
+        fun fromConfig(value: String?): MuscleHeatmapViewSide =
+            entries.firstOrNull { it.configValue == value || it.name.equals(value, ignoreCase = true) } ?: FRONT
+    }
+}
+
+@Serializable
+enum class MuscleHeatmapMetric(val displayName: String, val configValue: String, val unit: String) {
+    SETS("Sets", "sets", "sets"),
+    REPS("Reps", "reps", "reps"),
+    VOLUME("Volume", "volume", "kg"),
+    SESSIONS("Sessions", "sessions", "sessions");
+
+    fun formatValue(value: Float): String = when (this) {
+        SETS, REPS, SESSIONS -> value.toInt().toString()
+        VOLUME -> value.toInt().toString()
+    }
+
+    companion object {
+        fun fromConfig(value: String?): MuscleHeatmapMetric =
+            entries.firstOrNull { it.configValue == value || it.name.equals(value, ignoreCase = true) } ?: VOLUME
+    }
+}
+
+@Serializable
+enum class MuscleHeatmapColorMode(val displayName: String, val configValue: String) {
+    APP_GRADIENT("App Gradient", "app_gradient"),
+    MONOCHROME_INTENSITY("Monochrome", "monochrome_intensity");
+
+    companion object {
+        fun fromConfig(value: String?): MuscleHeatmapColorMode =
+            entries.firstOrNull { it.configValue == value || it.name.equals(value, ignoreCase = true) } ?: APP_GRADIENT
     }
 }
 

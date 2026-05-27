@@ -1,6 +1,7 @@
 package com.example.liftrix.ui.progress
 
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.domain.progress.ProgressAuthPort
 import com.example.liftrix.domain.progress.ProgressDetailAnalyticsGateway
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
@@ -11,7 +12,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class StrengthForecastViewModel @Inject constructor(
-    private val analyticsGateway: ProgressDetailAnalyticsGateway
+    private val analyticsGateway: ProgressDetailAnalyticsGateway,
+    private val authPort: ProgressAuthPort
 ) : ModernBaseViewModel<UiState<StrengthForecastState>>(initialState = UiState.Success(StrengthForecastState())) {
 
     fun handleEvent(event: StrengthForecastEvent) {
@@ -41,11 +43,26 @@ class StrengthForecastViewModel @Inject constructor(
 
     private fun loadForecast(force: Boolean = false) {
         val state = currentState() ?: return
-        val userId = state.userId ?: return
         if (state.isLoading && !force) return
 
         viewModelScope.launch {
             updateForecastState { copy(isLoading = true, errorMessage = null) }
+            val userId = state.userId ?: authPort(waitForAuth = false).fold(
+                onSuccess = { userId ->
+                    updateForecastState { copy(userId = userId.value) }
+                    userId.value
+                },
+                onFailure = { throwable ->
+                    Timber.e(throwable, "Unable to load strength forecast without authenticated user")
+                    updateForecastState {
+                        copy(
+                            isLoading = false,
+                            errorMessage = throwable.message ?: "User not authenticated"
+                        )
+                    }
+                    return@launch
+                }
+            )
             analyticsGateway.getStrengthForecast(
                 userId = userId,
                 selectedExerciseId = null,

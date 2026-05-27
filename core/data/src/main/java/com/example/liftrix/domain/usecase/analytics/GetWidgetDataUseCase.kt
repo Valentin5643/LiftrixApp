@@ -1,6 +1,10 @@
 package com.example.liftrix.domain.usecase.analytics
 
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
+import com.example.liftrix.domain.model.analytics.MuscleHeatmapColorMode
+import com.example.liftrix.domain.model.analytics.MuscleHeatmapGender
+import com.example.liftrix.domain.model.analytics.MuscleHeatmapMetric
+import com.example.liftrix.domain.model.analytics.MuscleHeatmapViewSide
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -8,6 +12,7 @@ import com.example.liftrix.domain.repository.ProgressStatsRepository
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.analytics.TimeRangeType
+import com.example.liftrix.domain.service.widget.MuscleHeatmapCalculator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -52,7 +57,8 @@ import javax.inject.Singleton
 @Singleton
 class GetWidgetDataUseCase @Inject constructor(
     private val progressStatsRepository: ProgressStatsRepository,
-    private val workoutRepository: WorkoutRepository
+    private val workoutRepository: WorkoutRepository,
+    private val muscleHeatmapCalculator: MuscleHeatmapCalculator
 ) {
     
     /**
@@ -82,7 +88,8 @@ class GetWidgetDataUseCase @Inject constructor(
      */
     suspend fun getWidgetData(
         userId: String,
-        widgetType: AnalyticsWidget
+        widgetType: AnalyticsWidget,
+        widgetConfiguration: Map<String, String> = emptyMap()
     ): LiftrixResult<WidgetData> = withContext(Dispatchers.IO) {
         return@withContext liftrixCatching(
             errorMapper = { throwable ->
@@ -97,7 +104,12 @@ class GetWidgetDataUseCase @Inject constructor(
             
             // Get real data from repositories based on widget type
             val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
-            val startDate = today.minus(DatePeriod(days = 30)) // Last 30 days by default
+            val heatmapTimeRange = TimeRangeType.fromConfig(widgetConfiguration["timeRange"])
+            val startDate = if (widgetType == AnalyticsWidget.MuscleHeatmap) {
+                heatmapTimeRange.toStartDate(today)
+            } else {
+                today.minus(DatePeriod(days = 30))
+            }
             val endDate = today
             
             val data = when (widgetType) {
@@ -200,6 +212,17 @@ class GetWidgetDataUseCase @Inject constructor(
                         )
                     }
                 }
+                AnalyticsWidget.MuscleHeatmap -> {
+                    muscleHeatmapCalculator.calculate(
+                        userId = userId,
+                        startDate = startDate,
+                        endDate = endDate,
+                        gender = MuscleHeatmapGender.fromConfig(widgetConfiguration["gender"]),
+                        viewSide = MuscleHeatmapViewSide.fromConfig(widgetConfiguration["viewSide"]),
+                        metric = MuscleHeatmapMetric.fromConfig(widgetConfiguration["metric"]),
+                        colorMode = MuscleHeatmapColorMode.fromConfig(widgetConfiguration["colorMode"])
+                    ) + mapOf("timeRange" to heatmapTimeRange.name)
+                }
                 // Legacy widgets - return basic data
                 AnalyticsWidget.AverageDuration,
                 AnalyticsWidget.WorkoutStreak -> {
@@ -280,6 +303,14 @@ class GetWidgetDataUseCase @Inject constructor(
                 lastUpdated = System.currentTimeMillis(),
                 isStale = false
             )
+        }
+    }
+
+    private fun TimeRangeType.toStartDate(today: kotlinx.datetime.LocalDate): kotlinx.datetime.LocalDate {
+        return when (this) {
+            TimeRangeType.MONTH -> today.minus(DatePeriod(months = 1))
+            TimeRangeType.SIX_MONTHS -> today.minus(DatePeriod(months = 6))
+            TimeRangeType.ALL_TIME -> kotlinx.datetime.LocalDate(2020, 1, 1)
         }
     }
     

@@ -107,6 +107,20 @@ interface WidgetPreferencesRepository {
         widgetName: String,
         size: com.example.liftrix.domain.model.analytics.WidgetDisplaySize
     ): LiftrixResult<Unit>
+
+    /**
+     * Updates persistable configuration for a specific widget.
+     *
+     * @param userId The user identifier
+     * @param widgetName Name or id of the widget
+     * @param configuration String-valued widget configuration
+     * @return LiftrixResult indicating success or failure
+     */
+    suspend fun updateWidgetConfiguration(
+        userId: String,
+        widgetName: String,
+        configuration: Map<String, String>
+    ): LiftrixResult<Unit>
     
     /**
      * Updates auto-refresh settings.

@@ -361,6 +361,7 @@ interface ExerciseSetDao {
         SELECT
             exercise_library_id,
             COALESCE(exercise_name, exercise_library_id) AS exercise_name,
+            workout_id,
             activity_date,
             weight_kg,
             reps,
@@ -554,6 +555,63 @@ interface ExerciseSetDao {
         limit: Int = 50
     ): List<MuscleGroupRepActivityResult>
 
+    @Query("""
+        SELECT
+            COALESCE(primary_muscle_group, 'UNKNOWN') as primary_muscle_group,
+            COUNT(DISTINCT workout_id) as total_sessions,
+            COUNT(DISTINCT exercise_library_id) as exercise_count,
+            COUNT(set_id) as total_sets
+        FROM exercise_set_performance_view
+        WHERE user_id = :userId
+        AND activity_date BETWEEN :startDate AND :endDate
+        AND rep_count > 0
+        GROUP BY primary_muscle_group
+        ORDER BY total_sessions DESC
+        LIMIT :limit
+    """)
+    @UserScoped
+    suspend fun getSessionActivityByMuscleGroup(
+        userId: String,
+        startDate: String,
+        endDate: String,
+        limit: Int = 50
+    ): List<MuscleGroupSessionActivityResult>
+
+    @Query("""
+        SELECT
+            v.exercise_library_id as exercise_library_id,
+            COALESCE(v.exercise_name, v.exercise_library_id) as exercise_name,
+            COALESCE(v.primary_muscle_group, 'UNKNOWN') as primary_muscle_group,
+            el.secondary_muscle_groups as secondary_muscle_groups,
+            el.movement_pattern as movement_pattern,
+            COALESCE(el.is_compound, 0) as is_compound,
+            SUM(v.set_volume) as total_volume,
+            SUM(v.rep_count) as total_reps,
+            COUNT(v.set_id) as total_sets,
+            COUNT(DISTINCT v.workout_id) as total_sessions
+        FROM exercise_set_performance_view v
+        LEFT JOIN exercise_library el ON v.exercise_library_id = el.id
+        WHERE v.user_id = :userId
+        AND v.activity_date BETWEEN :startDate AND :endDate
+        AND v.rep_count > 0
+        GROUP BY
+            v.exercise_library_id,
+            v.exercise_name,
+            v.primary_muscle_group,
+            el.secondary_muscle_groups,
+            el.movement_pattern,
+            el.is_compound
+        ORDER BY total_volume DESC
+        LIMIT :limit
+    """)
+    @UserScoped
+    suspend fun getHeatmapExerciseActivity(
+        userId: String,
+        startDate: String,
+        endDate: String,
+        limit: Int = 500
+    ): List<MuscleHeatmapExerciseActivityResult>
+
     /**
      * Gets normalized exercise performance aggregates for ranking and analytics.
      */
@@ -720,6 +778,7 @@ data class OneRmResult(
 data class StrengthForecastSetSampleResult(
     val exercise_library_id: String,
     val exercise_name: String,
+    val workout_id: String,
     val activity_date: String,
     val weight_kg: Float,
     val reps: Int,
@@ -783,6 +842,26 @@ data class MuscleGroupRepActivityResult(
     val total_reps: Int,
     val exercise_count: Int,
     val total_sets: Int
+)
+
+data class MuscleGroupSessionActivityResult(
+    val primary_muscle_group: String,
+    val total_sessions: Int,
+    val exercise_count: Int,
+    val total_sets: Int
+)
+
+data class MuscleHeatmapExerciseActivityResult(
+    val exercise_library_id: String,
+    val exercise_name: String,
+    val primary_muscle_group: String,
+    val secondary_muscle_groups: String?,
+    val movement_pattern: String?,
+    val is_compound: Int,
+    val total_volume: Double,
+    val total_reps: Int,
+    val total_sets: Int,
+    val total_sessions: Int
 )
 
 /**

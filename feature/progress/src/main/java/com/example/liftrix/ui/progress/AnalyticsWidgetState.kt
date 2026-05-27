@@ -514,6 +514,7 @@ fun AnalyticsWidgetState.withActiveWidgets(
 
 private fun defaultProgressWidgets(): List<AnalyticsWidget> = listOf(
     AnalyticsWidget.StrengthAnalytics,
+    AnalyticsWidget.StrengthForecast,
     AnalyticsWidget.VolumeAnalytics,
     AnalyticsWidget.MuscleGroupDistribution
 )

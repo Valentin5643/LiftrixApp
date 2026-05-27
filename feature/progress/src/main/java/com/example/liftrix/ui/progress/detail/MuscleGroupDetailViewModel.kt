@@ -4,6 +4,12 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.SavedStateHandle
 import com.example.liftrix.ui.common.viewmodel.ModernStatefulDetailViewModel
 import com.example.liftrix.domain.model.analytics.TimeRangeType
+import com.example.liftrix.domain.model.analytics.AnalyticsWidget
+import com.example.liftrix.domain.model.analytics.MuscleHeatmapColorMode
+import com.example.liftrix.domain.model.analytics.MuscleHeatmapGender
+import com.example.liftrix.domain.model.analytics.MuscleHeatmapMetric
+import com.example.liftrix.domain.model.analytics.MuscleHeatmapViewSide
+import com.example.liftrix.domain.model.analytics.MuscleHeatmapWidgetData
 import com.example.liftrix.domain.model.MuscleGroup
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.progress.ProgressDetailAnalyticsGateway
@@ -11,8 +17,10 @@ import com.example.liftrix.domain.progress.MuscleGroupAnalyticsData as UseCaseMu
 import com.example.liftrix.domain.progress.MuscleGroupData as UseCaseMuscleGroupData
 import com.example.liftrix.domain.progress.BalanceAnalysis as UseCaseBalanceAnalysis
 import com.example.liftrix.domain.progress.ProgressAuthPort
+import com.example.liftrix.domain.repository.WidgetPreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import timber.log.Timber
@@ -36,6 +44,7 @@ class MuscleGroupDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val analyticsQueryUseCase: ProgressDetailAnalyticsGateway,
     private val authQueryUseCase: ProgressAuthPort,
+    private val widgetPreferencesRepository: WidgetPreferencesRepository,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ModernStatefulDetailViewModel<MuscleGroupDetailViewModel.UiState>(
     initialState = UiState.Loading,
@@ -59,6 +68,21 @@ class MuscleGroupDetailViewModel @Inject constructor(
         savedStateHandle.get<String>(KEY_VIEW_MODE)?.let { ViewMode.valueOf(it) } ?: ViewMode.DISTRIBUTION
     )
     val viewMode = _viewMode
+
+    private val _heatmapGender = MutableStateFlow(MuscleHeatmapGender.MALE)
+    val heatmapGender = _heatmapGender
+
+    private val _heatmapViewSide = MutableStateFlow(MuscleHeatmapViewSide.FRONT)
+    val heatmapViewSide = _heatmapViewSide
+
+    private val _heatmapMetric = MutableStateFlow(MuscleHeatmapMetric.VOLUME)
+    val heatmapMetric = _heatmapMetric
+
+    private val _heatmapColorMode = MutableStateFlow(MuscleHeatmapColorMode.APP_GRADIENT)
+    val heatmapColorMode = _heatmapColorMode
+
+    private val _heatmapData = MutableStateFlow(MuscleHeatmapWidgetData.empty())
+    val heatmapData = _heatmapData
 
     companion object {
         private const val KEY_SELECTED_MUSCLE_GROUP = "selectedMuscleGroup"
@@ -232,6 +256,8 @@ class MuscleGroupDetailViewModel @Inject constructor(
                 }
             )
 
+            loadHeatmapData(userId.value)
+
             val result = analyticsQueryUseCase.getMuscleGroupAnalytics(
                 userId = userId.value,
                 muscleGroup = convertToUseCaseMuscleGroup(muscleGroup),
@@ -276,6 +302,35 @@ class MuscleGroupDetailViewModel @Inject constructor(
         if (newTimeRange != _timeRange.value) {
             Timber.d("Updating time range to: $newTimeRange")
             loadData(_selectedMuscleGroup.value, newTimeRange)
+            persistAndReloadHeatmap()
+        }
+    }
+
+    fun updateHeatmapGender(gender: MuscleHeatmapGender) {
+        if (gender != _heatmapGender.value) {
+            _heatmapGender.value = gender
+            persistAndReloadHeatmap()
+        }
+    }
+
+    fun updateHeatmapViewSide(viewSide: MuscleHeatmapViewSide) {
+        if (viewSide != _heatmapViewSide.value) {
+            _heatmapViewSide.value = viewSide
+            persistAndReloadHeatmap()
+        }
+    }
+
+    fun updateHeatmapMetric(metric: MuscleHeatmapMetric) {
+        if (metric != _heatmapMetric.value) {
+            _heatmapMetric.value = metric
+            persistAndReloadHeatmap()
+        }
+    }
+
+    fun updateHeatmapColorMode(colorMode: MuscleHeatmapColorMode) {
+        if (colorMode != _heatmapColorMode.value) {
+            _heatmapColorMode.value = colorMode
+            persistAndReloadHeatmap()
         }
     }
 
@@ -372,7 +427,9 @@ class MuscleGroupDetailViewModel @Inject constructor(
         return uiMuscleGroup?.let { ui ->
             when (ui) {
                 MuscleGroup.CHEST -> com.example.liftrix.domain.progress.MuscleGroup.CHEST
-                MuscleGroup.BACK -> com.example.liftrix.domain.progress.MuscleGroup.BACK
+                MuscleGroup.BACK,
+                MuscleGroup.LATS,
+                MuscleGroup.UPPER_BACK -> com.example.liftrix.domain.progress.MuscleGroup.BACK
                 MuscleGroup.SHOULDERS -> com.example.liftrix.domain.progress.MuscleGroup.SHOULDERS
                 MuscleGroup.BICEPS -> com.example.liftrix.domain.progress.MuscleGroup.ARMS
                 MuscleGroup.TRICEPS -> com.example.liftrix.domain.progress.MuscleGroup.ARMS
@@ -493,7 +550,7 @@ class MuscleGroupDetailViewModel @Inject constructor(
                 selectedMuscleGroup != null && muscleGroup == selectedMuscleGroup -> 100f
                 else -> when (muscleGroup) {
                     MuscleGroup.CHEST -> 18f
-                    MuscleGroup.BACK -> 22f
+                    MuscleGroup.BACK, MuscleGroup.LATS, MuscleGroup.UPPER_BACK -> 22f
                     MuscleGroup.QUADRICEPS -> 20f
                     MuscleGroup.HAMSTRINGS -> 15f
                     MuscleGroup.SHOULDERS -> 12f
@@ -575,6 +632,18 @@ class MuscleGroupDetailViewModel @Inject constructor(
                 "T-Bar Row" to 10f,
                 "Cable Rows" to 5f
             ),
+            MuscleGroup.LATS to listOf(
+                "Lat Pulldown" to 45f,
+                "Pull-ups" to 30f,
+                "Straight-Arm Pulldown" to 15f,
+                "One-Arm Pulldown" to 10f
+            ),
+            MuscleGroup.UPPER_BACK to listOf(
+                "Chest-Supported Row" to 35f,
+                "Face Pulls" to 25f,
+                "Barbell Rows" to 25f,
+                "Rear Delt Fly" to 15f
+            ),
             MuscleGroup.QUADRICEPS to listOf(
                 "Back Squat" to 45f,
                 "Front Squat" to 25f,
@@ -626,7 +695,7 @@ class MuscleGroupDetailViewModel @Inject constructor(
             val weeklyDistribution = primaryMuscleGroups.mapIndexed { index, muscleGroup ->
                 val basePercentage = when (muscleGroup) {
                     MuscleGroup.CHEST -> 18f
-                    MuscleGroup.BACK -> 22f
+                    MuscleGroup.BACK, MuscleGroup.LATS, MuscleGroup.UPPER_BACK -> 22f
                     MuscleGroup.QUADRICEPS -> 20f
                     MuscleGroup.HAMSTRINGS -> 15f
                     MuscleGroup.SHOULDERS -> 12f
@@ -661,8 +730,59 @@ class MuscleGroupDetailViewModel @Inject constructor(
      */
     fun initializeWithParameters(muscleGroup: MuscleGroup?, timeRange: TimeRangeType) {
         Timber.d("Initializing with parameters - muscleGroup: $muscleGroup, timeRange: $timeRange")
-        loadData(muscleGroup, timeRange)
+        viewModelScope.launch {
+            loadSavedHeatmapConfiguration()
+            loadData(muscleGroup, timeRange)
+        }
     }
+
+    private suspend fun loadSavedHeatmapConfiguration() {
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()?.value ?: return
+        val preferences = widgetPreferencesRepository.getWidgetPreferences(userId)
+            .first()
+            .getOrNull()
+            ?: return
+        val configuration = preferences.getWidgetConfiguration(AnalyticsWidget.MuscleHeatmap.id)
+
+        _heatmapGender.value = MuscleHeatmapGender.fromConfig(configuration["gender"])
+        _heatmapViewSide.value = MuscleHeatmapViewSide.fromConfig(configuration["viewSide"])
+        _heatmapMetric.value = MuscleHeatmapMetric.fromConfig(configuration["metric"])
+        _heatmapColorMode.value = MuscleHeatmapColorMode.fromConfig(configuration["colorMode"])
+    }
+
+    private fun persistAndReloadHeatmap() {
+        viewModelScope.launch {
+            val userId = authQueryUseCase(waitForAuth = false).getOrNull()?.value ?: return@launch
+            val configuration = currentHeatmapConfiguration()
+            widgetPreferencesRepository.updateWidgetConfiguration(
+                userId = userId,
+                widgetName = AnalyticsWidget.MuscleHeatmap.id,
+                configuration = configuration
+            ).onFailure { error ->
+                Timber.e(error, "Failed to persist muscle heatmap configuration")
+            }
+            loadHeatmapData(userId)
+        }
+    }
+
+    private suspend fun loadHeatmapData(userId: String) {
+        analyticsQueryUseCase.getMuscleHeatmapData(
+            userId = userId,
+            configuration = currentHeatmapConfiguration()
+        ).onSuccess { data ->
+            _heatmapData.value = data
+        }.onFailure { error ->
+            Timber.e(error, "Failed to load muscle heatmap detail data")
+        }
+    }
+
+    private fun currentHeatmapConfiguration(): Map<String, String> = mapOf(
+        "gender" to _heatmapGender.value.configValue,
+        "viewSide" to _heatmapViewSide.value.configValue,
+        "timeRange" to _timeRange.value.name,
+        "metric" to _heatmapMetric.value.configValue,
+        "colorMode" to _heatmapColorMode.value.configValue
+    )
 
     /**
      * Extension function for random float in range
@@ -677,6 +797,8 @@ class MuscleGroupDetailViewModel @Inject constructor(
         val lowerRec = recommendation.lowercase()
         return when {
             lowerRec.contains("chest") -> MuscleGroup.CHEST
+            lowerRec.contains("lat") -> MuscleGroup.LATS
+            lowerRec.contains("upper back") || lowerRec.contains("trap") || lowerRec.contains("rhomboid") -> MuscleGroup.UPPER_BACK
             lowerRec.contains("back") -> MuscleGroup.BACK
             lowerRec.contains("shoulder") -> MuscleGroup.SHOULDERS
             lowerRec.contains("leg") || lowerRec.contains("quad") -> MuscleGroup.QUADRICEPS
@@ -739,6 +861,8 @@ class MuscleGroupDetailViewModel @Inject constructor(
         return when (muscleGroup) {
             MuscleGroup.CHEST -> listOf("Bench Press", "Push-Ups", "Chest Fly")
             MuscleGroup.BACK -> listOf("Pull-Ups", "Bent-Over Row", "Lat Pulldown")
+            MuscleGroup.LATS -> listOf("Lat Pulldown", "Pull-Ups", "Straight-Arm Pulldown")
+            MuscleGroup.UPPER_BACK -> listOf("Bent-Over Row", "Face Pull", "Chest-Supported Row")
             MuscleGroup.SHOULDERS -> listOf("Overhead Press", "Lateral Raise", "Front Raise")
             MuscleGroup.QUADRICEPS -> listOf("Squats", "Leg Press", "Lunges")
             MuscleGroup.HAMSTRINGS -> listOf("Romanian Deadlift", "Leg Curl", "Good Morning")

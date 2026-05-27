@@ -1,6 +1,7 @@
 package com.example.liftrix.ui.progress.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -155,11 +156,14 @@ private fun ForecastChart(
                     val maxValue = values.maxOrNull()?.let { it + 2.5 } ?: 1.0
                     val range = (maxValue - minValue).takeIf { it > 0.0 } ?: 1.0
                     val firstDate = points.minOfOrNull { it.date }
-                    val lastDate = points.maxOfOrNull { it.date }
-                    val daySpan = firstDate?.daysUntil(lastDate ?: firstDate)?.coerceAtLeast(1) ?: 1
+                    val timelineValues = points.map { point ->
+                        point.timelineDay ?: (firstDate?.daysUntil(point.date)?.toDouble() ?: 0.0)
+                    }
+                    val firstTimeline = timelineValues.minOrNull() ?: 0.0
+                    val timelineSpan = ((timelineValues.maxOrNull() ?: firstTimeline) - firstTimeline).takeIf { it > 0.0 } ?: 1.0
                     fun position(point: StrengthForecastPoint): Offset {
-                        val dayOffset = firstDate?.daysUntil(point.date) ?: 0
-                        val x = padding + chartWidth * (dayOffset.toFloat() / daySpan.toFloat())
+                        val timelineOffset = (point.timelineDay ?: (firstDate?.daysUntil(point.date)?.toDouble() ?: 0.0)) - firstTimeline
+                        val x = padding + chartWidth * (timelineOffset.toFloat() / timelineSpan.toFloat())
                         val converted = weightUnit.convertFromKilograms(point.estimatedOneRmKg)
                         val y = padding + chartHeight * (1f - ((converted - minValue) / range).toFloat())
                         return Offset(x, y)
@@ -169,8 +173,14 @@ private fun ForecastChart(
                         val offset = position(point)
                         if (index == 0) historicalPath.moveTo(offset.x, offset.y) else historicalPath.lineTo(offset.x, offset.y)
                     }
+                    val historicalPoints = points.filter { it.type == StrengthForecastPointType.HISTORICAL }
+                    val forecastPoints = points.filter { it.type == StrengthForecastPointType.FORECAST }
+                    val forecastSeries = buildList {
+                        historicalPoints.lastOrNull()?.let(::add)
+                        addAll(forecastPoints)
+                    }
                     val forecastPath = Path()
-                    points.filter { it.type == StrengthForecastPointType.FORECAST }.forEachIndexed { index, point ->
+                    forecastSeries.forEachIndexed { index, point ->
                         val offset = position(point)
                         if (index == 0) forecastPath.moveTo(offset.x, offset.y) else forecastPath.lineTo(offset.x, offset.y)
                     }
@@ -223,6 +233,7 @@ private fun LegendDot(color: Color, filled: Boolean, label: String) {
             modifier = Modifier
                 .size(8.dp)
                 .background(if (filled) color else Color.Transparent, CircleShape)
+                .border(1.5.dp, color, CircleShape)
         )
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }

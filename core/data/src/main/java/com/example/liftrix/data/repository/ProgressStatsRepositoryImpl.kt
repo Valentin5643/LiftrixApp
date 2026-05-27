@@ -27,8 +27,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.catch
 import kotlin.time.Duration.Companion.hours
+import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone as KotlinTimeZone
+import kotlinx.datetime.minus
+import kotlinx.datetime.todayIn
 import kotlinx.datetime.toJavaInstant
 import timber.log.Timber
 import javax.inject.Inject
@@ -257,16 +260,24 @@ class ProgressStatsRepositoryImpl @Inject constructor(
                 else -> LocalDate(year, month, 31)
             }
             
-            Timber.d("🔍 VOLUME-CALENDAR-FIX: Using same data source as working volume chart")
-            
-            // FIX: Use the same data calculation method as the working volume chart
-            // This calls getWorkoutsInDateRangeWithMetrics() which properly calculates volume from exercise sets
-            val allDailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(userId, startDate, endDate)
-            
-            Timber.d("🔍 VOLUME-CALENDAR-FIX: Got ${allDailyMetrics.size} daily metrics")
-            
+            Timber.d("🔍 VOLUME-CALENDAR-FIX: Loading normalized completed workout metrics")
+
+            val dailyMetrics = workoutDao.getDailyWorkoutMetricsFromView(
+                userId = userId,
+                startDate = startDate.toString(),
+                endDate = endDate.toString()
+            )
+
+            Timber.d("🔍 VOLUME-CALENDAR-FIX: Got ${dailyMetrics.size} daily metrics from view")
+
             // Filter to only include dates within the specified month (VolumeCalendarData validation requirement)
-            val filteredMetrics = allDailyMetrics.filterKeys { date ->
+            val filteredMetrics = dailyMetrics.mapNotNull { row ->
+                val date = runCatching { LocalDate.parse(row.date) }.getOrElse { error ->
+                    Timber.w(error, "Skipping volume calendar row with invalid date: ${row.date}")
+                    return@mapNotNull null
+                }
+                date to row
+            }.filter { (date, _) ->
                 date.year == year && date.monthNumber == month
             }
             
@@ -276,9 +287,9 @@ class ProgressStatsRepositoryImpl @Inject constructor(
             Timber.d("🔍 VOLUME-CALENDAR-FIX: Converting ${filteredMetrics.size} daily metrics to calendar format")
             
             val dailyVolumes = try {
-                filteredMetrics.mapValues { (date, metrics) ->
-                    Timber.d("🔍 VOLUME-CALENDAR-FIX: Processing date=$date, volume=${metrics.totalVolume}kg")
-                    com.example.liftrix.domain.model.Volume(metrics.totalVolume.toDouble())
+                filteredMetrics.associate { (date, metrics) ->
+                    Timber.d("🔍 VOLUME-CALENDAR-FIX: Processing date=$date, volume=${metrics.total_volume}kg")
+                    date to com.example.liftrix.domain.model.Volume(metrics.total_volume)
                 }
             } catch (e: Exception) {
                 Timber.e(e, "🔍 VOLUME-CALENDAR-FIX: Error converting daily metrics to volumes")
@@ -361,29 +372,26 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         try {
             Timber.d("🔍 MAX-VOLUME: Getting historical maximum daily volume for userId=$userId")
             
-            // Get all workout data for the user to find maximum daily volume
-            // Using a reasonable time window (last 2 years) for performance
-            val currentDate = kotlinx.datetime.Clock.System.now()
-            val twoYearsAgo = kotlinx.datetime.LocalDate.fromEpochDays(
-                (currentDate.epochSeconds / 86400).toInt() - (365 * 2)
+            // Use the same normalized source as the calendar so scaling is based on the
+            // data that actually renders in the widget.
+            val today = Clock.System.todayIn(KotlinTimeZone.currentSystemDefault())
+            val twoYearsAgo = today.minus(DatePeriod(months = 24))
+            val allDailyMetrics = workoutDao.getDailyWorkoutMetricsFromView(
+                userId = userId,
+                startDate = twoYearsAgo.toString(),
+                endDate = today.toString()
             )
-            val today = kotlinx.datetime.LocalDate.fromEpochDays(
-                (currentDate.epochSeconds / 86400).toInt()
-            )
-            
-            // Get all daily metrics in the time window
-            val allDailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(userId, twoYearsAgo, today)
-            
+
             Timber.d("🔍 MAX-VOLUME: Found ${allDailyMetrics.size} days with workout data")
-            
+
             // Find the maximum daily volume
-            val maxDailyVolume = allDailyMetrics.values.maxOfOrNull { it.totalVolume } ?: 0f
+            val maxDailyVolume = allDailyMetrics.maxOfOrNull { it.total_volume } ?: 0.0
             
             Timber.d("🔍 MAX-VOLUME: Historical maximum daily volume: ${maxDailyVolume}kg")
             
             // Apply minimum threshold to ensure reasonable intensity scaling
             // Even users with low volume should see visual differences
-            val effectiveMaxVolume = maxOf(maxDailyVolume.toDouble(), 1000.0) // Minimum 1000kg for scaling
+            val effectiveMaxVolume = maxOf(maxDailyVolume, 1000.0) // Minimum 1000kg for scaling
             
             val maxVolume = com.example.liftrix.domain.model.Volume.fromKilograms(effectiveMaxVolume)
             

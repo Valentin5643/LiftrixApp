@@ -59,6 +59,12 @@ abstract class SettingsDomainModule {
         impl: com.example.liftrix.data.service.AdminFirebaseServiceImpl
     ): com.example.liftrix.domain.service.AdminFirebaseService
 
+    @Binds
+    @Singleton
+    abstract fun bindDemoModeSettingsPort(
+        impl: com.example.liftrix.di.feature.settings.DemoModeSettingsAdapter
+    ): com.example.liftrix.feature.settings.ports.DemoModeSettingsPort
+
     companion object {
         @Provides
         @Singleton

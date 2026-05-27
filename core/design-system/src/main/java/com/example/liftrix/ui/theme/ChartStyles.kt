@@ -562,26 +562,22 @@ object ModernChartRenderer {
         }
         
         val optimizedPoints = LiftrixChartStyle.Performance.optimizeDataPoints(dataPoints, size.width)
-        val smoothedPoints = if (config.useBezierCurves) {
-            LiftrixChartStyle.BezierCurves.smoothDataPoints(optimizedPoints)
-        } else {
-            optimizedPoints
-        }
+        val chartPoints = optimizedPoints
         
         val path = androidx.compose.ui.graphics.Path()
         
         // Create line path
-        smoothedPoints.forEachIndexed { index, (x, y) ->
+        chartPoints.forEachIndexed { index, (x, y) ->
             when (index) {
                 0 -> path.moveTo(x, y)
                 else -> {
                     if (config.useBezierCurves && index > 0) {
-                        val prevPoint = smoothedPoints[index - 1]
+                        val prevPoint = chartPoints[index - 1]
                         val controlPoints = LiftrixChartStyle.BezierCurves.calculateControlPoints(
                             prevPoint.first, prevPoint.second,
                             x, y,
-                            smoothedPoints.getOrNull(index + 1)?.first,
-                            smoothedPoints.getOrNull(index + 1)?.second
+                            chartPoints.getOrNull(index + 1)?.first,
+                            chartPoints.getOrNull(index + 1)?.second
                         )
                         
                         path.cubicTo(
@@ -600,8 +596,8 @@ object ModernChartRenderer {
         if (config.showGradientFill) {
             val fillPath = androidx.compose.ui.graphics.Path().apply {
                 addPath(path)
-                lineTo(smoothedPoints.last().first, size.height)
-                lineTo(smoothedPoints.first().first, size.height)
+                lineTo(chartPoints.last().first, size.height)
+                lineTo(chartPoints.first().first, size.height)
                 close()
             }
             
@@ -623,7 +619,7 @@ object ModernChartRenderer {
         
         // Draw data points
         if (config.showDataPoints) {
-            smoothedPoints.forEach { (x, y) ->
+            chartPoints.forEach { (x, y) ->
                 drawCircle(
                     color = config.color,
                     radius = LiftrixChartStyle.ChartDimensions.dataPointRadius.toPx(),

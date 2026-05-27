@@ -287,7 +287,7 @@ private fun VolumeAnalysisContent(
                         showPersonalRecords = true,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(200.dp)
+                            .height(260.dp)
                     )
                 } else {
                     EmptyState(

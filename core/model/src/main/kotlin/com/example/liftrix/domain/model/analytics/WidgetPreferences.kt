@@ -29,6 +29,7 @@ data class WidgetPreferences(
     val userLevel: UserLevel = UserLevel.BEGINNER,
     val collapsedSections: Set<String> = emptySet(),
     val widgetSizes: Map<String, WidgetDisplaySize> = emptyMap(),
+    val widgetConfigurations: Map<String, Map<String, String>> = emptyMap(),
     val enableAutoRefresh: Boolean = true,
     val refreshIntervalMinutes: Int = 5,
     val hasSeenWidgetMigrationNotice: Boolean = false,
@@ -62,6 +63,7 @@ data class WidgetPreferences(
                 userLevel = userLevel,
                 collapsedSections = emptySet(),
                 widgetSizes = createDefaultSizes(getWidgetsFromConfiguration(defaultConfiguration)),
+                widgetConfigurations = emptyMap(),
                 enableAutoRefresh = true,
                 refreshIntervalMinutes = 5,
                 lastModified = Clock.System.now()
@@ -77,6 +79,7 @@ data class WidgetPreferences(
         private fun getDefaultVisibleWidgets(): Set<String> {
             return setOf(
                 AnalyticsWidget.StrengthAnalytics.id,
+                AnalyticsWidget.StrengthForecast.id,
                 AnalyticsWidget.VolumeAnalytics.id,
                 AnalyticsWidget.MuscleGroupDistribution.id
             )
@@ -89,6 +92,7 @@ data class WidgetPreferences(
         private fun getDefaultWidgetOrder(): List<String> {
             return listOf(
                 AnalyticsWidget.StrengthAnalytics.id,
+                AnalyticsWidget.StrengthForecast.id,
                 AnalyticsWidget.VolumeAnalytics.id,
                 AnalyticsWidget.MuscleGroupDistribution.id
             )
@@ -106,6 +110,7 @@ data class WidgetPreferences(
 
         private fun getDefaultProgressWidgets(): List<AnalyticsWidget> = listOf(
             AnalyticsWidget.StrengthAnalytics,
+            AnalyticsWidget.StrengthForecast,
             AnalyticsWidget.VolumeAnalytics,
             AnalyticsWidget.MuscleGroupDistribution
         )
@@ -298,6 +303,33 @@ data class WidgetPreferences(
             widgetSizes = widgetSizes + (widgetName to size),
             lastModified = Clock.System.now()
         )
+    }
+
+    /**
+     * Updates widget-specific configuration while preserving other widget settings.
+     *
+     * @param widgetName Name or id of the widget
+     * @param configuration Persistable string configuration values
+     * @return Updated WidgetPreferences
+     */
+    fun updateWidgetConfiguration(
+        widgetName: String,
+        configuration: Map<String, String>
+    ): WidgetPreferences {
+        return copy(
+            widgetConfigurations = widgetConfigurations + (widgetName to configuration),
+            lastModified = Clock.System.now()
+        )
+    }
+
+    /**
+     * Gets widget-specific configuration by widget name or id.
+     *
+     * @param widgetName Name or id of the widget
+     * @return Persisted widget configuration, or empty map
+     */
+    fun getWidgetConfiguration(widgetName: String): Map<String, String> {
+        return widgetConfigurations[widgetName].orEmpty()
     }
     
     /**

@@ -68,7 +68,7 @@ class StrengthForecastService @Inject constructor() {
         forecastDays: Int
     ): StrengthExerciseForecast {
         val exerciseName = samples.firstOrNull()?.exercise_name?.takeIf { it.isNotBlank() } ?: "Unknown Exercise"
-        val historical = selectDailyBest(samples)
+        val historical = selectWorkoutBests(samples)
         if (historical.isEmpty()) {
             return emptyForecast(exerciseId, exerciseName, StrengthForecastStatus.NO_DATA, historyDays, forecastDays)
         }
@@ -80,17 +80,20 @@ class StrengthForecastService @Inject constructor() {
         if (latestDate.daysUntil(today) > INACTIVE_AFTER_DAYS) {
             return emptyForecast(exerciseId, exerciseName, StrengthForecastStatus.INACTIVE, historyDays, forecastDays, historical)
         }
+        if (timelineSpanDays(historical) <= 0.0) {
+            return emptyForecast(exerciseId, exerciseName, StrengthForecastStatus.INSUFFICIENT_DATA, historyDays, forecastDays, historical)
+        }
 
         val regression = calculateRegression(historical)
             ?: return emptyForecast(exerciseId, exerciseName, StrengthForecastStatus.INSUFFICIENT_DATA, historyDays, forecastDays, historical)
-        val latestPoint = historical.maxBy { it.date }
+        val latestPoint = historical.maxWith(compareBy<StrengthForecastPoint> { it.date }.thenBy { it.timelineDay ?: 0.0 })
         val firstDate = historical.minOf { it.date }
         val forecast = (1..forecastDays).mapNotNull { offset ->
             val date = latestDate.plus(DatePeriod(days = offset))
-            val x = firstDate.daysUntil(date).toDouble()
+            val x = (latestPoint.timelineDay ?: firstDate.daysUntil(latestDate).toDouble()) + offset.toDouble()
             val predicted = (regression.slopeKgPerDay * x + regression.interceptKg).coerceAtLeast(0.0)
             predicted.takeIf { it.isFinite() }?.let {
-                StrengthForecastPoint(date, it, StrengthForecastPointType.FORECAST)
+                StrengthForecastPoint(date, it, StrengthForecastPointType.FORECAST, x)
             }
         }
         val projected = forecast.lastOrNull()?.estimatedOneRmKg
@@ -120,26 +123,79 @@ class StrengthForecastService @Inject constructor() {
         )
     }
 
-    private fun selectDailyBest(samples: List<StrengthForecastSetSampleResult>): List<StrengthForecastPoint> {
-        return samples.mapNotNull { sample ->
+    private fun selectWorkoutBests(samples: List<StrengthForecastSetSampleResult>): List<StrengthForecastPoint> {
+        val candidates = samples.mapNotNull { sample ->
             val estimate = estimateBrzyckiOneRmKg(sample.weight_kg.toDouble(), sample.reps) ?: return@mapNotNull null
             val date = parseDate(sample.activity_date) ?: parseCompletedDate(sample.completed_at) ?: return@mapNotNull null
-            DailyCandidate(sample, date, estimate)
-        }.groupBy { it.date }
+            WorkoutCandidate(sample, date, sample.completed_at.takeIf { it > 0L }, estimate)
+        }
+            .groupBy { it.workoutKey }
             .map { (_, candidates) ->
                 candidates.maxWith(
-                    compareBy<DailyCandidate> { it.sample.weight_kg }
-                        .thenBy { it.estimatedOneRmKg }
+                    compareBy<WorkoutCandidate> { it.estimatedOneRmKg }
+                        .thenBy { it.sample.weight_kg }
                         .thenBy { it.sample.completed_at }
                 )
             }
-            .sortedBy { it.date }
-            .map { StrengthForecastPoint(it.date, it.estimatedOneRmKg, StrengthForecastPointType.HISTORICAL) }
+            .sortedWith(compareBy<WorkoutCandidate> { it.date }.thenBy { it.completedAtMillis ?: 0L })
+            .recordHighsOnly()
+
+        val timelineDays = workoutTimelineDays(candidates)
+        return candidates.zip(timelineDays).map { (candidate, timelineDay) ->
+            StrengthForecastPoint(
+                date = candidate.date,
+                estimatedOneRmKg = candidate.estimatedOneRmKg,
+                type = StrengthForecastPointType.HISTORICAL,
+                timelineDay = timelineDay
+            )
+        }
+    }
+
+    private fun List<WorkoutCandidate>.recordHighsOnly(): List<WorkoutCandidate> {
+        var bestEstimate = 0.0
+        return mapNotNull { candidate ->
+            if (candidate.estimatedOneRmKg < bestEstimate) {
+                null
+            } else {
+                bestEstimate = candidate.estimatedOneRmKg
+                candidate
+            }
+        }
+    }
+
+    private fun workoutTimelineDays(candidates: List<WorkoutCandidate>): List<Double> {
+        if (candidates.isEmpty()) return emptyList()
+
+        val firstCompletedAt = candidates.mapNotNull { it.completedAtMillis }.minOrNull()
+        val firstDate = candidates.minOfOrNull { it.date }
+        val rawTimeline = candidates.map { candidate ->
+            when {
+                firstCompletedAt != null && candidate.completedAtMillis != null ->
+                    (candidate.completedAtMillis - firstCompletedAt).toDouble() / MILLIS_PER_DAY
+                firstDate != null -> firstDate.daysUntil(candidate.date).toDouble()
+                else -> 0.0
+            }
+        }
+        val rawSpan = (rawTimeline.maxOrNull() ?: 0.0) - (rawTimeline.minOrNull() ?: 0.0)
+        return if (rawSpan < MIN_REAL_DAY_TIMELINE_SPAN) {
+            candidates.indices.map { it.toDouble() }
+        } else {
+            val adjustedTimeline = mutableListOf<Double>()
+            rawTimeline.forEach { current ->
+                val previous = adjustedTimeline.lastOrNull()
+                adjustedTimeline += if (previous != null && current <= previous) {
+                    previous + MIN_TIMELINE_INCREMENT_DAYS
+                } else {
+                    current
+                }
+            }
+            adjustedTimeline
+        }
     }
 
     private fun calculateRegression(points: List<StrengthForecastPoint>): StrengthForecastRegression? {
         val firstDate = points.minOf { it.date }
-        val xy = points.map { firstDate.daysUntil(it.date).toDouble() to it.estimatedOneRmKg }
+        val xy = points.map { (it.timelineDay ?: firstDate.daysUntil(it.date).toDouble()) to it.estimatedOneRmKg }
         val n = xy.size.toDouble()
         val sumX = xy.sumOf { it.first }
         val sumY = xy.sumOf { it.second }
@@ -156,6 +212,12 @@ class StrengthForecastService @Inject constructor() {
         val rSquared = if (ssTotal == 0.0) 1.0 else (1.0 - ssResidual / ssTotal).coerceIn(0.0, 1.0)
         val residualError = sqrt(ssResidual / (xy.size - 2).coerceAtLeast(1))
         return StrengthForecastRegression(slope, intercept, rSquared, residualError)
+    }
+
+    private fun timelineSpanDays(points: List<StrengthForecastPoint>): Double {
+        val firstDate = points.minOf { it.date }
+        val timelineValues = points.map { it.timelineDay ?: firstDate.daysUntil(it.date).toDouble() }
+        return (timelineValues.maxOrNull() ?: 0.0) - (timelineValues.minOrNull() ?: 0.0)
     }
 
     private fun classifyTrend(projectedChangeKg: Double?, regression: StrengthForecastRegression): StrengthForecastTrend {
@@ -220,17 +282,24 @@ class StrengthForecastService @Inject constructor() {
 
     private fun Double.formatKg(): String = "${"%.1f".format(this)} kg"
 
-    private data class DailyCandidate(
+    private data class WorkoutCandidate(
         val sample: StrengthForecastSetSampleResult,
         val date: LocalDate,
+        val completedAtMillis: Long?,
         val estimatedOneRmKg: Double
-    )
+    ) {
+        val workoutKey: String = sample.workout_id.takeIf { it.isNotBlank() }
+            ?: "${date}_${sample.completed_at}"
+    }
 
     companion object {
         const val DEFAULT_HISTORY_DAYS = 30
         const val DEFAULT_FORECAST_DAYS = 14
+        private const val MILLIS_PER_DAY = 86_400_000.0
         private const val MIN_FORECAST_DAYS = 7
         private const val MAX_FORECAST_DAYS = 30
+        private const val MIN_REAL_DAY_TIMELINE_SPAN = 1.0
+        private const val MIN_TIMELINE_INCREMENT_DAYS = 0.01
         private const val TREND_THRESHOLD_KG = 1.0
         private const val MIN_R_SQUARED = 0.15
         private const val HIGH_RESIDUAL_ERROR_KG = 12.5

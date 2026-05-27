@@ -11,20 +11,21 @@ data class VolumeDataPoint(
     val volume: Weight,
     val workoutCount: Int = 1,
     val exerciseCount: Int = 0,
-    val label: String = ""
+    val label: String = "",
+    val volumeKg: Double = volume.kilograms
 ) {
-    fun getVolumeInKg(): Float = volume.kilograms.toFloat()
+    fun getVolumeInKg(): Float = volumeKg.toFloat()
 
-    fun getVolumeAsDouble(): Double = volume.kilograms
+    fun getVolumeAsDouble(): Double = volumeKg
 
-    fun hasWorkoutData(): Boolean = workoutCount > 0 && volume.kilograms > 0.0
+    fun hasWorkoutData(): Boolean = workoutCount > 0 && volumeKg > 0.0
 
     fun getDisplayLabel(): String = label.ifBlank {
-        "${volume.displayValue} (${workoutCount}x)"
+        "${"%.1f kg".format(volumeKg)} (${workoutCount}x)"
     }
 
     fun getAverageVolumePerWorkout(): Weight = if (workoutCount > 0) {
-        Weight.fromKilograms(volume.kilograms / workoutCount)
+        Weight.fromKilograms(volumeKg / workoutCount)
     } else {
         Weight.ZERO
     }
@@ -50,20 +51,28 @@ data class VolumeDataPoint(
             workoutCount: Int = 1,
             exerciseCount: Int = 0,
             label: String = ""
-        ): VolumeDataPoint = VolumeDataPoint(
-            date = date,
-            volume = Weight.fromKilograms(volumeKg),
-            workoutCount = workoutCount,
-            exerciseCount = exerciseCount,
-            label = label
-        )
+        ): VolumeDataPoint {
+            val safeVolumeKg = sanitizeVolumeKg(volumeKg)
+            return VolumeDataPoint(
+                date = date,
+                volume = Weight.fromKilograms(safeVolumeKg),
+                workoutCount = workoutCount,
+                exerciseCount = exerciseCount,
+                label = label,
+                volumeKg = safeVolumeKg
+            )
+        }
 
         fun empty(date: LocalDate): VolumeDataPoint = VolumeDataPoint(
             date = date,
             volume = Weight.ZERO,
             workoutCount = 0,
             exerciseCount = 0,
-            label = "No data"
+            label = "No data",
+            volumeKg = 0.0
         )
+
+        private fun sanitizeVolumeKg(volumeKg: Double): Double =
+            if (volumeKg.isFinite()) volumeKg.coerceAtLeast(0.0) else 0.0
     }
 }

@@ -2,6 +2,7 @@ package com.example.liftrix.domain.progress
 
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.DashboardConfiguration
+import com.example.liftrix.domain.model.analytics.MuscleHeatmapWidgetData
 import com.example.liftrix.domain.model.analytics.StrengthForecastResult
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.analytics.WidgetPreferences
@@ -58,6 +59,11 @@ interface ProgressDetailAnalyticsGateway {
         timeRange: TimeRangeType,
         muscleGroup: MuscleGroup? = null
     ): LiftrixResult<MuscleGroupAnalyticsData>
+
+    suspend fun getMuscleHeatmapData(
+        userId: String,
+        configuration: Map<String, String>
+    ): LiftrixResult<MuscleHeatmapWidgetData>
 
     suspend fun getExerciseRanking(
         userId: String,

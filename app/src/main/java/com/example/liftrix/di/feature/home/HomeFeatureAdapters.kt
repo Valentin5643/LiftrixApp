@@ -1,5 +1,8 @@
 package com.example.liftrix.di.feature.home
 
+import com.example.liftrix.demo.DemoHomeDataFactory
+import com.example.liftrix.demo.DemoModeController
+import com.example.liftrix.demo.DemoTimelineGenerator
 import com.example.liftrix.domain.model.FeedWorkout
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.Workout
@@ -36,6 +39,7 @@ import com.example.liftrix.feature.home.ports.HomeSocialPort
 import com.example.liftrix.feature.home.ports.HomeWorkoutPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import timber.log.Timber
 import javax.inject.Inject
@@ -84,6 +88,38 @@ class AppHomeWorkoutAdapter @Inject constructor(
 }
 
 @Singleton
+class DemoAwareHomeWorkoutAdapter @Inject constructor(
+    private val delegate: AppHomeWorkoutAdapter,
+    private val demoModeController: DemoModeController,
+    private val timelineGenerator: DemoTimelineGenerator,
+    private val demoHomeDataFactory: DemoHomeDataFactory
+) : HomeWorkoutPort {
+    override fun getRecentWorkouts(userId: String, limit: Int): Flow<LiftrixResult<List<HomeWorkout>>> =
+        if (demoModeController.state.value.isActive) {
+            flowOf(Result.success(demoHomeDataFactory.recentWorkouts(activeTimeline(), limit)))
+        } else {
+            delegate.getRecentWorkouts(userId, limit)
+        }
+
+    override fun getRecentActivityFeed(userId: String, includeOthers: Boolean, limit: Int): Flow<LiftrixResult<List<HomeFeedWorkout>>> =
+        if (demoModeController.state.value.isActive) {
+            flowOf(Result.success(demoHomeDataFactory.recentActivityFeed(activeTimeline(), includeOthers, limit)))
+        } else {
+            delegate.getRecentActivityFeed(userId, includeOthers, limit)
+        }
+
+    override suspend fun getWorkoutStats(userId: String): LiftrixResult<HomeWorkoutStats> =
+        if (demoModeController.state.value.isActive) {
+            Result.success(demoHomeDataFactory.stats(activeTimeline()))
+        } else {
+            delegate.getWorkoutStats(userId)
+        }
+
+    private fun activeTimeline() =
+        timelineGenerator.generate(requireNotNull(demoModeController.state.value.sessionSeed))
+}
+
+@Singleton
 class AppHomeSocialAdapter @Inject constructor(
     private val socialRepository: SocialRepository
 ) : HomeSocialPort {
@@ -92,6 +128,17 @@ class AppHomeSocialAdapter @Inject constructor(
 
     override suspend fun refreshDiscoveryCache(): Result<Unit> =
         socialRepository.refreshDiscoveryCache()
+}
+
+@Singleton
+class DemoAwareHomeSocialAdapter @Inject constructor(
+    private val delegate: AppHomeSocialAdapter
+) : HomeSocialPort {
+    override fun getRecommendedUsers(limit: Int, offset: Int): Flow<List<com.example.liftrix.domain.model.RecommendedUser>> =
+        delegate.getRecommendedUsers(limit, offset)
+
+    override suspend fun refreshDiscoveryCache(): Result<Unit> =
+        delegate.refreshDiscoveryCache()
 }
 
 @Singleton
@@ -167,6 +214,50 @@ class AppHomeFeedAdapter @Inject constructor(
         errorMessage: String,
         additionalProperties: Map<String, Any>
     ) = analyticsTracker.trackError(errorType, errorMessage, additionalProperties)
+}
+
+@Singleton
+class DemoAwareHomeFeedAdapter @Inject constructor(
+    private val delegate: AppHomeFeedAdapter
+) : HomeFeedPort {
+    override fun getFeed(userId: String, feedType: FeedType, targetUserId: String?, pageSize: Int) =
+        delegate.getFeed(userId, feedType, targetUserId, pageSize)
+
+    override fun getHomeFeed(userId: String, pageSize: Int) =
+        delegate.getHomeFeed(userId, pageSize)
+
+    override fun getDiscoveryFeed(userId: String, pageSize: Int) =
+        delegate.getDiscoveryFeed(userId, pageSize)
+
+    override suspend fun createPost(userId: String, request: CreateWorkoutPostRequest): LiftrixResult<WorkoutPost> =
+        delegate.createPost(userId, request)
+
+    override suspend fun refreshFeed(userId: String): LiftrixResult<Unit> =
+        delegate.refreshFeed(userId)
+
+    override suspend fun seedWorkoutPosts(userId: String): LiftrixResult<Int> =
+        delegate.seedWorkoutPosts(userId)
+
+    override suspend fun toggleLike(postId: String, userId: String): LiftrixResult<Boolean> =
+        delegate.toggleLike(postId, userId)
+
+    override suspend fun toggleSave(postId: String, userId: String): LiftrixResult<Boolean> =
+        delegate.toggleSave(postId, userId)
+
+    override suspend fun copyWorkoutFromPost(postId: String, userId: String): LiftrixResult<String> =
+        delegate.copyWorkoutFromPost(postId, userId)
+
+    override fun trackShare(contentType: String, contentId: String, platform: String, userId: String, hasCustomMessage: Boolean, additionalProperties: Map<String, Any>) {
+        delegate.trackShare(contentType, contentId, platform, userId, hasCustomMessage, additionalProperties)
+    }
+
+    override fun trackEngagement(action: String, contentType: String, contentId: String, contentOwnerUserId: String, userId: String, additionalProperties: Map<String, Any>) {
+        delegate.trackEngagement(action, contentType, contentId, contentOwnerUserId, userId, additionalProperties)
+    }
+
+    override fun trackError(errorType: String, errorMessage: String, additionalProperties: Map<String, Any>) {
+        delegate.trackError(errorType, errorMessage, additionalProperties)
+    }
 }
 
 @Singleton

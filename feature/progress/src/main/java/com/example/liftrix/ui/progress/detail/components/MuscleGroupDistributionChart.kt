@@ -171,7 +171,7 @@ private fun EmptyChartState() {
 private fun mapDomainToChartMuscleGroup(domainMuscleGroup: MuscleGroup): ChartMuscleGroup {
     return when (domainMuscleGroup) {
         MuscleGroup.CHEST -> ChartMuscleGroup.CHEST
-        MuscleGroup.BACK -> ChartMuscleGroup.BACK
+        MuscleGroup.BACK, MuscleGroup.LATS, MuscleGroup.UPPER_BACK -> ChartMuscleGroup.BACK
         MuscleGroup.SHOULDERS -> ChartMuscleGroup.SHOULDERS
         MuscleGroup.TRICEPS, MuscleGroup.BICEPS, MuscleGroup.FOREARMS -> ChartMuscleGroup.ARMS
         MuscleGroup.QUADRICEPS, MuscleGroup.HAMSTRINGS, MuscleGroup.GLUTES, MuscleGroup.CALVES -> ChartMuscleGroup.LEGS

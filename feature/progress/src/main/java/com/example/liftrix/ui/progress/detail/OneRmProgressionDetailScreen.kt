@@ -224,7 +224,7 @@ private fun OneRmProgressionContent(
         LiftrixCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(300.dp)
+                .height(360.dp)
         ) {
             OneRmProgressionChart(
                 data = data,

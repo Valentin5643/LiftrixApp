@@ -278,12 +278,14 @@ fun WidgetPreviewThumbnail(
     val previewIcon = when (widget) {
         // Consolidated widgets
         AnalyticsWidget.StrengthAnalytics -> Icons.Default.FitnessCenter
+        AnalyticsWidget.StrengthForecast -> Icons.Default.ShowChart
         AnalyticsWidget.VolumeAnalytics -> Icons.Default.Analytics
         
         // Active widgets
         AnalyticsWidget.FrequencyChart -> Icons.Default.BarChart
         AnalyticsWidget.ProgressChart -> Icons.Default.TrendingUp
         AnalyticsWidget.MuscleGroupDistribution -> Icons.Default.DonutLarge
+        AnalyticsWidget.MuscleHeatmap -> Icons.Default.DonutLarge
         AnalyticsWidget.RecoveryMetrics -> Icons.Default.SelfImprovement
         AnalyticsWidget.MonthlySummary -> Icons.Default.CalendarMonth
         AnalyticsWidget.ExerciseRanking -> Icons.Default.EmojiEvents

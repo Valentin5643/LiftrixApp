@@ -104,7 +104,7 @@ fun FolderStyleWidget(
                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         modifier = Modifier.size(24.dp)
                     )
-                    
+
                     // Title at bottom
                     Text(
                         text = title,

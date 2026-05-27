@@ -22,7 +22,9 @@ import com.example.liftrix.ui.progress.ProgressComparisonViewModel
 import com.example.liftrix.ui.progress.ProgressDashboardScreen
 import com.example.liftrix.ui.progress.detail.ExerciseRankingDetailScreen
 import com.example.liftrix.ui.progress.detail.MuscleGroupDetailScreen
+import com.example.liftrix.ui.progress.detail.MuscleGroupDetailContentMode
 import com.example.liftrix.ui.progress.detail.OneRmProgressionDetailScreen
+import com.example.liftrix.ui.progress.detail.StrengthForecastDetailScreen
 import com.example.liftrix.ui.progress.detail.VolumeAnalysisDetailScreen
 import com.example.liftrix.ui.progress.detail.WorkoutFrequencyDetailScreen
 import timber.log.Timber
@@ -32,8 +34,10 @@ fun ProgressDashboardRoute(
     onNavigateToVolumeDetail: () -> Unit,
     onNavigateToOneRmDetail: () -> Unit,
     onNavigateToMuscleGroupDetail: () -> Unit,
+    onNavigateToMuscleHeatmapDetail: () -> Unit,
     onNavigateToFrequencyDetail: () -> Unit,
     onNavigateToExerciseRankingDetail: () -> Unit,
+    onNavigateToStrengthForecastDetail: () -> Unit,
     onNavigateToDashboardCustomization: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -42,8 +46,10 @@ fun ProgressDashboardRoute(
         onNavigateToVolumeDetail = onNavigateToVolumeDetail,
         onNavigateToOneRmDetail = onNavigateToOneRmDetail,
         onNavigateToMuscleGroupDetail = onNavigateToMuscleGroupDetail,
+        onNavigateToMuscleHeatmapDetail = onNavigateToMuscleHeatmapDetail,
         onNavigateToFrequencyDetail = onNavigateToFrequencyDetail,
         onNavigateToExerciseRankingDetail = onNavigateToExerciseRankingDetail,
+        onNavigateToStrengthForecastDetail = onNavigateToStrengthForecastDetail,
         onNavigateToDashboardCustomization = onNavigateToDashboardCustomization
     )
 }
@@ -118,6 +124,21 @@ fun MuscleGroupDetailRoute(
 }
 
 @Composable
+fun MuscleHeatmapDetailRoute(
+    navController: NavController,
+    timeRange: TimeRangeType = TimeRangeType.MONTH,
+    modifier: Modifier = Modifier
+) {
+    MuscleGroupDetailScreen(
+        navController = navController,
+        muscleGroup = null,
+        timeRange = timeRange,
+        contentMode = MuscleGroupDetailContentMode.HEATMAP,
+        modifier = modifier
+    )
+}
+
+@Composable
 fun ExerciseRankingDetailRoute(
     navController: NavController,
     sortBy: RankingMetric = RankingMetric.PERFORMANCE_SCORE,
@@ -141,6 +162,17 @@ fun WorkoutFrequencyDetailRoute(
     WorkoutFrequencyDetailScreen(
         navController = navController,
         timeRange = timeRange,
+        modifier = modifier
+    )
+}
+
+@Composable
+fun StrengthForecastDetailRoute(
+    navController: NavController,
+    modifier: Modifier = Modifier
+) {
+    StrengthForecastDetailScreen(
+        navController = navController,
         modifier = modifier
     )
 }

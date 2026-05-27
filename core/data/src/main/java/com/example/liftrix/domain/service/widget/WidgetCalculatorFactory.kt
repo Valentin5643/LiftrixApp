@@ -51,6 +51,7 @@ class WidgetCalculatorFactory @Inject constructor(
     private val consistencyScoreCalculator: ConsistencyScoreCalculator,
     private val oneRmProgressionCalculator: OneRmProgressionCalculator,
     private val recoveryMetricsCalculator: RecoveryMetricsCalculator,
+    private val muscleHeatmapCalculator: MuscleHeatmapCalculator,
     private val exerciseRankingCalculator: ExerciseRankingCalculator,
     private val overtrainingRiskCalculator: OvertrainingRiskCalculator,
     private val progressiveOverloadCalculator: ProgressiveOverloadCalculator,
@@ -100,6 +101,7 @@ class WidgetCalculatorFactory @Inject constructor(
 
             // Muscle group widgets
             AnalyticsWidget.MuscleGroupDistribution -> muscleGroupChartCalculator
+            AnalyticsWidget.MuscleHeatmap -> muscleHeatmapCalculator
 
             // Consistency/streak widgets (deprecated but kept for compatibility)
             AnalyticsWidget.WorkoutStreak,
@@ -140,6 +142,7 @@ class WidgetCalculatorFactory @Inject constructor(
             workoutDurationCalculator,
             personalRecordsCalculator,
             muscleGroupChartCalculator,
+            muscleHeatmapCalculator,
             consistencyScoreCalculator,
             oneRmProgressionCalculator,
             recoveryMetricsCalculator,

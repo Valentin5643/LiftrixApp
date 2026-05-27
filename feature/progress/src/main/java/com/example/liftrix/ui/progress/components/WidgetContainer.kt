@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -78,6 +80,8 @@ import com.example.liftrix.ui.common.extensions.getWeightUnitFromPreferences
 import com.example.liftrix.ui.common.extensions.getWeightUnitSymbolFromPreferences
 import com.example.liftrix.domain.progress.ProgressUnitConversionPort
 import com.example.liftrix.domain.model.WeightUnit
+import com.example.liftrix.ui.progress.StrengthForecastEvent
+import com.example.liftrix.ui.progress.StrengthForecastState
 
 // Import chart types for widget rendering
 import com.example.liftrix.ui.progress.components.ProgressChart
@@ -86,8 +90,19 @@ import com.example.liftrix.ui.progress.components.ChartDataPoint
 import com.example.liftrix.ui.progress.components.ChartType
 import com.example.liftrix.ui.progress.components.WidgetLayoutMode
 import com.example.liftrix.ui.progress.components.widgets.*
+import com.example.liftrix.ui.progress.components.widgets.heatmap.MuscleHeatmapWidget
 
 // WidgetLayoutMode is now imported from the proper file
+
+internal data class StrengthForecastWidgetContext(
+    val state: StrengthForecastState,
+    val weightUnit: WeightUnit,
+    val onEvent: (StrengthForecastEvent) -> Unit
+)
+
+internal val LocalStrengthForecastWidgetContext = staticCompositionLocalOf<StrengthForecastWidgetContext?> {
+    null
+}
 
 
 @Composable
@@ -501,6 +516,28 @@ internal fun WidgetRenderer(
     val weightUnitSymbol = coordinatorPreferences.getWeightUnitSymbolFromPreferences()
     // Render appropriate widget component based on widget type
     when (widget) {
+        AnalyticsWidget.StrengthForecast -> {
+            FolderStyleWidget(
+                title = "Strength Forecast",
+                icon = Icons.Default.ShowChart,
+                onClick = onClick,
+                modifier = modifier,
+                isLoading = isLoading,
+                iconTint = MaterialTheme.colorScheme.primary,
+                aspectRatio = aspectRatio
+            )
+        }
+
+        AnalyticsWidget.MuscleHeatmap -> {
+            MuscleHeatmapWidget(
+                data = widgetData as? com.example.liftrix.domain.model.analytics.MuscleHeatmapWidgetData,
+                onClick = onClick,
+                isLoading = isLoading,
+                modifier = modifier,
+                aspectRatio = aspectRatio
+            )
+        }
+
         AnalyticsWidget.TotalVolume -> {
             // Handle both BasicWidgetData and ChartWidgetData
             val basicData = widgetData as? BasicWidgetData
@@ -1056,6 +1093,7 @@ internal fun WidgetRenderer(
 // Helper functions for sample data
 private fun createSampleWidgetData(widget: AnalyticsWidget): WidgetData {
     return when (widget) {
+        AnalyticsWidget.MuscleHeatmap -> com.example.liftrix.domain.model.analytics.MuscleHeatmapWidgetData.empty()
         AnalyticsWidget.TotalVolume -> BasicWidgetData(
             widgetType = widget,
             lastUpdated = kotlinx.datetime.Clock.System.now(),

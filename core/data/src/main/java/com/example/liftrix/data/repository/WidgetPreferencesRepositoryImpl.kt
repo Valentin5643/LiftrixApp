@@ -194,6 +194,26 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
             Result.failure(LiftrixError.DatabaseError("Failed to update widget size: ${e.message}"))
         }
     }
+
+    override suspend fun updateWidgetConfiguration(
+        userId: String,
+        widgetName: String,
+        configuration: Map<String, String>
+    ): LiftrixResult<Unit> {
+        return try {
+            widgetPreferencesDataStore.edit { prefs ->
+                val currentPreferences = extractPreferencesForUser(userId, prefs)
+                val updatedPreferences = currentPreferences.updateWidgetConfiguration(widgetName, configuration)
+                savePreferencesForUser(updatedPreferences, prefs)
+            }
+
+            Timber.d("Widget configuration updated for user $userId: $widgetName")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to update widget configuration for user: $userId")
+            Result.failure(LiftrixError.DatabaseError("Failed to update widget configuration: ${e.message}"))
+        }
+    }
     
     override suspend fun updateAutoRefreshSettings(
         userId: String,
@@ -334,6 +354,7 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
         val userLevelKey = stringPreferencesKey("${userId}_user_level")
         val collapsedSectionsKey = stringSetPreferencesKey("${userId}_collapsed_sections")
         val widgetSizesKey = stringPreferencesKey("${userId}_widget_sizes")
+        val widgetConfigurationsKey = stringPreferencesKey("${userId}_widget_configurations")
         val autoRefreshEnabledKey = booleanPreferencesKey("${userId}_auto_refresh_enabled")
         val refreshIntervalKey = intPreferencesKey("${userId}_refresh_interval")
         val lastModifiedKey = longPreferencesKey("${userId}_last_modified")
@@ -368,6 +389,17 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
         } else {
             emptyMap()
         }
+
+        val widgetConfigurationsString = prefs[widgetConfigurationsKey] ?: ""
+        val widgetConfigurations = if (widgetConfigurationsString.isNotBlank()) {
+            try {
+                json.decodeFromString<Map<String, Map<String, String>>>(widgetConfigurationsString)
+            } catch (e: Exception) {
+                emptyMap()
+            }
+        } else {
+            emptyMap()
+        }
         
         val autoRefreshEnabled = prefs[autoRefreshEnabledKey] ?: true
         val refreshInterval = prefs[refreshIntervalKey] ?: 5
@@ -382,6 +414,7 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
             userLevel = userLevel,
             collapsedSections = collapsedSections,
             widgetSizes = widgetSizes,
+            widgetConfigurations = widgetConfigurations,
             enableAutoRefresh = autoRefreshEnabled,
             refreshIntervalMinutes = refreshInterval,
             lastModified = lastModified
@@ -400,6 +433,7 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
         val userLevelKey = stringPreferencesKey("${userId}_user_level")
         val collapsedSectionsKey = stringSetPreferencesKey("${userId}_collapsed_sections")
         val widgetSizesKey = stringPreferencesKey("${userId}_widget_sizes")
+        val widgetConfigurationsKey = stringPreferencesKey("${userId}_widget_configurations")
         val autoRefreshEnabledKey = booleanPreferencesKey("${userId}_auto_refresh_enabled")
         val refreshIntervalKey = intPreferencesKey("${userId}_refresh_interval")
         val lastModifiedKey = longPreferencesKey("${userId}_last_modified")
@@ -410,6 +444,7 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
         prefs[userLevelKey] = preferences.userLevel.name
         prefs[collapsedSectionsKey] = preferences.collapsedSections
         prefs[widgetSizesKey] = json.encodeToString(preferences.widgetSizes)
+        prefs[widgetConfigurationsKey] = json.encodeToString(preferences.widgetConfigurations)
         prefs[autoRefreshEnabledKey] = preferences.enableAutoRefresh
         prefs[refreshIntervalKey] = preferences.refreshIntervalMinutes
         prefs[lastModifiedKey] = preferences.lastModified.epochSeconds
@@ -456,6 +491,7 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
             "OneRMProgression" to "one_rm_progression",
             "WeeklyTrends" to "weekly_trends",
             "MuscleGroupDistribution" to "muscle_group_distribution",
+            "MuscleHeatmap" to "muscle_heatmap",
             "RecoveryPatterns" to "recovery_patterns",
             "TrainingIntensity" to "training_intensity",
             "ExerciseVariety" to "exercise_variety",
@@ -488,6 +524,7 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
             "1RM Progression" to "one_rm_progression",
             "Weekly Trends" to "weekly_trends",
             "Muscle Group Distribution" to "muscle_group_distribution",
+            "Muscle Heatmap" to "muscle_heatmap",
             "Recovery Patterns" to "recovery_patterns",
             "Training Intensity" to "training_intensity",
             "Exercise Variety" to "exercise_variety",

@@ -261,6 +261,12 @@ sealed class LiftrixRoute {
      */
     @Serializable
     data object MuscleGroupDetail : LiftrixRoute()
+
+    /**
+     * Muscle heatmap detail screen showing body-map muscle activation analytics
+     */
+    @Serializable
+    data object MuscleHeatmapDetail : LiftrixRoute()
     
     /**
      * Workout frequency detail screen showing frequency and consistency analytics
@@ -273,6 +279,12 @@ sealed class LiftrixRoute {
      */
     @Serializable
     data object ExerciseRankingDetail : LiftrixRoute()
+
+    /**
+     * Strength forecast detail screen showing projected strength trends.
+     */
+    @Serializable
+    data object StrengthForecastDetail : LiftrixRoute()
     
     // Social System Routes (Added for social system completion)
     

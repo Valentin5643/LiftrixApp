@@ -12,9 +12,14 @@ import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.domain.progress.ProgressSessionSummaryPort
 import com.example.liftrix.domain.progress.ProgressSettingsPort
 import com.example.liftrix.domain.progress.ProgressUnitConversionPort
+import com.example.liftrix.domain.progress.ProgressAuthPort
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.model.SubscriptionStatus
+import com.example.liftrix.domain.model.SubscriptionTier
+import com.example.liftrix.domain.model.User
 import timber.log.Timber
+import java.time.LocalDateTime
 
 /**
  * ProgressDashboardCoordinator coordinates communication between specialized ViewModels.
@@ -62,7 +67,8 @@ class ProgressDashboardCoordinator @Inject constructor(
     private val sessionSummaryPort: ProgressSessionSummaryPort,
     private val authRepository: AuthRepository,
     private val settingsPort: ProgressSettingsPort,
-    private val unitConversionService: ProgressUnitConversionPort
+    private val unitConversionService: ProgressUnitConversionPort,
+    private val authPort: ProgressAuthPort
 ) : ModernBaseViewModel<UiState<CoordinatorState>>(initialState = UiState.Loading) {
 
     /**
@@ -105,7 +111,7 @@ class ProgressDashboardCoordinator @Inject constructor(
         
         // Start monitoring auth state changes
         observeAuthenticationState()
-        
+
         // Start monitoring workout session changes
         observeWorkoutSessionState()
         
@@ -161,6 +167,10 @@ class ProgressDashboardCoordinator @Inject constructor(
                     handleError(error)
                 }
                 .collect { user ->
+                    if (user == null && emitPortBackedUserAuthState()) {
+                        return@collect
+                    }
+
                     coordinatorState.value = coordinatorState.value.copy(
                         currentUser = if (user != null) {
                             com.example.liftrix.ui.common.state.AsyncData.Success(user)
@@ -175,6 +185,17 @@ class ProgressDashboardCoordinator @Inject constructor(
                     updateUiState()
                 }
         }
+    }
+
+    private suspend fun emitPortBackedUserAuthState(): Boolean {
+        val userId = authPort(waitForAuth = false).getOrNull()?.value ?: return false
+        coordinatorState.value = coordinatorState.value.copy(
+            currentUser = com.example.liftrix.ui.common.state.AsyncData.Success(createPresentationUser(userId))
+        )
+        _coordinatorEvents.tryEmit(CoordinatorEvent.UserAuthChanged(userId))
+        _coordinatorEvents.tryEmit(CoordinatorEvent.TimePeriodChanged(com.example.liftrix.domain.model.analytics.TimeRange.lastMonth()))
+        updateUiState()
+        return true
     }
 
     /**
@@ -659,7 +680,16 @@ class ProgressDashboardCoordinator @Inject constructor(
                         "userId" to currentUser.uid
                     )
                 } else {
-                    emptyMap()
+                    val portUserId = authPort(waitForAuth = false).getOrNull()?.value
+                    if (portUserId != null) {
+                        val weightUnit = unitConversionService.getCurrentWeightUnit(portUserId)
+                        mapOf(
+                            "weightUnit" to weightUnit,
+                            "userId" to portUserId
+                        )
+                    } else {
+                        emptyMap()
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -667,4 +697,24 @@ class ProgressDashboardCoordinator @Inject constructor(
             emptyMap()
         }
     }
+}
+
+private fun createPresentationUser(userId: String): User {
+    val now = LocalDateTime.now()
+    return User(
+        uid = userId,
+        email = "$userId@liftrix.local",
+        displayName = "Liftrix Demo",
+        photoUrl = null,
+        isAnonymous = true,
+        subscriptionTier = SubscriptionTier.FREE,
+        subscriptionStatus = SubscriptionStatus.ACTIVE,
+        subscriptionExpiresAt = null,
+        premiumFeaturesEnabled = false,
+        onboardingCompleted = true,
+        profileVersion = 1L,
+        createdAt = now,
+        lastSignInAt = now,
+        updatedAt = now
+    )
 }

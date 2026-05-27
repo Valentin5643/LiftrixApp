@@ -340,6 +340,13 @@ fun NavController.navigateToMuscleGroupDetail() {
 }
 
 /**
+ * Navigate to muscle heatmap detail screen
+ */
+fun NavController.navigateToMuscleHeatmapDetail() {
+    navigate(LiftrixRoute.MuscleHeatmapDetail)
+}
+
+/**
  * Navigate to workout frequency detail screen
  */
 fun NavController.navigateToWorkoutFrequencyDetail() {
@@ -351,6 +358,10 @@ fun NavController.navigateToWorkoutFrequencyDetail() {
  */
 fun NavController.navigateToExerciseRankingDetail() {
     navigate(LiftrixRoute.ExerciseRankingDetail)
+}
+
+fun NavController.navigateToStrengthForecastDetail() {
+    navigate(LiftrixRoute.StrengthForecastDetail)
 }
 
 // MARK: - Folder Management Navigation

@@ -367,13 +367,12 @@ class AnalyticsQueryUseCase @Inject constructor(
                                 date to bestSetForDay
                             }
                             .sortedBy { it.first }
-                            .map { (date, result) ->
+                            .mapNotNull { (date, result) ->
                                 val dayOneRm = result.estimated_one_rm.toFloat()
-                                if (dayOneRm >= runningBestOneRm) {
-                                    runningBestOneRm = dayOneRm
-                                    runningBestWeight = result.weight_kg
-                                    runningBestReps = result.reps
-                                }
+                                if (dayOneRm < runningBestOneRm) return@mapNotNull null
+                                runningBestOneRm = dayOneRm
+                                runningBestWeight = result.weight_kg
+                                runningBestReps = result.reps
                                 OneRmDataPoint(
                                     date = date,
                                     exerciseId = exerciseId,

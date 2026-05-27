@@ -52,6 +52,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -93,13 +94,11 @@ import com.example.liftrix.ui.progress.components.WidgetContainer
 import com.example.liftrix.ui.progress.components.WidgetLayoutMode
 import com.example.liftrix.ui.progress.components.ResponsiveDashboardLayout
 import com.example.liftrix.ui.progress.components.DashboardLayoutMode
+import com.example.liftrix.ui.progress.components.LocalStrengthForecastWidgetContext
+import com.example.liftrix.ui.progress.components.StrengthForecastWidgetContext
 import com.example.liftrix.ui.common.rememberWindowSizeClass
 import com.example.liftrix.ui.progress.components.DailyCaloriesCard
 import com.example.liftrix.ui.progress.components.ProgressWeeklyCalorieTrendCard
-import com.example.liftrix.ui.progress.components.StrengthForecastCard
-
-
-
 import com.example.liftrix.domain.model.analytics.WidgetData
 import com.example.liftrix.domain.model.analytics.BasicWidgetData
 import com.example.liftrix.domain.model.analytics.MetricWidgetData
@@ -159,8 +158,10 @@ fun ProgressDashboardScreen(
     onNavigateToVolumeDetail: () -> Unit = {},
     onNavigateToOneRmDetail: () -> Unit = {},
     onNavigateToMuscleGroupDetail: () -> Unit = {},
+    onNavigateToMuscleHeatmapDetail: () -> Unit = {},
     onNavigateToFrequencyDetail: () -> Unit = {},
     onNavigateToExerciseRankingDetail: () -> Unit = {},
+    onNavigateToStrengthForecastDetail: () -> Unit = {},
     onNavigateToDashboardCustomization: () -> Unit = {}
 ) {
     // Validate ViewModels for debugging (only in debug builds)
@@ -195,8 +196,10 @@ fun ProgressDashboardScreen(
     val currentVolumeDetailCallback by rememberUpdatedState(onNavigateToVolumeDetail)
     val currentOneRmDetailCallback by rememberUpdatedState(onNavigateToOneRmDetail)
     val currentMuscleGroupDetailCallback by rememberUpdatedState(onNavigateToMuscleGroupDetail)
+    val currentMuscleHeatmapDetailCallback by rememberUpdatedState(onNavigateToMuscleHeatmapDetail)
     val currentFrequencyDetailCallback by rememberUpdatedState(onNavigateToFrequencyDetail)
     val currentExerciseRankingDetailCallback by rememberUpdatedState(onNavigateToExerciseRankingDetail)
+    val currentStrengthForecastDetailCallback by rememberUpdatedState(onNavigateToStrengthForecastDetail)
     val currentDashboardCustomizationCallback by rememberUpdatedState(onNavigateToDashboardCustomization)
 
     // Set up navigation callbacks for AnalyticsWidgetViewModel.
@@ -205,8 +208,10 @@ fun ProgressDashboardScreen(
             onNavigateToVolumeDetail = { currentVolumeDetailCallback() },
             onNavigateToOneRmDetail = { currentOneRmDetailCallback() },
             onNavigateToMuscleGroupDetail = { currentMuscleGroupDetailCallback() },
+            onNavigateToMuscleHeatmapDetail = { currentMuscleHeatmapDetailCallback() },
             onNavigateToFrequencyDetail = { currentFrequencyDetailCallback() },
             onNavigateToExerciseRankingDetail = { currentExerciseRankingDetailCallback() },
+            onNavigateToStrengthForecastDetail = { currentStrengthForecastDetailCallback() },
             onNavigateToDashboardCustomization = { currentDashboardCustomizationCallback() }
         )
     }
@@ -228,11 +233,17 @@ fun ProgressDashboardScreen(
                 is NavigationEvent.NavigateToMuscleGroupDetail -> {
                     onNavigateToMuscleGroupDetail()
                 }
+                is NavigationEvent.NavigateToMuscleHeatmapDetail -> {
+                    onNavigateToMuscleHeatmapDetail()
+                }
                 is NavigationEvent.NavigateToFrequencyDetail -> {
                     onNavigateToFrequencyDetail()
                 }
                 is NavigationEvent.NavigateToExerciseRankingDetail -> {
                     onNavigateToExerciseRankingDetail()
+                }
+                is NavigationEvent.NavigateToStrengthForecastDetail -> {
+                    onNavigateToStrengthForecastDetail()
                 }
             }
         }
@@ -475,21 +486,15 @@ private fun ProgressDashboardContent(
             item {
                 ResponsiveWidgetsSection(
                     widgetState = widgetState,
+                    strengthForecastState = strengthForecastState,
+                    strengthForecastWeightUnit = weightUnit,
+                    onStrengthForecastEvent = onStrengthForecastEvent,
                     onEvent = onWidgetEvent,
                     coordinatorPreferences = coordinatorState.coordinatorPreferences,
                     unitConversionService = coordinator.getUnitConversionService(),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-        }
-
-        item {
-            StrengthForecastCard(
-                state = strengthForecastState,
-                weightUnit = weightUnit,
-                onEvent = onStrengthForecastEvent,
-                modifier = Modifier.fillMaxWidth()
-            )
         }
 
         // Charts section with enhanced debugging
@@ -952,6 +957,9 @@ private fun WidgetsSection(
 @Composable
 private fun ResponsiveWidgetsSection(
     widgetState: AnalyticsWidgetState,
+    strengthForecastState: StrengthForecastState,
+    strengthForecastWeightUnit: WeightUnit,
+    onStrengthForecastEvent: (StrengthForecastEvent) -> Unit,
     onEvent: (AnalyticsWidgetEvent) -> Unit,
     coordinatorPreferences: Map<String, Any> = emptyMap(),
     unitConversionService: com.example.liftrix.domain.progress.ProgressUnitConversionPort? = null,
@@ -1005,37 +1013,45 @@ private fun ResponsiveWidgetsSection(
         
         // Only show widgets if we have configuration and non-deprecated widgets available
         if (filteredWidgets.isNotEmpty() && widgetState.configuration != null) {
-            ResponsiveDashboardLayout(
-                widgets = filteredWidgets,
-                configuration = widgetState.configuration,
-                layoutMode = run {
-                    val userPreference = mapDomainLayoutModeToUI(widgetState.preferences?.dashboardLayout)
-                    
-                    // Convert UI enum result back to domain enum for ResponsiveDashboardLayout
-                    val uiLayoutMode = DashboardLayoutMode.getOptimalMode(
-                        screenWidthDp = windowSizeClass.widthDp.value.toInt(),
-                        widgetCount = filteredWidgets.size,
-                        userPreference = userPreference
-                    )
-                    val result = DashboardLayoutMode.toDomain(uiLayoutMode)
-                    
-                    result
-                },
-                onWidgetClick = { widget ->
-                    onEvent(AnalyticsWidgetEvent.WidgetClicked(widget))
-                },
-                onWidgetReorder = { from, to ->
-                    onEvent(AnalyticsWidgetEvent.WidgetReordered(from, to))
-                },
-                widgetDataProvider = { widget ->
-                    widgetState.widgetDataMap[widget] ?: createDefaultWidgetData(widget)
-                },
-                isLoading = widgetState.isLoading,
-                enableDragAndDrop = mapDomainLayoutModeToUI(widgetState.preferences?.dashboardLayout) == DashboardLayoutMode.CUSTOM || windowSizeClass.supportsDragAndDrop,
-                windowSizeClass = windowSizeClass,
-                coordinatorPreferences = coordinatorPreferences,
-                unitConversionService = unitConversionService
-            )
+            CompositionLocalProvider(
+                LocalStrengthForecastWidgetContext provides StrengthForecastWidgetContext(
+                    state = strengthForecastState,
+                    weightUnit = strengthForecastWeightUnit,
+                    onEvent = onStrengthForecastEvent
+                )
+            ) {
+                ResponsiveDashboardLayout(
+                    widgets = filteredWidgets,
+                    configuration = widgetState.configuration,
+                    layoutMode = run {
+                        val userPreference = mapDomainLayoutModeToUI(widgetState.preferences?.dashboardLayout)
+
+                        // Convert UI enum result back to domain enum for ResponsiveDashboardLayout
+                        val uiLayoutMode = DashboardLayoutMode.getOptimalMode(
+                            screenWidthDp = windowSizeClass.widthDp.value.toInt(),
+                            widgetCount = filteredWidgets.size,
+                            userPreference = userPreference
+                        )
+                        val result = DashboardLayoutMode.toDomain(uiLayoutMode)
+
+                        result
+                    },
+                    onWidgetClick = { widget ->
+                        onEvent(AnalyticsWidgetEvent.WidgetClicked(widget))
+                    },
+                    onWidgetReorder = { from, to ->
+                        onEvent(AnalyticsWidgetEvent.WidgetReordered(from, to))
+                    },
+                    widgetDataProvider = { widget ->
+                        widgetState.widgetDataMap[widget] ?: createDefaultWidgetData(widget)
+                    },
+                    isLoading = widgetState.isLoading,
+                    enableDragAndDrop = mapDomainLayoutModeToUI(widgetState.preferences?.dashboardLayout) == DashboardLayoutMode.CUSTOM || windowSizeClass.supportsDragAndDrop,
+                    windowSizeClass = windowSizeClass,
+                    coordinatorPreferences = coordinatorPreferences,
+                    unitConversionService = unitConversionService
+                )
+            }
         } else {
             // Empty state with customization prompt
             Card( // Specialized empty state card
@@ -1180,6 +1196,10 @@ private fun CalorieSection(
  * Helper function to create default widget data - Clean zero-state display (FR-004)
  */
 private fun createDefaultWidgetData(widget: com.example.liftrix.domain.model.analytics.AnalyticsWidget): WidgetData {
+    if (widget == com.example.liftrix.domain.model.analytics.AnalyticsWidget.MuscleHeatmap) {
+        return com.example.liftrix.domain.model.analytics.MuscleHeatmapWidgetData.empty()
+    }
+
     val (defaultValue, defaultUnit, secondaryValue) = when (widget) {
         com.example.liftrix.domain.model.analytics.AnalyticsWidget.RecentAchievements,
         com.example.liftrix.domain.model.analytics.AnalyticsWidget.PersonalRecords -> Triple("No achievements yet", "", "Personal records will appear after logged progress")

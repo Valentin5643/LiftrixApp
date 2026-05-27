@@ -11,7 +11,9 @@ import com.example.liftrix.domain.progress.ExerciseRankingData
 import com.example.liftrix.domain.progress.MuscleGroup
 import com.example.liftrix.domain.progress.MuscleGroupAnalyticsData
 import com.example.liftrix.domain.progress.OneRmProgressionData
+import com.example.liftrix.domain.progress.ProgressAuthPort
 import com.example.liftrix.domain.progress.ProgressDetailAnalyticsGateway
+import com.example.liftrix.domain.model.UserId
 import com.example.liftrix.domain.progress.VolumeAnalysisData
 import com.example.liftrix.domain.progress.WorkoutFrequencyData
 import com.example.liftrix.test.MainDispatcherRule
@@ -30,7 +32,10 @@ class StrengthForecastViewModelTest {
 
     @Test
     fun `auth coordinator event loads forecast and selection can change`() = runTest {
-        val viewModel = StrengthForecastViewModel(FakeGateway(StrengthForecastResult(emptyList())))
+        val viewModel = StrengthForecastViewModel(
+            FakeGateway(StrengthForecastResult(emptyList())),
+            FakeAuthPort()
+        )
 
         viewModel.handleCoordinatorEvent(CoordinatorEvent.UserAuthChanged("user-1"))
         viewModel.handleEvent(StrengthForecastEvent.SelectExercise("bench"))
@@ -38,6 +43,20 @@ class StrengthForecastViewModelTest {
         val state = (viewModel.uiState.value as UiState.Success).data
         assertEquals("user-1", state.userId)
         assertEquals("bench", state.selectedExerciseId)
+        assertTrue(state.errorMessage == null)
+    }
+
+    @Test
+    fun `load event resolves authenticated user when opened from detail screen`() = runTest {
+        val viewModel = StrengthForecastViewModel(
+            FakeGateway(StrengthForecastResult(emptyList())),
+            FakeAuthPort("detail-user")
+        )
+
+        viewModel.handleEvent(StrengthForecastEvent.Load)
+
+        val state = (viewModel.uiState.value as UiState.Success).data
+        assertEquals("detail-user", state.userId)
         assertTrue(state.errorMessage == null)
     }
 
@@ -55,5 +74,12 @@ class StrengthForecastViewModelTest {
         override suspend fun exportOneRm(request: ExportOneRmDataRequest): LiftrixResult<File> = TODO()
         override suspend fun exportVolume(request: ExportVolumeDataRequest): LiftrixResult<File> = TODO()
         override suspend fun exportFrequency(request: ExportWorkoutFrequencyDataRequest): LiftrixResult<File> = TODO()
+    }
+
+    private class FakeAuthPort(
+        private val userId: String = "user-1"
+    ) : ProgressAuthPort {
+        override suspend fun invoke(waitForAuth: Boolean): LiftrixResult<UserId> =
+            Result.success(UserId(userId))
     }
 }

@@ -236,12 +236,17 @@ private fun DrawScope.drawModernVolumeChart(
     textMeasurer: TextMeasurer
 ) {
     if (data.isEmpty()) return
+    val plotArea = chartPlotArea(
+        width = size.width,
+        height = size.height,
+        density = density
+    )
     
     // Draw grid first (background layer)
-    drawGrid()
+    drawGrid(plotArea)
     
     // Draw axes
-    drawAxes()
+    drawAxes(plotArea)
     
     val chartConfig = LiftrixChartStyle.LineChartConfig(
         strokeWidth = LiftrixChartStyle.ChartDimensions.strokeWidthMedium.value,
@@ -256,16 +261,20 @@ private fun DrawScope.drawModernVolumeChart(
     val points = data.mapIndexed { index, dataPoint ->
         // SINGLE DATA POINT FIX: Handle single point rendering properly
         val x = if (data.size == 1) {
-            size.width * 0.5f // Center single data point
+            plotArea.left + plotArea.width * 0.5f // Center single data point
         } else {
-            size.width * index / (data.size - 1).toFloat()
+            plotArea.left + plotArea.width * index / (data.size - 1).toFloat()
         }
         val normalizedValue = if (scale.range > 0) {
-            (dataPoint.volume.value - scale.minValue) / scale.range
+            if (scale.isFlat) {
+                0.5
+            } else {
+                (dataPoint.getVolumeAsDouble() - scale.minValue) / scale.range
+            }
         } else {
             0.5 // For single points or zero range, show at mid-height for visibility
         }
-        val y = size.height * (1f - normalizedValue) * animationProgress
+        val y = plotArea.bottom - (plotArea.height * normalizedValue.toFloat() * animationProgress)
         x to y.toFloat()
     }
     
@@ -281,6 +290,7 @@ private fun DrawScope.drawModernVolumeChart(
             data = data,
             personalRecords = metrics.personalRecords,
             points = points,
+            plotArea = plotArea,
             density = density,
             textMeasurer = textMeasurer
         )
@@ -299,28 +309,28 @@ private fun DrawScope.drawModernVolumeChart(
 /**
  * Draw grid lines for better chart readability (matching 1RM progression style)
  */
-private fun DrawScope.drawGrid() {
+private fun DrawScope.drawGrid(plotArea: PlotArea) {
     val gridColor = ChartColorsV2.Infrastructure.getGridColor(true)
     val strokeWidth = 1.dp.toPx()
     
     // Horizontal grid lines
     for (i in 1..4) {
-        val y = size.height * i / 5
+        val y = plotArea.top + plotArea.height * i / 5
         drawLine(
             color = gridColor,
-            start = Offset(0f, y),
-            end = Offset(size.width, y),
+            start = Offset(plotArea.left, y),
+            end = Offset(plotArea.right, y),
             strokeWidth = strokeWidth
         )
     }
     
     // Vertical grid lines
     for (i in 1..4) {
-        val x = size.width * i / 5
+        val x = plotArea.left + plotArea.width * i / 5
         drawLine(
             color = gridColor,
-            start = Offset(x, 0f),
-            end = Offset(x, size.height),
+            start = Offset(x, plotArea.top),
+            end = Offset(x, plotArea.bottom),
             strokeWidth = strokeWidth
         )
     }
@@ -329,23 +339,23 @@ private fun DrawScope.drawGrid() {
 /**
  * Draw chart axes (matching 1RM progression style)
  */
-private fun DrawScope.drawAxes() {
+private fun DrawScope.drawAxes(plotArea: PlotArea) {
     val axisColor = ChartColorsV2.Infrastructure.getAxisColor(true)
     val strokeWidth = 2.dp.toPx()
     
     // Bottom axis
     drawLine(
         color = axisColor,
-        start = Offset(0f, size.height),
-        end = Offset(size.width, size.height),
+        start = Offset(plotArea.left, plotArea.bottom),
+        end = Offset(plotArea.right, plotArea.bottom),
         strokeWidth = strokeWidth
     )
     
     // Left axis
     drawLine(
         color = axisColor,
-        start = Offset(0f, 0f),
-        end = Offset(0f, size.height),
+        start = Offset(plotArea.left, plotArea.top),
+        end = Offset(plotArea.left, plotArea.bottom),
         strokeWidth = strokeWidth
     )
 }
@@ -390,6 +400,7 @@ private fun DrawScope.drawPersonalRecordMarkers(
     data: List<VolumeDataPoint>,
     personalRecords: List<VolumeDataPoint>,
     points: List<Pair<Float, Float>>,
+    plotArea: PlotArea,
     density: Float,
     textMeasurer: TextMeasurer
 ) {
@@ -424,7 +435,8 @@ private fun DrawScope.drawPersonalRecordMarkers(
                 textLayoutResult = textResult,
                 topLeft = Offset(
                     x - textResult.size.width / 2f,
-                    y - 20.dp.toPx() - textResult.size.height / 2f
+                    (y - 20.dp.toPx() - textResult.size.height / 2f)
+                        .coerceAtLeast(plotArea.top)
                 )
             )
         }
@@ -468,14 +480,27 @@ private fun findNearestDataPoint(
     density: Float
 ): VolumeDataPoint? {
     if (data.isEmpty()) return null
+    val plotArea = chartPlotArea(
+        width = canvasSize.width,
+        height = canvasSize.height,
+        density = density
+    )
     
     var nearestPoint: VolumeDataPoint? = null
     var minDistance = Float.MAX_VALUE
     
     data.forEachIndexed { index, dataPoint ->
-        val x = canvasSize.width * index / (data.size - 1).coerceAtLeast(1)
-        val normalizedValue = (dataPoint.volume.value - scale.minValue) / scale.range
-        val y = canvasSize.height * (1f - normalizedValue)
+        val x = if (data.size == 1) {
+            plotArea.left + plotArea.width * 0.5f
+        } else {
+            plotArea.left + plotArea.width * index / (data.size - 1).toFloat()
+        }
+        val normalizedValue = if (scale.isFlat) {
+            0.5
+        } else {
+            (dataPoint.getVolumeAsDouble() - scale.minValue) / scale.range
+        }
+        val y = plotArea.bottom - (plotArea.height * normalizedValue.toFloat())
         
         val distance = kotlin.math.sqrt(
             (tapOffset.x - x).let { it * it } + (tapOffset.y - y).let { it * it }
@@ -490,6 +515,32 @@ private fun findNearestDataPoint(
     return nearestPoint
 }
 
+private data class PlotArea(
+    val left: Float,
+    val top: Float,
+    val right: Float,
+    val bottom: Float
+) {
+    val width: Float = (right - left).coerceAtLeast(1f)
+    val height: Float = (bottom - top).coerceAtLeast(1f)
+}
+
+private fun chartPlotArea(
+    width: Float,
+    height: Float,
+    density: Float
+): PlotArea {
+    val topPadding = 30f * density
+    val rightPadding = 4f * density
+    val bottomPadding = 2f * density
+    return PlotArea(
+        left = 0f,
+        top = topPadding.coerceAtMost(height * 0.25f),
+        right = (width - rightPadding).coerceAtLeast(1f),
+        bottom = (height - bottomPadding).coerceAtLeast(1f)
+    )
+}
+
 /**
  * Chart metrics without title (title shown in widget container)
  */
@@ -499,10 +550,9 @@ private fun ChartMetricsOnly(
     metrics: ChartMetrics,
     unit: String = "kg"
 ) {
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
             text = subtitle,
@@ -579,7 +629,7 @@ private fun SelectedPointInfo(
         ) {
             Column {
                 Text(
-                    text = "${point.volume.value.toInt()}$unit",
+                    text = "${point.getVolumeAsDouble().toInt()}$unit",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = ChartColorsV2.getSeriesColor(0)
@@ -650,7 +700,8 @@ private fun ZeroDataOverlay() {
  */
 private data class ChartScale(
     val minValue: Double,
-    val range: Double
+    val range: Double,
+    val isFlat: Boolean
 )
 
 private data class ChartMetrics(
@@ -664,7 +715,7 @@ private data class ChartMetrics(
     fun scaleFor(useZeroBaseline: Boolean): ChartScale {
         val scaleMin = if (useZeroBaseline) 0.0 else minValue
         val scaleRange = (maxValue - scaleMin).coerceAtLeast(1.0)
-        return ChartScale(scaleMin, scaleRange)
+        return ChartScale(scaleMin, scaleRange, !useZeroBaseline && maxValue == minValue)
     }
 
     companion object {
@@ -675,7 +726,7 @@ private data class ChartMetrics(
         fun calculate(data: List<VolumeDataPoint>): ChartMetrics {
             if (data.isEmpty()) return empty()
             
-            val volumes = data.map { it.volume.value }
+            val volumes = data.map { it.getVolumeAsDouble() }
             val minValue = volumes.minOrNull() ?: 0.0
             val maxValue = volumes.maxOrNull() ?: 0.0
             val avgValue = volumes.average()
@@ -690,12 +741,12 @@ private data class ChartMetrics(
             val personalRecords = mutableListOf<VolumeDataPoint>()
             data.forEachIndexed { index, point ->
                 val isLocalMaxima = when {
-                    index == 0 -> data.getOrNull(1)?.let { point.volume.value >= it.volume.value } ?: true
-                    index == data.lastIndex -> point.volume.value >= data[index - 1].volume.value
-                    else -> point.volume.value >= data[index - 1].volume.value && 
-                           point.volume.value >= data[index + 1].volume.value
+                    index == 0 -> data.getOrNull(1)?.let { point.getVolumeAsDouble() >= it.getVolumeAsDouble() } ?: true
+                    index == data.lastIndex -> point.getVolumeAsDouble() >= data[index - 1].getVolumeAsDouble()
+                    else -> point.getVolumeAsDouble() >= data[index - 1].getVolumeAsDouble() &&
+                           point.getVolumeAsDouble() >= data[index + 1].getVolumeAsDouble()
                 }
-                if (isLocalMaxima && point.volume.value > avgValue) {
+                if (isLocalMaxima && point.getVolumeAsDouble() > avgValue) {
                     personalRecords.add(point)
                 }
             }

@@ -14,7 +14,9 @@ enum class MuscleGroup(
     TRICEPS("Triceps", "Triceps brachii and arm extensors"),
     
     // Upper Body - Pulling  
-    BACK("Back", "Latissimus dorsi, rhomboids, and upper back"),
+    BACK("Back", "General back training"),
+    LATS("Lats", "Latissimus dorsi and vertical pulling muscles"),
+    UPPER_BACK("Upper Back", "Trapezius, rhomboids, rear delts, and scapular retractors"),
     BICEPS("Biceps", "Biceps brachii and arm flexors"),
     FOREARMS("Forearms", "Forearm flexors and extensors"),
     
@@ -42,9 +44,9 @@ enum class MuscleGroup(
         fun getByTrainingType(type: String): List<MuscleGroup> {
             return when (type.lowercase()) {
                 "push" -> listOf(CHEST, SHOULDERS, TRICEPS)
-                "pull" -> listOf(BACK, BICEPS, FOREARMS)
+                "pull" -> listOf(LATS, UPPER_BACK, BICEPS, FOREARMS)
                 "legs" -> listOf(QUADRICEPS, HAMSTRINGS, GLUTES, CALVES)
-                "upper" -> listOf(CHEST, SHOULDERS, TRICEPS, BACK, BICEPS, FOREARMS)
+                "upper" -> listOf(CHEST, SHOULDERS, TRICEPS, LATS, UPPER_BACK, BICEPS, FOREARMS)
                 "lower" -> listOf(QUADRICEPS, HAMSTRINGS, GLUTES, CALVES, LOWER_BACK)
                 "core" -> listOf(CORE, LOWER_BACK)
                 else -> values().toList()
@@ -56,7 +58,7 @@ enum class MuscleGroup(
          */
         fun getPrimaryMuscleGroups(): List<MuscleGroup> {
             return listOf(
-                CHEST, SHOULDERS, TRICEPS, BACK, BICEPS, FOREARMS,
+                CHEST, SHOULDERS, TRICEPS, LATS, UPPER_BACK, BICEPS, FOREARMS,
                 QUADRICEPS, HAMSTRINGS, GLUTES, CALVES, CORE, LOWER_BACK
             )
         }
@@ -65,7 +67,7 @@ enum class MuscleGroup(
          * Gets compound movement muscle groups
          */
         fun getCompoundMuscleGroups(): List<MuscleGroup> {
-            return listOf(CHEST, BACK, SHOULDERS, QUADRICEPS, HAMSTRINGS, GLUTES)
+            return listOf(CHEST, LATS, UPPER_BACK, SHOULDERS, QUADRICEPS, HAMSTRINGS, GLUTES)
         }
         
         /**
@@ -92,7 +94,7 @@ enum class MuscleGroup(
     fun getSynergists(): List<MuscleGroup> {
         return when (this) {
             CHEST -> listOf(SHOULDERS, TRICEPS)
-            BACK -> listOf(BICEPS, FOREARMS)
+            BACK, LATS, UPPER_BACK -> listOf(BICEPS, FOREARMS)
             SHOULDERS -> listOf(TRICEPS, CHEST)
             QUADRICEPS -> listOf(GLUTES, CALVES)
             HAMSTRINGS -> listOf(GLUTES, LOWER_BACK)
@@ -106,8 +108,8 @@ enum class MuscleGroup(
      */
     fun getAntagonists(): List<MuscleGroup> {
         return when (this) {
-            CHEST -> listOf(BACK)
-            BACK -> listOf(CHEST)
+            CHEST -> listOf(LATS, UPPER_BACK)
+            BACK, LATS, UPPER_BACK -> listOf(CHEST)
             BICEPS -> listOf(TRICEPS)
             TRICEPS -> listOf(BICEPS)
             QUADRICEPS -> listOf(HAMSTRINGS)
@@ -115,4 +117,4 @@ enum class MuscleGroup(
             else -> emptyList()
         }
     }
-} 
+}

@@ -1,7 +1,9 @@
 package com.example.liftrix.ui.settings.about
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -9,12 +11,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
@@ -61,10 +63,29 @@ fun AboutScreen(
     onNavigateToPrivacy: () -> Unit,
     onNavigateToTerms: () -> Unit,
     onNavigateToLicenses: () -> Unit,
-    showTopBar: Boolean = true
+    showTopBar: Boolean = true,
+    demoModeViewModel: AboutDemoModeViewModel = hiltViewModel()
 ) {
-    val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
+    val demoModeState by demoModeViewModel.state.collectAsState()
+
+    if (demoModeState.showConfirmation) {
+        AlertDialog(
+            onDismissRequest = demoModeViewModel::dismissConfirmation,
+            title = { Text("Enable Demo Mode?") },
+            text = { Text("This fills local app surfaces with generated presentation data until you turn it off.") },
+            confirmButton = {
+                TextButton(onClick = demoModeViewModel::confirmActivation) {
+                    Text("Enable")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = demoModeViewModel::dismissConfirmation) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
     
     Scaffold(
         topBar = {
@@ -106,7 +127,12 @@ fun AboutScreen(
             
             // Version information
             item {
-                VersionInformationCard()
+                VersionInformationCard(
+                    demoModeState = demoModeState,
+                    onVersionLongPress = demoModeViewModel::onVersionLongPress,
+                    onBuildRowTap = demoModeViewModel::onBuildRowTap,
+                    onDisableDemoMode = demoModeViewModel::disable
+                )
             }
             
             // Legal documents section
@@ -223,8 +249,13 @@ private fun AppBrandingSection(
 /**
  * Version information card
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun VersionInformationCard(
+    demoModeState: AboutDemoModeUiState,
+    onVersionLongPress: () -> Unit,
+    onBuildRowTap: () -> Unit,
+    onDisableDemoMode: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     ElevatedLiftrixCard(modifier = modifier) {
@@ -240,12 +271,17 @@ private fun VersionInformationCard(
             
             VersionInfoRow(
                 label = "Version",
-                value = BuildConfig.VERSION_NAME
+                value = BuildConfig.VERSION_NAME,
+                modifier = Modifier.combinedClickable(
+                    onClick = { },
+                    onLongClick = onVersionLongPress
+                )
             )
             
             VersionInfoRow(
                 label = "Build",
-                value = BuildConfig.VERSION_CODE.toString()
+                value = BuildConfig.VERSION_CODE.toString(),
+                modifier = Modifier.clickable(onClick = onBuildRowTap)
             )
             
             VersionInfoRow(
@@ -263,6 +299,16 @@ private fun VersionInformationCard(
                     label = "Package",
                     value = BuildConfig.APPLICATION_ID
                 )
+            }
+
+            if (demoModeState.isActive) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                TextButton(
+                    onClick = onDisableDemoMode,
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("Disable")
+                }
             }
         }
     }

@@ -9,7 +9,9 @@ import com.example.liftrix.domain.model.analytics.MetricWidgetData
 import com.example.liftrix.domain.model.analytics.ChartWidgetData
 import com.example.liftrix.domain.model.analytics.ProgressWidgetData
 import com.example.liftrix.domain.model.analytics.AnalyticsWidgetData
+import com.example.liftrix.domain.model.analytics.MuscleHeatmapWidgetData
 import com.example.liftrix.ui.common.extensions.getWeightUnitSymbolFromPreferences
+import com.example.liftrix.ui.progress.components.widgets.heatmap.MuscleHeatmapWidget
 
 /**
  * Factory for creating dynamic widget instances based on widget type.
@@ -128,6 +130,16 @@ object WidgetFactory {
                     useFolderStyle = true
                 )
             }
+
+            AnalyticsWidget.MuscleHeatmap -> {
+                val heatmapData = data as? MuscleHeatmapWidgetData
+                MuscleHeatmapWidget(
+                    data = heatmapData,
+                    onClick = onClick,
+                    isLoading = heatmapData?.isLoading == true,
+                    modifier = modifier
+                )
+            }
             
             // RecoveryPatterns renamed to RecoveryMetrics
             
@@ -203,6 +215,10 @@ object WidgetFactory {
      * Gets the appropriate data type for a widget
      */
     fun getExpectedDataType(widget: AnalyticsWidget): Class<out WidgetData> {
+        if (widget == AnalyticsWidget.MuscleHeatmap) {
+            return MuscleHeatmapWidgetData::class.java
+        }
+
         return when (widget.category) {
             WidgetCategory.METRICS -> MetricWidgetData::class.java
             WidgetCategory.CHARTS -> ChartWidgetData::class.java
@@ -215,6 +231,10 @@ object WidgetFactory {
      * Validates if the data type matches the widget requirements
      */
     fun isValidDataType(widget: AnalyticsWidget, data: WidgetData): Boolean {
+        if (widget == AnalyticsWidget.MuscleHeatmap) {
+            return data is MuscleHeatmapWidgetData
+        }
+
         return when (widget.category) {
             WidgetCategory.METRICS -> data is MetricWidgetData
             WidgetCategory.CHARTS -> data is ChartWidgetData
@@ -227,6 +247,10 @@ object WidgetFactory {
      * Creates loading data for a widget type - Clean zero-state display (FR-004)
      */
     fun createLoadingData(widget: AnalyticsWidget): WidgetData {
+        if (widget == AnalyticsWidget.MuscleHeatmap) {
+            return MuscleHeatmapWidgetData.empty().copy(isLoading = true)
+        }
+
         return when (widget.category) {
             WidgetCategory.METRICS -> MetricWidgetData.loading(widget)
             WidgetCategory.CHARTS -> ChartWidgetData.loading(widget)
@@ -275,6 +299,7 @@ object WidgetFactory {
             
             // Other active widgets
             AnalyticsWidget.MuscleGroupDistribution -> "%"
+            AnalyticsWidget.MuscleHeatmap -> ""
             AnalyticsWidget.RecoveryMetrics -> "h"
             AnalyticsWidget.MonthlySummary -> ""
             AnalyticsWidget.FrequencyChart -> "workouts"
@@ -296,6 +321,10 @@ object WidgetFactory {
      * Creates error data for a widget type
      */
     fun createErrorData(widget: AnalyticsWidget, error: com.example.liftrix.domain.model.analytics.WidgetError): WidgetData {
+        if (widget == AnalyticsWidget.MuscleHeatmap) {
+            return MuscleHeatmapWidgetData.empty().copy(error = error)
+        }
+
         return when (widget.category) {
             WidgetCategory.METRICS -> MetricWidgetData.error(widget, error)
             WidgetCategory.CHARTS -> ChartWidgetData(

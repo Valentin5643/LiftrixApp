@@ -51,6 +51,7 @@ class WidgetResolver @Inject constructor() {
         "frequencyChart" to AnalyticsWidget.FrequencyChart.id,
         "recoveryMetrics" to AnalyticsWidget.RecoveryMetrics.id,
         "muscleGroupDistribution" to AnalyticsWidget.MuscleGroupDistribution.id,
+        "muscleHeatmap" to AnalyticsWidget.MuscleHeatmap.id,
         "monthlySummary" to AnalyticsWidget.MonthlySummary.id,
         
         // Deprecated strength widgets → StrengthAnalytics (consolidated)
@@ -68,6 +69,7 @@ class WidgetResolver @Inject constructor() {
         "FrequencyChart" to AnalyticsWidget.FrequencyChart.id,
         "RecoveryMetrics" to AnalyticsWidget.RecoveryMetrics.id,
         "MuscleGroupDistribution" to AnalyticsWidget.MuscleGroupDistribution.id,
+        "MuscleHeatmap" to AnalyticsWidget.MuscleHeatmap.id,
         "MonthlySummary" to AnalyticsWidget.MonthlySummary.id,
         
         // Deprecated strength widgets → StrengthAnalytics (consolidated)
@@ -85,6 +87,7 @@ class WidgetResolver @Inject constructor() {
         "Frequency Chart" to AnalyticsWidget.FrequencyChart.id,
         "Recovery Metrics" to AnalyticsWidget.RecoveryMetrics.id,
         "Muscle Group Distribution" to AnalyticsWidget.MuscleGroupDistribution.id,
+        "Muscle Heatmap" to AnalyticsWidget.MuscleHeatmap.id,
         "Monthly Summary" to AnalyticsWidget.MonthlySummary.id,
         
         // Deprecated strength widgets → StrengthAnalytics (consolidated)
@@ -144,6 +147,7 @@ class WidgetResolver @Inject constructor() {
     fun resolveStandardWidgets(userLevel: UserLevel): List<AnalyticsWidget> {
         val selectedWidgets = listOf(
             AnalyticsWidget.StrengthAnalytics,
+            AnalyticsWidget.StrengthForecast,
             AnalyticsWidget.VolumeAnalytics,
             AnalyticsWidget.MuscleGroupDistribution
         )
@@ -555,6 +559,14 @@ class WidgetResolver @Inject constructor() {
         } else if (resolvedWidgets.isEmpty()) {
             Timber.i("No widgets in preferences, using level-appropriate defaults for $userLevel")
             resolveStandardWidgets(userLevel)
+        } else if (
+            preferences.visibleWidgets == setOf(
+                AnalyticsWidget.StrengthAnalytics.id,
+                AnalyticsWidget.VolumeAnalytics.id,
+                AnalyticsWidget.MuscleGroupDistribution.id
+            )
+        ) {
+            resolvedWidgets + AnalyticsWidget.StrengthForecast
         } else {
             resolvedWidgets
         }

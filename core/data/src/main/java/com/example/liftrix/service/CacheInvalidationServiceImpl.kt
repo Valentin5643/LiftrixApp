@@ -5,6 +5,7 @@ import com.example.liftrix.core.cache.EnhancedCacheManager
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.usecase.analytics.AnalyticsQueryUseCase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -13,7 +14,8 @@ import timber.log.Timber
 
 class CacheInvalidationServiceImpl(
     private val cacheManager: EnhancedCacheManager,
-    private val keyGenerator: CacheKeyGenerator
+    private val keyGenerator: CacheKeyGenerator,
+    private val analyticsQueryUseCase: AnalyticsQueryUseCase
 ) : CacheInvalidationService {
     private val _invalidationEvents = MutableSharedFlow<InvalidationEvent>(extraBufferCapacity = 64)
     override val invalidationEvents: Flow<InvalidationEvent> = _invalidationEvents.asSharedFlow()
@@ -40,6 +42,7 @@ class CacheInvalidationServiceImpl(
         patterns.forEach { pattern ->
             cacheManager.invalidatePattern(pattern)
         }
+        analyticsQueryUseCase.invalidateCacheForUser(userId)
         _invalidationEvents.emit(InvalidationEvent.WorkoutCompleted(patterns))
         Timber.d(
             "Invalidated workout cache for user=$userId date=$workoutDate " +

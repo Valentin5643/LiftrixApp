@@ -267,6 +267,7 @@ private fun DrawScope.drawChartLines(
     selectedPoint: ChartPoint?
 ) {
     val groupedData = chartData.groupBy { it.exerciseId }
+    val drawSeriesFill = groupedData.size == 1
     
     groupedData.entries.forEachIndexed { exerciseIndex, (exerciseId, points) ->
         val sortedPoints = points.sortedBy { it.x }
@@ -293,24 +294,26 @@ private fun DrawScope.drawChartLines(
             // Draw gradient fill
             val gradient = Brush.verticalGradient(
                 colors = listOf(
-                    color.copy(alpha = 0.3f),
+                    color.copy(alpha = 0.14f),
                     Color.Transparent
                 ),
                 startY = 0f,
                 endY = size.height
             )
             
-            val fillPath = Path().apply {
-                addPath(path)
-                lineTo(animatedPoints.last().x * size.width, size.height)
-                lineTo(animatedPoints.first().x * size.width, size.height)
-                close()
+            if (drawSeriesFill) {
+                val fillPath = Path().apply {
+                    addPath(path)
+                    lineTo(animatedPoints.last().x * size.width, size.height)
+                    lineTo(animatedPoints.first().x * size.width, size.height)
+                    close()
+                }
+
+                drawPath(
+                    path = fillPath,
+                    brush = gradient
+                )
             }
-            
-            drawPath(
-                path = fillPath,
-                brush = gradient
-            )
             
             // Draw line
             drawPath(

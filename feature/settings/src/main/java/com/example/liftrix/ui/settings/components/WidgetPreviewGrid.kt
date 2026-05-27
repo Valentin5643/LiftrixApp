@@ -64,26 +64,33 @@ fun WidgetPreviewGrid(
     // Stable callback
     val stableOnWidgetClick = remember(onWidgetClick) { onWidgetClick }
     
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
+    Column(
         modifier = modifier
             .fillMaxWidth()
+            .padding(4.dp)
             .semantics {
                 contentDescription = "Dashboard preview grid showing ${widgets.size} widgets in ${layoutMode.displayName} layout"
             },
-        contentPadding = PaddingValues(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        items(
-            items = widgets,
-            key = { widget -> widget.id }
-        ) { widget ->
-            PreviewWidgetCard(
-                widget = widget,
-                layoutMode = layoutMode,
-                onClick = stableOnWidgetClick?.let { { it(widget) } }
-            )
+        widgets.chunked(columns).forEach { rowWidgets ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                rowWidgets.forEach { widget ->
+                    Box(modifier = Modifier.weight(1f)) {
+                        PreviewWidgetCard(
+                            widget = widget,
+                            layoutMode = layoutMode,
+                            onClick = stableOnWidgetClick?.let { { it(widget) } }
+                        )
+                    }
+                }
+                repeat(columns - rowWidgets.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
         }
     }
 }
@@ -394,12 +401,14 @@ private fun AnalyticsWidget.getPreviewIcon(): ImageVector {
     return when (this) {
         // Consolidated widgets
         AnalyticsWidget.StrengthAnalytics -> Icons.Default.FitnessCenter
+        AnalyticsWidget.StrengthForecast -> Icons.Default.ShowChart
         AnalyticsWidget.VolumeAnalytics -> Icons.Default.Analytics
         
         // Active widgets
         AnalyticsWidget.FrequencyChart -> Icons.Default.BarChart
         AnalyticsWidget.ProgressChart -> Icons.Default.TrendingUp
         AnalyticsWidget.MuscleGroupDistribution -> Icons.Default.DonutLarge
+        AnalyticsWidget.MuscleHeatmap -> Icons.Default.DonutLarge
         AnalyticsWidget.RecoveryMetrics -> Icons.Default.SelfImprovement
         AnalyticsWidget.MonthlySummary -> Icons.Default.CalendarMonth
         AnalyticsWidget.ExerciseRanking -> Icons.Default.EmojiEvents
@@ -430,12 +439,14 @@ private fun generatePreviewData(widget: AnalyticsWidget): String {
     return when (widget) {
         // Consolidated widgets
         AnalyticsWidget.StrengthAnalytics -> "PRs & 1RM"
+        AnalyticsWidget.StrengthForecast -> "Forecast"
         AnalyticsWidget.VolumeAnalytics -> "Trending ↗"
         
         // Active widgets
         AnalyticsWidget.FrequencyChart -> "Weekly view"
         AnalyticsWidget.ProgressChart -> "All-time"
         AnalyticsWidget.MuscleGroupDistribution -> "Balanced"
+        AnalyticsWidget.MuscleHeatmap -> "Heatmap"
         AnalyticsWidget.RecoveryMetrics -> "Good"
         AnalyticsWidget.MonthlySummary -> "Jan 2025"
         AnalyticsWidget.ExerciseRanking -> "Top lifts"

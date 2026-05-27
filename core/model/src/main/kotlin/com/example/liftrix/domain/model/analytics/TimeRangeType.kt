@@ -79,5 +79,25 @@ enum class TimeRangeType(
             durationInDays <= 270 -> SIX_MONTHS
             else -> ALL_TIME
         }
+
+        fun fromConfig(value: String?): TimeRangeType {
+            val normalized = value
+                ?.trim()
+                ?.replace("-", "_")
+                ?.replace(" ", "_")
+                ?.uppercase()
+                ?: return MONTH
+
+            return when (normalized) {
+                "1M", "ONE_MONTH", "MONTH" -> MONTH
+                "6M", "SIX_MONTH", "SIX_MONTHS", "6_MONTH", "6_MONTHS" -> SIX_MONTHS
+                "ALL", "ALL_TIME", "ALLTIME" -> ALL_TIME
+                else -> entries.firstOrNull {
+                    it.name == normalized ||
+                        it.displayName.replace(" ", "_").uppercase() == normalized ||
+                        it.getShortDisplayName().uppercase() == normalized
+                } ?: MONTH
+            }
+        }
     }
 }

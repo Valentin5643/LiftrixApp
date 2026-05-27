@@ -36,8 +36,10 @@ data class NavigationCallbacks(
     val onNavigateToVolumeDetail: () -> Unit = {},
     val onNavigateToOneRmDetail: () -> Unit = {},
     val onNavigateToMuscleGroupDetail: () -> Unit = {},
+    val onNavigateToMuscleHeatmapDetail: () -> Unit = {},
     val onNavigateToFrequencyDetail: () -> Unit = {},
     val onNavigateToExerciseRankingDetail: () -> Unit = {},
+    val onNavigateToStrengthForecastDetail: () -> Unit = {},
     val onNavigateToDashboardCustomization: () -> Unit = {}
 )
 
@@ -48,8 +50,10 @@ sealed class NavigationEvent {
     data object NavigateToVolumeDetail : NavigationEvent()
     data object NavigateToOneRmDetail : NavigationEvent()
     data object NavigateToMuscleGroupDetail : NavigationEvent()
+    data object NavigateToMuscleHeatmapDetail : NavigationEvent()
     data object NavigateToFrequencyDetail : NavigationEvent()
     data object NavigateToExerciseRankingDetail : NavigationEvent()
+    data object NavigateToStrengthForecastDetail : NavigationEvent()
 }
 
 /**
@@ -192,8 +196,10 @@ class AnalyticsWidgetViewModel @Inject constructor(
             AnalyticsWidgetEvent.NavigateToVolumeDetail -> handleNavigateToVolumeDetail()
             AnalyticsWidgetEvent.NavigateToOneRmDetail -> handleNavigateToOneRmDetail()
             AnalyticsWidgetEvent.NavigateToMuscleGroupDetail -> handleNavigateToMuscleGroupDetail()
+            AnalyticsWidgetEvent.NavigateToMuscleHeatmapDetail -> handleNavigateToMuscleHeatmapDetail()
             AnalyticsWidgetEvent.NavigateToFrequencyDetail -> handleNavigateToFrequencyDetail()
             AnalyticsWidgetEvent.NavigateToExerciseRankingDetail -> handleNavigateToExerciseRankingDetail()
+            AnalyticsWidgetEvent.NavigateToStrengthForecastDetail -> handleNavigateToStrengthForecastDetail()
             is AnalyticsWidgetEvent.WidgetReordered -> handleWidgetReordered(event.fromIndex, event.toIndex)
         }
     }
@@ -1059,11 +1065,10 @@ class AnalyticsWidgetViewModel @Inject constructor(
             
             Timber.d("=== CONFIG DEBUG: Created configuration: ${configuration.javaClass.simpleName}")
             
-            // Resolve widgets using ProgressWidgetResolverPort
-            val resolvedWidgets = widgetResolver.resolveWidgets(
-                userLevel = preferences.userLevel,
-                layoutMode = preferences.dashboardLayout,
-                preferences = preferences
+            // Layout mode controls arrangement; saved preferences control widget visibility.
+            val resolvedWidgets = widgetResolver.resolveWidgetsFromPreferences(
+                preferences = preferences,
+                userLevel = preferences.userLevel
             )
             
             Timber.d("=== CONFIG DEBUG: ProgressWidgetResolverPort returned ${resolvedWidgets.size} widgets for ${preferences.userLevel}")
@@ -1204,10 +1209,18 @@ class AnalyticsWidgetViewModel @Inject constructor(
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.RecentAchievements -> {
                 AnalyticsWidgetEvent.NavigateToOneRmDetail
             }
+
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.StrengthForecast -> {
+                AnalyticsWidgetEvent.NavigateToStrengthForecastDetail
+            }
             
             // Muscle group widgets → Muscle Group Detail
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.MuscleGroupDistribution -> {
                 AnalyticsWidgetEvent.NavigateToMuscleGroupDetail
+            }
+
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.MuscleHeatmap -> {
+                AnalyticsWidgetEvent.NavigateToMuscleHeatmapDetail
             }
             
             // Frequency widgets → Workout Frequency Detail
@@ -1261,8 +1274,10 @@ class AnalyticsWidgetViewModel @Inject constructor(
         val callbacksValid = callbacks.onNavigateToOneRmDetail != {} &&
                             callbacks.onNavigateToVolumeDetail != {} &&
                             callbacks.onNavigateToMuscleGroupDetail != {} &&
+                            callbacks.onNavigateToMuscleHeatmapDetail != {} &&
                             callbacks.onNavigateToFrequencyDetail != {} &&
-                            callbacks.onNavigateToExerciseRankingDetail != {}
+                            callbacks.onNavigateToExerciseRankingDetail != {} &&
+                            callbacks.onNavigateToStrengthForecastDetail != {}
         
         if (!callbacksValid) {
             Timber.w("Some navigation callbacks appear to be empty lambda functions")
@@ -1305,6 +1320,14 @@ class AnalyticsWidgetViewModel @Inject constructor(
         navigationCallbacks?.onNavigateToMuscleGroupDetail?.invoke()
             ?: Timber.w("Navigation callbacks not set - cannot navigate to muscle group detail")
     }
+
+    private fun handleNavigateToMuscleHeatmapDetail() {
+        Timber.d("Navigating to muscle heatmap detail screen")
+        navigationCallbacks?.onNavigateToMuscleHeatmapDetail?.invoke()
+            ?: viewModelScope.launch {
+                _navigationEvents.emit(NavigationEvent.NavigateToMuscleHeatmapDetail)
+            }
+    }
     
     /**
      * Handles navigation to workout frequency detail screen.
@@ -1323,6 +1346,14 @@ class AnalyticsWidgetViewModel @Inject constructor(
         navigationCallbacks?.onNavigateToExerciseRankingDetail?.invoke()
             ?: viewModelScope.launch {
                 _navigationEvents.emit(NavigationEvent.NavigateToExerciseRankingDetail)
+            }
+    }
+
+    private fun handleNavigateToStrengthForecastDetail() {
+        Timber.d("Navigating to strength forecast detail screen")
+        navigationCallbacks?.onNavigateToStrengthForecastDetail?.invoke()
+            ?: viewModelScope.launch {
+                _navigationEvents.emit(NavigationEvent.NavigateToStrengthForecastDetail)
             }
     }
     

@@ -3,6 +3,7 @@ package com.example.liftrix.ui.progress.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -11,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.analytics.VolumeCalendarData
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.layouts.GridSystem
@@ -60,6 +62,7 @@ fun VolumeCalendarWidget(
             
             LazyVerticalGrid(
                 columns = GridCells.Fixed(7),
+                modifier = Modifier.height(336.dp),
                 horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing1),
                 verticalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
             ) {
@@ -107,6 +110,7 @@ private fun CalendarMonthHeader(month: YearMonth) {
     
     LazyVerticalGrid(
         columns = GridCells.Fixed(7),
+        modifier = Modifier.height(20.dp),
         horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
     ) {
         items(weekdays) { weekday ->

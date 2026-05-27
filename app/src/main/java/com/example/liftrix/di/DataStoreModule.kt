@@ -15,6 +15,7 @@ import javax.inject.Singleton
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "liftrix_settings")
 private val Context.widgetDataStore: DataStore<Preferences> by preferencesDataStore(name = "liftrix_widget_preferences")
 private val Context.onboardingDataStore: DataStore<Preferences> by preferencesDataStore(name = "liftrix_onboarding_temp")
+private val Context.demoModeDataStore: DataStore<Preferences> by preferencesDataStore(name = "liftrix_demo_mode")
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -34,4 +35,10 @@ object DataStoreModule {
     @Named("onboardingDataStore")
     fun provideOnboardingDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
         context.onboardingDataStore
+
+    @Provides
+    @Singleton
+    @Named("demoModeDataStore")
+    fun provideDemoModeDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
+        context.demoModeDataStore
 }

@@ -373,11 +373,15 @@ class PdfReportGenerator @Inject constructor() {
         val maxValue = (values.maxOrNull() ?: 1.0) + 2.5
         val valueRange = (maxValue - minValue).takeIf { it > 0.0 } ?: 1.0
         val firstDate = points.minOf { it.date }
-        val lastDate = points.maxOf { it.date }
-        val daySpan = firstDate.daysUntil(lastDate).coerceAtLeast(1)
+        val timelineValues = points.map { point ->
+            point.timelineDay ?: firstDate.daysUntil(point.date).toDouble()
+        }
+        val firstTimeline = timelineValues.minOrNull() ?: 0.0
+        val timelineSpan = ((timelineValues.maxOrNull() ?: firstTimeline) - firstTimeline).takeIf { it > 0.0 } ?: 1.0
 
         fun pointOffset(point: com.example.liftrix.domain.model.analytics.StrengthForecastPoint): android.graphics.PointF {
-            val x = left + width * (firstDate.daysUntil(point.date).toFloat() / daySpan.toFloat())
+            val timelineOffset = (point.timelineDay ?: firstDate.daysUntil(point.date).toDouble()) - firstTimeline
+            val x = left + width * (timelineOffset.toFloat() / timelineSpan.toFloat())
             val y = top + height * (1f - ((point.estimatedOneRmKg - minValue) / valueRange).toFloat())
             return android.graphics.PointF(x, y)
         }

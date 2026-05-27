@@ -98,9 +98,11 @@ import com.example.liftrix.feature.progress.navigation.AnomalyDashboardRoute
 import com.example.liftrix.feature.progress.navigation.AnomalySettingsRoute
 import com.example.liftrix.feature.progress.navigation.ExerciseRankingDetailRoute
 import com.example.liftrix.feature.progress.navigation.MuscleGroupDetailRoute
+import com.example.liftrix.feature.progress.navigation.MuscleHeatmapDetailRoute
 import com.example.liftrix.feature.progress.navigation.OneRmDetailRoute
 import com.example.liftrix.feature.progress.navigation.ProgressComparisonRoute
 import com.example.liftrix.feature.progress.navigation.ProgressDashboardRoute
+import com.example.liftrix.feature.progress.navigation.StrengthForecastDetailRoute
 import com.example.liftrix.feature.progress.navigation.VolumeAnalysisDetailRoute
 import com.example.liftrix.feature.progress.navigation.WorkoutFrequencyDetailRoute
 import com.example.liftrix.feature.settings.navigation.AIDisclaimerRoute
@@ -308,11 +310,17 @@ fun UnifiedNavigationContainer(
                         onNavigateToMuscleGroupDetail = {
                             navController.navigate(LiftrixRoute.MuscleGroupDetail)
                         },
+                        onNavigateToMuscleHeatmapDetail = {
+                            navController.navigate(LiftrixRoute.MuscleHeatmapDetail)
+                        },
                         onNavigateToFrequencyDetail = {
                             navController.navigate(LiftrixRoute.WorkoutFrequencyDetail)
                         },
                         onNavigateToExerciseRankingDetail = {
                             navController.navigate(LiftrixRoute.ExerciseRankingDetail)
+                        },
+                        onNavigateToStrengthForecastDetail = {
+                            navController.navigate(LiftrixRoute.StrengthForecastDetail)
                         },
                         onNavigateToDashboardCustomization = {
                             navController.navigate(LiftrixRoute.DashboardCustomization)
@@ -1173,6 +1181,10 @@ fun UnifiedNavigationContainer(
                 composable<LiftrixRoute.MuscleGroupDetail> {
                     MuscleGroupDetailRoute(navController = navController)
                 }
+
+                composable<LiftrixRoute.MuscleHeatmapDetail> {
+                    MuscleHeatmapDetailRoute(navController = navController)
+                }
                 
                 composable<LiftrixRoute.ExerciseRankingDetail> {
                     ExerciseRankingDetailRoute(navController = navController)
@@ -1180,6 +1192,10 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.WorkoutFrequencyDetail> {
                     WorkoutFrequencyDetailRoute(navController = navController)
+                }
+
+                composable<LiftrixRoute.StrengthForecastDetail> {
+                    StrengthForecastDetailRoute(navController = navController)
                 }
                 
                 // Social Follow System Routes
@@ -1596,7 +1612,9 @@ private fun NavigationAwareTopAppBar(
         "VolumeAnalysisDetail" to "Volume Analysis",
         "OneRmDetail" to "1RM Progression", 
         "MuscleGroupDetail" to "Muscle Groups",
+        "MuscleHeatmapDetail" to "Muscle Heatmap",
         "WorkoutFrequencyDetail" to "Workout Frequency",
+        "StrengthForecastDetail" to "Strength Forecast",
         // Social System Routes (Added for social system completion)
         "ShareWorkout" to "Share Workout",
         "ProgressComparison" to "Progress Comparison",

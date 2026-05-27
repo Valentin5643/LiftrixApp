@@ -816,8 +816,8 @@ private fun mapStringToMuscleGroup(muscleGroupName: String): MuscleGroup? {
         "biceps", "triceps", "forearms", "arms" -> MuscleGroup.ARMS
         "abs", "abdominals", "core" -> MuscleGroup.CORE
         "glutes", "quadriceps", "quads", "hamstrings", "calves", "legs" -> MuscleGroup.LEGS
-        "traps", "trapezius" -> MuscleGroup.BACK // Map traps to back
-        "lats", "latissimus" -> MuscleGroup.BACK // Map lats to back
+        "traps", "trapezius", "upperback" -> MuscleGroup.BACK
+        "lats", "latissimus" -> MuscleGroup.BACK
         "delts", "deltoids" -> MuscleGroup.SHOULDERS // Alias for shoulders
         "cardio", "cardiovascular" -> MuscleGroup.CARDIO
         else -> {

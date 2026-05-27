@@ -376,6 +376,11 @@ sealed class AnalyticsWidgetEvent : ViewModelEvent {
      * ```
      */
     data object NavigateToMuscleGroupDetail : AnalyticsWidgetEvent()
+
+    /**
+     * Event for navigating to muscle heatmap detail screen.
+     */
+    data object NavigateToMuscleHeatmapDetail : AnalyticsWidgetEvent()
     
     /**
      * Event for navigating to workout frequency detail screen.
@@ -395,6 +400,8 @@ sealed class AnalyticsWidgetEvent : ViewModelEvent {
      * Event for navigating to exercise ranking detail screen.
      */
     data object NavigateToExerciseRankingDetail : AnalyticsWidgetEvent()
+
+    data object NavigateToStrengthForecastDetail : AnalyticsWidgetEvent()
 }
 
 /**

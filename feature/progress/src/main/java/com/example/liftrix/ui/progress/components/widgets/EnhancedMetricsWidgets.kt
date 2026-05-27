@@ -510,7 +510,7 @@ private fun generateSampleProgressData(): List<Float> {
 }
 
 private fun generateSample1RMData(): List<Float> {
-    return listOf(80f, 82.5f, 82.5f, 85f, 87.5f, 85f, 90f)
+    return listOf(80f, 82.5f, 82.5f, 85f, 87.5f, 87.5f, 90f)
 }
 
 private fun generateSampleDistribution(): List<Pair<Float, Color>> {
