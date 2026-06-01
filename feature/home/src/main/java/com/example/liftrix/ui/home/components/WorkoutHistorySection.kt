@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
@@ -92,7 +93,10 @@ fun WorkoutHistorySection(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item {
+            item(
+                key = "quick_stat_this_week",
+                contentType = WorkoutHistoryContentType.QuickStat
+            ) {
                 QuickStatCard(
                     icon = Icons.Default.FitnessCenter,
                     label = "This Week",
@@ -100,7 +104,10 @@ fun WorkoutHistorySection(
                     subtitle = "workouts"
                 )
             }
-            item {
+            item(
+                key = "quick_stat_total_time",
+                contentType = WorkoutHistoryContentType.QuickStat
+            ) {
                 QuickStatCard(
                     icon = Icons.Default.Timer,
                     label = "Total Time",
@@ -108,7 +115,10 @@ fun WorkoutHistorySection(
                     subtitle = "minutes"
                 )
             }
-            item {
+            item(
+                key = "quick_stat_current_streak",
+                contentType = WorkoutHistoryContentType.QuickStat
+            ) {
                 QuickStatCard(
                     icon = Icons.AutoMirrored.Filled.TrendingUp,
                     label = "Current Streak",
@@ -116,7 +126,10 @@ fun WorkoutHistorySection(
                     subtitle = "days"
                 )
             }
-            item {
+            item(
+                key = "quick_stat_last_workout",
+                contentType = WorkoutHistoryContentType.QuickStat
+            ) {
                 QuickStatCard(
                     icon = Icons.Default.CalendarMonth,
                     label = "Last Workout",
@@ -144,10 +157,11 @@ fun WorkoutHistorySection(
                 // If we have feed workouts with media, use those
                 if (feedWorkouts != null) {
                     // 🔥 CRITICAL FIX: Add unique key for feedWorkouts as well
-                    items(
+                    itemsIndexed(
                         items = feedWorkouts,
-                        key = { feedWorkout -> feedWorkout.workout.id } // Use workout ID as unique key
-                    ) { feedWorkout ->
+                        key = { index, feedWorkout -> "${feedWorkout.workout.id}_$index" },
+                        contentType = { _, _ -> WorkoutHistoryContentType.FeedWorkout }
+                    ) { _, feedWorkout ->
                         WorkoutHistoryCardWithMedia(
                             feedWorkout = feedWorkout,
                             onClick = { onWorkoutClick(feedWorkout.workout) }
@@ -164,10 +178,11 @@ fun WorkoutHistorySection(
                     
                     // Otherwise fall back to regular workout display
                     // 🔥 CRITICAL FIX: Add unique key to prevent workout collapsing with same names
-                    items(
+                    itemsIndexed(
                         items = recentWorkouts,
-                        key = { workout -> workout.id } // Use workout ID as unique key
-                    ) { workout ->
+                        key = { index, workout -> "${workout.id}_$index" },
+                        contentType = { _, _ -> WorkoutHistoryContentType.Workout }
+                    ) { _, workout ->
                         WorkoutHistoryCard(
                             workout = workout,
                             onClick = { onWorkoutClick(workout) }
@@ -177,6 +192,12 @@ fun WorkoutHistorySection(
             }
         }
     }
+}
+
+private enum class WorkoutHistoryContentType {
+    QuickStat,
+    FeedWorkout,
+    Workout
 }
 
 /**
@@ -212,8 +233,9 @@ private fun WorkoutHistoryCardWithMedia(
     val workout = feedWorkout.workout
     val subtitle = buildString {
         // Show user name if not personal workout
-        if (!feedWorkout.isPersonal && feedWorkout.user != null) {
-            append("${feedWorkout.user.displayName} • ")
+        val feedUser = feedWorkout.user
+        if (!feedWorkout.isPersonal && feedUser != null) {
+            append("${feedUser.displayName} • ")
         }
         append("${workout.exerciseCount} exercises")
         val completedSets = workout.getCompletedSets()

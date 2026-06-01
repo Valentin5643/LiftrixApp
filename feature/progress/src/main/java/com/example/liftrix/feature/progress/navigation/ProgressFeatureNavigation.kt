@@ -7,6 +7,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.composable
+import androidx.navigation.toRoute
 import com.example.liftrix.domain.model.BodyPart
 import com.example.liftrix.domain.model.MuscleGroup
 import com.example.liftrix.domain.model.ProgressComparison
@@ -15,6 +19,7 @@ import com.example.liftrix.domain.model.PhotoType
 import com.example.liftrix.domain.model.analytics.RankingMetric
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.analytics.VolumeGrouping
+import com.example.liftrix.ui.navigation.LiftrixRoute
 import com.example.liftrix.ui.anomaly.AnomalyDashboardScreen
 import com.example.liftrix.ui.anomaly.AnomalySettingsScreen
 import com.example.liftrix.ui.progress.ProgressComparisonView
@@ -238,4 +243,94 @@ private fun placeholderProgressComparison(
         timeDifferenceWeeks = 4,
         createdAt = currentTime
     )
+}
+
+fun NavGraphBuilder.progressGraph(navController: NavHostController) {
+    composable<LiftrixRoute.Progress> {
+        ProgressDashboardRoute(
+            onNavigateToVolumeDetail = {
+                navController.navigate(LiftrixRoute.VolumeAnalysisDetail)
+            },
+            onNavigateToOneRmDetail = {
+                navController.navigate(LiftrixRoute.OneRmDetail)
+            },
+            onNavigateToMuscleGroupDetail = {
+                navController.navigate(LiftrixRoute.MuscleGroupDetail)
+            },
+            onNavigateToMuscleHeatmapDetail = {
+                navController.navigate(LiftrixRoute.MuscleHeatmapDetail)
+            },
+            onNavigateToFrequencyDetail = {
+                navController.navigate(LiftrixRoute.WorkoutFrequencyDetail)
+            },
+            onNavigateToExerciseRankingDetail = {
+                navController.navigate(LiftrixRoute.ExerciseRankingDetail)
+            },
+            onNavigateToStrengthForecastDetail = {
+                navController.navigate(LiftrixRoute.StrengthForecastDetail)
+            },
+            onNavigateToDashboardCustomization = {
+                navController.navigate(LiftrixRoute.DashboardCustomization)
+            }
+        )
+    }
+
+    composable<LiftrixRoute.AnomalyDashboard> {
+        AnomalyDashboardRoute(
+            onNavigateBack = { navController.popBackStackSafely() },
+            onNavigateToSettings = {
+                navController.navigate(LiftrixRoute.AnomalySettings)
+            }
+        )
+    }
+
+    composable<LiftrixRoute.AnomalySettings> {
+        AnomalySettingsRoute(
+            onNavigateBack = { navController.popBackStackSafely() }
+        )
+    }
+
+    composable<LiftrixRoute.ProgressComparison> { backStackEntry ->
+        val route = backStackEntry.toRoute<LiftrixRoute.ProgressComparison>()
+        ProgressComparisonRoute(
+            comparisonId = route.comparisonId,
+            shareMode = route.shareMode
+        )
+    }
+
+    composable<LiftrixRoute.VolumeAnalysisDetail> {
+        VolumeAnalysisDetailRoute(navController = navController)
+    }
+
+    composable<LiftrixRoute.OneRmDetail> {
+        OneRmDetailRoute(navController = navController)
+    }
+
+    composable<LiftrixRoute.MuscleGroupDetail> {
+        MuscleGroupDetailRoute(navController = navController)
+    }
+
+    composable<LiftrixRoute.MuscleHeatmapDetail> {
+        MuscleHeatmapDetailRoute(navController = navController)
+    }
+
+    composable<LiftrixRoute.ExerciseRankingDetail> {
+        ExerciseRankingDetailRoute(navController = navController)
+    }
+
+    composable<LiftrixRoute.WorkoutFrequencyDetail> {
+        WorkoutFrequencyDetailRoute(navController = navController)
+    }
+
+    composable<LiftrixRoute.StrengthForecastDetail> {
+        StrengthForecastDetailRoute(navController = navController)
+    }
+}
+
+private fun NavController.popBackStackSafely(): Boolean {
+    return if (previousBackStackEntry != null) {
+        popBackStack()
+    } else {
+        false
+    }
 }

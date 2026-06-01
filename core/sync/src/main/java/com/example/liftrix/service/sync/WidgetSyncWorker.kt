@@ -6,9 +6,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
-import com.example.liftrix.domain.model.analytics.WidgetComplexity
 import com.example.liftrix.service.AnalyticsService
-import com.example.liftrix.service.cache.WidgetCacheManager
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.async
@@ -16,8 +14,6 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import timber.log.Timber
-import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
 
 /**
  * Background worker for widget data synchronization.
@@ -46,9 +42,7 @@ import kotlin.time.Duration.Companion.seconds
 class WidgetSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted workerParams: WorkerParameters,
-    private val analyticsService: AnalyticsService,
-    private val widgetCacheManager: WidgetCacheManager,
-    private val syncStrategy: SyncStrategy
+    private val analyticsService: AnalyticsService
 ) : CoroutineWorker(context, workerParams) {
     
     companion object {
@@ -56,10 +50,6 @@ class WidgetSyncWorker @AssistedInject constructor(
         private const val MAX_RETRY_ATTEMPTS = 3
         private const val RETRY_DELAY_MS = 2000L
         
-        // Sync intervals based on widget complexity
-        private val SIMPLE_SYNC_INTERVAL = 30.seconds
-        private val MODERATE_SYNC_INTERVAL = 2.minutes
-        private val COMPLEX_SYNC_INTERVAL = 5.minutes
     }
     
     override suspend fun doWork(): Result = coroutineScope {
@@ -92,7 +82,8 @@ class WidgetSyncWorker @AssistedInject constructor(
                 }
             )
             
-            // Filter widgets that need syncing based on cache staleness and complexity
+            // Filter widgets that need explicit background calculation. Room-backed UI
+            // observers own freshness, so periodic widget cache warming is disabled.
             val widgetsToSync = getWidgetsRequiringSync(userId, preferences.visibleWidgets, syncType)
             
             if (widgetsToSync.isEmpty()) {
@@ -189,10 +180,7 @@ class WidgetSyncWorker @AssistedInject constructor(
                 
                 widgetDataResult.fold(
                     onSuccess = { widgetData ->
-                        // Cache the fresh data
-                        widgetCacheManager.putWidgetData(userId, widget, widgetData)
-                        
-                        Timber.d("WidgetSyncWorker: Successfully synced widget ${widget.id}")
+                        Timber.d("WidgetSyncWorker: Successfully calculated widget ${widget.id}")
                         return true
                     },
                     onFailure = { error ->
@@ -232,7 +220,6 @@ class WidgetSyncWorker @AssistedInject constructor(
         enabledWidgets: Set<String>,
         syncType: String
     ): List<AnalyticsWidget> {
-        val currentTime = System.currentTimeMillis()
         val result = mutableListOf<AnalyticsWidget>()
         
         for (widgetId in enabledWidgets) {
@@ -244,19 +231,7 @@ class WidgetSyncWorker @AssistedInject constructor(
                 continue
             }
             
-            // Check if widget data is stale based on complexity
-            val cachedData = widgetCacheManager.getWidgetData(userId, widget)
-            val syncInterval = when (widget.complexity) {
-                WidgetComplexity.SIMPLE -> SIMPLE_SYNC_INTERVAL.inWholeMilliseconds
-                WidgetComplexity.MODERATE -> MODERATE_SYNC_INTERVAL.inWholeMilliseconds
-                WidgetComplexity.COMPLEX -> COMPLEX_SYNC_INTERVAL.inWholeMilliseconds
-            }
-            
-            val lastSync = cachedData?.lastUpdated?.toEpochMilliseconds()
-            if (lastSync == null || (currentTime - lastSync) >= syncInterval) {
-                result.add(widget)
-                Timber.d("WidgetSyncWorker: Widget ${widget.id} requires sync (last sync: $lastSync, interval: ${syncInterval}ms)")
-            }
+            Timber.v("WidgetSyncWorker: Skipping periodic cache sync for ${widget.id}; Room Flow owns freshness")
         }
         
         return result
@@ -276,27 +251,4 @@ class WidgetSyncWorker @AssistedInject constructor(
         }
     }
     
-    /**
-     * Estimates the time required for sync based on widget complexity and count
-     */
-    private fun estimateSyncDuration(widgets: List<AnalyticsWidget>): Long {
-        return widgets.sumOf { widget ->
-            when (widget.complexity) {
-                WidgetComplexity.SIMPLE -> 500L // 500ms for simple widgets
-                WidgetComplexity.MODERATE -> 1500L // 1.5s for moderate widgets
-                WidgetComplexity.COMPLEX -> 3000L // 3s for complex widgets
-            }
-        }
-    }
-    
-    /**
-     * Gets the priority for widget sync based on complexity and user activity
-     */
-    private fun getWidgetSyncPriority(widget: AnalyticsWidget): Int {
-        return when (widget.complexity) {
-            WidgetComplexity.SIMPLE -> 1 // High priority
-            WidgetComplexity.MODERATE -> 2 // Medium priority  
-            WidgetComplexity.COMPLEX -> 3 // Low priority
-        }
-    }
 }

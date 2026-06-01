@@ -12,7 +12,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination
-import androidx.navigation.NavDestination.Companion.hierarchy
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import com.example.liftrix.ui.components.WorkoutCreationFab
 import com.example.liftrix.ui.components.QuickWorkoutFab
@@ -58,12 +57,12 @@ fun ConditionalWorkoutFab(
     isExtended: Boolean = false,
     fabType: FabType = FabType.CREATION,
     currentDestination: NavDestination? = null,
+    routeChrome: RouteChrome = currentDestination.routeChrome(),
     viewModel: ConditionalWorkoutFabViewModel = hiltViewModel()
 ) {
     val hasActiveSession by viewModel.hasActiveSession.collectAsState()
     
-    // Type-safe FAB visibility check
-    val shouldHideFab = hasActiveSession || shouldHideFabForDestination(currentDestination)
+    val shouldHideFab = hasActiveSession || !routeChrome.showFab
     
     AnimatedVisibility(
         visible = !shouldHideFab,
@@ -96,57 +95,6 @@ enum class FabType {
 }
 
 /**
- * Type-safe route checking for FAB visibility.
- * Determines if FAB should be hidden based on the current route.
- * 
- * This approach is more maintainable than string matching because:
- * - It's centralized in one place
- * - It's type-safe with the sealed class hierarchy
- * - It's resilient to route refactoring
- * 
- * @param route The current navigation route
- * @return true if FAB should be hidden, false otherwise
- */
-private fun shouldHideFabForDestination(destination: NavDestination?): Boolean {
-    if (destination == null) return false
-
-    return destination.hierarchy
-        .mapNotNull { it.route }
-        .any(::shouldHideFabForRoute)
-}
-
-private fun shouldHideFabForRoute(route: String): Boolean {
-    // Define route patterns where FAB should be hidden
-    val routesToHideFab = setOf(
-        // Coach tab and standalone AI chat interface don't need workout creation
-        LiftrixRoute.Coach::class.simpleName,
-        "AIChatbot",
-        
-        // Settings screens - contextually inappropriate for workout creation
-        "Settings", "WidgetSettings", "AnomalySettings", 
-        "DashboardCustomization", "NotificationSettings",
-        "EmailChange", "PasswordChange", "UsernameChange",
-        "AccountDeletion", "PrivacySettings",
-        
-        // Help and legal screens
-        "HelpCenter", "ContactSupport", "About",
-        "PrivacyPolicy", "TermsOfService", "DataPortability", "ExportProgressReport",
-        
-        // Authentication screens
-        "AuthSignIn", "AuthSignUp", "AuthForgotPassword",
-        
-        // Active workout and completion flow screens do not need workout creation
-        "ActiveWorkout", "ActiveWorkoutDetail",
-        "PostWorkoutSummary", "PostCreation", "WorkoutDetails"
-    )
-    
-    // Check if current route contains any of the patterns
-    return routesToHideFab.any { pattern ->
-        pattern?.let { route.contains(it, ignoreCase = true) } ?: false
-    }
-}
-
-/**
  * ViewModel for conditional FAB that tracks session state
  */
 @HiltViewModel
@@ -168,4 +116,3 @@ class ConditionalWorkoutFabViewModel @Inject constructor(
             initialValue = false
         )
 }
-

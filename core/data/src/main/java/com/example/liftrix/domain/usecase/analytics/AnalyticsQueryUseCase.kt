@@ -2,6 +2,7 @@ package com.example.liftrix.domain.usecase.analytics
 
 import com.example.liftrix.data.local.dao.ExerciseLibraryDao
 import com.example.liftrix.data.local.dao.ExerciseSetDao
+import com.example.liftrix.data.local.dao.AnalyticsReadModelDao
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.analytics.TimeRangeType
@@ -32,7 +33,6 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
 import timber.log.Timber
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -97,6 +97,7 @@ import javax.inject.Singleton
 class AnalyticsQueryUseCase @Inject constructor(
     private val progressDataService: ProgressDataService,
     private val exerciseSetDao: ExerciseSetDao,
+    private val analyticsReadModelDao: AnalyticsReadModelDao,
     private val exerciseLibraryDao: ExerciseLibraryDao,
     private val progressStatsRepository: ProgressStatsRepository,
     private val workoutRepository: WorkoutRepository,
@@ -111,17 +112,6 @@ class AnalyticsQueryUseCase @Inject constructor(
     /**
      * Cache entry with TTL support for analytics data.
      */
-    private data class CacheEntry<T>(
-        val data: T,
-        val timestamp: Long,
-        val ttlMs: Long
-    ) {
-        fun isValid(): Boolean = System.currentTimeMillis() - timestamp < ttlMs
-    }
-
-    // Cache storage with thread-safe concurrent access
-    private val analyticsCache = ConcurrentHashMap<String, CacheEntry<Any>>()
-
     // Cache TTLs by data type (in milliseconds)
     private object CacheTTL {
         const val VOLUME_ANALYSIS = 10 * 60 * 1000L      // 10 minutes
@@ -136,23 +126,14 @@ class AnalyticsQueryUseCase @Inject constructor(
      */
     @Suppress("UNCHECKED_CAST")
     private fun <T> getCached(key: String): T? {
-        val entry = analyticsCache[key] ?: return null
-        return if (entry.isValid()) {
-            Timber.d("[ANALYTICS-CACHE] Cache hit for key: $key")
-            entry.data as? T
-        } else {
-            analyticsCache.remove(key)
-            Timber.d("[ANALYTICS-CACHE] Cache expired for key: $key")
-            null
-        }
+        return null
     }
 
     /**
      * Store data in cache with specified TTL.
      */
     private fun <T : Any> putCache(key: String, data: T, ttlMs: Long) {
-        analyticsCache[key] = CacheEntry(data, System.currentTimeMillis(), ttlMs)
-        Timber.d("[ANALYTICS-CACHE] Cached data for key: $key (TTL: ${ttlMs / 1000}s)")
+        Timber.v("[ANALYTICS-CACHE] Skipped memory cache write for key: $key; Room is source of truth")
     }
 
     /**
@@ -168,18 +149,14 @@ class AnalyticsQueryUseCase @Inject constructor(
      * Call this when workout data changes.
      */
     fun invalidateCacheForUser(userId: String) {
-        val keysToRemove = analyticsCache.keys.filter { it.startsWith("$userId:") }
-        keysToRemove.forEach { analyticsCache.remove(it) }
-        Timber.d("[ANALYTICS-CACHE] Invalidated ${keysToRemove.size} cache entries for user: $userId")
+        Timber.d("[ANALYTICS-CACHE] No memory analytics cache to invalidate for user: $userId")
     }
 
     /**
      * Clear all cached analytics data.
      */
     fun clearAllCache() {
-        val size = analyticsCache.size
-        analyticsCache.clear()
-        Timber.d("[ANALYTICS-CACHE] Cleared all $size cache entries")
+        Timber.d("[ANALYTICS-CACHE] No memory analytics cache to clear")
     }
 
     /**
@@ -586,8 +563,8 @@ class AnalyticsQueryUseCase @Inject constructor(
                 TimeRangeType.ALL_TIME -> LocalDate(2020, 1, 1)
             }
 
-            // Step 2: Query DAO for muscle group volume data
-            val muscleGroupResults = exerciseSetDao.getVolumeDataByMuscleGroup(
+            // Step 2: Query materialized muscle group aggregates.
+            val muscleGroupResults = analyticsReadModelDao.getMuscleGroupVolumeSummary(
                 userId, startDate.toString(), today.toString()
             )
 

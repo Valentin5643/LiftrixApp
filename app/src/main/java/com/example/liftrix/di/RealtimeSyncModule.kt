@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.liftrix.service.sync.ConflictResolver
 import com.example.liftrix.service.sync.RealtimeSyncManager
 import com.example.liftrix.service.sync.SyncStrategy
+import com.example.liftrix.sync.SyncCoordinator
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.Module
@@ -11,6 +12,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import javax.inject.Provider
 import javax.inject.Singleton
 
 @Module
@@ -31,12 +33,14 @@ object RealtimeSyncModule {
         auth: FirebaseAuth,
         @ApplicationContext context: Context,
         syncStrategy: SyncStrategy,
-        conflictResolver: ConflictResolver
+        conflictResolver: ConflictResolver,
+        syncCoordinatorProvider: Provider<SyncCoordinator>
     ): RealtimeSyncManager = RealtimeSyncManager(
         firestore = firestore,
         auth = auth,
         context = context,
         syncStrategy = syncStrategy,
-        conflictResolver = conflictResolver
+        conflictResolver = conflictResolver,
+        syncCoordinatorProvider = syncCoordinatorProvider
     )
 }

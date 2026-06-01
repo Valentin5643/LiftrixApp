@@ -5,11 +5,16 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import com.example.liftrix.data.di.IoDispatcher
 import com.example.liftrix.domain.service.NetworkConnectivityMonitor
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,7 +26,9 @@ import javax.inject.Singleton
  */
 @Singleton
 class NetworkConnectivityMonitorImpl @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val applicationScope: CoroutineScope,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : NetworkConnectivityMonitor {
 
     private val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -176,9 +183,10 @@ class NetworkConnectivityMonitorImpl @Inject constructor(
         synchronized(monitoringLock) {
             Timber.d("Restarting network connectivity monitoring")
             stopMonitoring()
-            // Small delay to ensure cleanup completes
-            Thread.sleep(100)
-            startMonitoring()
+            applicationScope.launch(ioDispatcher) {
+                delay(100)
+                startMonitoring()
+            }
         }
     }
-} 
+}

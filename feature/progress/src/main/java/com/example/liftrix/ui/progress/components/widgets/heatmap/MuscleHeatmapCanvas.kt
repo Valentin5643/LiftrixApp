@@ -1,6 +1,7 @@
 package com.example.liftrix.ui.progress.components.widgets.heatmap
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -29,6 +30,10 @@ internal fun MuscleHeatmapCanvas(
     val resourceId = remember(gender, viewSide) { muscleHeatmapResource(gender, viewSide) }
     val svg = remember(resourceId, viewSide) { MuscleHeatmapSvgParser.parse(context, resourceId, viewSide) }
     val colorScheme = MaterialTheme.colorScheme
+    val isDarkTheme = isSystemInDarkTheme()
+    val heatmapColors = remember(colorScheme, isDarkTheme) {
+        MuscleHeatmapThemeColors.from(colorScheme, isDarkTheme)
+    }
     val intensityByMuscle = remember(values) {
         values.associate { it.muscleGroup to it.normalizedIntensity }
     }
@@ -48,9 +53,9 @@ internal fun MuscleHeatmapCanvas(
                         val fill = region.resolveFill(
                             intensityByMuscle = intensityByMuscle,
                             colorMode = colorMode,
-                            neutral = colorScheme.surfaceVariant.copy(alpha = 0.72f),
-                            base = colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            separator = colorScheme.outlineVariant
+                            neutral = heatmapColors.neutral,
+                            base = heatmapColors.base,
+                            separator = region.separatorColor(heatmapColors)
                         )
                         if (region.isSeparator) {
                             if (region.isFilledSeparator) {
@@ -60,6 +65,13 @@ internal fun MuscleHeatmapCanvas(
                             }
                         } else {
                             drawPath(region.path, fill)
+                            region.sourceStrokeWidth?.let { strokeWidth ->
+                                drawPath(
+                                    path = region.path,
+                                    color = heatmapColors.separator,
+                                    style = Stroke(width = strokeWidth.coerceAtLeast(1f) / scale)
+                                )
+                            }
                         }
                     }
                 }
@@ -82,4 +94,42 @@ private fun MuscleHeatmapPath.resolveFill(
         colorMode = colorMode,
         neutral = neutral
     )
+}
+
+private data class MuscleHeatmapThemeColors(
+    val neutral: Color,
+    val base: Color,
+    val separator: Color,
+    val outline: Color
+) {
+    companion object {
+        fun from(
+            colorScheme: androidx.compose.material3.ColorScheme,
+            isDarkTheme: Boolean
+        ): MuscleHeatmapThemeColors {
+            return if (isDarkTheme) {
+                MuscleHeatmapThemeColors(
+                    neutral = colorScheme.onSurface.copy(alpha = 0.10f),
+                    base = colorScheme.onSurface.copy(alpha = 0.055f),
+                    separator = colorScheme.background,
+                    outline = colorScheme.onSurface.copy(alpha = 0.15f)
+                )
+            } else {
+                MuscleHeatmapThemeColors(
+                    neutral = Color(0xFFE9EEF1),
+                    base = Color(0xFFF5F7F8),
+                    separator = colorScheme.background,
+                    outline = colorScheme.onSurface.copy(alpha = 0.10f)
+                )
+            }
+        }
+    }
+}
+
+private fun MuscleHeatmapPath.separatorColor(colors: MuscleHeatmapThemeColors): Color {
+    return if (id.equals("body-outline", ignoreCase = true)) {
+        colors.outline
+    } else {
+        colors.separator
+    }
 }

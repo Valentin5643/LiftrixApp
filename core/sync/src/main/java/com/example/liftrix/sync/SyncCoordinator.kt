@@ -5,14 +5,15 @@ import androidx.work.WorkManager
 import androidx.work.ExistingWorkPolicy
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.Constraints
 import androidx.work.NetworkType
 import androidx.work.BackoffPolicy
 import androidx.work.workDataOf
 import androidx.work.WorkInfo
 import androidx.work.Operation
+import com.example.liftrix.data.model.SyncPayloadFactory
 import com.example.liftrix.data.sync.RealtimeSyncService
+import com.example.liftrix.data.sync.OfflineQueueManager
 import com.example.liftrix.data.service.ProfileCleanupService
 import com.example.liftrix.domain.repository.SyncStatusRepository
 import com.example.liftrix.domain.model.common.LiftrixResult
@@ -59,6 +60,7 @@ import javax.inject.Singleton
 class SyncCoordinator @Inject constructor(
     @ApplicationContext private val context: Context,
     private val realtimeSyncService: RealtimeSyncService,
+    private val offlineQueueManager: OfflineQueueManager,
     private val syncStatusRepository: SyncStatusRepository,
     private val profileCleanupService: ProfileCleanupService,
     private val startupRestoreGate: StartupRestoreGate
@@ -76,15 +78,20 @@ class SyncCoordinator @Inject constructor(
     private val startupSyncInFlightUsers = mutableSetOf<String>()
     
     companion object {
-        private const val PERIODIC_SYNC_WORK_NAME = "liftrix_periodic_sync"
-        private const val IMMEDIATE_SYNC_WORK_NAME = "liftrix_immediate_sync"
         private const val UNIFIED_SYNC_WORK_NAME = "liftrix_unified_sync"
+        private const val STARTUP_SYNC_WORK_NAME = "startup_sync"
         private const val SYNC_INTERVAL_MINUTES = 15L
         private const val SYNC_TIMEOUT_MS = 30_000L // 30 seconds timeout
         private const val WORKER_INSTANTIATION_CHECK_DELAY_MS = 1_000L // 1 second
-        
-        // Feature flags for gradual migration
-        private const val USE_UNIFIED_SYNC = true // Set to false to use legacy workers
+        private val STARTUP_FETCH_ENTITY_TYPES = listOf(
+            SyncOperationManager.ENTITY_PROFILE,
+            "USER_PUBLIC",
+            SyncOperationManager.ENTITY_WORKOUT,
+            SyncOperationManager.ENTITY_TEMPLATE,
+            SyncOperationManager.ENTITY_FOLLOW_RELATIONSHIP,
+            SyncOperationManager.ENTITY_WORKOUT_POST,
+            SyncOperationManager.ENTITY_ACHIEVEMENT
+        )
     }
     
     /**
@@ -96,13 +103,8 @@ class SyncCoordinator @Inject constructor(
      * @param userId The user ID to sync data for
      */
     fun schedulePeriodicSync(userId: String) {
-        Timber.d("SyncCoordinator: Scheduling periodic sync for user $userId (unified: $USE_UNIFIED_SYNC)")
-        
-        if (USE_UNIFIED_SYNC) {
-            scheduleUnifiedPeriodicSync(userId)
-        } else {
-            scheduleLegacyPeriodicSync(userId)
-        }
+        Timber.d("SyncCoordinator: Scheduling unified periodic sync for user $userId")
+        scheduleUnifiedPeriodicSync(userId)
 
         scheduleDeadLetterCleanup(userId)
         scheduleDatabaseIntegrityCheck(userId)
@@ -145,39 +147,6 @@ class SyncCoordinator @Inject constructor(
         Timber.d("SyncCoordinator: Unified periodic sync scheduled for user $userId")
     }
     
-    /**
-     * Schedule periodic sync using legacy MasterSyncWorker (fallback)
-     */
-    private fun scheduleLegacyPeriodicSync(userId: String) {
-        val periodicSyncRequest = PeriodicWorkRequestBuilder<MasterSyncWorker>(
-            SYNC_INTERVAL_MINUTES, TimeUnit.MINUTES
-        )
-            .setInputData(workDataOf("userId" to userId))
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .setRequiresBatteryNotLow(true)
-                    .setRequiresDeviceIdle(false)
-                    .build()
-            )
-            .setBackoffCriteria(
-                BackoffPolicy.EXPONENTIAL,
-                30, TimeUnit.SECONDS
-            )
-            .addTag("periodic_sync")
-            .addTag("user_$userId")
-            .addTag("master_sync")
-            .build()
-        
-        workManager.enqueueUniquePeriodicWork(
-            "${PERIODIC_SYNC_WORK_NAME}_$userId",
-            ExistingPeriodicWorkPolicy.KEEP,
-            periodicSyncRequest
-        )
-        
-        Timber.d("SyncCoordinator: Legacy periodic sync scheduled for user $userId")
-    }
-
     private fun scheduleDeadLetterCleanup(userId: String) {
         val cleanupRequest = DeadLetterCleanupWorker.createPeriodicWorkRequest(userId)
 
@@ -220,18 +189,14 @@ class SyncCoordinator @Inject constructor(
                 return liftrixSuccess(Unit)
             }
             Timber.tag("FreshLoginRestoreDebug").d(
-                "operation=SYNC_COORDINATOR_IMMEDIATE_START userId=$userId direction=Firebase->Room_then_Room->Firebase unified=$USE_UNIFIED_SYNC timestamp=${System.currentTimeMillis()}"
+                "operation=SYNC_COORDINATOR_IMMEDIATE_START userId=$userId direction=queue_driven_unified timestamp=${System.currentTimeMillis()}"
             )
-            Timber.d("SyncCoordinator: Triggering immediate sync for user $userId (unified: $USE_UNIFIED_SYNC)")
+            Timber.d("SyncCoordinator: Triggering unified immediate sync for user $userId")
             
             // Update sync status to indicate sync in progress
             syncStatusRepository.updateSyncStatus(userId, isInProgress = true)
             
-            if (USE_UNIFIED_SYNC) {
-                triggerUnifiedImmediateSync(userId)
-            } else {
-                triggerLegacyImmediateSync(userId)
-            }
+            triggerUnifiedImmediateSync(userId)
             
         } catch (e: Exception) {
             Timber.e(e, "SyncCoordinator: Failed to trigger immediate sync for user $userId")
@@ -272,39 +237,6 @@ class SyncCoordinator @Inject constructor(
     }
     
     /**
-     * Trigger immediate sync using legacy workers (fallback)
-     */
-    private suspend fun triggerLegacyImmediateSync(userId: String): LiftrixResult<Unit> {
-        // Create sync work requests for all entity types using unique names per user
-        val profileSync = ProfileSyncWorker.createWorkRequest(userId, forceSync = true)
-        val userPublicSync = UserPublicSyncWorker.createWorkRequest(userId, forceSync = true)
-        val followRelationshipSync = FollowRelationshipSyncWorker.createWorkRequest(userId, forceSync = true)
-        val workoutSync = WorkoutSyncWorker.createWorkRequest(userId)
-        val templateSync = TemplateSyncWorker.createWorkRequest(userId)
-        val achievementSync = AchievementSyncWorker.createWorkRequest(userId)
-        val workoutPostSync = WorkoutPostSyncWorker.createWorkRequest(userId, forceSync = true)
-        
-        // Chain sync operations with dependencies
-        val operation = workManager.beginUniqueWork(
-            "${IMMEDIATE_SYNC_WORK_NAME}_$userId",
-            ExistingWorkPolicy.KEEP,
-            profileSync
-        )
-            .then(userPublicSync)
-            .then(followRelationshipSync)
-            .then(listOf(workoutSync, templateSync, achievementSync, workoutPostSync))
-            .enqueue()
-        Timber.tag("FreshLoginRestoreDebug").i(
-            "operation=SYNC_COORDINATOR_IMMEDIATE_ENQUEUED userId=$userId uniqueWork=${IMMEDIATE_SYNC_WORK_NAME}_$userId policy=KEEP mode=legacy workers=profile,user_public,follow,workout,template,achievement,workout_post timestamp=${System.currentTimeMillis()}"
-        )
-        
-        startWorkMonitoring(operation, "${IMMEDIATE_SYNC_WORK_NAME}_$userId", userId)
-        
-        Timber.d("SyncCoordinator: Legacy immediate sync work enqueued for user $userId")
-        return liftrixSuccess(Unit)
-    }
-    
-    /**
      * Triggers sync for a specific entity type only.
      * Useful for targeted sync after specific user actions.
      * 
@@ -316,13 +248,8 @@ class SyncCoordinator @Inject constructor(
      */
     suspend fun triggerEntitySync(userId: String, entityType: String): LiftrixResult<Unit> {
         return try {
-            Timber.d("SyncCoordinator: Triggering $entityType sync for user $userId (unified: $USE_UNIFIED_SYNC)")
-            
-            if (USE_UNIFIED_SYNC) {
-                triggerUnifiedEntitySync(userId, entityType)
-            } else {
-                triggerLegacyEntitySync(userId, entityType)
-            }
+            Timber.d("SyncCoordinator: Triggering unified $entityType sync for user $userId")
+            triggerUnifiedEntitySync(userId, entityType)
             
         } catch (e: Exception) {
             Timber.e(e, "SyncCoordinator: Failed to trigger $entityType sync for user $userId")
@@ -344,22 +271,12 @@ class SyncCoordinator @Inject constructor(
      * Trigger entity sync using UnifiedSyncWorker
      */
     private suspend fun triggerUnifiedEntitySync(userId: String, entityType: String): LiftrixResult<Unit> {
-        // Map entity types to sync types and priorities
-        val (syncType, priority) = when (entityType.lowercase()) {
-            "workout", "workouts" -> "workouts" to SyncOperationManager.PRIORITY_HIGH
-            "template", "templates" -> "all" to SyncOperationManager.PRIORITY_HIGH
-            "achievement", "achievements" -> "all" to SyncOperationManager.PRIORITY_LOW
-            "profile" -> "profile" to SyncOperationManager.PRIORITY_CRITICAL
-            "social", "social_profile", "follow_relationship", "workout_post" -> "social" to SyncOperationManager.PRIORITY_MEDIUM
-            else -> {
-                return liftrixFailure(
-                    LiftrixError.ValidationError(
-                        field = "entityType",
-                        violations = listOf("Unknown entity type: $entityType")
-                    )
-                )
-            }
-        }
+        val (syncType, priority) = syncRequestForEntity(entityType) ?: return liftrixFailure(
+            LiftrixError.ValidationError(
+                field = "entityType",
+                violations = listOf("Unknown entity type: $entityType")
+            )
+        )
         
         val workRequest = UnifiedSyncWorker.createWorkRequest(
             userId = userId,
@@ -379,43 +296,27 @@ class SyncCoordinator @Inject constructor(
         Timber.d("SyncCoordinator: Unified $entityType sync work enqueued for user $userId")
         return liftrixSuccess(Unit)
     }
-    
-    /**
-     * Trigger entity sync using legacy specialized workers (fallback)
-     */
-    private suspend fun triggerLegacyEntitySync(userId: String, entityType: String): LiftrixResult<Unit> {
-        val workRequest = when (entityType.lowercase()) {
-            "workout" -> WorkoutSyncWorker.createWorkRequest(userId)
-            "workout_post" -> WorkoutPostSyncWorker.createWorkRequest(userId)
-            "template" -> TemplateSyncWorker.createWorkRequest(userId)
-            "achievement" -> AchievementSyncWorker.createWorkRequest(userId)
-            "profile" -> ProfileSyncWorker.createWorkRequest(userId, forceSync = true)
-            "user_public" -> UserPublicSyncWorker.createWorkRequest(userId, forceSync = true)
-            "follow_relationship" -> FollowRelationshipSyncWorker.createWorkRequest(userId, forceSync = true)
-            else -> {
-                return liftrixFailure(
-                    LiftrixError.ValidationError(
-                        field = "entityType",
-                        violations = listOf("Unknown entity type: $entityType")
-                    )
-                )
-            }
+
+    fun enqueueEntitySync(userId: String, entityType: String, forceSync: Boolean = true) {
+        val (syncType, priority) = syncRequestForEntity(entityType) ?: run {
+            Timber.w("SyncCoordinator: Ignoring unknown entity sync type $entityType for user $userId")
+            return
         }
-        
-        val uniqueWorkName = when (entityType.lowercase()) {
-            "workout" -> WorkoutSyncWorker.getWorkName(userId)
-            "profile" -> ProfileSyncWorker.getWorkName(userId)
-            else -> "${entityType}_sync_$userId"
-        }
-        
+        val workRequest = UnifiedSyncWorker.createWorkRequest(
+            userId = userId,
+            syncType = syncType,
+            maxPriority = priority,
+            forceSync = forceSync
+        )
+        val uniqueWorkName = UnifiedSyncWorker.getWorkName(userId, "${entityType}_${syncType}")
+
         workManager.enqueueUniqueWork(
             uniqueWorkName,
             ExistingWorkPolicy.KEEP,
             workRequest
         )
-        
-        Timber.d("SyncCoordinator: Legacy $entityType sync work enqueued for user $userId")
-        return liftrixSuccess(Unit)
+
+        Timber.d("SyncCoordinator: Unified $entityType sync work enqueued for user $userId")
     }
     
     /**
@@ -478,8 +379,8 @@ class SyncCoordinator @Inject constructor(
             workManager.cancelUniqueWork("${UNIFIED_SYNC_WORK_NAME}_immediate_$userId")
             
             // Cancel legacy sync operations (for backward compatibility)
-            workManager.cancelUniqueWork("${PERIODIC_SYNC_WORK_NAME}_$userId")
-            workManager.cancelUniqueWork("${IMMEDIATE_SYNC_WORK_NAME}_$userId")
+            workManager.cancelUniqueWork("liftrix_periodic_sync_$userId")
+            workManager.cancelUniqueWork("liftrix_immediate_sync_$userId")
             workManager.cancelUniqueWork("startup_sync_$userId")
             
             // Cancel entity-specific syncs (both unified and legacy)
@@ -504,6 +405,22 @@ class SyncCoordinator @Inject constructor(
             
         } catch (e: Exception) {
             Timber.e(e, "SyncCoordinator: Error cancelling sync operations for user $userId")
+        }
+    }
+
+    fun cancelAllSync() {
+        Timber.d("SyncCoordinator: Cancelling all WorkManager sync operations")
+
+        try {
+            workManager.cancelAllWorkByTag("unified_sync")
+            workManager.cancelAllWorkByTag("periodic_sync")
+            workManager.cancelAllWorkByTag("startup_sync")
+
+            coordinatorScope.launch {
+                realtimeSyncService.stopRealtimeSync()
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "SyncCoordinator: Error cancelling all sync operations")
         }
     }
     
@@ -634,62 +551,29 @@ class SyncCoordinator @Inject constructor(
             // Update sync status to indicate startup sync in progress
             syncStatusRepository.updateSyncStatus(userId, isInProgress = true)
             
-            // Create high-priority sync work requests for all entity types
-            // These will perform both remote-to-local and local-to-remote synchronization
-            val profileSync = ProfileSyncWorker.createWorkRequest(userId, forceSync = true)
-            val userPublicSync = UserPublicSyncWorker.createWorkRequest(userId, forceSync = true)
-            val followRelationshipSync = FollowRelationshipSyncWorker.createRestoreWorkRequest(userId) // 🔥 FIX: Use restore for startup
-            val workoutSync = WorkoutSyncWorker.createWorkRequest(userId) // Already includes bidirectional sync
-            val templateSync = TemplateSyncWorker.createWorkRequest(userId, startupSync = true)
-            val achievementSync = AchievementSyncWorker.createWorkRequest(userId)
-            val workoutPostSync = WorkoutPostSyncWorker.createWorkRequest(userId, forceSync = true)
-            
-            // Use high-priority constraints for startup sync
-            val startupConstraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .setRequiresBatteryNotLow(false) // Allow even on low battery for startup
-                .setRequiresDeviceIdle(false)
-                .build()
-            
-            // Create startup-specific work requests with higher priority
-            val startupWorkoutSync = OneTimeWorkRequestBuilder<WorkoutSyncWorker>()
-                .setInputData(workDataOf("userId" to userId, "startupSync" to true))
-                .setConstraints(startupConstraints)
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS) // Faster retry for startup
-                .addTag("startup_sync")
-                .addTag("user_$userId")
-                .build()
-                
-            val startupWorkoutPostSync = OneTimeWorkRequestBuilder<WorkoutPostSyncWorker>()
-                .setInputData(workDataOf("userId" to userId, "forceSync" to true, "startupSync" to true))
-                .setConstraints(startupConstraints)
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
-                .addTag("startup_sync")
-                .addTag("user_$userId")
-                .build()
-            
-            // Chain startup sync operations with dependencies:
-            // Profile first (foundational data)
-            // Then UserPublicSync (for searchability)  
-            // Then FollowRelationshipSync (critical for social features and fetches missing profiles)
-            // Then parallel sync of workouts and workout posts (critical for data recovery)
-            // Finally templates and achievements (less critical)
-            val operation = workManager.beginUniqueWork(
+            queueStartupFetchItems(userId)
+
+            val startupUnifiedSync = UnifiedSyncWorker.createWorkRequest(
+                userId = userId,
+                syncType = "startup",
+                maxPriority = SyncOperationManager.PRIORITY_LOW,
+                forceSync = true,
+                startupSync = true
+            )
+
+            val operation = workManager.enqueueUniqueWork(
                 workName,
                 ExistingWorkPolicy.KEEP,
-                startupWorkoutSync
+                startupUnifiedSync
             )
-                .then(templateSync)
-                .then(listOf(profileSync, userPublicSync, followRelationshipSync, startupWorkoutPostSync, achievementSync))
-                .enqueue()
             Timber.tag("StartupRestoreFix").i(
                 "[TEMPLATE-LOAD] operation=STARTUP_SYNC_ENQUEUE_POLICY userId=$userId source=$source workName=$workName policy=KEEP previousPolicy=REPLACE reason=preserve_running_restore timestamp=${System.currentTimeMillis()}"
             )
             Timber.tag("StartupRestoreFix").i(
-                "[TEMPLATE-LOAD] operation=STARTUP_SYNC_ENQUEUED_ONCE userId=$userId source=$source workName=$workName workers=workout_restore,template_restore,profile,user_public,follow_restore,workout_post,achievement timestamp=${System.currentTimeMillis()}"
+                "[TEMPLATE-LOAD] operation=STARTUP_SYNC_ENQUEUED_ONCE userId=$userId source=$source workName=$workName worker=UnifiedSyncWorker queuedFetchTypes=${STARTUP_FETCH_ENTITY_TYPES.joinToString(",")} timestamp=${System.currentTimeMillis()}"
             )
             Timber.tag("FreshLoginRestoreDebug").i(
-                "operation=SYNC_COORDINATOR_STARTUP_ENQUEUED userId=$userId uniqueWork=startup_sync_$userId policy=KEEP workers=workout_restore,template_restore,profile,user_public,follow_restore,workout_post,achievement timestamp=${System.currentTimeMillis()}"
+                "operation=SYNC_COORDINATOR_STARTUP_ENQUEUED userId=$userId uniqueWork=startup_sync_$userId policy=KEEP worker=UnifiedSyncWorker timestamp=${System.currentTimeMillis()}"
             )
             
             // 🔥 NEW: Monitor startup sync operation and add watchdog
@@ -756,6 +640,50 @@ class SyncCoordinator @Inject constructor(
                     analyticsContext = mapOf("user_id" to userId)
                 )
             )
+        }
+    }
+
+    private suspend fun queueStartupFetchItems(userId: String) {
+        STARTUP_FETCH_ENTITY_TYPES.forEach { entityType ->
+            offlineQueueManager.queueOperation(
+                userId = userId,
+                entityType = entityType,
+                entityId = "startup_fetch_${entityType.lowercase()}",
+                operation = "FETCH",
+                data = SyncPayloadFactory.createFetchPayload(
+                    userId = userId,
+                    entityType = entityType,
+                    lastSyncTimestamp = 0L,
+                    fetchAll = true
+                )
+            ).onFailure { error ->
+                Timber.w(
+                    error,
+                    "SyncCoordinator: Failed to queue startup fetch item userId=$userId entityType=$entityType"
+                )
+            }
+        }
+        Timber.i(
+            "SyncCoordinator: Queued startup fetch items userId=$userId " +
+                "entityTypes=${STARTUP_FETCH_ENTITY_TYPES.joinToString(",")}"
+        )
+    }
+
+    private fun syncRequestForEntity(entityType: String): Pair<String, Int>? {
+        return when (entityType.lowercase()) {
+            "workout", "workouts" -> "workouts" to SyncOperationManager.PRIORITY_HIGH
+            "template", "templates" -> "templates" to SyncOperationManager.PRIORITY_HIGH
+            "achievement", "achievements", "analytics" -> "analytics" to SyncOperationManager.PRIORITY_LOW
+            "profile", "user_public" -> "profile" to SyncOperationManager.PRIORITY_CRITICAL
+            "social",
+            "social_profile",
+            "follow_relationship",
+            "workout_post",
+            "gym_buddy",
+            "engagement" -> "social" to SyncOperationManager.PRIORITY_MEDIUM
+            "settings" -> "settings" to SyncOperationManager.PRIORITY_MEDIUM
+            "chat" -> "chat" to SyncOperationManager.PRIORITY_LOW
+            else -> null
         }
     }
     

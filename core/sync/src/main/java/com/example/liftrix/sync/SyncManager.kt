@@ -4,9 +4,6 @@ import android.content.Context
 import androidx.lifecycle.asFlow
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import androidx.work.OneTimeWorkRequestBuilder
-import com.example.liftrix.core.workmanager.WorkManagerProvider
-import androidx.work.ExistingWorkPolicy
 import com.example.liftrix.domain.sync.ProgressStatsSyncRepository
 import com.example.liftrix.domain.repository.workout.WorkoutSyncStatusRepository
 import com.example.liftrix.config.OfflineArchitectureFlags
@@ -15,6 +12,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import timber.log.Timber
 import javax.inject.Inject
+import javax.inject.Provider
 import javax.inject.Singleton
 import dagger.hilt.android.qualifiers.ApplicationContext
 
@@ -22,6 +20,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 class SyncManager @Inject constructor(
     private val workoutSyncStatusRepository: WorkoutSyncStatusRepository,
     private val progressStatsRepository: ProgressStatsSyncRepository,
+    private val syncCoordinatorProvider: Provider<SyncCoordinator>,
     @ApplicationContext private val context: Context
 ) {
     
@@ -32,10 +31,14 @@ class SyncManager @Inject constructor(
      * Get sync status as a Flow
      */
     fun getSyncStatus(): Flow<SyncStatus> {
-        return workManager.getWorkInfosForUniqueWorkLiveData(WorkoutSyncWorker.WORK_NAME)
+        return workManager.getWorkInfosByTagLiveData("unified_sync")
             .asFlow()
             .map { workInfos ->
-                val workInfo = workInfos.firstOrNull()
+                val workInfo = workInfos.firstOrNull {
+                    it.state == WorkInfo.State.RUNNING ||
+                        it.tags.contains("sync_type_all") ||
+                        it.tags.contains("immediate_sync")
+                } ?: workInfos.firstOrNull()
                 when {
                     workInfo == null -> SyncStatus.Idle
                     workInfo.state == WorkInfo.State.RUNNING -> SyncStatus.Syncing
@@ -70,9 +73,7 @@ class SyncManager @Inject constructor(
      */
     suspend fun queueSync(userId: String): Result<Unit> {
         return try {
-            // Note: queueSync typically would queue all unsynced workouts
-            // For now, we'll trigger a general sync for the user
-            workoutSyncStatusRepository.syncNow(userId).getOrThrow()
+            syncCoordinatorProvider.get().triggerImmediateSync(userId).getOrThrow()
             Timber.d("Sync queued successfully for user: $userId")
             Result.success(Unit)
         } catch (e: Exception) {
@@ -86,7 +87,7 @@ class SyncManager @Inject constructor(
      */
     suspend fun syncNow(userId: String): Result<Unit> {
         return try {
-            workoutSyncStatusRepository.syncNow(userId).getOrThrow()
+            syncCoordinatorProvider.get().triggerImmediateSync(userId).getOrThrow()
             Timber.d("Immediate sync initiated for user: $userId")
             Result.success(Unit)
         } catch (e: Exception) {
@@ -99,8 +100,7 @@ class SyncManager @Inject constructor(
      * Cancel any pending sync operations
      */
     fun cancelSync() {
-        workManager.cancelUniqueWork(WorkoutSyncWorker.WORK_NAME)
-        workManager.cancelUniqueWork(AnalyticsSyncWorker.WORK_NAME)
+        syncCoordinatorProvider.get().cancelAllSync()
         Timber.d("All sync operations cancelled")
     }
 
@@ -110,7 +110,7 @@ class SyncManager @Inject constructor(
      * Get analytics sync status as a Flow
      */
     fun getAnalyticsSyncStatus(): Flow<SyncStatus> {
-        return workManager.getWorkInfosForUniqueWorkLiveData(AnalyticsSyncWorker.WORK_NAME)
+        return workManager.getWorkInfosByTagLiveData("sync_type_analytics")
             .asFlow()
             .map { workInfos ->
                 val workInfo = workInfos.firstOrNull()
@@ -118,12 +118,12 @@ class SyncManager @Inject constructor(
                     workInfo == null -> SyncStatus.Idle
                     workInfo.state == WorkInfo.State.RUNNING -> SyncStatus.Syncing
                     workInfo.state == WorkInfo.State.SUCCEEDED -> {
-                        val syncCount = workInfo.outputData.getInt(AnalyticsSyncWorker.KEY_SYNC_COUNT, 0)
-                        val conflictCount = workInfo.outputData.getInt(AnalyticsSyncWorker.KEY_CONFLICT_COUNT, 0)
+                        val syncCount = workInfo.outputData.getInt("sync_count", 0)
+                        val conflictCount = workInfo.outputData.getInt("conflict_count", 0)
                         SyncStatus.AnalyticsSuccess(syncCount, conflictCount)
                     }
                     workInfo.state == WorkInfo.State.FAILED -> {
-                        val errorMessage = workInfo.outputData.getString(AnalyticsSyncWorker.KEY_ERROR_MESSAGE)
+                        val errorMessage = workInfo.outputData.getString("error_message")
                         SyncStatus.Error(errorMessage ?: "Unknown analytics sync error")
                     }
                     else -> SyncStatus.Idle
@@ -163,17 +163,7 @@ class SyncManager @Inject constructor(
      */
     suspend fun queueAnalyticsSync(userId: String): Result<Unit> {
         return try {
-            val syncRequest = OneTimeWorkRequestBuilder<AnalyticsSyncWorker>()
-                .addTag("analytics_sync")
-                .addTag("user_$userId")
-                .build()
-
-            workManager.enqueueUniqueWork(
-                AnalyticsSyncWorker.WORK_NAME,
-                ExistingWorkPolicy.REPLACE,
-                syncRequest
-            )
-
+            syncCoordinatorProvider.get().triggerEntitySync(userId, "analytics").getOrThrow()
             Timber.d("Analytics sync queued successfully for user: $userId")
             Result.success(Unit)
         } catch (e: Exception) {
@@ -187,20 +177,7 @@ class SyncManager @Inject constructor(
      */
     suspend fun syncAnalyticsNow(userId: String): Result<Unit> {
         return try {
-            // Cancel any pending analytics sync first
-            workManager.cancelUniqueWork(AnalyticsSyncWorker.WORK_NAME)
-
-            val immediateRequest = OneTimeWorkRequestBuilder<AnalyticsSyncWorker>()
-                .addTag("analytics_sync_immediate")
-                .addTag("user_$userId")
-                .build()
-
-            workManager.enqueueUniqueWork(
-                AnalyticsSyncWorker.WORK_NAME,
-                ExistingWorkPolicy.REPLACE,
-                immediateRequest
-            )
-
+            syncCoordinatorProvider.get().triggerEntitySync(userId, "analytics").getOrThrow()
             Timber.d("Immediate analytics sync initiated for user: $userId")
             Result.success(Unit)
         } catch (e: Exception) {
@@ -230,6 +207,7 @@ class SyncManager @Inject constructor(
      * Cancel analytics sync operations
      */
     fun cancelAnalyticsSync() {
+        workManager.cancelAllWorkByTag("sync_type_analytics")
         workManager.cancelUniqueWork(AnalyticsSyncWorker.WORK_NAME)
         Timber.d("Analytics sync operations cancelled")
     }

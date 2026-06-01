@@ -1,9 +1,8 @@
 package com.example.liftrix.di
 
 import android.content.Context
+import com.example.liftrix.BuildConfig
 import com.example.liftrix.config.OfflineArchitectureFlags
-import com.example.liftrix.data.remote.PRNotificationFirebaseService
-import com.example.liftrix.data.remote.config.RemoteConfigManager
 import com.example.liftrix.data.serialization.ExerciseDeserializer
 import com.example.liftrix.data.serialization.ExerciseSetDeserializer
 import com.example.liftrix.domain.model.Exercise
@@ -96,14 +95,6 @@ object FirebaseModule {
 
     @Provides
     @Singleton
-    fun providePRNotificationFirebaseService(
-        firestore: FirebaseFirestore,
-        auth: FirebaseAuth,
-        json: Json
-    ): PRNotificationFirebaseService = PRNotificationFirebaseService(firestore, auth, json)
-
-    @Provides
-    @Singleton
     fun provideFirebaseAnalytics(): FirebaseAnalytics {
         return Firebase.analytics.apply {
             setAnalyticsCollectionEnabled(true)
@@ -114,7 +105,14 @@ object FirebaseModule {
     @Singleton
     fun provideFirebaseCrashlytics(): FirebaseCrashlytics {
         return FirebaseCrashlytics.getInstance().apply {
-            setCrashlyticsCollectionEnabled(true)
+            setCrashlyticsCollectionEnabled(BuildConfig.ENABLE_CRASHLYTICS)
+            setCustomKey("build_type", BuildConfig.BUILD_TYPE)
+            setCustomKey("environment", BuildConfig.ENVIRONMENT)
+            setCustomKey("app_version_name", BuildConfig.APP_VERSION_NAME)
+            setCustomKey("app_version_code", BuildConfig.APP_VERSION_CODE)
+            setCustomKey("debug_tools_enabled", BuildConfig.ENABLE_DEBUG_TOOLS)
+            setCustomKey("strict_mode_enabled", BuildConfig.ENABLE_STRICT_MODE)
+            setCustomKey("firebase_performance_enabled", BuildConfig.ENABLE_FIREBASE_PERFORMANCE)
         }
     }
 
@@ -122,18 +120,13 @@ object FirebaseModule {
     @Singleton
     fun provideFirebasePerformance(): FirebasePerformance {
         return FirebasePerformance.getInstance().apply {
-            isPerformanceCollectionEnabled = true
+            isPerformanceCollectionEnabled = BuildConfig.ENABLE_FIREBASE_PERFORMANCE
         }
     }
 
     @Provides
     @Singleton
     fun provideFirebaseRemoteConfig(): FirebaseRemoteConfig = Firebase.remoteConfig
-
-    @Provides
-    @Singleton
-    fun provideRemoteConfigManager(remoteConfig: FirebaseRemoteConfig): RemoteConfigManager =
-        RemoteConfigManager(remoteConfig = remoteConfig)
 
     @Provides
     @Singleton

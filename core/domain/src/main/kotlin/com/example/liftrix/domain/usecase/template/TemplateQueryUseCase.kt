@@ -62,10 +62,9 @@ class TemplateQueryUseCase @Inject constructor(
      */
     operator fun invoke(userId: String): Flow<List<WorkoutTemplate>> {
         require(userId.isNotBlank()) { "User ID cannot be blank" }
-        return templateRepository.getAllTemplatesForUser(userId).map { result ->
-            val templates = result.getOrElse { emptyList() }
+        return templateRepository.getAllTemplatesForUser(userId).map { templates ->
             Timber.tag("StartupRestoreFix").d(
-                "[TEMPLATE-LOAD] operation=TEMPLATE_REPOSITORY_FLOW_EMIT layer=TemplateQueryUseCase userId=$userId count=${templates.size} resultSuccess=${result.isSuccess} debounceApplied=false distinctApplied=false cacheApplied=false timestamp=${System.currentTimeMillis()}"
+                "[TEMPLATE-LOAD] operation=TEMPLATE_REPOSITORY_FLOW_EMIT layer=TemplateQueryUseCase userId=$userId count=${templates.size} resultSuccess=true debounceApplied=false distinctApplied=false cacheApplied=false timestamp=${System.currentTimeMillis()}"
             )
             templates
         }
@@ -311,12 +310,12 @@ class TemplateQueryUseCase @Inject constructor(
     private fun getRecentTemplates(request: GetTemplatesRequest): Flow<LiftrixResult<List<WorkoutTemplate>>> {
         return if (request.hasFilters()) {
             // If filters are applied, get all templates and filter them
-            templateRepository.getAllTemplatesForUser(request.userId)
+            templateRepository.getAllTemplatesForUser(request.userId).asTemplateResult()
         } else {
             // Use getAllTemplatesForUser to include newly created templates
             // getRecentlyUsedTemplates excludes templates with usageCount=0 or lastUsedAt=null
             Timber.d("TemplateQueryUseCase: Loading all templates for user ${request.userId} (including new ones)")
-            templateRepository.getAllTemplatesForUser(request.userId)
+            templateRepository.getAllTemplatesForUser(request.userId).asTemplateResult()
         }
     }
 
@@ -326,10 +325,10 @@ class TemplateQueryUseCase @Inject constructor(
     private fun getMostUsedTemplates(request: GetTemplatesRequest): Flow<LiftrixResult<List<WorkoutTemplate>>> {
         return if (request.hasFilters()) {
             // If filters are applied, get all templates and filter them
-            templateRepository.getAllTemplatesForUser(request.userId)
+            templateRepository.getAllTemplatesForUser(request.userId).asTemplateResult()
         } else {
             // If no filters, use optimized most used templates query
-            templateRepository.getMostUsedTemplates(request.userId, request.limit)
+            templateRepository.getMostUsedTemplates(request.userId, request.limit).asTemplateResult()
         }
     }
 
@@ -338,11 +337,7 @@ class TemplateQueryUseCase @Inject constructor(
      */
     private fun getAllTemplatesAlphabetical(request: GetTemplatesRequest): Flow<LiftrixResult<List<WorkoutTemplate>>> {
         return templateRepository.getAllTemplatesForUser(request.userId)
-            .map { result ->
-                result.map { templates ->
-                    templates.sortedBy { it.name.lowercase() }
-                }
-            }
+            .map { templates -> LiftrixResult.success(templates.sortedBy { it.name.lowercase() }) }
     }
 
     /**
@@ -351,10 +346,10 @@ class TemplateQueryUseCase @Inject constructor(
     private fun getTemplatesByDifficulty(request: GetTemplatesRequest): Flow<LiftrixResult<List<WorkoutTemplate>>> {
         return if (request.difficultyLevel != null) {
             // Use specific difficulty query if provided
-            templateRepository.getTemplatesByDifficulty(request.userId, request.difficultyLevel)
+            templateRepository.getTemplatesByDifficulty(request.userId, request.difficultyLevel).asTemplateResult()
         } else {
             // Get all templates if no specific difficulty requested
-            templateRepository.getAllTemplatesForUser(request.userId)
+            templateRepository.getAllTemplatesForUser(request.userId).asTemplateResult()
         }
     }
 
@@ -366,16 +361,31 @@ class TemplateQueryUseCase @Inject constructor(
         Timber.d("TemplateQueryUseCase: Using database-level folder filtering for folderId: ${request.folderId}")
 
         return templateRepository.getTemplatesByFolder(request.userId, request.folderId!!)
-            .map { result ->
-                result.map { templates ->
-                    // Apply sorting to folder-specific templates
+            .map { templates ->
+                LiftrixResult.success(
                     when (request.sortBy) {
                         TemplateSortBy.RECENT -> templates.sortedByDescending { it.lastUsedAt ?: it.createdAt }
                         TemplateSortBy.MOST_USED -> templates.sortedByDescending { it.usageCount }
                         TemplateSortBy.ALPHABETICAL -> templates.sortedBy { it.name.lowercase() }
                         TemplateSortBy.DIFFICULTY -> templates.sortedBy { it.difficultyLevel ?: 0 }
                     }
-                }
+                )
+            }
+    }
+
+    private fun Flow<List<WorkoutTemplate>>.asTemplateResult(): Flow<LiftrixResult<List<WorkoutTemplate>>> {
+        return map { templates -> LiftrixResult.success(templates) }
+            .catch { throwable ->
+                emit(
+                    liftrixFailure(
+                        LiftrixError.DatabaseError(
+                            errorMessage = "Failed to observe workout templates",
+                            operation = "observeTemplates",
+                            table = "workout_templates",
+                            analyticsContext = mapOf("error" to throwable.message.orEmpty())
+                        )
+                    )
+                )
             }
     }
 

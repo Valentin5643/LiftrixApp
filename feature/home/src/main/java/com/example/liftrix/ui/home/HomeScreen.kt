@@ -3,8 +3,6 @@ package com.example.liftrix.ui.home
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -225,7 +223,10 @@ private fun EnhancedHomeContent(
         contentPadding = PaddingValues(vertical = GridSystem.spacing3)
     ) {
         // Enhanced Header Section with Sync Status
-        item {
+        item(
+            key = "home_header",
+            contentType = HomeContentType.Header
+        ) {
             EnhancedHomeHeader(
                 syncStatusContent = syncStatusContent,
                 modifier = Modifier
@@ -235,7 +236,10 @@ private fun EnhancedHomeContent(
         }
         
         // Discovery Section Header
-        item {
+        item(
+            key = "home_discovery_header",
+            contentType = HomeContentType.SectionHeader
+        ) {
             SectionHeader(
                 title = "Discover People",
                 onViewAllClick = onNavigateToFriends,
@@ -244,7 +248,10 @@ private fun EnhancedHomeContent(
         }
         
         // Enhanced Discovery Carousel Section
-        item {
+        item(
+            key = "home_discovery_carousel",
+            contentType = HomeContentType.DiscoveryCarousel
+        ) {
             DiscoveryCarouselSection(
                 recommendationsState = screenData.recommendationsState,
                 onLoadMore = { onEvent(HomeEvent.LoadMoreRecommendations) },
@@ -256,7 +263,10 @@ private fun EnhancedHomeContent(
         }
         
         // Workout Feed Header with Dropdown Selector and View All
-        item {
+        item(
+            key = "home_feed_header",
+            contentType = HomeContentType.FeedHeader
+        ) {
             var showDropdown by remember { mutableStateOf(false) }
             
             Row(
@@ -378,7 +388,11 @@ private fun EnhancedHomeContent(
         // Social Feed Posts (from FeedViewModel - exactly like Feed screen)
         // Show shimmer loading state during initial load
         if (posts.loadState.refresh is LoadState.Loading && posts.itemCount == 0) {
-            items(5) { // Show 5 shimmer placeholders
+            items(
+                count = 5,
+                key = { index -> "home_feed_initial_shimmer_$index" },
+                contentType = { HomeContentType.FeedInitialLoading }
+            ) { // Show 5 shimmer placeholders
                 FeedItemShimmer(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -389,7 +403,10 @@ private fun EnhancedHomeContent(
         
         // Handle empty state for home feed
         if (posts.itemCount == 0 && posts.loadState.refresh !is LoadState.Loading) {
-            item {
+            item(
+                key = "home_feed_empty_${selectedTab.name}",
+                contentType = HomeContentType.FeedEmpty
+            ) {
                 EmptyFeedState(
                     feedType = selectedTab,
                     onDiscoverPeople = onNavigateToUserSearch,
@@ -411,7 +428,8 @@ private fun EnhancedHomeContent(
                 } else {
                     "placeholder_$index"
                 }
-            }
+            },
+            contentType = { HomeContentType.FeedPost }
         ) { index ->
             posts[index]?.let { post ->
                 WorkoutPostCard(
@@ -453,7 +471,10 @@ private fun EnhancedHomeContent(
         // Loading state
         when (posts.loadState.append) {
             is LoadState.Loading -> {
-                item {
+                item(
+                    key = "home_feed_append_loading",
+                    contentType = HomeContentType.FeedAppendLoading
+                ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -465,7 +486,10 @@ private fun EnhancedHomeContent(
                 }
             }
             is LoadState.Error -> {
-                item {
+                item(
+                    key = "home_feed_append_error",
+                    contentType = HomeContentType.FeedAppendError
+                ) {
                     ErrorDisplay(
                         error = convertThrowableToLiftrixError((posts.loadState.append as LoadState.Error).error),
                         onRetry = { posts.retry() },
@@ -480,7 +504,10 @@ private fun EnhancedHomeContent(
 
         // Initial loading error
         if (posts.loadState.refresh is LoadState.Error && posts.itemCount == 0) {
-            item {
+            item(
+                key = "home_feed_refresh_error",
+                contentType = HomeContentType.FeedRefreshError
+            ) {
                 ErrorDisplay(
                     error = convertThrowableToLiftrixError((posts.loadState.refresh as LoadState.Error).error),
                     onRetry = { posts.refresh() },
@@ -491,6 +518,19 @@ private fun EnhancedHomeContent(
             }
         }
     }
+}
+
+private enum class HomeContentType {
+    Header,
+    SectionHeader,
+    DiscoveryCarousel,
+    FeedHeader,
+    FeedInitialLoading,
+    FeedEmpty,
+    FeedPost,
+    FeedAppendLoading,
+    FeedAppendError,
+    FeedRefreshError
 }
 
 /**

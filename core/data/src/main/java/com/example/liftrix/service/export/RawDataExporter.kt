@@ -178,21 +178,17 @@ class RawDataExporter @Inject constructor(
         // Collect workouts if requested
         if (dataTypes.contains(RawDataType.WORKOUTS)) {
             Timber.d("Collecting workout data for export")
-            val workoutsResult = workoutRepository.getWorkoutsByUser(userId).first()
-            workoutsResult.fold(
-                onSuccess = { workouts ->
-                    // Filter by date range
-                    val filteredWorkouts = workouts.filter { workout ->
-                        val workoutDate = workout.date.atStartOfDay().toInstant(ZoneOffset.UTC)
-                        workoutDate >= dateRange.startDate.toInstant() && workoutDate <= dateRange.endDate.toInstant()
-                    }
-                    exportData.workouts = filteredWorkouts
-                    Timber.d("Collected ${filteredWorkouts.size} workouts")
-                },
-                onFailure = { exception ->
-                    Timber.w(exception, "Failed to collect workout data, skipping")
+            runCatching {
+                val workouts = workoutRepository.getWorkoutsByUser(userId).first()
+                val filteredWorkouts = workouts.filter { workout ->
+                    val workoutDate = workout.date.atStartOfDay().toInstant(ZoneOffset.UTC)
+                    workoutDate >= dateRange.startDate.toInstant() && workoutDate <= dateRange.endDate.toInstant()
                 }
-            )
+                exportData.workouts = filteredWorkouts
+                Timber.d("Collected ${filteredWorkouts.size} workouts")
+            }.onFailure { exception ->
+                Timber.w(exception, "Failed to collect workout data, skipping")
+            }
         }
         
         // Collect progress metrics if requested

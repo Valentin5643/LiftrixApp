@@ -187,6 +187,15 @@ private fun ExerciseSelectionContent(
 ) {
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
+    val hasFiltersApplied = searchQuery.isNotBlank() ||
+        selectedEquipment.isNotEmpty() ||
+        selectedMuscleGroups.isNotEmpty()
+    val showFilters = selectedEquipment.isNotEmpty() ||
+        selectedMuscleGroups.isNotEmpty() ||
+        searchQuery.isBlank()
+    val recentExercisePreview = remember(recentExercises) {
+        recentExercises.take(5)
+    }
     
     // Use LazyColumn for proper scrolling with bounded height
     LazyColumn(
@@ -196,7 +205,7 @@ private fun ExerciseSelectionContent(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // Search field
-        item {
+        item(key = "search_field", contentType = "search_field") {
             ExerciseSearchField(
                 query = searchQuery,
                 onQueryChange = onSearchQueryChange,
@@ -207,8 +216,8 @@ private fun ExerciseSelectionContent(
         }
         
         // Unified filter chips (Equipment + Muscle Groups)
-        if (selectedEquipment.isNotEmpty() || selectedMuscleGroups.isNotEmpty() || searchQuery.isBlank()) {
-            item {
+        if (showFilters) {
+            item(key = "filters", contentType = "filters") {
                 Column {
                     Text(
                         text = "Filters",
@@ -231,8 +240,8 @@ private fun ExerciseSelectionContent(
         }
         
         // Recent exercises section (show when no search/filters applied)
-        if (searchQuery.isBlank() && selectedEquipment.isEmpty() && selectedMuscleGroups.isEmpty() && recentExercises.isNotEmpty()) {
-            item {
+        if (!hasFiltersApplied && recentExercisePreview.isNotEmpty()) {
+            item(key = "recent_header", contentType = "section_header") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -255,7 +264,11 @@ private fun ExerciseSelectionContent(
             }
             
             // Recent exercises items
-            items(recentExercises.take(5)) { searchableExercise ->
+            items(
+                items = recentExercisePreview,
+                key = { searchableExercise -> "recent_${searchableExercise.listKey()}" },
+                contentType = { "recent_exercise" }
+            ) { searchableExercise ->
                 ExercisePreviewCard(
                     exercise = searchableExercise,
                     onClick = { onExerciseSelected(searchableExercise) },
@@ -263,7 +276,7 @@ private fun ExerciseSelectionContent(
                 )
             }
             
-            item {
+            item(key = "recent_divider", contentType = "divider") {
                 HorizontalDivider(
                     modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
@@ -272,8 +285,7 @@ private fun ExerciseSelectionContent(
         }
         
         // Exercise list header
-        item {
-            val hasFiltersApplied = searchQuery.isNotBlank() || selectedEquipment.isNotEmpty() || selectedMuscleGroups.isNotEmpty()
+        item(key = "exercise_list_header", contentType = "section_header") {
             val exerciseListTitle = if (hasFiltersApplied) "Search Results" else "All Exercises"
             
             Row(
@@ -328,7 +340,7 @@ private fun ExerciseSelectionContent(
         
         // Exercise list or empty state
         if (exercises.isEmpty()) {
-            item {
+            item(key = "empty_exercises", contentType = "empty_state") {
                 EmptyExerciseState(
                     searchQuery = searchQuery,
                     hasFilters = selectedEquipment.isNotEmpty() || selectedMuscleGroups.isNotEmpty(),
@@ -340,7 +352,11 @@ private fun ExerciseSelectionContent(
         } else {
             
             // Render exercises using LazyColumn items
-            items(exercises) { searchableExercise ->
+            items(
+                items = exercises,
+                key = { searchableExercise -> searchableExercise.listKey() },
+                contentType = { "exercise" }
+            ) { searchableExercise ->
                 ExercisePreviewCard(
                     exercise = searchableExercise,
                     onClick = { onExerciseSelected(searchableExercise) },
@@ -349,7 +365,7 @@ private fun ExerciseSelectionContent(
             }
             
             // Bottom padding
-            item {
+            item(key = "bottom_spacing", contentType = "spacing") {
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
@@ -359,6 +375,11 @@ private fun ExerciseSelectionContent(
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
     }
+}
+
+private fun SearchableExercise.listKey(): String = when (this) {
+    is SearchableExercise.LibraryExercise -> "library_${id}"
+    is SearchableExercise.CustomExercise -> "custom_${id}"
 }
 
 

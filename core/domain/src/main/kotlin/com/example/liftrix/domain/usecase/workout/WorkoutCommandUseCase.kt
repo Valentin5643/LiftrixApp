@@ -723,15 +723,10 @@ class WorkoutCommandUseCase @Inject constructor(
         }
 
         // Check for duplicate workout name on the same date
-        val workoutsByDateResult = workoutRepository.getWorkoutsByDate(
+        val workoutsOnDate = workoutRepository.getWorkoutsByDate(
             request.date.toKotlinxLocalDate(),
             userId?.value!!
         ).first()
-
-        val workoutsOnDate = workoutsByDateResult.fold(
-            onSuccess = { it ?: emptyList() },
-            onFailure = { error -> throw Exception("Failed to check for existing workouts: ${error.message}") }
-        )
 
         val duplicateName = workoutsOnDate.any { workout ->
             workout.name.equals(request.name, ignoreCase = true)

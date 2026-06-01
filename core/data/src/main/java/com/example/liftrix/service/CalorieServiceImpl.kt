@@ -292,21 +292,13 @@ class CalorieServiceImpl @Inject constructor(
             
             // Use getWorkoutsByUser and filter by date range since getWorkoutsByDateRange doesn't exist
             val workouts = workoutRepository.getWorkoutsByUser(userId)
-                .map { result: LiftrixResult<List<Workout>> ->
-                    result.fold(
-                        onSuccess = { workoutList ->
-                            val filteredWorkouts = workoutList.filter { workout: Workout ->
-                                val workoutDate = workout.date
-                                workoutDate != null && !workoutDate.isBefore(startDate) && !workoutDate.isAfter(endDate)
-                            }
-                            Timber.d("CalorieServiceImpl: Found ${workoutList.size} total workouts, ${filteredWorkouts.size} in period")
-                            filteredWorkouts
-                        },
-                        onFailure = { exception ->
-                            Timber.e("CalorieServiceImpl: Error getting workouts: ${exception.message}")
-                            emptyList<Workout>()
-                        }
-                    )
+                .map { workoutList ->
+                    val filteredWorkouts = workoutList.filter { workout: Workout ->
+                        val workoutDate = workout.date
+                        workoutDate != null && !workoutDate.isBefore(startDate) && !workoutDate.isAfter(endDate)
+                    }
+                    Timber.d("CalorieServiceImpl: Found ${workoutList.size} total workouts, ${filteredWorkouts.size} in period")
+                    filteredWorkouts
                 }
                 .first()
             

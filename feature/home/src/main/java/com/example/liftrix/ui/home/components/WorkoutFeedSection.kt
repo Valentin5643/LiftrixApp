@@ -160,7 +160,11 @@ private fun FeedLoadingPlaceholder(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(5) {
+        items(
+            count = 5,
+            key = { index -> "feed_loading_placeholder_$index" },
+            contentType = { "feed_loading_placeholder" }
+        ) {
             FeedItemShimmer()
         }
     }

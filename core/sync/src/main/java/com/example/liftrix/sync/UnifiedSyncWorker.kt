@@ -48,7 +48,8 @@ class UnifiedSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val syncOperationManager: SyncOperationManager,
-    private val offlineQueueManager: OfflineQueueManager
+    private val offlineQueueManager: OfflineQueueManager,
+    private val startupRestoreGate: StartupRestoreGate
 ) : BaseSyncWorker(context, params) {
 
     override val workerName: String = "UnifiedSyncWorker"
@@ -217,8 +218,15 @@ class UnifiedSyncWorker @AssistedInject constructor(
             try {
                 checkCancellation()
                 
-                Timber.d("$workerName: Processing offline queue for user $userId")
-                val queueResult = offlineQueueManager.processPendingQueue(userId)
+                val queueEntityTypes = queueEntityTypesForSyncType(syncType)
+                Timber.d(
+                    "$workerName: Processing offline queue for user $userId " +
+                        "syncType=$syncType entityTypes=${queueEntityTypes ?: "ALL"}"
+                )
+                val queueResult = offlineQueueManager.processPendingQueue(
+                    userId = userId,
+                    entityTypes = queueEntityTypes
+                )
                 
                 queueResult.fold(
                     onSuccess = { syncResult ->
@@ -243,7 +251,7 @@ class UnifiedSyncWorker @AssistedInject constructor(
                 Timber.d("$workerName: Processing sync operations via SyncOperationManager")
                 val operationResults = syncOperationManager.processSyncOperations(
                     userId = userId,
-                    operationType = syncType,
+                    operationType = operationManagerSyncType(syncType),
                     maxPriority = maxPriority,
                     cancellationCheck = { checkCancellation() }
                 )
@@ -301,6 +309,18 @@ class UnifiedSyncWorker @AssistedInject constructor(
             }
             
             Timber.i("$workerName: Sync completed for user $userId - Duration: ${syncDuration}ms, Operations: $successfulOperations/$totalOperations successful")
+
+            if (startupSync && isSuccessful) {
+                startupRestoreGate.transition(
+                    userId = userId,
+                    state = StartupRestoreState.RESTORE_COMPLETE,
+                    reason = "unified_startup_sync_complete"
+                )
+                Timber.tag("StartupRestoreFix").i(
+                    "operation=UNIFIED_STARTUP_RESTORE_COMPLETE userId=$userId syncType=$syncType " +
+                        "successful=$successfulOperations total=$totalOperations timestamp=${System.currentTimeMillis()}"
+                )
+            }
             
             return if (isSuccessful) {
                 Result.success(
@@ -321,9 +341,48 @@ class UnifiedSyncWorker @AssistedInject constructor(
             Timber.d("$workerName: Sync cancelled for user $userId")
             throw e
         } catch (e: Exception) {
+            if (inputData.getBoolean(KEY_STARTUP_SYNC, false)) {
+                startupRestoreGate.transition(
+                    userId = userId,
+                    state = StartupRestoreState.RESTORE_FAILED,
+                    reason = "unified_startup_sync_failed"
+                )
+            }
             // Let base class handle the error and retry logic
             Timber.e(e, "$workerName: Sync failed for user $userId")
             throw e
+        }
+    }
+
+    private fun queueEntityTypesForSyncType(syncType: String): Set<String>? {
+        return when (syncType.lowercase()) {
+            "all", "priority", "startup" -> null
+            "workout", "workouts" -> setOf(SyncOperationManager.ENTITY_WORKOUT)
+            "template", "templates" -> setOf(SyncOperationManager.ENTITY_TEMPLATE)
+            "profile" -> setOf(SyncOperationManager.ENTITY_PROFILE, SyncOperationManager.ENTITY_USER_PUBLIC)
+            "social" -> setOf(
+                SyncOperationManager.ENTITY_SOCIAL_PROFILE,
+                SyncOperationManager.ENTITY_FOLLOW_RELATIONSHIP,
+                SyncOperationManager.ENTITY_WORKOUT_POST,
+                SyncOperationManager.ENTITY_GYM_BUDDY
+            )
+            "settings" -> setOf(SyncOperationManager.ENTITY_SETTINGS)
+            "analytics" -> setOf("ANALYTICS", SyncOperationManager.ENTITY_ACHIEVEMENT)
+            "chat" -> setOf("CHAT")
+            else -> null
+        }
+    }
+
+    private fun operationManagerSyncType(syncType: String): String {
+        return when (syncType.lowercase()) {
+            "startup" -> "startup"
+            "workout" -> "workouts"
+            "template", "templates" -> "templates"
+            "achievement", "achievements" -> "achievements"
+            "analytics" -> "analytics"
+            "settings" -> "settings"
+            "chat" -> "chat"
+            else -> syncType
         }
     }
     

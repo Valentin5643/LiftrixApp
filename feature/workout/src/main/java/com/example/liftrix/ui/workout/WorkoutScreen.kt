@@ -42,10 +42,8 @@ import com.example.liftrix.ui.workout.components.SecondaryActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -55,13 +53,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
-import com.example.liftrix.domain.model.WorkoutTemplate
-import com.example.liftrix.feature.workout.state.WorkoutScreenData
 import com.example.liftrix.feature.workout.state.WorkoutUiState
 import com.example.liftrix.domain.service.SyncStatus
 import com.example.liftrix.domain.model.Folder
-import com.example.liftrix.domain.usecase.folder.FolderOperationsUseCase
-import kotlinx.coroutines.flow.firstOrNull
 import com.example.liftrix.ui.workout.components.InlineFolderSection
 import timber.log.Timber
 import com.example.liftrix.ui.workout.components.CreateFolderDialog
@@ -107,11 +101,6 @@ fun WorkoutScreen(
             WorkoutLoadingScreen()
         }
         is WorkoutUiState.Success -> {
-            if (currentState.data.workouts.isEmpty() && currentState.data.templates.isEmpty() && currentState.data.folders.isEmpty()) {
-                Timber.w("[WORKOUT-DEBUG] WorkoutScreen rendering Success with empty data; No Workouts card may be shown")
-            } else {
-                Timber.d("[WORKOUT-DEBUG] WorkoutScreen rendering Success workouts=${currentState.data.workouts.size} templates=${currentState.data.templates.size} folders=${currentState.data.folders.size}")
-            }
             WorkoutContent(
                 screenData = currentState.data,
                 onNavigateToActiveWorkout = { templateId ->
@@ -149,7 +138,6 @@ fun WorkoutScreen(
             )
         }
         is WorkoutUiState.Empty -> {
-            Timber.w("[WORKOUT-DEBUG] WorkoutScreen rendering explicit Empty state")
             WorkoutEmptyScreen(
                 onCreateWorkout = { folderId ->
                     // Check for active workout before navigating
@@ -214,6 +202,14 @@ private fun WorkoutContent(
     
     // Drop zone tracking
     val folderPositions = remember { mutableMapOf<String, androidx.compose.ui.geometry.Rect>() }
+    val foldersWithWorkouts = remember(screenData.folders, screenData.templates) {
+        screenData.folders.map { folder ->
+            val workoutsInFolder = screenData.templates.filter { template ->
+                template.folderId == folder.id.value
+            }
+            folder.updateTemplateCount(workoutsInFolder.size) to workoutsInFolder
+        }
+    }
 
     LazyColumn(
         modifier = modifier
@@ -221,15 +217,14 @@ private fun WorkoutContent(
             .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item {
+        item(key = "top_spacing", contentType = "spacing") {
             Spacer(modifier = Modifier.height(16.dp))
         }
         
         // Quick Actions Section
-        item {
+        item(key = "quick_actions", contentType = "quick_actions") {
             QuickActionsCard(
                 onStartQuickWorkout = {
-                    Timber.d("[WORKOUT-DEBUG] Quick workout start clicked templates=${screenData.templates.size} folders=${screenData.folders.size}")
                     onNavigateToActiveWorkout(null)
                 },
                 onCreateWorkout = { onNavigateToWorkoutCreation(null) }
@@ -237,7 +232,7 @@ private fun WorkoutContent(
         }
         
         // Recent Workouts Section with Inline Folder Management
-        item {
+        item(key = "workout_section_header", contentType = "section_header") {
             InlineFolderSectionHeader(
                 title = "Your Workouts",
                 onCreateFolder = { showCreateFolderDialog = true },
@@ -245,22 +240,9 @@ private fun WorkoutContent(
             )
         }
         
-        // Always show folders, regardless of template count
-        // Use real folders from screenData and group templates accordingly
-        val foldersWithWorkouts = screenData.folders.map { folder ->
-            val workoutsInFolder = screenData.templates.filter { template ->
-                template.folderId == folder.id.value
-            }
-            folder.updateTemplateCount(workoutsInFolder.size) to workoutsInFolder
-        }
-        Timber.tag("WorkoutSyncDebug").d(
-            "[DATABASE-DEBUG] operation=WORKOUT_SCREEN_FILTER_RESULT source=UiFilter timestamp=${System.currentTimeMillis()} workoutCount=${screenData.workouts.size} templateCount=${screenData.templates.size} folderCount=${screenData.folders.size} foldersWithTemplateBuckets=${foldersWithWorkouts.size} unbucketedTemplateCount=${screenData.templates.count { template -> screenData.folders.none { folder -> template.folderId == folder.id.value } }}"
-        )
-        
         if (foldersWithWorkouts.isEmpty() && screenData.templates.isEmpty() && screenData.workouts.isEmpty()) {
-            Timber.w("[WORKOUT-DEBUG] EmptyWorkoutsCard condition met foldersWithWorkouts=0 templates=0 workouts=${screenData.workouts.size}")
             // Only show empty state if there is no workout content at all.
-            item {
+            item(key = "empty_workouts", contentType = "empty_state") {
                 EmptyWorkoutsCard(
                     onCreateWorkout = { onNavigateToWorkoutCreation(null) }
                 )
@@ -268,7 +250,10 @@ private fun WorkoutContent(
         } else {
             // Show folders (empty or not) and any templates
             foldersWithWorkouts.forEach { (folder, workouts) ->
-                item(key = "folder_${folder.id.value}") {
+                item(
+                    key = "folder_${folder.id.value}",
+                    contentType = "folder_section"
+                ) {
                     InlineFolderSection(
                         folder = folder,
                         workouts = workouts,
@@ -284,7 +269,6 @@ private fun WorkoutContent(
                             onNavigateToActiveWorkout(workout.id.value) 
                         },
                         onEditWorkout = { workout -> 
-                            Timber.d("🔥 EDIT-WORKOUT-DEBUG: WorkoutScreen - onEditWorkout called with workout: id=${workout.id.value}, name=${workout.name}, userId=${workout.userId}")
                             onNavigateToEditWorkout(workout.id.value) 
                         },
                         onShareWorkout = { workout ->
@@ -326,7 +310,7 @@ private fun WorkoutContent(
             }
         }
         
-        item {
+        item(key = "bottom_spacing", contentType = "spacing") {
             Spacer(modifier = Modifier.height(16.dp))
         }
     }

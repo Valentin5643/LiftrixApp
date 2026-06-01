@@ -1,6 +1,6 @@
 # Social, Feed, Gym Buddy, and PR Patterns
 
-Last moved from root `AGENTS.md`: 2026-05-05. Source audit baseline: 2026-05-01.
+Last moved from root `AGENTS.md`: 2026-05-05. Source refresh: 2026-05-31.
 
 Use this when touching feed, posts, follows, public profiles, privacy, engagement, comments, media sharing, gym buddies, PR notifications, or social notification settings.
 
@@ -15,19 +15,20 @@ Use this when touching feed, posts, follows, public profiles, privacy, engagemen
 ## Active Feed Path
 
 ```text
-FeedScreen / Home feed
+FeedScreen / Home feed (:feature:home / :feature:social surfaces)
   -> collectAsLazyPagingItems()
   -> FeedViewModel
   -> Flow<PagingData<WorkoutPost>>
-  -> FeedRepositoryImpl
-  -> Room DAO paging plus cache/sync
+  -> FeedRepositoryImpl (:core:data)
+  -> Room DAO paging plus cache/sync (:core:database / :core:sync)
 ```
 
 Source-audited notes:
 
 - `FeedRepositoryImpl` uses Paging 3 and Room DAO paging for active feed queries.
-- `FeedRemoteMediator` exists/imports remain, but active feed queries explicitly avoid using it.
+- `FeedRemoteMediator` was not found by filename during the 2026-05-31 refresh; older docs mentioning it may describe removed code.
 - `FeedGeneratorUseCase` still exists for relevance scoring/privacy filtering paths, but the active Home feed path does not call it directly.
+- The active app graph registers social destinations through `UnifiedNavigationContainer`; `SocialFeed` is not present in the current `LiftrixRoute` sealed class.
 
 Required Compose imports for feed screens:
 
@@ -132,7 +133,7 @@ Notification routing should respect privacy, quiet hours, category preferences, 
 - Missing viewer context can leak private social data.
 - Firestore listeners must be removed when their owning lifecycle ends.
 - Feed cache invalidation is required after relationship changes.
-- Do not add links to `SocialOnboarding` or `PrivacySettings` without verifying active `UnifiedNavigationContainer` registration.
+- `SocialOnboarding` and `PrivacySettings` are registered in the active app graph as of the 2026-05-31 refresh; still verify entry points and privacy behavior before adding new links.
 - Do not newly surface deprecated/hidden social routes without checking `docs/architecture.md` and `docs/module-map.md`.
 
 ## Existing Docs Reused

@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filter
@@ -624,27 +625,24 @@ class WorkoutViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 // Use repository directly for folder filtering
-                workoutTemplateRepository.getTemplatesByFolder(userId, selectedFolderId ?: "").collect { result ->
-                    result.fold(
-                        onSuccess = { templates ->
-                            updateWorkoutData { currentData ->
-                                currentData.copy(
-                                    templates = templates,
-                                    selectedFolderId = selectedFolderId
-                                )
-                            }
-                        },
-                        onFailure = { exception ->
-                            Timber.e(exception, "Failed to load filtered templates for user $userId, folder: $selectedFolderId")
-                            updateWorkoutData { currentData ->
-                                currentData.copy(
-                                    templates = emptyList(),
-                                    selectedFolderId = selectedFolderId
-                                )
-                            }
+                workoutTemplateRepository.getTemplatesByFolder(userId, selectedFolderId ?: "")
+                    .catch { exception ->
+                        Timber.e(exception, "Failed to load filtered templates for user $userId, folder: $selectedFolderId")
+                        updateWorkoutData { currentData ->
+                            currentData.copy(
+                                templates = emptyList(),
+                                selectedFolderId = selectedFolderId
+                            )
                         }
-                    )
-                }
+                    }
+                    .collect { templates ->
+                        updateWorkoutData { currentData ->
+                            currentData.copy(
+                                templates = templates,
+                                selectedFolderId = selectedFolderId
+                            )
+                        }
+                    }
             } catch (exception: Exception) {
                 Timber.e(exception, "Error in loadTemplatesForUser folder filtering")
             }

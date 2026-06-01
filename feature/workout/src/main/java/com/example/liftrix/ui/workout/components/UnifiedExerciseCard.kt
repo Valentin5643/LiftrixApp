@@ -205,7 +205,11 @@ private fun ExerciseSetsSection(
             modifier = Modifier.heightIn(max = 200.dp), // Limit height to prevent excessive scrolling
             verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.elementPaddingSmall)
         ) {
-            itemsIndexed(sets) { index, set ->
+            itemsIndexed(
+                items = sets,
+                key = { _, set -> set.id.value },
+                contentType = { _, _ -> "exercise_set" }
+            ) { index, set ->
                 ExerciseSetRow(
                     setNumber = set.setNumber,
                     set = set,

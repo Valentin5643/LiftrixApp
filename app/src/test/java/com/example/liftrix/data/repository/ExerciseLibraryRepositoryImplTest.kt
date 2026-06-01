@@ -2,6 +2,7 @@ package com.example.liftrix.data.repository
 
 import com.example.liftrix.data.local.dao.ExerciseLibraryDao
 import com.example.liftrix.data.local.dao.ExerciseUsageHistoryDao
+import com.example.liftrix.data.local.DatabaseSeedInitializer
 import com.example.liftrix.data.local.entity.ExerciseLibraryEntity
 import com.example.liftrix.data.mapper.ExerciseLibraryMapper
 import com.example.liftrix.domain.model.Equipment
@@ -26,6 +27,7 @@ class ExerciseLibraryRepositoryImplTest {
     private val dao: ExerciseLibraryDao = mockk()
     private val usageHistoryDao: ExerciseUsageHistoryDao = mockk()
     private val mapper: ExerciseLibraryMapper = mockk()
+    private val databaseSeedInitializer: DatabaseSeedInitializer = mockk(relaxed = true)
 
     private val sampleExerciseEntities = listOf(
         ExerciseLibraryEntity(
@@ -108,11 +110,10 @@ class ExerciseLibraryRepositoryImplTest {
     @Before
     fun setup() {
         repository = ExerciseLibraryRepositoryImpl(
-            database = mockk(),
             dao = dao, 
             usageHistoryDao = usageHistoryDao, 
             mapper = mapper,
-            exerciseLibrarySeedData = mockk(),
+            databaseSeedInitializer = databaseSeedInitializer,
             placeholderService = mockk()
         )
         

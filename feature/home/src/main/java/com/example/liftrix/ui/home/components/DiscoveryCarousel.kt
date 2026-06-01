@@ -94,7 +94,8 @@ fun DiscoveryCarousel(
     ) {
         items(
             items = recommendedUsers,
-            key = { user -> user.userId }
+            key = { user -> user.userId },
+            contentType = { DiscoveryContentType.RecommendedUser }
         ) { user ->
             RecommendedUserCard(
                 user = user,
@@ -106,11 +107,20 @@ fun DiscoveryCarousel(
         
         // Loading placeholders with enhanced styling
         if (isLoading) {
-            items(3) {
+            items(
+                count = 3,
+                key = { index -> "recommended_user_shimmer_$index" },
+                contentType = { DiscoveryContentType.Loading }
+            ) {
                 UserCardShimmer()
             }
         }
     }
+}
+
+private enum class DiscoveryContentType {
+    RecommendedUser,
+    Loading
 }
 
 /**

@@ -54,12 +54,14 @@ class TimerServiceManager @Inject constructor(
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             try {
                 val binder = service as WorkoutTimerService.TimerBinder
-                timerService = binder.getService()
+                val connectedService = binder.getService()
+                    ?: throw IllegalStateException("WorkoutTimerService binding returned a cleared service reference")
+                timerService = connectedService
                 isBound = true
                 isBindingInProgress = false
                 _connectionState.value = ConnectionState.Connected
                 
-                collectServiceState(currentService = binder.getService())
+                collectServiceState(currentService = connectedService)
                 
                 Timber.d("TimerServiceManager connected to WorkoutTimerService")
             } catch (e: Exception) {

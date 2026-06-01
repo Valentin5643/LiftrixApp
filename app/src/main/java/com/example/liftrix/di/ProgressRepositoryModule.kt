@@ -6,8 +6,10 @@ import com.example.liftrix.data.repository.PersonalRecordRepositoryImpl
 import com.example.liftrix.data.repository.ProgressStatsRepositoryImpl
 import com.example.liftrix.data.repository.WidgetPreferencesRepositoryImpl
 import com.example.liftrix.data.repository.export.ProgressReportRepositoryImpl
+import com.example.liftrix.demo.DemoProgressReportDataProviderImpl
 import com.example.liftrix.domain.repository.AchievementRepository
 import com.example.liftrix.domain.repository.AnomalyDetectionRepository
+import com.example.liftrix.domain.repository.export.DemoProgressReportDataProvider
 import com.example.liftrix.domain.repository.PersonalRecordRepository
 import com.example.liftrix.domain.repository.ProgressStatsRepository
 import com.example.liftrix.domain.repository.WidgetPreferencesRepository
@@ -49,4 +51,10 @@ abstract class ProgressRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindProgressReportRepository(impl: ProgressReportRepositoryImpl): ProgressReportRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindDemoProgressReportDataProvider(
+        impl: DemoProgressReportDataProviderImpl
+    ): DemoProgressReportDataProvider
 }

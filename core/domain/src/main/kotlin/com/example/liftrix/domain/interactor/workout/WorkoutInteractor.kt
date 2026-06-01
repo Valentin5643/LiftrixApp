@@ -8,7 +8,6 @@ import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.usecase.analytics.LogWorkoutEventUseCase
 import com.example.liftrix.domain.usecase.workout.CreateWorkoutRequest
-import com.example.liftrix.domain.usecase.workout.CreateWorkoutUseCase
 import com.example.liftrix.domain.usecase.workout.CreateWorkoutWithExercisesRequest
 import com.example.liftrix.domain.usecase.workout.PreviousSetData
 import com.example.liftrix.domain.usecase.workout.PreviousSetDataResponse
@@ -23,7 +22,6 @@ import javax.inject.Inject
 class WorkoutInteractor @Inject constructor(
     private val workoutQueryUseCase: WorkoutQueryUseCase,
     private val workoutCommandUseCase: WorkoutCommandUseCase,
-    private val createWorkoutUseCase: CreateWorkoutUseCase,
     private val logWorkoutEventUseCase: LogWorkoutEventUseCase
 ) {
     suspend fun getById(workoutId: WorkoutId, userId: String): LiftrixResult<Workout?> =
@@ -84,9 +82,6 @@ class WorkoutInteractor @Inject constructor(
 
     suspend fun createWithExercises(request: CreateWorkoutWithExercisesRequest): LiftrixResult<Workout> =
         workoutCommandUseCase.createWithExercises(request)
-
-    suspend fun create(workout: Workout): LiftrixResult<Workout> =
-        createWorkoutUseCase(workout)
 
     suspend fun logWorkoutStatusChange(workout: Workout, previousStatus: WorkoutStatus): Result<Unit> =
         logWorkoutEventUseCase.logWorkoutStatusChange(workout, previousStatus)

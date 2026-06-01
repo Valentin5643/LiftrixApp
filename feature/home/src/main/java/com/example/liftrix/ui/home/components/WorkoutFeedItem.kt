@@ -71,9 +71,10 @@ fun WorkoutFeedItem(
             verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
         ) {
             // Friend workout header (only for friends' workouts)
-            if (!feedWorkout.isPersonal && feedWorkout.user != null) {
+            val feedUser = feedWorkout.user
+            if (!feedWorkout.isPersonal && feedUser != null) {
                 FriendWorkoutHeader(
-                    user = feedWorkout.user,
+                    user = feedUser,
                     modifier = Modifier.fillMaxWidth()
                 )
             }

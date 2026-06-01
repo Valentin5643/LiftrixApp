@@ -6,6 +6,7 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.export.ProgressReportData
 import com.example.liftrix.domain.model.export.ProgressReportRequest
 import com.example.liftrix.domain.model.export.ProgressReportResult
+import com.example.liftrix.domain.repository.export.DemoProgressReportDataProvider
 import com.example.liftrix.domain.repository.export.ProgressReportRepository
 import com.example.liftrix.domain.service.ProgressReportFileManager
 import com.example.liftrix.service.export.PdfReportGenerator
@@ -18,6 +19,7 @@ import javax.inject.Singleton
 @Singleton
 class ProgressReportRepositoryImpl @Inject constructor(
     private val dataBuilder: ProgressReportDataBuilder,
+    private val demoProgressReportDataProvider: DemoProgressReportDataProvider,
     private val pdfReportGenerator: PdfReportGenerator,
     private val fileManager: ProgressReportFileManager
 ) : ProgressReportRepository {
@@ -33,7 +35,8 @@ class ProgressReportRepositoryImpl @Inject constructor(
                 )
             }
         ) {
-            val data = dataBuilder.build(userId, request)
+            val data = demoProgressReportDataProvider.buildDemoReportDataIfActive(request)
+                ?: dataBuilder.build(userId, request)
             if (data.summary.workoutsCompleted == 0) {
                 throw LiftrixError.ValidationError(
                     field = "workouts",

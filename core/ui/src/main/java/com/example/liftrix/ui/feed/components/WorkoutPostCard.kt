@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -167,8 +168,11 @@ private fun PostHeader(
         ) {
             // Profile image - using ProfileImageDisplay for consistent behavior
             val userIdentifier = "${post.authorDisplayName ?: post.authorUsername} (${post.userId})"
+            val timestampText = remember(post.createdAt) { formatTimestamp(post.createdAt) }
 
-            Timber.d("PFP_DEBUG: Feed profile image for $userIdentifier | imageUrl='${post.authorProfilePhotoUrl}'")
+            LaunchedEffect(post.id, post.authorProfilePhotoUrl) {
+                Timber.d("PFP_DEBUG: Feed profile image for $userIdentifier | imageUrl='${post.authorProfilePhotoUrl}'")
+            }
 
             DynamicProfileImage(
                 storagePath = post.authorProfilePhotoUrl,
@@ -190,7 +194,7 @@ private fun PostHeader(
                 )
                 
                 Text(
-                    text = formatTimestamp(post.createdAt),
+                    text = timestampText,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -278,6 +282,17 @@ private fun WorkoutSummaryCard(
     val weightUnitManager = LocalWeightUnitManager.current
     val currentWeightUnit = weightUnitManager?.currentUnit?.collectAsState()?.value
         ?: WeightUnit.getSystemDefault()
+    val durationText = remember(post.workoutDuration) {
+        formatDuration(post.workoutDuration)
+    }
+    val volumeText = remember(post.id, post.workoutId, post.totalVolume, currentWeightUnit, weightUnitManager) {
+        post.totalVolume?.let { volume ->
+            weightUnitManager?.formatWeight(volume, WeightUnit.KILOGRAMS, precision = 0)
+                ?: currentWeightUnit.formatWeight(volume, precision = 0)
+        } ?: currentWeightUnit.formatWeight(0.0, precision = 0).also {
+            Timber.w("UI-MAPPER-DEBUG: post.totalVolume is null! Post ID: ${post.id}, workout ID: ${post.workoutId}")
+        }
+    }
 
     Column(
         modifier = modifier
@@ -292,19 +307,12 @@ private fun WorkoutSummaryCard(
         ) {
             // Duration
             WorkoutMetric(
-                value = formatDuration(post.workoutDuration),
+                value = durationText,
                 label = "Duration",
                 modifier = Modifier.padding(end = 32.dp)
             )
             
             // Volume
-            val volumeText = post.totalVolume?.let { volume ->
-                weightUnitManager?.formatWeight(volume, WeightUnit.KILOGRAMS, precision = 0)
-                    ?: currentWeightUnit.formatWeight(volume, precision = 0)
-            } ?: currentWeightUnit.formatWeight(0.0, precision = 0).also {
-                Timber.w("UI-MAPPER-DEBUG: post.totalVolume is null! Post ID: ${post.id}, workout ID: ${post.workoutId}")
-            }
-            
             WorkoutMetric(
                 value = volumeText,
                 label = "Volume",
@@ -391,7 +399,11 @@ private fun MediaCarousel(
             horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.small),
             contentPadding = PaddingValues(horizontal = 0.dp)
         ) {
-            items(mediaItems) { mediaItem ->
+            items(
+                items = mediaItems,
+                key = { mediaItem -> mediaItem.id },
+                contentType = { WorkoutPostCardContentType.Media }
+            ) { mediaItem ->
                 MediaItem(
                     mediaItem = mediaItem,
                     modifier = Modifier
@@ -408,9 +420,13 @@ private fun MediaItem(
     mediaItem: MediaItem,
     modifier: Modifier = Modifier
 ) {
+    val imageModel = remember(mediaItem.thumbnailUrl, mediaItem.originalUrl) {
+        mediaItem.thumbnailUrl ?: mediaItem.originalUrl
+    }
+
     Box(modifier = modifier) {
         AsyncImage(
-            model = mediaItem.thumbnailUrl ?: mediaItem.originalUrl,
+            model = imageModel,
             contentDescription = "Post media",
             modifier = Modifier
                 .fillMaxSize()
@@ -507,6 +523,8 @@ private fun EngagementButton(
     contentDescription: String,
     modifier: Modifier = Modifier
 ) {
+    val countText = remember(count) { formatCount(count) }
+
     Row(
         modifier = modifier.clickable { onClick() },
         verticalAlignment = Alignment.CenterVertically,
@@ -521,7 +539,7 @@ private fun EngagementButton(
         
         if (count > 0) {
             Text(
-                text = formatCount(count),
+                text = countText,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -570,6 +588,9 @@ private fun ExerciseList(
     exercises: List<com.example.liftrix.domain.model.social.PostExercise>,
     modifier: Modifier = Modifier
 ) {
+    val visibleExercises = remember(exercises) { exercises.take(5) }
+    val remainingCount = exercises.size - visibleExercises.size
+
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.small)
@@ -586,13 +607,20 @@ private fun ExerciseList(
             horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.small),
             contentPadding = PaddingValues(horizontal = 0.dp)
         ) {
-            items(exercises.take(5)) { exercise -> // Limit to 5 exercises for better UX
+            itemsIndexed(
+                items = visibleExercises,
+                key = { index, exercise -> "${exercise.name}_${exercise.customExerciseId}_${exercise.setsCount}_$index" },
+                contentType = { _, _ -> WorkoutPostCardContentType.Exercise }
+            ) { _, exercise -> // Limit to 5 exercises for better UX
                 ExerciseChip(exercise = exercise)
             }
             
-            if (exercises.size > 5) {
-                item {
-                    ExerciseCountChip(remainingCount = exercises.size - 5)
+            if (remainingCount > 0) {
+                item(
+                    key = "remaining_exercise_count_$remainingCount",
+                    contentType = WorkoutPostCardContentType.ExerciseCount
+                ) {
+                    ExerciseCountChip(remainingCount = remainingCount)
                 }
             }
         }
@@ -652,6 +680,12 @@ private fun ExerciseChip(
             null,
         modifier = modifier
     )
+}
+
+private enum class WorkoutPostCardContentType {
+    Media,
+    Exercise,
+    ExerciseCount
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

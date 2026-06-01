@@ -241,12 +241,36 @@ class MasterSyncWorker @AssistedInject constructor(
     private suspend fun syncEntity(entityType: String, userId: String): SyncResult {
         return try {
             val workRequest = when (entityType) {
-                "profile" -> ProfileSyncWorker.createWorkRequest(userId)
-                "workout" -> WorkoutSyncWorker.createWorkRequest(userId)
-                "template" -> TemplateSyncWorker.createWorkRequest(userId)
-                "user_public" -> UserPublicSyncWorker.createWorkRequest(userId)
-                "achievement" -> AchievementSyncWorker.createWorkRequest(userId)
-                "follow_relationship" -> FollowRelationshipSyncWorker.createWorkRequest(userId)
+                "profile", "user_public" -> UnifiedSyncWorker.createWorkRequest(
+                    userId = userId,
+                    syncType = "profile",
+                    maxPriority = SyncOperationManager.PRIORITY_CRITICAL,
+                    forceSync = true
+                )
+                "workout" -> UnifiedSyncWorker.createWorkRequest(
+                    userId = userId,
+                    syncType = "workouts",
+                    maxPriority = SyncOperationManager.PRIORITY_HIGH,
+                    forceSync = true
+                )
+                "template" -> UnifiedSyncWorker.createWorkRequest(
+                    userId = userId,
+                    syncType = "templates",
+                    maxPriority = SyncOperationManager.PRIORITY_HIGH,
+                    forceSync = true
+                )
+                "achievement" -> UnifiedSyncWorker.createWorkRequest(
+                    userId = userId,
+                    syncType = "analytics",
+                    maxPriority = SyncOperationManager.PRIORITY_LOW,
+                    forceSync = true
+                )
+                "follow_relationship" -> UnifiedSyncWorker.createWorkRequest(
+                    userId = userId,
+                    syncType = "social",
+                    maxPriority = SyncOperationManager.PRIORITY_MEDIUM,
+                    forceSync = true
+                )
                 else -> {
                     Timber.e("MasterSyncWorker: Unknown entity type: $entityType")
                     return SyncResult(success = false, syncedCount = 0, failedCount = 1, error = "Unknown entity type")

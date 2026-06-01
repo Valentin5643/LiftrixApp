@@ -26,7 +26,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,6 +59,7 @@ fun PostWorkoutSummaryScreen(
     navController: NavController,
     onNavigateToWorkoutDetails: (String) -> Unit = {},
     onNavigateToPostCreation: (String) -> Unit = {},
+    onNavigateToShareWorkout: (String) -> Unit = {},
     onNavigateHome: () -> Unit = { navController.navigateUp() },
     viewModel: PostWorkoutSummaryViewModel = hiltViewModel()
 ) {
@@ -67,7 +67,6 @@ fun PostWorkoutSummaryScreen(
     val weightUnitManager = rememberWeightUnitManager()
     weightUnitManager?.currentUnit?.collectAsState()
     var showDetails by remember { mutableStateOf(false) }
-    var showShareOptions by remember { mutableStateOf(false) }
     
     LaunchedEffect(workoutId) {
         viewModel.loadWorkoutSummary(workoutId)
@@ -151,7 +150,7 @@ fun PostWorkoutSummaryScreen(
                     item {
                         ShareActionsCard(
                             onShareWorkout = {
-                                showShareOptions = true
+                                onNavigateToShareWorkout(workoutId)
                             },
                             onShareToSocialFeed = {
                                 onNavigateToPostCreation(workoutId)
@@ -180,19 +179,6 @@ fun PostWorkoutSummaryScreen(
                             )
                         }
                     }
-                }
-                
-                // Share Options Bottom Sheet
-                if (showShareOptions) {
-                    ShareOptionsBottomSheet(
-                        workoutId = workoutId,
-                        workoutSummary = state,
-                        onDismiss = { showShareOptions = false },
-                        onShareMethod = { method ->
-                            viewModel.shareWorkout(workoutId, method)
-                            showShareOptions = false
-                        }
-                    )
                 }
             }
             
@@ -707,129 +693,6 @@ private fun ShareActionsCard(
     }
 }
 
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ShareOptionsBottomSheet(
-    workoutId: String,
-    workoutSummary: PostWorkoutUiState.Success,
-    onDismiss: () -> Unit,
-    onShareMethod: (ShareMethod) -> Unit
-) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-                .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(
-                text = "Share Your Workout",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            
-            // Instagram Story with Image
-            ShareMethodItem(
-                icon = Icons.Default.PhotoCamera,
-                title = "Instagram Story",
-                subtitle = "Share as a story with workout image",
-                onClick = { onShareMethod(ShareMethod.InstagramStory) }
-            )
-            
-            // Copy Link
-            ShareMethodItem(
-                icon = Icons.Default.Link,
-                title = "Copy Link",
-                subtitle = "Share workout link with anyone",
-                onClick = { onShareMethod(ShareMethod.CopyLink) }
-            )
-            
-            // WhatsApp
-            ShareMethodItem(
-                icon = Icons.Default.Message,
-                title = "WhatsApp",
-                subtitle = "Send to contacts or groups",
-                onClick = { onShareMethod(ShareMethod.WhatsApp) }
-            )
-            
-            // Download Image
-            ShareMethodItem(
-                icon = Icons.Default.Download,
-                title = "Save Image",
-                subtitle = "Download workout summary image",
-                onClick = { onShareMethod(ShareMethod.SaveImage) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun ShareMethodItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit
-) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(
-                        color = LiftrixColorsV2.Teal.copy(alpha = 0.1f),
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = title,
-                    tint = LiftrixColorsV2.Teal,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-            
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = subtitle,
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            
-            Icon(
-                Icons.Default.KeyboardArrowRight,
-                contentDescription = "View details",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
 
 @Composable
 private fun ErrorContent(

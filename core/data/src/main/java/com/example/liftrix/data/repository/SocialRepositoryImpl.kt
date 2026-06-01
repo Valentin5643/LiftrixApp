@@ -1,6 +1,5 @@
 package com.example.liftrix.data.repository
 
-import com.example.liftrix.data.cache.RecommendationCache
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
 import com.example.liftrix.data.local.dao.FriendDao
 import com.example.liftrix.data.local.dao.PrivacySettingsDao
@@ -44,7 +43,6 @@ class SocialRepositoryImpl @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val friendMapper: FriendMapper,
     private val authRepository: AuthRepository,
-    private val recommendationCache: RecommendationCache,
     private val socialProfileQueryUseCase: SocialProfileQueryUseCase,
     private val userSuggestionService: com.example.liftrix.domain.service.UserSuggestionService,
     private val syncScheduler: SyncScheduler
@@ -135,9 +133,6 @@ class SocialRepositoryImpl @Inject constructor(
             Timber.d("DEBUG_SEND_FRIEND_REQUEST: Upserted friend request locally")
             triggerImmediateSyncSafely(currentUserId.value)
 
-            // Invalidate recommendation cache since friend relationships changed
-            recommendationCache.invalidateCacheForUser(currentUserId.value)
-
             Timber.d("Friend request sent successfully: $currentUserId -> $friendUserId")
             Result.success(Unit)
 
@@ -179,12 +174,6 @@ class SocialRepositoryImpl @Inject constructor(
             }
 
             triggerImmediateSyncSafely(currentUserId.value)
-
-            // Invalidate recommendation cache for both users since friend relationships changed
-            if (accept) {
-                recommendationCache.invalidateCacheForUser(currentUserId.value)
-                recommendationCache.invalidateCacheForUser(friendUserId)
-            }
 
             val action = if (accept) "accepted" else "declined"
             Timber.d("Friend request $action: $friendUserId -> $currentUserId")
@@ -406,10 +395,6 @@ class SocialRepositoryImpl @Inject constructor(
 
             triggerImmediateSyncSafely(currentUserId.value)
 
-            // Invalidate recommendation cache for both users since friend relationships changed
-            recommendationCache.invalidateCacheForUser(currentUserId.value)
-            recommendationCache.invalidateCacheForUser(friendUserId)
-
             Timber.d("Friend removed successfully: $currentUserId removed $friendUserId")
             Result.success(Unit)
 
@@ -435,23 +420,7 @@ class SocialRepositoryImpl @Inject constructor(
             Timber.v("Loading recommended users: limit=$limit, offset=$offset")
             val followExclusions = getFollowExclusionIds(currentUserId.value)
             
-            // Step 1: Check cache first (only for first page)
-            if (offset == 0) {
-                val cachedRecommendations = recommendationCache.getCachedRecommendations(currentUserId.value)
-                if (cachedRecommendations != null) {
-                    val cachedResults = cachedRecommendations
-                        .filterNot { it.userId in followExclusions }
-                        .take(limit)
-                    if (cachedResults.isNotEmpty()) {
-                        Timber.d("Cache hit: returning ${cachedResults.size} cached recommendations")
-                        emit(cachedResults)
-                        return@flow
-                    }
-                }
-                Timber.d("Cache miss: proceeding with fresh API call")
-            }
-
-            // Step 2: Get current user's friends to exclude from recommendations
+            // Step 1: Get current user's friends to exclude from recommendations
             val existingFriendIds = friendDao.getFriends(currentUserId.value).map { friendEntities ->
                 friendEntities.map { it.friendUserId }.toSet()
             }.catch { emit(emptySet()) }
@@ -460,7 +429,7 @@ class SocialRepositoryImpl @Inject constructor(
                 val recommendations = mutableListOf<RecommendedUser>()
                 val excludedIds = friendIds + followExclusions
 
-                // Step 3: Get mutual friends recommendations (50% of limit)
+                // Step 2: Get mutual friends recommendations (50% of limit)
                 val mutualFriendsLimit = (limit * MUTUAL_FRIENDS_WEIGHT).toInt()
                 if (mutualFriendsLimit > 0) {
                     val mutualFriendsUsers = getMutualFriendsRecommendations(
@@ -472,7 +441,7 @@ class SocialRepositoryImpl @Inject constructor(
                     recommendations.addAll(mutualFriendsUsers)
                 }
 
-                // Step 4: Get discovery recommendations to fill remaining slots
+                // Step 3: Get discovery recommendations to fill remaining slots
                 val remainingSlots = limit - recommendations.size
                 if (remainingSlots > 0) {
                         // For new users (< 3 friends), use sophisticated UserSuggestionService
@@ -535,11 +504,6 @@ class SocialRepositoryImpl @Inject constructor(
                 val filteredRecommendations = finalRecommendations
                     .filterNot { it.userId in freshExclusions }
 
-                // Step 5: Cache fresh recommendations (only for first page)
-                if (offset == 0 && filteredRecommendations.isNotEmpty()) {
-                    recommendationCache.cacheRecommendations(currentUserId.value, filteredRecommendations)
-                }
-                
                 Timber.d("Generated ${filteredRecommendations.size} recommendations for user: $currentUserId")
                 emit(filteredRecommendations)
             }
@@ -586,9 +550,7 @@ class SocialRepositoryImpl @Inject constructor(
         return try {
             val currentUserId = authRepository.getCurrentUserId()
             if (currentUserId != null) {
-                // Clear cached recommendations to trigger fresh discovery
-                recommendationCache.invalidateCacheForUser(currentUserId.value)
-                Timber.d("Discovery cache refreshed successfully for user: $currentUserId")
+                Timber.d("Discovery refresh requested; recommendations are computed from Room-backed state for user: $currentUserId")
             } else {
                 Timber.w("Cannot refresh cache: user not authenticated")
             }

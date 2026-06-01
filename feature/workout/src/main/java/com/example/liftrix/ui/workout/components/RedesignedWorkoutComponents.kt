@@ -13,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.runtime.LaunchedEffect
@@ -701,7 +702,8 @@ fun ExerciseReorderDialog(
             ) {
                 itemsIndexed(
                     items = reorderedExercises,
-                    key = { _, exercise -> exercise.first }
+                    key = { _, exercise -> exercise.first },
+                    contentType = { _, _ -> "reorder_exercise" }
                 ) { index, exercise ->
                     Row(
                         modifier = Modifier
@@ -877,6 +879,7 @@ private fun SwipeToDismissSetRow(
 /**
  * Data class for redesigned set
  */
+@Immutable
 data class RedesignedSetData(
     val weight: String = "",
     val reps: String = "",
@@ -895,6 +898,7 @@ data class RedesignedSetData(
 /**
  * Data class for tracking removed sets for undo functionality
  */
+@Immutable
 data class RemovedSetInfo(
     val setData: RedesignedSetData,
     val index: Int,

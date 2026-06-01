@@ -13,6 +13,7 @@ plugins {
     alias(libs.plugins.google.firebase.firebase.perf)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt.android)
+    alias(libs.plugins.androidx.baselineprofile)
     id("kotlin-parcelize")
     id("jacoco")
 }
@@ -26,6 +27,8 @@ val localProperties = Properties().apply {
 
 fun localOrEnvironment(name: String): String =
     (System.getenv(name) ?: localProperties.getProperty(name)).orEmpty()
+
+fun buildConfigString(value: String): String = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 // Dependency resolution strategies for deterministic builds
 configurations.all {
@@ -88,8 +91,8 @@ composeCompiler {
     // Enable non-skipping group optimization
     enableNonSkippingGroupOptimization.set(true)
 
-    // Note: Metrics/reports generation requires adding compiler args manually
-    // Add to freeCompilerArgs if needed: "-P", "plugin:androidx.compose.compiler.plugins.kotlin:metricsDestination=..."
+    reportsDestination.set(layout.buildDirectory.dir("compose_compiler/reports"))
+    metricsDestination.set(layout.buildDirectory.dir("compose_compiler/metrics"))
 }
 
 android {
@@ -98,7 +101,7 @@ android {
     buildToolsVersion = "34.0.0"  // Installed SDK build tools with complete binaries
 
     installation {
-        enableBaselineProfile = false
+        enableBaselineProfile = true
     }
 
     defaultConfig {
@@ -107,6 +110,10 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+
+        buildConfigField("String", "APP_VERSION_NAME", buildConfigString(versionName ?: "unknown"))
+        buildConfigField("int", "APP_VERSION_CODE", versionCode.toString())
+        buildConfigField("String", "API_BASE_URL", buildConfigString(localOrEnvironment("API_BASE_URL")))
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -186,6 +193,12 @@ android {
             
             // Secure OAuth configuration from properties
             buildConfigField("String", "GOOGLE_CLIENT_ID", "\"${project.findProperty("GOOGLE_CLIENT_ID_RELEASE") ?: ""}\"")
+            buildConfigField("String", "ENVIRONMENT", buildConfigString("release"))
+            buildConfigField("boolean", "ENABLE_VERBOSE_LOGGING", "false")
+            buildConfigField("boolean", "ENABLE_DEBUG_TOOLS", "false")
+            buildConfigField("boolean", "ENABLE_STRICT_MODE", "false")
+            buildConfigField("boolean", "ENABLE_FIREBASE_PERFORMANCE", "true")
+            buildConfigField("boolean", "ENABLE_CRASHLYTICS", "true")
             signingConfig = signingConfigs.getByName("release")  // ADD THIS LINE
 
             // Release mapping upload is required so production crashes remain retraceable.
@@ -213,6 +226,12 @@ android {
 
             // Secure OAuth configuration from properties
             buildConfigField("String", "GOOGLE_CLIENT_ID", "\"${project.findProperty("GOOGLE_CLIENT_ID_DEBUG") ?: "734273269747-ojaksa5nhir6re5sqskn7qlbflec2f94.apps.googleusercontent.com"}\"")
+            buildConfigField("String", "ENVIRONMENT", buildConfigString("debug"))
+            buildConfigField("boolean", "ENABLE_VERBOSE_LOGGING", "true")
+            buildConfigField("boolean", "ENABLE_DEBUG_TOOLS", "true")
+            buildConfigField("boolean", "ENABLE_STRICT_MODE", "true")
+            buildConfigField("boolean", "ENABLE_FIREBASE_PERFORMANCE", "false")
+            buildConfigField("boolean", "ENABLE_CRASHLYTICS", "true")
             buildConfigField(
                 "String",
                 "FIREBASE_APP_CHECK_DEBUG_SECRET",
@@ -308,14 +327,12 @@ ksp {
 dependencies {
     // Custom Lint rules for architectural enforcement
     lintChecks(project(":lint-rules"))
-    implementation(project(":core:analytics"))
     implementation(project(":core:data"))
     implementation(project(":core:database"))
     implementation(project(":core:domain"))
     implementation(project(":core:domain-common"))
     implementation(project(":core:design-system"))
     implementation(project(":core:model"))
-    implementation(project(":core:network"))
     implementation(project(":core:notifications"))
     implementation(project(":core:presentation"))
     implementation(project(":core:sync"))
@@ -328,9 +345,7 @@ dependencies {
     implementation(project(":feature:settings"))
     implementation(project(":feature:social"))
     implementation(project(":feature:workout"))
-    implementation(project(":user-scoping-annotations"))
-    add("kspDebug", project(":user-scoping-processor"))
-    add("kspRelease", project(":user-scoping-processor"))
+    baselineProfile(project(":baselineprofile"))
 
     implementation(libs.androidx.core.ktx)
     implementation("androidx.core:core-splashscreen:1.0.1")
@@ -502,6 +517,12 @@ dependencies {
     
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+    debugImplementation(libs.leakcanary.android)
+}
+
+configurations.matching { it.name == "kspBenchmarkRelease" }.all {
+    project.dependencies.add(name, libs.hilt.compiler)
+    project.dependencies.add(name, libs.androidx.hilt.compiler)
 }
 
 // Room Query Validation Task - Configuration Cache Compatible

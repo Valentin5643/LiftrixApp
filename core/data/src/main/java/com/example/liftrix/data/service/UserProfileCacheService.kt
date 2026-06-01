@@ -4,17 +4,14 @@ import com.example.liftrix.domain.model.UserProfile
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.model.social.SocialProfile
 import com.example.liftrix.domain.repository.UserRepository
 import com.example.liftrix.domain.repository.social.SocialProfileRepository
 import timber.log.Timber
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Cache service for efficient user profile data fetching.
- * Implements caching layer for user profiles to reduce database queries.
+ * Room-backed user profile lookup helper.
  * Part of Phase 1: User Profile Data Integration from SPEC-20250901-todo-implementation.
  */
 @Singleton
@@ -22,16 +19,9 @@ class UserProfileCacheService @Inject constructor(
     private val userRepository: UserRepository,
     private val socialProfileRepository: SocialProfileRepository
 ) {
-    
-    // In-memory cache for user profile data
-    private val profileCache = ConcurrentHashMap<String, UserProfileData>()
-    private val socialProfileCache = ConcurrentHashMap<String, SocialProfile>()
-    
-    // Cache expiry time in milliseconds (15 minutes)
-    private val cacheExpiryTime = 15 * 60 * 1000L
-    
+
     /**
-     * Gets user profile with caching. Uses Room as source of truth with offline-first strategy.
+     * Gets user profile data from repositories. Room remains the local source of truth.
      * @param userId The user ID to fetch profile for (mandatory for user scoping)
      * @return LiftrixResult with UserProfileData if found
      */
@@ -46,14 +36,7 @@ class UserProfileCacheService @Inject constructor(
             }
         ) {
             require(userId.isNotBlank()) { "User ID cannot be blank" }
-            
-            // Check cache first
-            val cachedProfile = profileCache[userId]
-            if (cachedProfile != null && !isCacheExpired(cachedProfile.cacheTimestamp)) {
-                Timber.d("UserProfileCacheService: Returning cached profile for user $userId")
-                return@liftrixCatching cachedProfile
-            }
-            
+
             // Fetch from repositories (Room is source of truth)
             val userProfile = userRepository.getUserProfile(userId).fold(
                 onSuccess = { it },
@@ -79,13 +62,10 @@ class UserProfileCacheService @Inject constructor(
                 bio = userProfile?.bio ?: socialProfile?.bio,
                 memberSince = userProfile?.memberSince,
                 totalWorkouts = userProfile?.totalWorkouts ?: socialProfile?.workoutCount ?: 0,
-                cacheTimestamp = System.currentTimeMillis()
+                loadedAt = System.currentTimeMillis()
             )
-            
-            // Update cache
-            profileCache[userId] = profileData
-            
-            Timber.d("UserProfileCacheService: Cached profile data for user $userId")
+
+            Timber.d("UserProfileCacheService: Loaded profile data for user $userId")
             profileData
         }
     
@@ -113,32 +93,9 @@ class UserProfileCacheService @Inject constructor(
         )
     }
     
-    /**
-     * Invalidates cache for a specific user.
-     * @param userId The user ID to invalidate cache for
-     */
-    fun invalidateCache(userId: String) {
-        profileCache.remove(userId)
-        socialProfileCache.remove(userId)
-        Timber.d("UserProfileCacheService: Invalidated cache for user $userId")
-    }
-    
-    /**
-     * Clears all cached profile data.
-     * Used for memory management and testing.
-     */
-    fun clearCache() {
-        profileCache.clear()
-        socialProfileCache.clear()
-        Timber.d("UserProfileCacheService: Cleared all cached profile data")
-    }
-    
-    /**
-     * Checks if cache entry has expired.
-     */
-    private fun isCacheExpired(cacheTimestamp: Long): Boolean {
-        return System.currentTimeMillis() - cacheTimestamp > cacheExpiryTime
-    }
+    fun invalidateCache(userId: String) = Timber.d("UserProfileCacheService: No memory cache to invalidate for user $userId")
+
+    fun clearCache() = Timber.d("UserProfileCacheService: No memory cache to clear")
 }
 
 /**
@@ -152,5 +109,5 @@ data class UserProfileData(
     val bio: String? = null,
     val memberSince: java.time.LocalDateTime? = null,
     val totalWorkouts: Int = 0,
-    val cacheTimestamp: Long = System.currentTimeMillis()
+    val loadedAt: Long = System.currentTimeMillis()
 )

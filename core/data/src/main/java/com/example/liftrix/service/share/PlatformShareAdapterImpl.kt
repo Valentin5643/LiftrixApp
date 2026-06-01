@@ -161,6 +161,76 @@ class PlatformShareAdapterImpl @Inject constructor(
         }
     }
     
+    override suspend fun shareImage(
+        platform: SocialPlatform,
+        imageFilePath: String,
+        content: ShareableContent,
+        customText: String?
+    ): LiftrixResult<Intent> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "PLATFORM_IMAGE_SHARE_FAILED",
+                errorMessage = "Failed to share image to ${platform.name}: ${throwable.message}",
+                analyticsContext = mapOf(
+                    "operation" to "SHARE_IMAGE_TO_PLATFORM",
+                    "platform" to platform.name,
+                    "content_type" to content.type.name
+                )
+            )
+        }
+    ) {
+        withContext(Dispatchers.IO) {
+            if (!isPlatformAvailable(platform)) {
+                throw IllegalStateException("${platform.name} app is not installed")
+            }
+
+            val imageUri = createSecureUri(imageFilePath)
+            when (platform) {
+                SocialPlatform.INSTAGRAM -> createInstagramStoryIntent(imageUri)
+                SocialPlatform.WHATSAPP -> createImageSendIntent(
+                    packageName = "com.whatsapp",
+                    imageUri = imageUri,
+                    text = buildShareText(content, customText, SocialPlatform.WHATSAPP)
+                )
+                else -> createImageSendIntent(
+                    packageName = PLATFORM_CONFIGS[platform]?.packageName,
+                    imageUri = imageUri,
+                    text = buildShareText(content, customText, platform)
+                )
+            }
+        }
+    }
+
+    override suspend fun createNativeImageShare(
+        imageFilePath: String,
+        content: ShareableContent,
+        customText: String?
+    ): LiftrixResult<Intent> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "NATIVE_IMAGE_SHARE_FAILED",
+                errorMessage = "Failed to create native share: ${throwable.message}",
+                analyticsContext = mapOf(
+                    "operation" to "CREATE_NATIVE_IMAGE_SHARE",
+                    "content_type" to content.type.name
+                )
+            )
+        }
+    ) {
+        withContext(Dispatchers.IO) {
+            val imageUri = createSecureUri(imageFilePath)
+            val sendIntent = createImageSendIntent(
+                packageName = null,
+                imageUri = imageUri,
+                text = customText?.takeIf { it.isNotBlank() } ?: "Shared from Liftrix"
+            )
+            Intent.createChooser(sendIntent, "Share workout story").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        }
+    }
+
     override suspend fun isPlatformAvailable(platform: SocialPlatform): Boolean = withContext(Dispatchers.IO) {
         val config = PLATFORM_CONFIGS[platform] ?: return@withContext false
         
@@ -345,6 +415,31 @@ class PlatformShareAdapterImpl @Inject constructor(
             val text = buildShareText(content, customText, SocialPlatform.DISCORD)
             putExtra(Intent.EXTRA_TEXT, text)
             
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
+
+    private fun createInstagramStoryIntent(imageUri: Uri): Intent {
+        return Intent("com.instagram.share.ADD_TO_STORY").apply {
+            setPackage("com.instagram.android")
+            setDataAndType(imageUri, "image/png")
+            putExtra("interactive_asset_uri", imageUri)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
+
+    private fun createImageSendIntent(
+        packageName: String?,
+        imageUri: Uri,
+        text: String
+    ): Intent {
+        return Intent(Intent.ACTION_SEND).apply {
+            type = "image/png"
+            packageName?.let(::setPackage)
+            putExtra(Intent.EXTRA_STREAM, imageUri)
+            putExtra(Intent.EXTRA_TEXT, text)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }

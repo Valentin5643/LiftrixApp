@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -134,9 +135,19 @@ class UserWorkoutsViewModel @Inject constructor(
                         Timber.d("[WORKOUTS-DEBUG] Loading workouts for user: ${userId.value}")
 
                         // Collect workouts from the workout repository and convert to WorkoutPost format
-                        workoutRepository.getWorkoutsByUser(userId.value).collect { result ->
-                        result.fold(
-                            onSuccess = { workouts ->
+                        workoutRepository.getWorkoutsByUser(userId.value)
+                            .catch { error ->
+                                val liftrixError = error as? LiftrixError
+                                    ?: LiftrixError.UnknownError("Failed to load workouts: ${error.message}")
+                                Timber.e("[WORKOUTS-DEBUG] Failed to load workouts: $liftrixError")
+                                _uiState.update {
+                                    it.copy(
+                                        isLoading = false,
+                                        error = liftrixError
+                                    )
+                                }
+                            }
+                            .collect { workouts ->
                                 Timber.d("[WORKOUTS-DEBUG] Successfully loaded ${workouts.size} workouts")
                                 val statusCounts = workouts.groupingBy { it.status }.eachCount()
                                 val completedWithoutEndTime = workouts.count { it.status.name == "COMPLETED" && it.endTime == null }
@@ -210,19 +221,7 @@ class UserWorkoutsViewModel @Inject constructor(
                                         error = null
                                     )
                                 }
-                            },
-                            onFailure = { error ->
-                                val liftrixError = error as? LiftrixError ?: LiftrixError.UnknownError("Failed to load workouts: ${error.message}")
-                                Timber.e("[WORKOUTS-DEBUG] Failed to load workouts: $liftrixError")
-                                _uiState.update { 
-                                    it.copy(
-                                        isLoading = false,
-                                        error = liftrixError
-                                    )
-                                }
                             }
-                        )
-                        }
                     },
                     onFailure = {
                         val error = LiftrixError.AuthenticationError("User not authenticated")

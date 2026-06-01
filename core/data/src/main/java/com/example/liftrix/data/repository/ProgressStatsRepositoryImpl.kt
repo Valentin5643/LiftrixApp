@@ -5,6 +5,8 @@ import com.example.liftrix.data.extensions.toDurationDataPoints
 import com.example.liftrix.data.extensions.toFrequencyDataPoints
 import com.example.liftrix.data.extensions.toVolumeDataPoints
 import com.example.liftrix.data.extensions.calculateProgressSummary
+import com.example.liftrix.data.extensions.WorkoutDayMetrics
+import com.example.liftrix.data.local.dao.AnalyticsReadModelDao
 import com.example.liftrix.data.local.dao.ExerciseSetDao
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.mapper.AnalyticsMapper
@@ -26,7 +28,6 @@ import com.example.liftrix.domain.sync.SyncScheduler
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.catch
-import kotlin.time.Duration.Companion.hours
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone as KotlinTimeZone
@@ -43,13 +44,39 @@ import java.time.ZoneId
 class ProgressStatsRepositoryImpl @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val exerciseSetDao: ExerciseSetDao,
+    private val analyticsReadModelDao: AnalyticsReadModelDao,
     private val analyticsMapper: AnalyticsMapper,
-    private val cacheManager: com.example.liftrix.core.cache.CacheManager,
     private val syncScheduler: SyncScheduler
 ) : ProgressStatsRepository, ProgressStatsSyncRepository {
 
     companion object {
         private const val MILLISECONDS_PER_MINUTE = 60_000L
+    }
+
+    private suspend fun getDailyMetrics(
+        userId: String,
+        startDate: LocalDate,
+        endDate: LocalDate
+    ): Map<LocalDate, WorkoutDayMetrics> {
+        val rows = analyticsReadModelDao.getDailyVolumes(
+            userId = userId,
+            startDate = startDate.toString(),
+            endDate = endDate.toString()
+        )
+        if (rows.isNotEmpty()) {
+            return rows.associate { row ->
+                val workoutCount = row.workoutCount.coerceAtLeast(1)
+                LocalDate.parse(row.workoutDate) to WorkoutDayMetrics(
+                    totalVolume = row.totalVolume.toFloat(),
+                    exerciseCount = row.exerciseCount,
+                    workoutCount = row.workoutCount,
+                    totalDurationMinutes = row.totalDurationMinutes,
+                    averageDurationMinutes = row.totalDurationMinutes / workoutCount
+                )
+            }
+        }
+
+        return workoutDao.getWorkoutsInDateRangeWithMetrics(userId, startDate, endDate)
     }
 
     override fun getWorkoutVolumeData(
@@ -58,33 +85,15 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         endDate: LocalDate
     ): Flow<List<VolumeDataPoint>> = flow {
         Timber.d("🔍 REPO-DEBUG: getWorkoutVolumeData() Flow starting for userId=$userId")
-        val timeRange = TimeRange(
-            java.util.Date.from(java.time.LocalDate.of(startDate.year, startDate.monthNumber, startDate.dayOfMonth).atStartOfDay(ZoneId.systemDefault()).toInstant()),
-            java.util.Date.from(java.time.LocalDate.of(endDate.year, endDate.monthNumber, endDate.dayOfMonth).atStartOfDay(ZoneId.systemDefault()).toInstant())
-        )
-        val cacheKey = com.example.liftrix.core.cache.CacheKeyUtils.createVolumeKey(userId, timeRange)
+        Timber.d("ProgressStatsRepository: querying Room workout volume data for user=$userId start=$startDate end=$endDate")
         
-        // Check cache first
-        Timber.d("🔍 REPO-DEBUG: Checking repository cache for key=$cacheKey")
-        val cachedEntry = cacheManager.get<List<VolumeDataPoint>>(cacheKey)
-        if (cachedEntry != null && cachedEntry.isValid()) {
-            Timber.d("🔍 REPO-DEBUG: Repository cache HIT, emitting cached data")
-            emit(cachedEntry.data)
-            return@flow
-        }
-        
-        // Cache miss - compute data
-        Timber.d("🔍 REPO-DEBUG: Repository cache MISS, calling DAO.getWorkoutsInDateRangeWithMetrics()")
-        val dailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(
-            userId, startDate, endDate
-        )
+        val dailyMetrics = getDailyMetrics(userId, startDate, endDate)
         Timber.d("🔍 REPO-DEBUG: DAO call completed, got ${dailyMetrics.size} metrics")
         
         val volumeData = dailyMetrics.toVolumeDataPoints()
         Timber.d("🔍 REPO-DEBUG: Converted to ${volumeData.size} VolumeDataPoints")
         
-        // Cache the result for 1 hour
-        cacheManager.put(cacheKey, volumeData, 1.hours)
+        Timber.v("ProgressStatsRepository: Room query result is not cached in memory")
         
         // Trigger sync event for volume data changes
         triggerSyncIfSignificantChange(userId, "volume_data", volumeData.size)
@@ -102,9 +111,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         startDate: LocalDate,
         endDate: LocalDate
     ): Flow<List<DurationDataPoint>> = flow {
-        val dailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(
-            userId, startDate, endDate
-        )
+        val dailyMetrics = getDailyMetrics(userId, startDate, endDate)
         
         val durationData = dailyMetrics.toDurationDataPoints()
         
@@ -119,9 +126,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         startDate: LocalDate,
         endDate: LocalDate
     ): Flow<List<FrequencyDataPoint>> = flow {
-        val dailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(
-            userId, startDate, endDate
-        )
+        val dailyMetrics = getDailyMetrics(userId, startDate, endDate)
         
         val frequencyData = dailyMetrics.toFrequencyDataPoints()
         
@@ -138,7 +143,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
     ): Flow<ProgressSummary> = flow {
         Timber.d("ProgressStatsRepository: Loading progress summary for user: $userId, range: $startDate to $endDate")
         
-        val dailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(userId, startDate, endDate)
+        val dailyMetrics = getDailyMetrics(userId, startDate, endDate)
         Timber.d("ProgressStatsRepository: Found ${dailyMetrics.size} days with metrics")
         
         val summary = dailyMetrics.calculateProgressSummary(startDate, endDate)
@@ -262,7 +267,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
             
             Timber.d("🔍 VOLUME-CALENDAR-FIX: Loading normalized completed workout metrics")
 
-            val dailyMetrics = workoutDao.getDailyWorkoutMetricsFromView(
+            val dailyMetrics = analyticsReadModelDao.getDailyVolumes(
                 userId = userId,
                 startDate = startDate.toString(),
                 endDate = endDate.toString()
@@ -272,8 +277,8 @@ class ProgressStatsRepositoryImpl @Inject constructor(
 
             // Filter to only include dates within the specified month (VolumeCalendarData validation requirement)
             val filteredMetrics = dailyMetrics.mapNotNull { row ->
-                val date = runCatching { LocalDate.parse(row.date) }.getOrElse { error ->
-                    Timber.w(error, "Skipping volume calendar row with invalid date: ${row.date}")
+                val date = runCatching { LocalDate.parse(row.workoutDate) }.getOrElse { error ->
+                    Timber.w(error, "Skipping volume calendar row with invalid date: ${row.workoutDate}")
                     return@mapNotNull null
                 }
                 date to row
@@ -288,8 +293,8 @@ class ProgressStatsRepositoryImpl @Inject constructor(
             
             val dailyVolumes = try {
                 filteredMetrics.associate { (date, metrics) ->
-                    Timber.d("🔍 VOLUME-CALENDAR-FIX: Processing date=$date, volume=${metrics.total_volume}kg")
-                    date to com.example.liftrix.domain.model.Volume(metrics.total_volume)
+                    Timber.d("🔍 VOLUME-CALENDAR-FIX: Processing date=$date, volume=${metrics.totalVolume}kg")
+                    date to com.example.liftrix.domain.model.Volume(metrics.totalVolume)
                 }
             } catch (e: Exception) {
                 Timber.e(e, "🔍 VOLUME-CALENDAR-FIX: Error converting daily metrics to volumes")
@@ -376,7 +381,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
             // data that actually renders in the widget.
             val today = Clock.System.todayIn(KotlinTimeZone.currentSystemDefault())
             val twoYearsAgo = today.minus(DatePeriod(months = 24))
-            val allDailyMetrics = workoutDao.getDailyWorkoutMetricsFromView(
+            val allDailyMetrics = analyticsReadModelDao.getDailyVolumes(
                 userId = userId,
                 startDate = twoYearsAgo.toString(),
                 endDate = today.toString()
@@ -385,7 +390,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
             Timber.d("🔍 MAX-VOLUME: Found ${allDailyMetrics.size} days with workout data")
 
             // Find the maximum daily volume
-            val maxDailyVolume = allDailyMetrics.maxOfOrNull { it.total_volume } ?: 0.0
+            val maxDailyVolume = allDailyMetrics.maxOfOrNull { it.totalVolume } ?: 0.0
             
             Timber.d("🔍 MAX-VOLUME: Historical maximum daily volume: ${maxDailyVolume}kg")
             
@@ -569,12 +574,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         try {
             Timber.d("ProgressStatsRepository: Notifying workout data update - user: $userId, workout: $workoutId")
             
-            // Invalidate relevant cache entries
-            val volumeCacheKey = com.example.liftrix.core.cache.CacheKeyUtils.createVolumeKey(
-                userId, 
-                TimeRange.lastMonth()
-            )
-            cacheManager.invalidate(volumeCacheKey)
+            Timber.v("ProgressStatsRepository: No memory volume cache to invalidate")
             
             // Trigger sync for workout-related widgets
             syncScheduler.startRealtimeSync(userId)

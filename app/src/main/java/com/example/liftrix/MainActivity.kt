@@ -5,12 +5,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -23,13 +23,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.liftrix.sync.SyncCoordinator
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import com.example.liftrix.di.IoDispatcher
+import com.example.liftrix.monitoring.PerformanceMonitor
+import com.google.firebase.perf.metrics.Trace
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import com.example.liftrix.ui.branding.LiftrixLaunchAnimation
@@ -59,16 +58,27 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var profileImageCache: ProfileImageCache
 
+    @Inject
+    @IoDispatcher
+    lateinit var ioDispatcher: CoroutineDispatcher
+
+    @Inject
+    lateinit var performanceMonitor: PerformanceMonitor
+
+    private var mainActivityCreateTrace: Trace? = null
+    private var firstAuthenticatedContentTrace: Trace? = null
+    private var fullyDrawnReported = false
     private var pendingWidgetWorkoutNavigation by mutableStateOf(false)
     
     override fun onCreate(savedInstanceState: Bundle?) {
         ThemeManager.getInstance(this).applyCurrentThemeToPlatform()
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        mainActivityCreateTrace = performanceMonitor.startCustomTrace("liftrix_main_activity_on_create")
         captureWidgetNavigationRequest(intent)
         
         // Initialize WeightUnitManager
-        CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+        lifecycleScope.launch(ioDispatcher) {
             try {
                 weightUnitManager.initialize()
                 Timber.d("WeightUnitManager initialized successfully in MainActivity")
@@ -97,6 +107,11 @@ class MainActivity : ComponentActivity() {
                                 onWidgetWorkoutNavigationConsumed = {
                                     pendingWidgetWorkoutNavigation = false
                                 },
+                                onFirstAuthenticatedContent = { userId ->
+                                    traceFirstAuthenticatedContent()
+                                    reportStartupFullyDrawn()
+                                    (application as? LiftrixApp)?.onFirstContentReady(userId)
+                                },
                                 onNavigateToAuth = {
                                     navigateToAuthActivity()
                                 }
@@ -106,6 +121,26 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        mainActivityCreateTrace?.let { performanceMonitor.stopCustomTrace(it) }
+        mainActivityCreateTrace = null
+    }
+
+    private fun traceFirstAuthenticatedContent() {
+        val trace = firstAuthenticatedContentTrace
+            ?: performanceMonitor.startCustomTrace("liftrix_first_authenticated_content").also {
+                firstAuthenticatedContentTrace = it
+            }
+        trace?.let { performanceMonitor.stopCustomTrace(it) }
+        firstAuthenticatedContentTrace = null
+    }
+
+    private fun reportStartupFullyDrawn() {
+        if (fullyDrawnReported) return
+        fullyDrawnReported = true
+
+        val trace = performanceMonitor.startCustomTrace("liftrix_report_fully_drawn")
+        reportFullyDrawn()
+        trace?.let { performanceMonitor.stopCustomTrace(it) }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -135,6 +170,7 @@ class MainActivity : ComponentActivity() {
 fun MainContent(
     pendingWidgetWorkoutNavigation: Boolean = false,
     onWidgetWorkoutNavigationConsumed: () -> Unit = {},
+    onFirstAuthenticatedContent: (String) -> Unit = {},
     onNavigateToAuth: () -> Unit,
     viewModel: MainViewModel = hiltViewModel()
 ) {
@@ -160,7 +196,7 @@ fun MainContent(
                 user = currentState.user,
                 pendingWidgetWorkoutNavigation = pendingWidgetWorkoutNavigation,
                 onWidgetWorkoutNavigationConsumed = onWidgetWorkoutNavigationConsumed,
-                onNavigateToAuth = onNavigateToAuth
+                onFirstAuthenticatedContent = onFirstAuthenticatedContent
             )
         }
     }
@@ -191,48 +227,22 @@ fun AuthenticatedContent(
     user: com.example.liftrix.domain.model.User,
     pendingWidgetWorkoutNavigation: Boolean = false,
     onWidgetWorkoutNavigationConsumed: () -> Unit = {},
-    onNavigateToAuth: () -> Unit,
+    onFirstAuthenticatedContent: (String) -> Unit = {},
     viewModel: MainViewModel = hiltViewModel()
 ) {
-    var profileCheckComplete by remember { mutableStateOf(false) }
-
-    // Verify profile exists before showing main UI
-    LaunchedEffect(user.uid) {
-        try {
-            Timber.d("User authenticated in MainActivity")
-
-            // Check if profile exists, wait up to 5 seconds for it to be created
-            var attempts = 0
-            val maxAttempts = 10 // 5 seconds total (10 * 500ms)
-
-            while (attempts < maxAttempts && !profileCheckComplete) {
-                val hasProfile = viewModel.checkProfileExists(user.uid)
-
-                if (hasProfile) {
-                    Timber.i("Profile verified for current user")
-                    profileCheckComplete = true
-                    break
-                } else {
-                    Timber.d("Profile not found yet for current user, attempt ${attempts + 1}/$maxAttempts")
-                    kotlinx.coroutines.delay(500) // Wait 500ms between checks
-                    attempts++
-                }
-            }
-
-            if (!profileCheckComplete) {
-                Timber.w("Profile verification timeout for current user, proceeding anyway")
-                profileCheckComplete = true // Proceed anyway after timeout
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Error during profile verification")
-            profileCheckComplete = true // Proceed on error
-        }
-    }
+    val profileReadiness by viewModel.profileReadiness.collectAsState()
+    val profileReady = profileReadiness is MainViewModel.ProfileReadiness.Ready &&
+        (profileReadiness as MainViewModel.ProfileReadiness.Ready).userId == user.uid
 
     // Show loading while verifying profile existence
-    if (!profileCheckComplete) {
+    if (!profileReady) {
         LoadingScreen()
     } else {
+        LaunchedEffect(user.uid) {
+            Timber.d("User authenticated in MainActivity")
+            onFirstAuthenticatedContent(user.uid)
+        }
+
         // Main navigation with type-safe navigation system
         UnifiedNavigationContainer(
             pendingWidgetWorkoutNavigation = pendingWidgetWorkoutNavigation,
@@ -240,4 +250,3 @@ fun AuthenticatedContent(
         )
     }
 }
-

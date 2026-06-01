@@ -1,7 +1,6 @@
 package com.example.liftrix.service
 
-import com.example.liftrix.core.cache.CacheKeyGenerator
-import com.example.liftrix.core.cache.EnhancedCacheManager
+import com.example.liftrix.domain.event.DomainEvent
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -13,40 +12,45 @@ import kotlinx.datetime.LocalDate
 import timber.log.Timber
 
 class CacheInvalidationServiceImpl(
-    private val cacheManager: EnhancedCacheManager,
-    private val keyGenerator: CacheKeyGenerator,
     private val analyticsQueryUseCase: AnalyticsQueryUseCase
 ) : CacheInvalidationService {
-    private val _invalidationEvents = MutableSharedFlow<InvalidationEvent>(extraBufferCapacity = 64)
-    override val invalidationEvents: Flow<InvalidationEvent> = _invalidationEvents.asSharedFlow()
+    private val _invalidationEvents = MutableSharedFlow<DomainEvent>(extraBufferCapacity = 64)
+    override val invalidationEvents: Flow<DomainEvent> = _invalidationEvents.asSharedFlow()
+
+    override suspend fun publish(event: DomainEvent): LiftrixResult<Unit> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.CacheError(
+                errorMessage = "Failed to publish cache invalidation event: ${throwable.message}",
+                operation = "publishCacheInvalidation"
+            )
+        }
+    ) {
+        when (event) {
+            is DomainEvent.WorkoutChanged,
+            is DomainEvent.ExerciseLibraryChanged,
+            is DomainEvent.SyncCompleted,
+            is DomainEvent.UserDataReset -> analyticsQueryUseCase.invalidateCacheForUser(event.userId)
+            is DomainEvent.ProfileChanged,
+            is DomainEvent.SocialFeedChanged -> Unit
+        }
+
+        _invalidationEvents.emit(event)
+        Timber.d(
+            "Published cache invalidation event type=${event::class.simpleName} " +
+                "userId=${event.userId} signals=${event.invalidationSignals}"
+        )
+    }
 
     override suspend fun invalidateWorkoutData(
         userId: String,
         workoutDate: LocalDate,
         exerciseIds: List<String>,
         workoutDuration: Int
-    ): LiftrixResult<Unit> = liftrixCatching(
-        errorMapper = { throwable ->
-            LiftrixError.CacheError(
-                errorMessage = "Failed to invalidate workout cache",
-                analyticsContext = mapOf("operation" to "INVALIDATE_WORKOUT_CACHE")
-            )
-        }
-    ) {
-        val datePrefix = "${workoutDate.year}-${workoutDate.monthNumber.toString().padStart(2, '0')}"
-        val patterns = listOf(
-            keyGenerator.userPattern(userId),
-            keyGenerator.exercisePattern(userId, exerciseIds),
-            keyGenerator.timePattern(userId, datePrefix)
+    ): LiftrixResult<Unit> = publish(
+        DomainEvent.WorkoutChanged(
+            userId = userId,
+            workoutDate = workoutDate,
+            exerciseIds = exerciseIds
         )
-        patterns.forEach { pattern ->
-            cacheManager.invalidatePattern(pattern)
-        }
-        analyticsQueryUseCase.invalidateCacheForUser(userId)
-        _invalidationEvents.emit(InvalidationEvent.WorkoutCompleted(patterns))
-        Timber.d(
-            "Invalidated workout cache for user=$userId date=$workoutDate " +
-                "exercises=${exerciseIds.size} duration=$workoutDuration"
-        )
-    }
+    )
 }

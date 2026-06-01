@@ -1,13 +1,13 @@
 # Progress Dashboard Patterns
 
-Last moved from root `AGENTS.md`: 2026-05-05. Source audit baseline: 2026-05-01.
+Last moved from root `AGENTS.md`: 2026-05-05. Source refresh: 2026-06-01.
 
 Use this when touching progress dashboard, analytics widgets, charts, metric cards, detail screens, widget preferences, or progress navigation.
 
 ## Core Shape
 
 ```text
-ProgressDashboardScreen
+ProgressDashboardScreen (:feature:progress)
   -> ProgressDashboardCoordinator
   -> ProgressSummaryCards
   -> GlobalTimeRangeSelector
@@ -32,7 +32,7 @@ Specialized ViewModels preserved from the prior root guide:
 
 ## Active Widgets
 
-Active widgets returned by `AnalyticsWidget.getAllWidgets()` in the prior root guide:
+Active widgets are defined by `AnalyticsWidget.getAllWidgets()` in `:core:model`. The list below is preserved as orientation; verify the source list before changing widget registration:
 
 - `strength_analytics`
 - `volume_analytics`
@@ -59,6 +59,18 @@ Android launcher widgets live in `app/src/main/java/com/example/liftrix/widget` 
 - `CompleteWorkoutSessionUseCase` notifies native widgets through the `HomeWidgetUpdateNotifier` domain boundary so domain code does not import Android widget APIs.
 - Widget taps should use existing typed workout navigation through `MainActivity` and `UnifiedNavigationContainer`; do not add a route unless the active graph cannot express the target.
 
+## Analytics Read Models
+
+Progress read-model tables are registered in Room v11 and owned by `:core:database`:
+
+- `completed_workout_metric_read_models`
+- `workout_daily_volume_read_models`
+- `workout_weekly_volume_read_models`
+- `exercise_pr_read_models`
+- `muscle_group_daily_read_models`
+
+`AnalyticsReadModelDao` refreshes these models from Room views and normalized workout/exercise/set rows. `WorkoutRepositoryImpl` refreshes read models after local workout mutations, while `RealtimeSyncService` refreshes them after remote workout upserts. Progress query paths should prefer these user-scoped read models when they already cover the metric, and fall back to normalized Room queries only when the read model does not cover the required shape.
+
 ## Progress Report Export
 
 - Progress-report export actions must declare API-level behavior for file save, share, and open paths.
@@ -72,15 +84,18 @@ Use type-safe navigation:
 navController.navigate(LiftrixRoute.OneRmDetail)
 ```
 
-Preserved detail routes:
+Source-verified progress/detail routes as of the 2026-06-01 refresh:
 
 - `VolumeAnalysisDetail`
 - `OneRmDetail`
 - `MuscleGroupDetail`
-- `WorkoutFrequencyDetail`
+- `MuscleHeatmapDetail`
 - `ExerciseRankingDetail`
+- `WorkoutFrequencyDetail`
+- `StrengthForecastDetail`
+- `DashboardCustomization`
 
-Check active registration in `UnifiedNavigationContainer` before adding new links. `DashboardCustomization` was documented as needing verification because it is navigated from the active dashboard but was not found in the active container during the source audit.
+Check active registration in `UnifiedNavigationContainer` before adding new links. Older docs saying `DashboardCustomization` was missing are stale; it is currently registered.
 
 ## Chart Standards
 
@@ -108,7 +123,7 @@ Performance rules:
 
 ## Debug Hot Zones
 
-- `GetWidgetDataUseCase`, analytics services, and chart/widget ViewModels.
+- `AnalyticsReadModelDao`, `GetWidgetDataUseCase`, analytics services, and chart/widget ViewModels.
 - Per-widget calculation cost and caching behavior.
 - Time range propagation through `ProgressDashboardCoordinator`.
 - Detail route registration drift in `UnifiedNavigationContainer`.

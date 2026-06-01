@@ -500,10 +500,6 @@ class AIChatServiceImpl @Inject constructor(
         return try {
             workoutRepository.getRecentWorkouts(userId, limit = 3)
                 .first()
-                .getOrElse { error ->
-                    Timber.w(error, "[AI] AIChatService: recent workout context unavailable user=$userId")
-                    emptyList()
-                }
         } catch (exception: Exception) {
             Timber.w(exception, "[AI] AIChatService: failed to load recent workout context user=$userId")
             emptyList()

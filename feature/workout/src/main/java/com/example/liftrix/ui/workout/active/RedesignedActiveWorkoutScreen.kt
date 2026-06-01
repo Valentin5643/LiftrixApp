@@ -159,6 +159,12 @@ private fun ActiveWorkoutContent(
     val observedWeightUnit = weightUnitManager?.currentUnit?.collectAsStateWithLifecycle()
     val currentWeightUnit = observedWeightUnit?.value ?: WeightUnit.KILOGRAMS
     val previousSetData by viewModel.previousSetData.collectAsStateWithLifecycle()
+    val totalSets = remember(session.exercises) {
+        session.exercises.sumOf { it.sets.size }
+    }
+    val totalVolume = remember(session.exercises) {
+        calculateTotalVolume(session.exercises)
+    }
     val exerciseMenuStates = remember { mutableStateMapOf<String, Boolean>() }
     val exerciseNotes = remember { mutableStateMapOf<String, String>() }
     var showReorderDialog by remember { mutableStateOf(false) }
@@ -282,7 +288,7 @@ private fun ActiveWorkoutContent(
                             )
                         )
                         Text(
-                            text = "${session.exercises.sumOf { it.sets.size }}",
+                            text = "$totalSets",
                             style = TextStyle(
                                 color = MaterialTheme.colorScheme.onSurface,
                                 fontSize = 18.sp,
@@ -301,9 +307,9 @@ private fun ActiveWorkoutContent(
                         )
                         Text(
                             text = weightUnitManager?.formatWeightCompact(
-                                calculateTotalVolume(session.exercises).toDouble(),
+                                totalVolume.toDouble(),
                                 WeightUnit.KILOGRAMS
-                            ) ?: "${calculateTotalVolume(session.exercises)} kg",
+                            ) ?: "$totalVolume kg",
                             style = TextStyle(
                                 color = MaterialTheme.colorScheme.onSurface,
                                 fontSize = 18.sp,
@@ -378,7 +384,8 @@ private fun ActiveWorkoutContent(
             ) {
                 itemsIndexed(
                     items = session.exercises,
-                    key = { _, exercise -> exercise.exerciseId.value }
+                    key = { _, exercise -> exercise.exerciseId.value },
+                    contentType = { _, _ -> "active_exercise" }
                 ) { index, exercise ->
                     var showMenu by remember { mutableStateOf(false) }
                     var showNotesDialog by remember { mutableStateOf(false) }
@@ -544,7 +551,7 @@ private fun ActiveWorkoutContent(
                 }
 
                 // Add Exercise Button
-                item {
+                item(key = "add_exercise", contentType = "action_button") {
                     OutlinedButton(
                         onClick = { onNavigateToExerciseLibrary?.invoke() },
                         colors = ButtonDefaults.outlinedButtonColors(
@@ -575,7 +582,7 @@ private fun ActiveWorkoutContent(
                 }
 
                 // Bottom padding
-                item {
+                item(key = "bottom_spacing", contentType = "spacing") {
                     Spacer(modifier = Modifier.height(80.dp))
                 }
             }

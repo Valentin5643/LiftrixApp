@@ -38,6 +38,21 @@ class FirebaseDataSourceImpl @Inject constructor(
         private const val WORKOUTS_SUBCOLLECTION = "workouts"
         private const val TEMPLATES_SUBCOLLECTION = "templates"
         private const val ACHIEVEMENTS_SUBCOLLECTION = "achievements"
+        private const val SETTINGS_SUBCOLLECTION = "settings"
+        private const val GYM_BUDDIES_SUBCOLLECTION = "gym_buddies"
+        private const val USERS_PUBLIC_COLLECTION = "users_public"
+        private const val SOCIAL_PROFILES_COLLECTION = "social_profiles"
+        private const val FOLLOW_RELATIONSHIPS_COLLECTION = "follow_relationships"
+        private const val WORKOUT_POSTS_COLLECTION = "workout_posts"
+        private val UPSERT_ENTITY_TYPES = setOf(
+            "PROFILE",
+            "USER_PUBLIC",
+            "SOCIAL_PROFILE",
+            "FOLLOW_RELATIONSHIP",
+            "WORKOUT_POST",
+            "SETTINGS",
+            "GYM_BUDDY"
+        )
     }
     
     override suspend fun create(userId: String, entityType: String, entityId: String, data: String): ProcessResult {
@@ -54,13 +69,13 @@ class FirebaseDataSourceImpl @Inject constructor(
             
             // 🔥 PROFILE SYNC CONFLICT FIX: Handle profile entities with UPSERT semantics
             // Profile entities should use merge behavior instead of strict CREATE conflict detection
-            if (entityType == "PROFILE") {
-                Timber.d("FirebaseDataSource: Using UPSERT semantics for profile $entityId")
+            if (entityType in UPSERT_ENTITY_TYPES) {
+                Timber.d("FirebaseDataSource: Using UPSERT semantics for $entityType:$entityId")
                 
                 // Use SetOptions.merge() for profile documents to avoid conflicts during account creation
                 documentRef.set(documentData, com.google.firebase.firestore.SetOptions.merge()).await()
                 
-                Timber.d("FirebaseDataSource: Successfully upserted profile $entityId")
+                Timber.d("FirebaseDataSource: Successfully upserted $entityType:$entityId")
                 return ProcessResult.Success
             }
             
@@ -72,7 +87,7 @@ class FirebaseDataSourceImpl @Inject constructor(
             }
             
             // Create the document
-            documentRef.set(documentData).await()
+            documentRef.set(documentData, com.google.firebase.firestore.SetOptions.merge()).await()
             
             Timber.d("FirebaseDataSource: Successfully created $entityType:$entityId")
             ProcessResult.Success
@@ -114,7 +129,7 @@ class FirebaseDataSourceImpl @Inject constructor(
             }
             
             // Update the document
-            documentRef.set(documentData).await()
+            documentRef.set(documentData, com.google.firebase.firestore.SetOptions.merge()).await()
             
             Timber.d("FirebaseDataSource: Successfully updated $entityType:$entityId")
             ProcessResult.Success
@@ -197,6 +212,12 @@ class FirebaseDataSourceImpl @Inject constructor(
                 "WORKOUT" -> "users/$userId/workouts"
                 "TEMPLATE" -> "users/$userId/templates"
                 "ACHIEVEMENT" -> "users/$userId/achievements"
+                "SETTINGS" -> "users/$userId/settings"
+                "GYM_BUDDY" -> "users/$userId/gym_buddies"
+                "USER_PUBLIC" -> "users_public/$userId"
+                "SOCIAL_PROFILE" -> "social_profiles/$userId"
+                "FOLLOW_RELATIONSHIP" -> "follow_relationships"
+                "WORKOUT_POST" -> "workout_posts"
                 else -> "unsupported/$entityType"
             }
             Timber.tag("FreshLoginRestoreDebug").d(
@@ -248,6 +269,18 @@ class FirebaseDataSourceImpl @Inject constructor(
      */
     private fun getDocumentReference(userId: String, entityType: String, entityId: String) = when (entityType) {
         "PROFILE" -> firestore.collection(USERS_COLLECTION).document(userId)
+        "USER_PUBLIC" -> firestore.collection(USERS_PUBLIC_COLLECTION).document(userId)
+        "SOCIAL_PROFILE" -> firestore.collection(SOCIAL_PROFILES_COLLECTION).document(entityId)
+        "FOLLOW_RELATIONSHIP" -> firestore.collection(FOLLOW_RELATIONSHIPS_COLLECTION).document(entityId)
+        "WORKOUT_POST" -> firestore.collection(WORKOUT_POSTS_COLLECTION).document(entityId)
+        "SETTINGS" -> firestore.collection(USERS_COLLECTION)
+            .document(userId)
+            .collection(SETTINGS_SUBCOLLECTION)
+            .document(entityId.ifBlank { "preferences" })
+        "GYM_BUDDY" -> firestore.collection(USERS_COLLECTION)
+            .document(userId)
+            .collection(GYM_BUDDIES_SUBCOLLECTION)
+            .document(entityId)
         "WORKOUT" -> firestore.collection(USERS_COLLECTION)
             .document(userId)
             .collection(WORKOUTS_SUBCOLLECTION)
@@ -276,6 +309,16 @@ class FirebaseDataSourceImpl @Inject constructor(
         "ACHIEVEMENT" -> firestore.collection(USERS_COLLECTION)
             .document(userId)
             .collection(ACHIEVEMENTS_SUBCOLLECTION)
+        "SETTINGS" -> firestore.collection(USERS_COLLECTION)
+            .document(userId)
+            .collection(SETTINGS_SUBCOLLECTION)
+        "GYM_BUDDY" -> firestore.collection(USERS_COLLECTION)
+            .document(userId)
+            .collection(GYM_BUDDIES_SUBCOLLECTION)
+        "USER_PUBLIC" -> firestore.collection(USERS_PUBLIC_COLLECTION)
+        "SOCIAL_PROFILE" -> firestore.collection(SOCIAL_PROFILES_COLLECTION)
+        "FOLLOW_RELATIONSHIP" -> firestore.collection(FOLLOW_RELATIONSHIPS_COLLECTION)
+        "WORKOUT_POST" -> firestore.collection(WORKOUT_POSTS_COLLECTION)
         else -> throw IllegalArgumentException("Unknown entity type for collection: $entityType")
     }
     

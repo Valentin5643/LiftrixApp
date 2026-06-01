@@ -40,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -246,7 +247,11 @@ private fun GridLayout(
         horizontalArrangement = Arrangement.spacedBy(spacing),
         verticalArrangement = Arrangement.spacedBy(spacing)
     ) {
-        items(widgets.size) { index ->
+        items(
+            count = widgets.size,
+            key = { index -> widgets[index].id },
+            contentType = { index -> widgets[index].category.name }
+        ) { index ->
             val widget = widgets[index]
             val widgetData = widgetDataCache[widget] ?: createSampleWidgetData(widget)
             
@@ -284,7 +289,11 @@ private fun StaggeredLayout(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalItemSpacing = 12.dp
     ) {
-        items(widgets) { widget ->
+        items(
+            items = widgets,
+            key = { widget -> widget.id },
+            contentType = { widget -> widget.category.name }
+        ) { widget ->
             val widgetData = widgetDataProvider(widget)
             
             // Calculate aspect ratio based on column count
@@ -320,20 +329,22 @@ private fun ListLayout(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         widgets.forEach { widget ->
-            val widgetData = widgetDataProvider(widget)
-            
-            // List layout always uses single column, so use rectangular aspect ratio
-            val aspectRatio = 2.0f
-            
-            WidgetRenderer(
-                widget = widget,
-                widgetData = widgetData,
-                onClick = { onWidgetClick(widget) },
-                isLoading = isLoading,
-                coordinatorPreferences = coordinatorPreferences,
-                unitConversionService = unitConversionService,
-                aspectRatio = aspectRatio
-            )
+            key(widget.id) {
+                val widgetData = widgetDataProvider(widget)
+
+                // List layout always uses single column, so use rectangular aspect ratio
+                val aspectRatio = 2.0f
+
+                WidgetRenderer(
+                    widget = widget,
+                    widgetData = widgetData,
+                    onClick = { onWidgetClick(widget) },
+                    isLoading = isLoading,
+                    coordinatorPreferences = coordinatorPreferences,
+                    unitConversionService = unitConversionService,
+                    aspectRatio = aspectRatio
+                )
+            }
         }
     }
 }
@@ -480,20 +491,22 @@ private fun WidgetSection(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     widgets.forEach { widget ->
-                        val widgetData = widgetDataProvider(widget)
-                        
-                        // Section layout uses single column, so use rectangular aspect ratio
-                        val aspectRatio = 2.0f
-                        
-                        WidgetRenderer(
-                            widget = widget,
-                            widgetData = widgetData,
-                            onClick = { onWidgetClick(widget) },
-                            isLoading = isLoading,
-                            coordinatorPreferences = coordinatorPreferences,
-                            unitConversionService = unitConversionService,
-                            aspectRatio = aspectRatio
-                        )
+                        key(widget.id) {
+                            val widgetData = widgetDataProvider(widget)
+
+                            // Section layout uses single column, so use rectangular aspect ratio
+                            val aspectRatio = 2.0f
+
+                            WidgetRenderer(
+                                widget = widget,
+                                widgetData = widgetData,
+                                onClick = { onWidgetClick(widget) },
+                                isLoading = isLoading,
+                                coordinatorPreferences = coordinatorPreferences,
+                                unitConversionService = unitConversionService,
+                                aspectRatio = aspectRatio
+                            )
+                        }
                     }
                 }
             }
@@ -514,6 +527,9 @@ internal fun WidgetRenderer(
 ) {
     // Get dynamic weight unit symbol from coordinator preferences
     val weightUnitSymbol = coordinatorPreferences.getWeightUnitSymbolFromPreferences()
+    val rememberedGraphData = remember(widgetData) {
+        (widgetData as? ChartWidgetData)?.dataPoints?.map { it.y } ?: emptyList()
+    }
     // Render appropriate widget component based on widget type
     when (widget) {
         AnalyticsWidget.StrengthForecast -> {
@@ -574,7 +590,7 @@ internal fun WidgetRenderer(
             }
             
             // Extract chart data for mini-graph
-            val graphData = chartData?.dataPoints?.map { it.y } ?: emptyList()
+            val graphData = rememberedGraphData
             
             // Use Enhanced widget with mini-graph
             EnhancedTotalVolumeWidget(
@@ -608,7 +624,7 @@ internal fun WidgetRenderer(
                 )
             } ?: chartData?.let { chart ->
                 // Extract metric data from ChartWidgetData
-                val totalSessions = chart.dataPoints.sumOf { it.y.toDouble() }.toInt()
+                val totalSessions = rememberedGraphData.sumOf { it.toDouble() }.toInt()
                 com.example.liftrix.domain.model.analytics.MetricWidgetData(
                     widgetType = widget,
                     lastUpdated = chart.lastUpdated,
@@ -624,7 +640,7 @@ internal fun WidgetRenderer(
             }
             
             // Extract chart data for mini-graph
-            val graphData = chartData?.dataPoints?.map { it.y } ?: emptyList()
+            val graphData = rememberedGraphData
             
             // Use Enhanced widget with mini-graph
             EnhancedWorkoutFrequencyWidget(
@@ -712,7 +728,7 @@ internal fun WidgetRenderer(
                 )
             } ?: chartData?.let { chart ->
                 // Extract metric data from ChartWidgetData
-                val averageValue = chart.dataPoints.map { it.y }.average().toInt()
+                val averageValue = rememberedGraphData.average().toInt()
                 com.example.liftrix.domain.model.analytics.MetricWidgetData(
                     widgetType = widget,
                     lastUpdated = chart.lastUpdated,
@@ -728,7 +744,7 @@ internal fun WidgetRenderer(
             }
             
             // Extract chart data for mini-graph
-            val graphData = chartData?.dataPoints?.map { it.y } ?: emptyList()
+            val graphData = rememberedGraphData
             
             EnhancedStrengthProgressWidget(
                 data = metricData,
@@ -777,7 +793,7 @@ internal fun WidgetRenderer(
             }
             
             // Extract chart data for mini-graph
-            val graphData = chartData?.dataPoints?.map { it.y } ?: emptyList()
+            val graphData = rememberedGraphData
             
             EnhancedOneRmProgressionWidget(
                 data = metricData,
@@ -826,7 +842,7 @@ internal fun WidgetRenderer(
             }
             
             // Extract chart data for mini-graph
-            val graphData = chartData?.dataPoints?.map { it.y } ?: emptyList()
+            val graphData = rememberedGraphData
             
             EnhancedVolumeLoadProgressionWidget(
                 data = metricData,
@@ -902,7 +918,7 @@ internal fun WidgetRenderer(
             }
             
             // Extract chart data for mini-graph
-            val graphData = chartData?.dataPoints?.map { it.y } ?: emptyList()
+            val graphData = rememberedGraphData
             
             EnhancedStrengthProgressWidget(
                 data = metricData,
@@ -984,7 +1000,7 @@ internal fun WidgetRenderer(
             }
             
             // Extract chart data for mini-graph
-            val graphData = chartData?.dataPoints?.map { it.y } ?: emptyList()
+            val graphData = rememberedGraphData
             
             EnhancedStrengthProgressWidget(
                 data = metricData,
@@ -1017,7 +1033,7 @@ internal fun WidgetRenderer(
                 )
             } ?: chartData?.let { chart ->
                 // Extract metric data from ChartWidgetData
-                val totalSessions = chart.dataPoints.sumOf { it.y.toDouble() }.toInt()
+                val totalSessions = rememberedGraphData.sumOf { it.toDouble() }.toInt()
                 com.example.liftrix.domain.model.analytics.MetricWidgetData(
                     widgetType = widget,
                     lastUpdated = chart.lastUpdated,
@@ -1033,7 +1049,7 @@ internal fun WidgetRenderer(
             }
             
             // Extract chart data for mini-graph
-            val graphData = chartData?.dataPoints?.map { it.y } ?: emptyList()
+            val graphData = rememberedGraphData
             
             // Use Enhanced frequency widget with folder style
             EnhancedWorkoutFrequencyWidget(

@@ -1,6 +1,7 @@
 package com.example.liftrix.data.sync
 
 import com.example.liftrix.config.OfflineArchitectureFlags
+import com.example.liftrix.data.local.dao.AnalyticsReadModelDao
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.local.entity.WorkoutEntity
 import com.example.liftrix.domain.model.WorkoutStatus
@@ -53,6 +54,7 @@ class RealtimeSyncService @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val auth: FirebaseAuth,
     private val workoutDao: WorkoutDao,
+    private val analyticsReadModelDao: AnalyticsReadModelDao,
     private val gson: Gson
 ) {
     
@@ -244,8 +246,17 @@ class RealtimeSyncService @Inject constructor(
                     lastModified = lastModified
                 )
 
+                val previousReadModelDate = analyticsReadModelDao.getReadModelDateForWorkout(userId, workoutId)
+                val previousExerciseIds = analyticsReadModelDao.getExerciseLibraryIdsForWorkout(userId, workoutId)
+
                 // IDEMPOTENT: Only applies if remote is newer (timestamp check in DAO)
                 workoutDao.upsertFromRemote(workoutEntity)
+                analyticsReadModelDao.refreshWorkoutReadModels(
+                    userId = userId,
+                    workoutId = workoutId,
+                    oldWorkoutDate = previousReadModelDate,
+                    oldExerciseLibraryIds = previousExerciseIds
+                )
                 Timber.tag("WorkoutSyncDebug").d(
                     "[DATABASE-DEBUG] operation=REALTIME_FIREBASE_APPLIED source=Firebase userId=$userId workoutId=$workoutId timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount afterCount=${workoutDao.getWorkoutCountForUser(userId)} parsedStatus=${workoutEntity.status} parsedEndTimePresent=${workoutEntity.endTime != null} parsedLastModified=${workoutEntity.lastModified}"
                 )

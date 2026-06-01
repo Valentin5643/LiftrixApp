@@ -158,3 +158,292 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
         )
     }
 }
+
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `completed_workout_metric_read_models` (
+                `workout_id` TEXT NOT NULL,
+                `user_id` TEXT NOT NULL,
+                `workout_date` TEXT NOT NULL,
+                `duration_minutes` INTEGER NOT NULL,
+                `total_volume` REAL NOT NULL,
+                `total_reps` INTEGER NOT NULL,
+                `total_sets` INTEGER NOT NULL,
+                `exercise_count` INTEGER NOT NULL,
+                `updated_at` INTEGER NOT NULL,
+                PRIMARY KEY(`workout_id`, `user_id`)
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS `idx_completed_workout_metrics_user_date`
+            ON `completed_workout_metric_read_models` (`user_id`, `workout_date`)
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `workout_daily_volume_read_models` (
+                `user_id` TEXT NOT NULL,
+                `workout_date` TEXT NOT NULL,
+                `total_volume` REAL NOT NULL,
+                `total_reps` INTEGER NOT NULL,
+                `total_sets` INTEGER NOT NULL,
+                `workout_count` INTEGER NOT NULL,
+                `exercise_count` INTEGER NOT NULL,
+                `total_duration_minutes` INTEGER NOT NULL,
+                `updated_at` INTEGER NOT NULL,
+                PRIMARY KEY(`user_id`, `workout_date`)
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS `idx_daily_volume_user_date`
+            ON `workout_daily_volume_read_models` (`user_id`, `workout_date`)
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `workout_weekly_volume_read_models` (
+                `user_id` TEXT NOT NULL,
+                `week_start_date` TEXT NOT NULL,
+                `week_end_date` TEXT NOT NULL,
+                `total_volume` REAL NOT NULL,
+                `total_reps` INTEGER NOT NULL,
+                `total_sets` INTEGER NOT NULL,
+                `workout_count` INTEGER NOT NULL,
+                `exercise_count` INTEGER NOT NULL,
+                `total_duration_minutes` INTEGER NOT NULL,
+                `updated_at` INTEGER NOT NULL,
+                PRIMARY KEY(`user_id`, `week_start_date`)
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS `idx_weekly_volume_user_week`
+            ON `workout_weekly_volume_read_models` (`user_id`, `week_start_date`)
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `exercise_pr_read_models` (
+                `user_id` TEXT NOT NULL,
+                `exercise_library_id` TEXT NOT NULL,
+                `exercise_name` TEXT NOT NULL,
+                `primary_muscle_group` TEXT NOT NULL,
+                `max_estimated_one_rm` REAL NOT NULL,
+                `max_weight_kg` REAL NOT NULL,
+                `max_reps` INTEGER NOT NULL,
+                `total_volume` REAL NOT NULL,
+                `total_sets` INTEGER NOT NULL,
+                `last_pr_at` INTEGER,
+                `source_workout_id` TEXT,
+                `updated_at` INTEGER NOT NULL,
+                PRIMARY KEY(`user_id`, `exercise_library_id`)
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS `idx_exercise_pr_user_one_rm`
+            ON `exercise_pr_read_models` (`user_id`, `max_estimated_one_rm`)
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS `idx_exercise_pr_user_muscle`
+            ON `exercise_pr_read_models` (`user_id`, `primary_muscle_group`)
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `muscle_group_daily_read_models` (
+                `user_id` TEXT NOT NULL,
+                `workout_date` TEXT NOT NULL,
+                `primary_muscle_group` TEXT NOT NULL,
+                `total_volume` REAL NOT NULL,
+                `total_reps` INTEGER NOT NULL,
+                `total_sets` INTEGER NOT NULL,
+                `exercise_count` INTEGER NOT NULL,
+                `workout_count` INTEGER NOT NULL,
+                `updated_at` INTEGER NOT NULL,
+                PRIMARY KEY(`user_id`, `workout_date`, `primary_muscle_group`)
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS `idx_muscle_daily_user_date`
+            ON `muscle_group_daily_read_models` (`user_id`, `workout_date`)
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS `idx_muscle_daily_user_group`
+            ON `muscle_group_daily_read_models` (`user_id`, `primary_muscle_group`)
+            """.trimIndent()
+        )
+
+        val updatedAtExpression = "(strftime('%s', 'now') * 1000)"
+        db.execSQL(
+            """
+            INSERT OR REPLACE INTO completed_workout_metric_read_models (
+                workout_id,
+                user_id,
+                workout_date,
+                duration_minutes,
+                total_volume,
+                total_reps,
+                total_sets,
+                exercise_count,
+                updated_at
+            )
+            SELECT
+                workout_id,
+                user_id,
+                workout_date,
+                duration_minutes,
+                total_volume,
+                total_reps,
+                total_sets,
+                exercise_count,
+                $updatedAtExpression
+            FROM completed_workout_metrics_view
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT OR REPLACE INTO workout_daily_volume_read_models (
+                user_id,
+                workout_date,
+                total_volume,
+                total_reps,
+                total_sets,
+                workout_count,
+                exercise_count,
+                total_duration_minutes,
+                updated_at
+            )
+            SELECT
+                user_id,
+                workout_date,
+                SUM(total_volume),
+                SUM(total_reps),
+                SUM(total_sets),
+                COUNT(workout_id),
+                SUM(exercise_count),
+                SUM(duration_minutes),
+                $updatedAtExpression
+            FROM completed_workout_metric_read_models
+            GROUP BY user_id, workout_date
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT OR REPLACE INTO workout_weekly_volume_read_models (
+                user_id,
+                week_start_date,
+                week_end_date,
+                total_volume,
+                total_reps,
+                total_sets,
+                workout_count,
+                exercise_count,
+                total_duration_minutes,
+                updated_at
+            )
+            SELECT
+                user_id,
+                date(workout_date, '-' || ((CAST(strftime('%w', workout_date) AS INTEGER) + 6) % 7) || ' days') AS week_start_date,
+                date(workout_date, (6 - ((CAST(strftime('%w', workout_date) AS INTEGER) + 6) % 7)) || ' days') AS week_end_date,
+                SUM(total_volume),
+                SUM(total_reps),
+                SUM(total_sets),
+                SUM(workout_count),
+                SUM(exercise_count),
+                SUM(total_duration_minutes),
+                $updatedAtExpression
+            FROM workout_daily_volume_read_models
+            GROUP BY user_id, week_start_date, week_end_date
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT OR REPLACE INTO exercise_pr_read_models (
+                user_id,
+                exercise_library_id,
+                exercise_name,
+                primary_muscle_group,
+                max_estimated_one_rm,
+                max_weight_kg,
+                max_reps,
+                total_volume,
+                total_sets,
+                last_pr_at,
+                source_workout_id,
+                updated_at
+            )
+            SELECT
+                user_id,
+                exercise_library_id,
+                COALESCE(exercise_name, exercise_library_id),
+                COALESCE(primary_muscle_group, 'UNKNOWN'),
+                COALESCE(MAX(estimated_one_rm), 0),
+                COALESCE(MAX(weight_kg), 0),
+                COALESCE(MAX(reps), 0),
+                COALESCE(SUM(set_volume), 0),
+                COUNT(set_id),
+                MAX(completed_at),
+                (
+                    SELECT v2.workout_id
+                    FROM exercise_set_performance_view v2
+                    WHERE v2.user_id = v.user_id
+                    AND v2.exercise_library_id = v.exercise_library_id
+                    AND v2.estimated_one_rm IS NOT NULL
+                    ORDER BY v2.estimated_one_rm DESC, v2.completed_at DESC
+                    LIMIT 1
+                ),
+                $updatedAtExpression
+            FROM exercise_set_performance_view v
+            WHERE estimated_one_rm IS NOT NULL
+            GROUP BY user_id, exercise_library_id, exercise_name, primary_muscle_group
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT OR REPLACE INTO muscle_group_daily_read_models (
+                user_id,
+                workout_date,
+                primary_muscle_group,
+                total_volume,
+                total_reps,
+                total_sets,
+                exercise_count,
+                workout_count,
+                updated_at
+            )
+            SELECT
+                user_id,
+                activity_date,
+                COALESCE(primary_muscle_group, 'UNKNOWN'),
+                SUM(set_volume),
+                SUM(rep_count),
+                COUNT(set_id),
+                COUNT(DISTINCT exercise_library_id),
+                COUNT(DISTINCT workout_id),
+                $updatedAtExpression
+            FROM exercise_set_performance_view
+            WHERE rep_count > 0
+            GROUP BY user_id, activity_date, COALESCE(primary_muscle_group, 'UNKNOWN')
+            """.trimIndent()
+        )
+    }
+}

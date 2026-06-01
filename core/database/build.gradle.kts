@@ -1,5 +1,6 @@
 plugins {
     id("liftrix.android.library")
+    id("com.google.dagger.hilt.android")
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
 }
@@ -55,6 +56,10 @@ dependencies {
 
     add("kspDebug", libs.room.compiler)
     add("kspRelease", libs.room.compiler)
+    add("kspDebug", libs.hilt.compiler)
+    add("kspRelease", libs.hilt.compiler)
+    add("kspDebug", project(":user-scoping-processor"))
+    add("kspRelease", project(":user-scoping-processor"))
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.runner)

@@ -278,7 +278,6 @@ fun animatedColorScheme(
 
 /**
  * Theme manager for handling theme state management and persistence
- * Follows the same pattern as RecommendationCache for SharedPreferences usage
  */
 class ThemeManager private constructor(private val context: Context) {
     

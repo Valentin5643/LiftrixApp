@@ -7,7 +7,7 @@ import timber.log.Timber
  * Minimal release Timber tree.
  *
  * Sensitive values must be removed at call sites. This tree only enforces the
- * release severity policy and avoids global message parsing or rewriting.
+ * release severity policy and avoids lossy global message rewriting.
  */
 class ReleaseLoggingTree : Timber.Tree() {
 
@@ -19,10 +19,11 @@ class ReleaseLoggingTree : Timber.Tree() {
         if (!accepts(priority)) return
 
         val safeTag = tag ?: DEFAULT_TAG
+        val safeMessage = LiftrixLogger.redactSensitiveTokens(message)
         if (t == null) {
-            Log.println(priority, safeTag, message)
+            Log.println(priority, safeTag, safeMessage)
         } else {
-            Log.println(priority, safeTag, "$message\n${Log.getStackTraceString(t)}")
+            Log.println(priority, safeTag, "$safeMessage\n${Log.getStackTraceString(t)}")
         }
     }
 

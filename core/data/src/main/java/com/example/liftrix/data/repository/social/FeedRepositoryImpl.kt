@@ -392,6 +392,10 @@ class FeedRepositoryImpl @Inject constructor(
             ),
             pagingSourceFactory = {
                 // Create a custom PagingSource that fetches posts from a specific user
+                // PERF-FOLLOW-UP: This path still loads the full user-post Flow snapshot and
+                // sublists in memory because this SPEC cannot add a DAO offset/PagingSource
+                // query. Keep user scoping via userId and move to DAO-backed paging in a
+                // data-layer SPEC that includes WorkoutPostDao.
                 object : PagingSource<Int, com.example.liftrix.data.local.entity.WorkoutPostEntity>() {
                     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, com.example.liftrix.data.local.entity.WorkoutPostEntity> {
                         return try {

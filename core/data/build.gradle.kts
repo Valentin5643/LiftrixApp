@@ -32,6 +32,8 @@ dependencies {
     implementation(project(":core:network"))
     implementation(project(":core:presentation"))
     implementation(project(":core:notifications"))
+    implementation(project(":feature:home-api"))
+    implementation(project(":feature:settings-api"))
 
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation(libs.firebase.analytics)

@@ -142,36 +142,58 @@ class OfflineQueueManager @Inject constructor(
         data: SyncPayload
     ): LiftrixResult<Unit> {
         return try {
-            Timber.d("OfflineQueueManager: Queuing $operation for $entityType:$entityId")
+            val normalizedEntityType = entityType.uppercase()
+            val normalizedOperation = operation.uppercase()
+            Timber.d("OfflineQueueManager: Queuing $normalizedOperation for $normalizedEntityType:$entityId")
+
+            val existingItem = syncQueueDao.getSyncItem(
+                userId = userId,
+                entityType = normalizedEntityType,
+                entityId = entityId
+            )
+            val encodedData = json.encodeToString(data)
             
-            val queueItem = SyncQueueEntity(
+            val queueItem = existingItem?.copy(
+                operation = normalizedOperation,
+                data = encodedData,
+                priority = getPriority(normalizedEntityType),
+                nextRetryAt = null,
+                lastError = null,
+                failedAt = null
+            ) ?: SyncQueueEntity(
                 id = UUID.randomUUID().toString(),
                 userId = userId,
-                entityType = entityType,
+                entityType = normalizedEntityType,
                 entityId = entityId,
-                operation = operation,
-                data = json.encodeToString(data),
-                priority = getPriority(entityType),
+                operation = normalizedOperation,
+                data = encodedData,
+                priority = getPriority(normalizedEntityType),
                 retryCount = 0,
                 createdAt = System.currentTimeMillis(),
                 nextRetryAt = null
             )
             
             syncQueueDao.insert(queueItem)
+            val lifecycleAction = if (existingItem == null) "QUEUE_ADD" else "QUEUE_COALESCE"
 
             // Track queue operation
             analyticsTracker.trackOfflineQueue(
-                action = "QUEUE_ADD",
+                action = lifecycleAction,
                 userId = userId,
                 queueSize = syncQueueDao.getPendingItemsCount(userId),
-                entityType = entityType,
+                entityType = normalizedEntityType,
                 additionalProperties = mapOf(
-                    "operation" to operation,
-                    "priority" to queueItem.priority
+                    "operation" to normalizedOperation,
+                    "priority" to queueItem.priority,
+                    "coalesced" to (existingItem != null)
                 )
             )
 
-            Timber.d("OfflineQueueManager: Successfully queued operation ${queueItem.id}")
+            Timber.i(
+                "OfflineQueueManager: Queue lifecycle action=$lifecycleAction itemId=${queueItem.id} " +
+                    "userId=$userId entity=$normalizedEntityType:$entityId operation=$normalizedOperation " +
+                    "priority=${queueItem.priority}"
+            )
             Result.success(Unit)
             
         } catch (e: Exception) {
@@ -196,19 +218,34 @@ class OfflineQueueManager @Inject constructor(
      * @param userId The user ID to process operations for
      * @return SyncResult with statistics about successful, failed, and conflict operations
      */
-    suspend fun processPendingQueue(userId: String): LiftrixResult<SyncResult> {
+    suspend fun processPendingQueue(
+        userId: String,
+        entityTypes: Set<String>? = null
+    ): LiftrixResult<SyncResult> {
         return try {
             val startTime = System.currentTimeMillis()
-            Timber.d("OfflineQueueManager: Processing pending queue for user $userId")
+            val normalizedEntityTypes = entityTypes
+                ?.map { it.uppercase() }
+                ?.toSet()
+            Timber.d(
+                "OfflineQueueManager: Processing pending queue for user $userId " +
+                    "entityTypes=${normalizedEntityTypes ?: "ALL"}"
+            )
 
-            val pendingItems = syncQueueDao.getPendingItems(userId)
+            val pendingItems = normalizedEntityTypes
+                ?.flatMap { syncQueueDao.getPendingItemsByType(userId, it) }
+                ?.sortedWith(compareBy<SyncQueueEntity> { it.priority }.thenBy { it.createdAt })
+                ?: syncQueueDao.getPendingItems(userId)
 
             // Track queue processing start
             analyticsTracker.trackOfflineQueue(
                 action = "QUEUE_PROCESS",
                 userId = userId,
                 queueSize = pendingItems.size,
-                additionalProperties = mapOf("sync_type" to "MANUAL")
+                additionalProperties = mapOf(
+                    "sync_type" to "MANUAL",
+                    "entity_types" to (normalizedEntityTypes?.joinToString(",") ?: "ALL")
+                )
             )
             
             if (pendingItems.isEmpty()) {
@@ -227,9 +264,18 @@ class OfflineQueueManager @Inject constructor(
                     if (item.entityType == "PROFILE") {
                         Timber.d("[PROFILE-QUEUE] PROFILE_QUEUE_GUARD_SKIP itemId=${item.id} entityType=${item.entityType}")
                     }
+                    Timber.d(
+                        "OfflineQueueManager: Queue lifecycle action=QUEUE_IN_FLIGHT_SKIP " +
+                            "itemId=${item.id} entity=${item.entityType}:${item.entityId}"
+                    )
                     continue
                 }
                 try {
+                    Timber.i(
+                        "OfflineQueueManager: Queue lifecycle action=QUEUE_ITEM_START " +
+                            "itemId=${item.id} userId=${item.userId} entity=${item.entityType}:${item.entityId} " +
+                            "operation=${item.operation} retry=${item.retryCount}"
+                    )
                     val result = processQueueItem(item)
                     
                     // 🔥 PROFILE SYNC DIAGNOSTICS: Enhanced logging for profile operations
@@ -239,6 +285,10 @@ class OfflineQueueManager @Inject constructor(
                         is ProcessResult.Success -> {
                             syncQueueDao.delete(item)
                             successful++
+                            Timber.i(
+                                "OfflineQueueManager: Queue lifecycle action=QUEUE_ITEM_SUCCESS " +
+                                    "itemId=${item.id} entity=${item.entityType}:${item.entityId}"
+                            )
                             if (item.entityType == "PROFILE") {
                                 Timber.i("$logPrefix ✅ Profile operation ${item.id} (${item.operation}) completed successfully!")
                             } else {
@@ -248,6 +298,10 @@ class OfflineQueueManager @Inject constructor(
                         is ProcessResult.Conflict -> {
                             syncQueueDao.delete(item) // Remove conflict item as it's been resolved
                             conflicts++
+                            Timber.w(
+                                "OfflineQueueManager: Queue lifecycle action=QUEUE_ITEM_CONFLICT_RESOLVED " +
+                                    "itemId=${item.id} entity=${item.entityType}:${item.entityId}"
+                            )
 
                             // Track conflict resolution
                             analyticsTracker.trackSyncConflict(
@@ -272,6 +326,11 @@ class OfflineQueueManager @Inject constructor(
                         is ProcessResult.Failure -> {
                             handleSyncFailure(item, result.error)
                             failed++
+                            Timber.w(
+                                result.error,
+                                "OfflineQueueManager: Queue lifecycle action=QUEUE_ITEM_FAILURE " +
+                                    "itemId=${item.id} entity=${item.entityType}:${item.entityId}"
+                            )
                             if (item.entityType == "PROFILE") {
                                 Timber.e("$logPrefix ❌ Profile operation ${item.id} (${item.operation}) failed: ${result.error}")
                             } else {
@@ -282,12 +341,20 @@ class OfflineQueueManager @Inject constructor(
                             // For fetch operations, just mark as successful
                             syncQueueDao.delete(item)
                             successful++
+                            Timber.i(
+                                "OfflineQueueManager: Queue lifecycle action=QUEUE_ITEM_FETCH_SUCCESS " +
+                                    "itemId=${item.id} entity=${item.entityType}:${item.entityId}"
+                            )
                             Timber.d("$logPrefix: Successfully processed fetch operation ${item.id}")
                         }
                         is ProcessResult.DataList -> {
                             // For fetchAll operations, just mark as successful
                             syncQueueDao.delete(item)
                             successful++
+                            Timber.i(
+                                "OfflineQueueManager: Queue lifecycle action=QUEUE_ITEM_FETCH_LIST_SUCCESS " +
+                                    "itemId=${item.id} entity=${item.entityType}:${item.entityId}"
+                            )
                             Timber.d("$logPrefix: Successfully processed fetchAll operation ${item.id}")
                         }
                     }
@@ -1024,11 +1091,11 @@ class OfflineQueueManager @Inject constructor(
     /**
      * Determines the priority level for different entity types.
      */
-    private fun getPriority(entityType: String): Int = when (entityType) {
-        "WORKOUT" -> HIGH_PRIORITY      // Active workout data has highest priority
-        "PROFILE" -> MEDIUM_PRIORITY    // Profile changes are medium priority
-        "TEMPLATE", "ACHIEVEMENT" -> LOW_PRIORITY  // Templates and achievements are lower priority
-        else -> LOW_PRIORITY            // Default to low priority for unknown types
+    private fun getPriority(entityType: String): Int = when (entityType.uppercase()) {
+        "WORKOUT", "TEMPLATE" -> HIGH_PRIORITY
+        "PROFILE", "USER_PUBLIC", "SOCIAL_PROFILE", "FOLLOW_RELATIONSHIP", "WORKOUT_POST", "GYM_BUDDY", "SETTINGS" -> MEDIUM_PRIORITY
+        "ACHIEVEMENT", "ANALYTICS", "CHAT" -> LOW_PRIORITY
+        else -> LOW_PRIORITY
     }
     
 }

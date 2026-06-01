@@ -229,8 +229,7 @@ class FolderOperationsUseCase @Inject constructor(
 
             // Step 4: Move templates to default folder if folder has templates
             if (folder.templateCount > 0) {
-                val templatesResult = workoutTemplateRepository.getTemplatesByFolder(userId, folder.id.value).first()
-                val templates = templatesResult.getOrThrow()
+                val templates = workoutTemplateRepository.getTemplatesByFolder(userId, folder.id.value).first()
 
                 // Move each template to default folder
                 for (template in templates) {

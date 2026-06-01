@@ -1,9 +1,5 @@
 package com.example.liftrix.service
 
-import com.example.liftrix.core.cache.CacheManager
-import com.example.liftrix.core.cache.CacheKey
-import com.example.liftrix.core.cache.CacheKeyUtils
-import com.example.liftrix.service.cache.WidgetCacheManager
 import com.example.liftrix.domain.sync.SyncScheduler
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.WidgetData
@@ -40,13 +36,12 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.datetime.Clock
-import kotlin.time.Duration.Companion.minutes
 
 /**
  * Implementation of AnalyticsService providing comprehensive widget data management.
  * 
  * This service implementation provides:
- * - Widget data retrieval with async loading and caching
+ * - Widget data retrieval from Room-backed sources
  * - Widget preference management with atomic updates
  * - Widget visibility toggle with immediate feedback
  * - Batch operations for performance optimization
@@ -59,14 +54,8 @@ import kotlin.time.Duration.Companion.minutes
  * - Leverages AnalyticsEngine for data calculation
  * - Provides proper error handling and recovery mechanisms
  * 
- * Caching Strategy:
- * - Uses LRU cache with 10-minute TTL for widget data
- * - Longer TTL (30 minutes) for widget preferences
- * - Cache invalidation on preference updates
- * - Structured cache keys for efficient invalidation
- * 
  * Performance Characteristics:
- * - Widget data loading: <500ms for standard widgets (cached: <50ms)
+ * - Widget data loading: <500ms for standard widgets
  * - Preference updates: <200ms for atomic operations
  * - Visibility toggles: <100ms for immediate feedback
  * - Batch operations: Optimized for multiple widget updates
@@ -76,8 +65,6 @@ class AnalyticsServiceImpl @Inject constructor(
     private val widgetManager: AnalyticsWidgetManager,
     private val preferencesRepository: WidgetPreferencesRepository,
     private val analyticsEngine: AnalyticsEngine,
-    private val cacheManager: CacheManager,
-    private val widgetCacheManager: WidgetCacheManager,
     private val syncScheduler: SyncScheduler,
     private val getWidgetDataUseCase: com.example.liftrix.domain.usecase.analytics.GetWidgetDataUseCase,
     @com.example.liftrix.data.di.IoDispatcher private val ioDispatcher: CoroutineDispatcher
@@ -117,24 +104,12 @@ class AnalyticsServiceImpl @Inject constructor(
                 throw IllegalArgumentException("User ID cannot be blank")
             }
             
-            // Check multi-tier cache first
-            val cachedData = widgetCacheManager.getWidgetData(userId, widget)
-            if (cachedData != null) {
-                Timber.d("Multi-tier cache hit for widget data - user: $userId, widget: ${widget.id}")
-                return@liftrixCatching cachedData
-            }
-            
-            Timber.d("Multi-tier cache miss for widget data - computing fresh data")
-            
             // Check if widget should be visible based on data availability
             val hasWorkoutData = checkUserHasWorkoutData(userId)
             val dataAge = calculateDataAge(userId)
             
             if (!widgetManager.shouldShowWidget(widget, hasWorkoutData, dataAge)) {
-                val noDataWidget = createNoDataWidgetData(widget)
-                // Cache the no-data result using multi-tier cache
-                widgetCacheManager.putWidgetData(userId, widget, noDataWidget)
-                return@liftrixCatching noDataWidget
+                return@liftrixCatching createNoDataWidgetData(widget)
             }
             
             // Load widget data based on widget type
@@ -166,9 +141,6 @@ class AnalyticsServiceImpl @Inject constructor(
                 else -> createNoDataWidgetData(widget)
             }
             
-            // Cache the result using multi-tier cache with complexity-based TTL
-            widgetCacheManager.putWidgetData(userId, widget, widgetData)
-            
             // Check if real-time sync should be started for this widget
             if (shouldStartRealtimeSync(widget)) {
                 syncScheduler.startRealtimeSync(userId)
@@ -199,15 +171,6 @@ class AnalyticsServiceImpl @Inject constructor(
             if (userId.isBlank()) {
                 throw IllegalArgumentException("User ID cannot be blank")
             }
-            
-            // Check multi-tier cache first
-            val cachedPreferences = widgetCacheManager.getWidgetPreferences(userId)
-            if (cachedPreferences != null) {
-                Timber.d("Multi-tier cache hit for widget preferences - user: $userId")
-                return@liftrixCatching cachedPreferences
-            }
-            
-            Timber.d("Multi-tier cache miss for widget preferences - fetching from repository")
             
             // Get preferences from repository
             val preferencesResult = preferencesRepository.getWidgetPreferences(userId).first()
@@ -241,9 +204,6 @@ class AnalyticsServiceImpl @Inject constructor(
                     }
                 }
             )
-            
-            // Cache the result using multi-tier cache
-            widgetCacheManager.putWidgetPreferences(preferences)
             
             preferences
         }
@@ -285,11 +245,7 @@ class AnalyticsServiceImpl @Inject constructor(
                 onSuccess = {
                     Timber.d("Successfully updated preferences for user: ${preferences.userId}")
                     
-                    // Invalidate multi-tier cache for this user's preferences and widgets
-                    widgetCacheManager.invalidateUserPreferences(preferences.userId)
-                    widgetCacheManager.invalidateUserWidgets(preferences.userId)
-                    
-                    Timber.d("Multi-tier cache invalidated for user preferences: ${preferences.userId}")
+                    Timber.d("Widget preferences updated; Room/DataStore observers own freshness for user: ${preferences.userId}")
                 },
                 onFailure = { exception ->
                     Timber.e(exception, "Failed to update preferences for user: ${preferences.userId}")
@@ -350,13 +306,7 @@ class AnalyticsServiceImpl @Inject constructor(
                 onSuccess = {
                     Timber.d("Successfully toggled visibility for widget: $widgetId")
                     
-                    // Cache invalidation is handled by updateWidgetPreferences, but we should
-                    // also invalidate the specific widget data if it's now hidden
-                    val widget = AnalyticsWidget.getAllWidgets().find { it.id == widgetId }
-                    if (widget != null && !updatedPreferences.isWidgetVisible(widgetId)) {
-                        val widgetCacheKey = CacheKeyUtils.createWidgetKey(userId, widget)
-                        cacheManager.invalidate(widgetCacheKey)
-                    }
+                    Timber.d("Widget visibility toggled; no parallel widget cache invalidation required")
                 },
                 onFailure = { exception ->
                     Timber.e(exception, "Failed to toggle widget visibility: $widgetId")
@@ -394,11 +344,7 @@ class AnalyticsServiceImpl @Inject constructor(
                 onSuccess = {
                     Timber.d("Successfully reset preferences for user: $userId")
                     
-                    // Invalidate all analytics cache for this user using multi-tier cache
-                    widgetCacheManager.invalidateUserPreferences(userId)
-                    widgetCacheManager.invalidateUserWidgets(userId)
-                    
-                    Timber.d("Multi-tier cache invalidated for user reset: $userId")
+                    Timber.d("Widget preferences reset; Room/DataStore observers own freshness for user: $userId")
                 },
                 onFailure = { exception ->
                     Timber.e(exception, "Failed to reset preferences for user: $userId")

@@ -158,17 +158,19 @@ private fun MobileOptimizedLayout(
         verticalArrangement = Arrangement.spacedBy(spacing)
     ) {
         widgets.forEach { widget ->
-            val widgetData = widgetDataProvider(widget)
-            WidgetRenderer(
-                widget = widget,
-                widgetData = widgetData,
-                onClick = { onWidgetClick(widget) },
-                isLoading = isLoading,
-                aspectRatio = 2.0f, // Mobile single-column layout should use more rectangular ratio
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-            )
+            key(widget.id) {
+                val widgetData = widgetDataProvider(widget)
+                WidgetRenderer(
+                    widget = widget,
+                    widgetData = widgetData,
+                    onClick = { onWidgetClick(widget) },
+                    isLoading = isLoading,
+                    aspectRatio = 2.0f, // Mobile single-column layout should use more rectangular ratio
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                )
+            }
         }
     }
 }
@@ -252,17 +254,19 @@ private fun MobileWidgetColumn(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         widgets.forEach { widget ->
-            val widgetData = widgetDataProvider(widget)
-            WidgetRenderer(
-                widget = widget,
-                widgetData = widgetData,
-                onClick = { onWidgetClick(widget) },
-                isLoading = isLoading,
-                aspectRatio = 2.0f, // Mobile single-column layout should use more rectangular ratio
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-            )
+            key(widget.id) {
+                val widgetData = widgetDataProvider(widget)
+                WidgetRenderer(
+                    widget = widget,
+                    widgetData = widgetData,
+                    onClick = { onWidgetClick(widget) },
+                    isLoading = isLoading,
+                    aspectRatio = 2.0f, // Mobile single-column layout should use more rectangular ratio
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                )
+            }
         }
     }
 }
@@ -320,7 +324,8 @@ private fun ResponsiveGridLayout(
         ) {
             items(
                 items = widgets,
-                key = { widget -> widget.id }
+                key = { widget -> widget.id },
+                contentType = { widget -> widget.category.name }
             ) { widget ->
                 val widgetData = widgetDataProvider(widget)
                 WidgetRenderer(
@@ -355,24 +360,30 @@ private fun NonScrollableGrid(
             .padding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(spacing)
     ) {
+        val widgetRows = remember(widgets, columns) {
+            widgets.chunked(columns)
+        }
+
         // Group widgets into rows based on column count
-        widgets.chunked(columns).forEach { rowWidgets ->
+        widgetRows.forEach { rowWidgets ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(spacing)
             ) {
                 rowWidgets.forEach { widget ->
-                    val widgetData = widgetDataProvider(widget)
-                    Box(
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        WidgetRenderer(
-                            widget = widget,
-                            widgetData = widgetData,
-                            onClick = { onWidgetClick(widget) },
-                            isLoading = isLoading,
-                            aspectRatio = if (columns == 1) 2.0f else 1.1f // Use more rectangular ratio for single column
-                        )
+                    key(widget.id) {
+                        val widgetData = widgetDataProvider(widget)
+                        Box(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            WidgetRenderer(
+                                widget = widget,
+                                widgetData = widgetData,
+                                onClick = { onWidgetClick(widget) },
+                                isLoading = isLoading,
+                                aspectRatio = if (columns == 1) 2.0f else 1.1f // Use more rectangular ratio for single column
+                            )
+                        }
                     }
                 }
                 // Fill remaining columns with spacers if row is incomplete

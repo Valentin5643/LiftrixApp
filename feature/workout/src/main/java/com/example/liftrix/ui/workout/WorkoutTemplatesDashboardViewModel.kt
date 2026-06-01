@@ -73,9 +73,13 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
                 )
                 Timber.d("User authenticated, loading templates for user: $userId")
                 
-                workoutTemplateRepository.getAllTemplatesForUser(userId.value).collect { result ->
-                    if (result.isSuccess) {
-                        val templates = result.getOrElse { emptyList() }
+                workoutTemplateRepository.getAllTemplatesForUser(userId.value)
+                    .catch { exception ->
+                        val errorMessage = "Failed to load templates: ${exception.message ?: "Unknown error"}"
+                        _uiState.value = WorkoutTemplatesDashboardUiState.Error(errorMessage)
+                        Timber.e(exception, "Failed to load templates for user $userId")
+                    }
+                    .collect { templates ->
                         _uiState.value = WorkoutTemplatesDashboardUiState.Success(
                             templates = templates,
                             filteredTemplates = templates,
@@ -83,12 +87,7 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
                             isShowingFolderContents = false
                         )
                         Timber.d("Successfully loaded ${templates.size} templates for user $userId")
-                    } else {
-                        val errorMessage = result.exceptionOrNull()?.message ?: "Failed to load templates"
-                        _uiState.value = WorkoutTemplatesDashboardUiState.Error(errorMessage)
-                        Timber.e("Failed to load templates: $errorMessage")
                     }
-                }
             } catch (exception: Exception) {
                 val errorMessage = "Authentication or template loading failed: ${exception.message}"
                 _uiState.value = WorkoutTemplatesDashboardUiState.Error(errorMessage)
@@ -116,10 +115,13 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
                 )
 
                 // Use repository directly for folder-specific templates
-                workoutTemplateRepository.getTemplatesByFolder(userId.value, folderId).collect { result ->
-                    if (result.isSuccess) {
-                        val templates = result.getOrThrow()
-
+                workoutTemplateRepository.getTemplatesByFolder(userId.value, folderId)
+                    .catch { exception ->
+                        val errorMessage = "Failed to load folder templates: ${exception.message ?: "Unknown error"}"
+                        _uiState.value = WorkoutTemplatesDashboardUiState.Error(errorMessage)
+                        Timber.e(exception, "Failed to load templates for folder $folderId")
+                    }
+                    .collect { templates ->
                         _uiState.value = WorkoutTemplatesDashboardUiState.Success(
                             templates = templates,
                             filteredTemplates = templates,
@@ -127,12 +129,7 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
                             isShowingFolderContents = true
                         )
                         Timber.d("🔥 FOLDER-DASHBOARD: Successfully loaded ${templates.size} templates for folder $folderId")
-                    } else {
-                        val errorMessage = result.exceptionOrNull()?.message ?: "Failed to load folder templates"
-                        _uiState.value = WorkoutTemplatesDashboardUiState.Error(errorMessage)
-                        Timber.e("Failed to load templates for folder $folderId: $errorMessage")
                     }
-                }
             } catch (exception: Exception) {
                 val errorMessage = "Error loading folder templates: ${exception.message}"
                 _uiState.value = WorkoutTemplatesDashboardUiState.Error(errorMessage)

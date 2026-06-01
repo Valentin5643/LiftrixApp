@@ -10,7 +10,6 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.template.TemplateRepository
 import com.example.liftrix.domain.sync.SyncScheduler
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import timber.log.Timber
 import java.time.Instant
@@ -103,39 +102,14 @@ class TemplateRepositoryImpl @Inject constructor(
         }
     }
 
-    override fun getAllTemplatesForUser(userId: String): Flow<LiftrixResult<List<WorkoutTemplate>>> {
+    override fun getAllTemplatesForUser(userId: String): Flow<List<WorkoutTemplate>> {
         return workoutTemplateDao.getAllTemplatesForUser(userId)
             .map { entities ->
-                try {
-                    val templates = entities.map { workoutTemplateMapper.toDomain(it) }
-                    Timber.tag("StartupRestoreFix").d(
-                        "[TEMPLATE-LOAD] operation=TEMPLATE_REPOSITORY_FLOW_EMIT repo=TemplateRepositoryImpl userId=$userId entityCount=${entities.size} templateCount=${templates.size} debounceApplied=false distinctApplied=false cacheApplied=false timestamp=${System.currentTimeMillis()}"
-                    )
-                    LiftrixResult.success(templates)
-                } catch (throwable: Throwable) {
-                    Timber.e(throwable, "Failed to map template entities to domain models for user: $userId")
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Failed to retrieve templates for user",
-                            operation = "READ",
-                            table = "workout_templates",
-                            analyticsContext = mapOf("user_id" to userId)
-                        )
-                    )
-                }
-            }
-            .catch { throwable ->
-                Timber.e(throwable, "Database flow error for user templates: $userId")
-                emit(
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Database connection error while retrieving templates",
-                            operation = "READ",
-                            table = "workout_templates",
-                            analyticsContext = mapOf("user_id" to userId)
-                        )
-                    )
+                val templates = entities.map { workoutTemplateMapper.toDomain(it) }
+                Timber.tag("StartupRestoreFix").d(
+                    "[TEMPLATE-LOAD] operation=TEMPLATE_REPOSITORY_FLOW_EMIT repo=TemplateRepositoryImpl userId=$userId entityCount=${entities.size} templateCount=${templates.size} debounceApplied=false distinctApplied=false cacheApplied=false timestamp=${System.currentTimeMillis()}"
                 )
+                templates
             }
     }
 
@@ -192,198 +166,38 @@ class TemplateRepositoryImpl @Inject constructor(
         }
     }
 
-    override fun searchTemplates(userId: String, searchQuery: String): Flow<LiftrixResult<List<WorkoutTemplate>>> {
+    override fun searchTemplates(userId: String, searchQuery: String): Flow<List<WorkoutTemplate>> {
         return workoutTemplateDao.searchTemplates(userId, searchQuery)
             .map { entities ->
-                try {
-                    val templates = entities.map { workoutTemplateMapper.toDomain(it) }
-                    LiftrixResult.success(templates)
-                } catch (throwable: Throwable) {
-                    Timber.e(throwable, "Failed to map template search results for user: $userId")
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Failed to search templates",
-                            operation = "READ",
-                            table = "workout_templates",
-                            analyticsContext = mapOf(
-                                "user_id" to userId,
-                                "search_query" to searchQuery
-                            )
-                        )
-                    )
-                }
-            }
-            .catch { throwable ->
-                Timber.e(throwable, "Database flow error for template search: $userId")
-                emit(
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Database connection error while searching templates",
-                            operation = "READ",
-                            table = "workout_templates",
-                            analyticsContext = mapOf(
-                                "user_id" to userId,
-                                "search_query" to searchQuery
-                            )
-                        )
-                    )
-                )
+                entities.map { workoutTemplateMapper.toDomain(it) }
             }
     }
 
-    override fun getTemplatesByFolder(userId: String, folderId: String): Flow<LiftrixResult<List<WorkoutTemplate>>> {
+    override fun getTemplatesByFolder(userId: String, folderId: String): Flow<List<WorkoutTemplate>> {
         return workoutTemplateDao.getTemplatesByFolder(userId, folderId)
             .map { entities ->
-                try {
-                    val templates = entities.map { workoutTemplateMapper.toDomain(it) }
-                    LiftrixResult.success(templates)
-                } catch (throwable: Throwable) {
-                    Timber.e(throwable, "Failed to map folder template entities for user: $userId, folder: $folderId")
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Failed to retrieve templates by folder",
-                            operation = "READ",
-                            table = "workout_templates",
-                            analyticsContext = mapOf(
-                                "user_id" to userId,
-                                "folder_id" to folderId
-                            )
-                        )
-                    )
-                }
-            }
-            .catch { throwable ->
-                Timber.e(throwable, "Database flow error for folder templates: user: $userId, folder: $folderId")
-                emit(
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Database connection error while retrieving templates by folder",
-                            operation = "READ",
-                            table = "workout_templates",
-                            analyticsContext = mapOf(
-                                "user_id" to userId,
-                                "folder_id" to folderId
-                            )
-                        )
-                    )
-                )
+                entities.map { workoutTemplateMapper.toDomain(it) }
             }
     }
 
-    override fun getTemplatesByDifficulty(userId: String, difficultyLevel: Int): Flow<LiftrixResult<List<WorkoutTemplate>>> {
+    override fun getTemplatesByDifficulty(userId: String, difficultyLevel: Int): Flow<List<WorkoutTemplate>> {
         return workoutTemplateDao.getTemplatesByDifficulty(userId, difficultyLevel)
             .map { entities ->
-                try {
-                    val templates = entities.map { workoutTemplateMapper.toDomain(it) }
-                    LiftrixResult.success(templates)
-                } catch (throwable: Throwable) {
-                    Timber.e(throwable, "Failed to map templates by difficulty for user: $userId")
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Failed to retrieve templates by difficulty",
-                            operation = "READ",
-                            table = "workout_templates",
-                            analyticsContext = mapOf(
-                                "user_id" to userId,
-                                "difficulty_level" to difficultyLevel.toString()
-                            )
-                        )
-                    )
-                }
-            }
-            .catch { throwable ->
-                Timber.e(throwable, "Database flow error for templates by difficulty: $userId")
-                emit(
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Database connection error while retrieving templates by difficulty",
-                            operation = "READ",
-                            table = "workout_templates",
-                            analyticsContext = mapOf(
-                                "user_id" to userId,
-                                "difficulty_level" to difficultyLevel.toString()
-                            )
-                        )
-                    )
-                )
+                entities.map { workoutTemplateMapper.toDomain(it) }
             }
     }
 
-    override fun getRecentlyUsedTemplates(userId: String, limit: Int): Flow<LiftrixResult<List<WorkoutTemplate>>> {
+    override fun getRecentlyUsedTemplates(userId: String, limit: Int): Flow<List<WorkoutTemplate>> {
         return workoutTemplateDao.getRecentlyUsedTemplates(userId, limit)
             .map { entities ->
-                try {
-                    val templates = entities.map { workoutTemplateMapper.toDomain(it) }
-                    LiftrixResult.success(templates)
-                } catch (throwable: Throwable) {
-                    Timber.e(throwable, "Failed to map recently used template entities for user: $userId, limit: $limit")
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Failed to retrieve recently used templates",
-                            operation = "READ",
-                            table = "workout_templates",
-                            analyticsContext = mapOf(
-                                "user_id" to userId,
-                                "limit" to limit.toString()
-                            )
-                        )
-                    )
-                }
-            }
-            .catch { throwable ->
-                Timber.e(throwable, "Database flow error for recently used templates: user: $userId, limit: $limit")
-                emit(
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Database connection error while retrieving recently used templates",
-                            operation = "READ",
-                            table = "workout_templates",
-                            analyticsContext = mapOf(
-                                "user_id" to userId,
-                                "limit" to limit.toString()
-                            )
-                        )
-                    )
-                )
+                entities.map { workoutTemplateMapper.toDomain(it) }
             }
     }
 
-    override fun getMostUsedTemplates(userId: String, limit: Int): Flow<LiftrixResult<List<WorkoutTemplate>>> {
+    override fun getMostUsedTemplates(userId: String, limit: Int): Flow<List<WorkoutTemplate>> {
         return workoutTemplateDao.getMostUsedTemplates(userId, limit)
             .map { entities ->
-                try {
-                    val templates = entities.map { workoutTemplateMapper.toDomain(it) }
-                    LiftrixResult.success(templates)
-                } catch (throwable: Throwable) {
-                    Timber.e(throwable, "Failed to map most used template entities for user: $userId, limit: $limit")
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Failed to retrieve most used templates",
-                            operation = "READ",
-                            table = "workout_templates",
-                            analyticsContext = mapOf(
-                                "user_id" to userId,
-                                "limit" to limit.toString()
-                            )
-                        )
-                    )
-                }
-            }
-            .catch { throwable ->
-                Timber.e(throwable, "Database flow error for most used templates: user: $userId, limit: $limit")
-                emit(
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Database connection error while retrieving most used templates",
-                            operation = "READ",
-                            table = "workout_templates",
-                            analyticsContext = mapOf(
-                                "user_id" to userId,
-                                "limit" to limit.toString()
-                            )
-                        )
-                    )
-                )
+                entities.map { workoutTemplateMapper.toDomain(it) }
             }
     }
 

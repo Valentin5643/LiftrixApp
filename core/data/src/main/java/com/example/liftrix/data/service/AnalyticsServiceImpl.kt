@@ -150,6 +150,8 @@ class AnalyticsServiceImpl @Inject constructor(
         private const val CRASHLYTICS_USER_ID = "user_pseudonymous_id"
         private const val CRASHLYTICS_SUBSCRIPTION_TIER = "subscription_tier"
         private const val CRASHLYTICS_APP_VERSION = "app_version"
+        private const val REDACTED_VALUE = "[redacted]"
+        private const val MAX_CRASHLYTICS_KEY_LENGTH = 40
     }
 
     override suspend fun setUserProperties(user: User): Result<Unit> {
@@ -377,7 +379,7 @@ class AnalyticsServiceImpl @Inject constructor(
         return try {
             // Set additional context data
             additionalData.forEach { (key, value) ->
-                firebaseCrashlytics.setCustomKey(key, value)
+                firebaseCrashlytics.setCustomKey(key.toSafeCrashlyticsKey(), value.toSafeCrashlyticsValue(key))
             }
             
             // Record the exception
@@ -393,8 +395,9 @@ class AnalyticsServiceImpl @Inject constructor(
 
     override suspend fun setCustomKey(key: String, value: String): Result<Unit> {
         return try {
-            firebaseCrashlytics.setCustomKey(key, value)
-            Timber.d("Custom key set: $key = $value")
+            val safeKey = key.toSafeCrashlyticsKey()
+            firebaseCrashlytics.setCustomKey(safeKey, value.toSafeCrashlyticsValue(key))
+            Timber.d("Custom key set: $safeKey")
             Result.success(Unit)
         } catch (exception: Exception) {
             Timber.e(exception, "Failed to set custom key: $key")
@@ -1211,5 +1214,22 @@ class AnalyticsServiceImpl @Inject constructor(
             .joinToString(separator = "") { "%02x".format(it) }
 
         return "liftrix-${digest.take(32)}"
+    }
+
+    private fun String.toSafeCrashlyticsKey(): String {
+        return lowercase()
+            .replace(Regex("[^a-z0-9_]+"), "_")
+            .trim('_')
+            .ifBlank { "unknown" }
+            .take(MAX_CRASHLYTICS_KEY_LENGTH)
+    }
+
+    private fun String.toSafeCrashlyticsValue(key: String): String {
+        val lowerKey = key.lowercase()
+        val lowerValue = lowercase()
+        val looksSensitive = listOf("uid", "user_id", "userid", "token", "secret", "email")
+            .any { lowerKey.contains(it) || lowerValue.contains(it) }
+
+        return if (looksSensitive) REDACTED_VALUE else take(100)
     }
 } 

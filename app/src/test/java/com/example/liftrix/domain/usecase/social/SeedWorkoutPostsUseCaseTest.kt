@@ -71,6 +71,8 @@ class SeedWorkoutPostsUseCaseTest {
         assertTrue(postSlot.captured.workoutDuration in 15..50)
         assertTrue(postSlot.captured.mediaUrls.orEmpty().contains("file:///android_asset/official_posts/"))
         assertTrue(postSlot.captured.mediaThumbnails.orEmpty().contains("file:///android_asset/official_posts/"))
+        assertTrue(postSlot.captured.mediaUrls.orEmpty().contains(".webp"))
+        assertTrue(postSlot.captured.mediaThumbnails.orEmpty().contains(".webp"))
         assertTrue(postSlot.captured.isSynced)
     }
 

@@ -27,6 +27,25 @@ interface PlatformShareAdapter {
         customText: String? = null,
         imageUrl: String? = null
     ): LiftrixResult<Intent>
+
+    /**
+     * Creates an image share intent for a generated local image.
+     */
+    suspend fun shareImage(
+        platform: SocialPlatform,
+        imageFilePath: String,
+        content: ShareableContent,
+        customText: String? = null
+    ): LiftrixResult<Intent>
+
+    /**
+     * Creates a native Android image share-sheet intent for a generated local image.
+     */
+    suspend fun createNativeImageShare(
+        imageFilePath: String,
+        content: ShareableContent,
+        customText: String? = null
+    ): LiftrixResult<Intent>
     
     /**
      * Checks if the specified platform app is installed.

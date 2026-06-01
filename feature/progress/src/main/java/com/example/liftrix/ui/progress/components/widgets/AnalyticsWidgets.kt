@@ -36,6 +36,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -472,8 +473,12 @@ private fun VolumeProgressIndicator(
     metrics: Map<String, String>,
     primaryColor: Color
 ) {
-    val progressPercentage = metrics["progress_percentage"]?.toFloatOrNull() ?: 0f
-    val targetVolume = metrics["target_volume"] ?: "N/A"
+    val progressPercentage = remember(metrics) {
+        metrics["progress_percentage"]?.toFloatOrNull() ?: 0f
+    }
+    val targetVolume = remember(metrics) {
+        metrics["target_volume"] ?: "N/A"
+    }
     
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -683,13 +688,19 @@ private fun PerformanceDisplay(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Performance metrics grid
-        val performanceMetrics = analyticsData.metrics.entries.take(4)
+        val performanceMetrics = remember(analyticsData.metrics) {
+            analyticsData.metrics.entries.take(4)
+        }
         
         if (performanceMetrics.isNotEmpty()) {
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(performanceMetrics) { entry ->
+                items(
+                    items = performanceMetrics,
+                    key = { entry -> entry.key },
+                    contentType = { "performance_metric" }
+                ) { entry ->
                     val (key, value) = entry
                     PerformanceMetricCard(
                         label = key.replace("_", " ").replaceFirstChar { it.uppercase() },
@@ -720,30 +731,20 @@ private fun MuscleGroupDisplay(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Convert analytics data to MuscleGroup map for pie chart
-        Timber.d("MuscleGroup Debug: Processing ${analyticsData.metrics.size} metrics: ${analyticsData.metrics}")
-        
-        val muscleGroupData = analyticsData.metrics.entries.take(6)
-            .mapNotNull { entry ->
-                val (muscleGroupName, percentage) = entry
-                val percentageFloat = percentage.toFloatOrNull() ?: return@mapNotNull null
-                
-                Timber.d("MuscleGroup Debug: Converting '$muscleGroupName' -> $percentageFloat")
-                
-                // Map muscle group name to MuscleGroup enum
-                val muscleGroup = mapStringToMuscleGroup(muscleGroupName)
-                if (muscleGroup != null) {
-                    Timber.d("MuscleGroup Debug: Mapped '$muscleGroupName' to ${muscleGroup.displayName}")
-                } else {
-                    Timber.w("MuscleGroup Debug: Failed to map '$muscleGroupName'")
+        val muscleGroupData = remember(analyticsData.metrics) {
+            analyticsData.metrics.entries.take(6)
+                .mapNotNull { entry ->
+                    val (muscleGroupName, percentage) = entry
+                    val percentageFloat = percentage.toFloatOrNull() ?: return@mapNotNull null
+                    mapStringToMuscleGroup(muscleGroupName)?.let { it to percentageFloat }
                 }
-                muscleGroup?.let { it to percentageFloat }
-            }
-            .toMap()
-            
-        Timber.d("MuscleGroup Debug: Final pie chart data has ${muscleGroupData.size} entries: $muscleGroupData")
+                .toMap()
+        }
+        val fallbackMuscleGroups = remember(analyticsData.metrics) {
+            analyticsData.metrics.entries.take(5)
+        }
         
         if (muscleGroupData.isNotEmpty()) {
-            Timber.d("MuscleGroup Debug: Rendering pie chart with ${muscleGroupData.size} slices")
             // Modern pie chart for muscle group distribution
             MuscleGroupPieChart(
                 data = muscleGroupData,
@@ -757,13 +758,10 @@ private fun MuscleGroupDisplay(
                 modifier = Modifier.height(200.dp)
             )
         } else {
-            Timber.w("MuscleGroup Debug: No muscle group data available, showing fallback bars")
             // Fallback to bars if data conversion fails
-            val muscleGroups = analyticsData.metrics.entries.take(5)
-            
-            muscleGroups.forEachIndexed { index, entry ->
+            fallbackMuscleGroups.forEach { entry ->
                 val (muscleGroup, percentage) = entry
-                key(index) {
+                key(muscleGroup) {
                     MuscleGroupBar(
                         label = muscleGroup.replace("_", " ").replaceFirstChar { it.uppercase() },
                         percentage = percentage.toFloatOrNull() ?: 0f,
@@ -1140,6 +1138,10 @@ private fun MetricsDisplay(
     metrics: Map<String, String>,
     primaryColor: Color
 ) {
+    val metricEntries = remember(metrics) {
+        metrics.entries.take(4).toList()
+    }
+
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -1153,7 +1155,11 @@ private fun MetricsDisplay(
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(metrics.entries.take(4).toList()) { (key, value) ->
+            items(
+                items = metricEntries,
+                key = { entry -> entry.key },
+                contentType = { "metric" }
+            ) { (key, value) ->
                 MetricCard(
                     label = key.replace("_", " ").replaceFirstChar { it.uppercase() },
                     value = value,

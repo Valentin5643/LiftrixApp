@@ -169,6 +169,7 @@ private fun FixedWidgetGrid(
         items(
             count = widgets.size,
             key = { index -> widgets[index].id },
+            contentType = { index -> widgets[index].category.name },
             span = { index ->
                 val widget = widgets[index]
                 // CHARTS category widgets should span full width
@@ -227,7 +228,8 @@ private fun StaggeredWidgetGrid(
     ) {
         items(
             items = widgets,
-            key = { widget -> widget.id }
+            key = { widget -> widget.id },
+            contentType = { widget -> widget.category.name }
         ) { widget ->
             val widgetData = widgetDataProvider(widget)
             WidgetRenderer(
@@ -287,6 +289,7 @@ fun AdaptiveWidgetGridWithMinWidth(
         items(
             count = widgets.size,
             key = { index -> widgets[index].id },
+            contentType = { index -> widgets[index].category.name },
             span = { index ->
                 val widget = widgets[index]
                 // CHARTS category widgets should span full width

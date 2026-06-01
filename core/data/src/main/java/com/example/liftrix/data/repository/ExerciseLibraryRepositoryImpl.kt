@@ -1,10 +1,9 @@
 package com.example.liftrix.data.repository
 
 import com.example.liftrix.data.fallback.ExercisePlaceholderService
-import com.example.liftrix.data.local.LiftrixDatabase
+import com.example.liftrix.data.local.DatabaseSeedInitializer
 import com.example.liftrix.data.local.dao.ExerciseLibraryDao
 import com.example.liftrix.data.local.dao.ExerciseUsageHistoryDao
-import com.example.liftrix.data.local.seed.ExerciseLibrarySeedData
 import com.example.liftrix.data.mapper.ExerciseLibraryMapper
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseCategory
@@ -27,11 +26,10 @@ import javax.inject.Singleton
  */
 @Singleton
 class ExerciseLibraryRepositoryImpl @Inject constructor(
-    private val database: LiftrixDatabase,
     private val dao: ExerciseLibraryDao,
     private val usageHistoryDao: ExerciseUsageHistoryDao,
     private val mapper: ExerciseLibraryMapper,
-    private val exerciseLibrarySeedData: ExerciseLibrarySeedData,
+    private val databaseSeedInitializer: DatabaseSeedInitializer,
     private val placeholderService: ExercisePlaceholderService
 ) : ExerciseLibraryRepository {
     
@@ -54,7 +52,7 @@ class ExerciseLibraryRepositoryImpl @Inject constructor(
                     
                     // CRITICAL FIX: Ensure population completes before proceeding
                     Timber.d("🔥 REPO-DEBUG: Starting database population...")
-                    exerciseLibrarySeedData.populateExerciseLibraryIfNeeded(database)
+                    databaseSeedInitializer.ensureExerciseLibrarySeeded("exercise_search")
                     
                     // Get updated exercises from database after population
                     val updatedExercises = dao.getAllExercises().first()
@@ -213,7 +211,7 @@ class ExerciseLibraryRepositoryImpl @Inject constructor(
                     Timber.d("Database empty, triggering population")
                     
                     // Trigger database population in background
-                    exerciseLibrarySeedData.populateExerciseLibraryIfNeeded(database)
+                    databaseSeedInitializer.ensureExerciseLibrarySeeded("get_all_exercises")
                     
                     // Get updated exercises from database
                     val updatedExercises = dao.getAllExercises().first()

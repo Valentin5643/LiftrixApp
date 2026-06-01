@@ -13,21 +13,25 @@ import androidx.work.Configuration
 import androidx.work.WorkManager
 import com.example.liftrix.BuildConfig
 import com.example.liftrix.core.logging.ReleaseLoggingTree
-import com.example.liftrix.domain.repository.WidgetPreferencesRepository
-import com.example.liftrix.service.CacheWarmingService
-import com.example.liftrix.sync.SyncCoordinator
+import com.example.liftrix.debug.DebugToolingInitializer
+import com.example.liftrix.di.ApplicationScope
+import com.example.liftrix.di.IoDispatcher
 import com.example.liftrix.sync.StartupRestoreGate
 import com.example.liftrix.domain.usecase.settings.InitializeUserThemeUseCase
+import com.example.liftrix.monitoring.PerformanceMonitor
+import com.example.liftrix.startup.PostFirstScreenStartupCoordinator
+import com.example.liftrix.startup.StartupTaskClass
+import com.example.liftrix.startup.StartupTaskTracer
 import com.example.liftrix.ui.theme.ThemeManager
 import com.example.liftrix.widget.LiftrixWidgetUpdateScheduler
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.perf.metrics.Trace
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -35,15 +39,6 @@ import javax.inject.Inject
 
 @HiltAndroidApp
 class LiftrixApp : Application(), Configuration.Provider {
-
-    @Inject
-    lateinit var widgetPreferencesRepository: WidgetPreferencesRepository
-
-    @Inject
-    lateinit var cacheWarmingService: CacheWarmingService
-
-    @Inject
-    lateinit var syncCoordinator: SyncCoordinator
 
     @Inject
     lateinit var firebaseAuth: FirebaseAuth
@@ -55,13 +50,27 @@ class LiftrixApp : Application(), Configuration.Provider {
     lateinit var initializeUserThemeUseCase: InitializeUserThemeUseCase
 
     @Inject
-    lateinit var offlineQueueManager: com.example.liftrix.data.sync.OfflineQueueManager
-
-    @Inject
     lateinit var startupRestoreGate: StartupRestoreGate
 
     @Inject
     lateinit var liftrixWidgetUpdateScheduler: LiftrixWidgetUpdateScheduler
+
+    @Inject
+    lateinit var postFirstScreenStartupCoordinator: PostFirstScreenStartupCoordinator
+
+    @Inject
+    lateinit var startupTaskTracer: StartupTaskTracer
+
+    @Inject
+    @ApplicationScope
+    lateinit var applicationScope: CoroutineScope
+
+    @Inject
+    @IoDispatcher
+    lateinit var ioDispatcher: CoroutineDispatcher
+
+    @Inject
+    lateinit var performanceMonitor: PerformanceMonitor
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -72,7 +81,12 @@ class LiftrixApp : Application(), Configuration.Provider {
             )
             .build()
 
-    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var appOnCreateTrace: Trace? = null
+    private var workManagerInitTrace: Trace? = null
+    private var cacheWarmingTrace: Trace? = null
+
+    @Volatile
+    private var firstContentStartupUserId: String? = null
 
     // App Check initialization state
     private val _isAppCheckInitialized = MutableStateFlow(false)
@@ -101,42 +115,57 @@ class LiftrixApp : Application(), Configuration.Provider {
     
     override fun onCreate() {
         super.onCreate()
+        appOnCreateTrace = performanceMonitor.startCustomTrace("liftrix_app_on_create")
 
         // Set the singleton instance
         INSTANCE = this
 
         // Initialize Timber for logging
-        if (BuildConfig.DEBUG) {
+        DebugToolingInitializer.initialize(this)
+
+        if (BuildConfig.ENABLE_VERBOSE_LOGGING) {
             Timber.plant(Timber.DebugTree())
         } else {
             Timber.plant(ReleaseLoggingTree())
         }
 
-        ThemeManager.getInstance(this).applyCurrentThemeToPlatform()
+        startupTaskTracer.measure("platform_theme_apply", StartupTaskClass.BlockingAuth) {
+            ThemeManager.getInstance(this).applyCurrentThemeToPlatform()
+        }
 
         // Mark/log App Check readiness and perform a single non-forced verification.
-        initializeFirebaseAppCheck(verifyToken = true)
+        startupTaskTracer.measure("firebase_app_check_setup", StartupTaskClass.BlockingAuth) {
+            initializeFirebaseAppCheck(verifyToken = true)
+        }
 
         // SPEC-20241228: Log Room-First Architecture Configuration
-        logOfflineArchitectureMode()
+        startupTaskTracer.measure("offline_architecture_log", StartupTaskClass.Deferred) {
+            logOfflineArchitectureMode()
+        }
 
         // 🔥 FIX: MANUAL WorkManager initialization to ensure HiltWorkerFactory is used
         // This MUST happen before anything calls WorkManager.getInstance()
         // We disabled auto-initialization via androidx.startup in AndroidManifest
-        try {
-            val workManagerConfig = Configuration.Builder()
-                .setWorkerFactory(hiltWorkerFactory)
-                .setMinimumLoggingLevel(
-                    if (BuildConfig.DEBUG) android.util.Log.DEBUG
-                    else android.util.Log.INFO
-                )
-                .build()
+        startupTaskTracer.measure("workmanager_setup", StartupTaskClass.BlockingAuth) {
+            workManagerInitTrace = performanceMonitor.startCustomTrace("liftrix_workmanager_init")
+            try {
+                val workManagerConfig = Configuration.Builder()
+                    .setWorkerFactory(hiltWorkerFactory)
+                    .setMinimumLoggingLevel(
+                        if (BuildConfig.DEBUG) android.util.Log.DEBUG
+                        else android.util.Log.INFO
+                    )
+                    .build()
 
-            WorkManager.initialize(this, workManagerConfig)
-            Timber.d("🔥 SYNC WorkManager manually initialized with HiltWorkerFactory")
-        } catch (e: IllegalStateException) {
-            // WorkManager was already initialized (shouldn't happen with Startup disabled)
-            Timber.e(e, "🔥 SYNC ❌ WorkManager already initialized - early init detected!")
+                WorkManager.initialize(this, workManagerConfig)
+                Timber.d("WorkManager manually initialized with HiltWorkerFactory")
+            } catch (e: IllegalStateException) {
+                // WorkManager was already initialized (shouldn't happen with Startup disabled)
+                Timber.e(e, "WorkManager already initialized - early init detected")
+            } finally {
+                workManagerInitTrace?.let { performanceMonitor.stopCustomTrace(it) }
+                workManagerInitTrace = null
+            }
         }
 
         // 🔧 DEBUG: Test if HiltWorkerFactory can create workers (debug builds only)
@@ -145,19 +174,36 @@ class LiftrixApp : Application(), Configuration.Provider {
         }
         
         // Create notification channels
-        createNotificationChannels()
+        startupTaskTracer.measure("notification_channels", StartupTaskClass.BlockingAuth) {
+            createNotificationChannels()
+        }
         
         // Initialize widget migration system
-        initializeWidgetMigration()
-        
-        // Initialize cache warming system
-        initializeCacheWarmingSystem()
+        startupTaskTracer.measure("widget_migration_registration", StartupTaskClass.Deferred) {
+            initializeWidgetMigration()
+        }
         
         // Initialize sync system after WorkManager is ready
-        initializeSyncSystem()
+        startupTaskTracer.measure("auth_startup_listener", StartupTaskClass.FirstScreen) {
+            initializeSyncSystem()
+        }
         
         // 🔥 FIX: Clean up legacy queue entries from before SyncPayload refactoring
-        cleanupLegacyQueueEntries()
+        // Legacy sync cleanup is deferred until after the first authenticated screen.
+
+        appOnCreateTrace?.let { performanceMonitor.stopCustomTrace(it) }
+        appOnCreateTrace = null
+    }
+
+    fun onFirstContentReady(userId: String) {
+        if (firstContentStartupUserId == userId) return
+
+        firstContentStartupUserId = userId
+        postFirstScreenStartupCoordinator.start(
+            userId = userId,
+            source = "main_activity_first_authenticated_content"
+        )
+        initializeCacheWarmingSystem()
     }
     
     /**
@@ -319,18 +365,19 @@ class LiftrixApp : Application(), Configuration.Provider {
      * This improves user experience by reducing cold start loading times for analytics dashboards.
      */
     private fun initializeCacheWarmingSystem() {
-        applicationScope.launch {
+        applicationScope.launch(ioDispatcher) {
             try {
-                Timber.d("Initializing cache warming system")
-                
-                // Start cache warming process in background
-                // This will preload user-specific data if authenticated user is found
-                cacheWarmingService.startCacheWarming()
-                
-                Timber.i("Cache warming system initialized successfully")
+                startupTaskTracer.measure("cache_warming", StartupTaskClass.Deferred) {
+                    cacheWarmingTrace = performanceMonitor.startCustomTrace("liftrix_cache_warming")
+                    Timber.d("Initializing cache warming system")
+                    Timber.i("Cache warming skipped; Room-backed first screen data loads through observers")
+                }
             } catch (e: Exception) {
                 Timber.e(e, "Failed to initialize cache warming system")
                 // Don't crash app if cache warming fails - it's an optimization, not critical
+            } finally {
+                cacheWarmingTrace?.let { performanceMonitor.stopCustomTrace(it) }
+                cacheWarmingTrace = null
             }
         }
     }
@@ -343,6 +390,55 @@ class LiftrixApp : Application(), Configuration.Provider {
      * IMPORTANT: Delayed to ensure WorkManager is fully initialized with HiltWorkerFactory.
      */
     private fun initializeSyncSystem() {
+        val currentUser = firebaseAuth.currentUser
+        Timber.tag("StartupRestoreFix").i(
+            "[TEMPLATE-LOAD] operation=APP_STARTUP_AUTH_CHECK firebaseCurrentUserId=${currentUser?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+        )
+
+        if (currentUser == null) {
+            startupRestoreGate.resetForAuthPending("app_startup_no_current_user")
+            postFirstScreenStartupCoordinator.reset()
+            applicationScope.launch {
+                try {
+                    liftrixWidgetUpdateScheduler.clearAndUpdateAll()
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to clear native home widgets during unauthenticated startup")
+                }
+            }
+            Timber.d("No authenticated user found; deferred startup waits for first authenticated screen")
+        }
+
+        firebaseAuth.addAuthStateListener { auth ->
+            val user = auth.currentUser
+            Timber.tag("StartupRestoreFix").i(
+                "[TEMPLATE-LOAD] operation=APP_AUTH_STATE firebaseCurrentUserId=${user?.uid ?: "null"} timestamp=${System.currentTimeMillis()}"
+            )
+            if (user != null) {
+                applicationScope.launch {
+                    try {
+                        startupTaskTracer.measureSuspend("user_theme_initialization", StartupTaskClass.FirstScreen) {
+                            initializeUserThemeUseCase(user.uid)
+                        }
+                    } catch (e: Exception) {
+                        Timber.e(e, "Failed to initialize theme for user: ${user.uid}")
+                    }
+                }
+            } else {
+                startupRestoreGate.resetForAuthPending("auth_listener_signed_out")
+                firstContentStartupUserId = null
+                postFirstScreenStartupCoordinator.reset()
+                applicationScope.launch {
+                    try {
+                        liftrixWidgetUpdateScheduler.clearAndUpdateAll()
+                    } catch (e: Exception) {
+                        Timber.e(e, "Failed to clear native home widgets after sign out")
+                    }
+                }
+            }
+        }
+
+        Timber.i("Startup auth listener initialized; seed, sync, cache, and widgets defer until first authenticated screen")
+        /*
         applicationScope.launch {
             try {
                 Timber.d("Initializing sync system...")
@@ -490,6 +586,7 @@ class LiftrixApp : Application(), Configuration.Provider {
                 // Don't crash app if sync init fails - sync will be attempted again on user action
             }
         }
+        */
     }
     
     /**
@@ -514,39 +611,4 @@ class LiftrixApp : Application(), Configuration.Provider {
         }
     }
     
-    /**
-     * 🔥 FIX: Clean up legacy queue entries on app startup.
-     * Removes any stale entries from before the SyncPayload refactoring that can't be deserialized.
-     */
-    private fun cleanupLegacyQueueEntries() {
-        applicationScope.launch(Dispatchers.IO) {
-            try {
-                Timber.d("🔧 LEGACY-CLEANUP: Starting legacy queue cleanup...")
-                
-                val currentUserId = firebaseAuth.currentUser?.uid
-                if (currentUserId.isNullOrBlank()) {
-                    Timber.d("🔧 LEGACY-CLEANUP: No authenticated user; skipping legacy queue cleanup")
-                    return@launch
-                }
-
-                val result = offlineQueueManager.cleanupLegacyQueueEntries(currentUserId)
-                result.fold(
-                    onSuccess = { removedCount ->
-                        if (removedCount > 0) {
-                            Timber.i("🔧 LEGACY-CLEANUP: ✅ Removed $removedCount legacy queue entries")
-                        } else {
-                            Timber.d("🔧 LEGACY-CLEANUP: ✅ No legacy entries found - queue is clean")
-                        }
-                    },
-                    onFailure = { error ->
-                        Timber.w("🔧 LEGACY-CLEANUP: ⚠️ Cleanup failed: ${error.message}")
-                        // Non-critical failure - app can continue normally
-                    }
-                )
-            } catch (e: Exception) {
-                Timber.w(e, "🔧 LEGACY-CLEANUP: ⚠️ Cleanup exception - continuing app startup")
-                // Non-critical failure - app can continue normally
-            }
-        }
-    }
 }

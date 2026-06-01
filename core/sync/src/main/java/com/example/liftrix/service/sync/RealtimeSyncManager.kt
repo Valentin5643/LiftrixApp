@@ -1,14 +1,11 @@
 package com.example.liftrix.service.sync
 
 import android.content.Context
-import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.sync.SyncCoordinator
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.FirebaseFirestore
@@ -26,8 +23,8 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+import javax.inject.Provider
 import javax.inject.Singleton
 import dagger.hilt.android.qualifiers.ApplicationContext
 
@@ -59,7 +56,8 @@ class RealtimeSyncManager @Inject constructor(
     private val auth: FirebaseAuth,
     @ApplicationContext private val context: Context,
     private val syncStrategy: SyncStrategy,
-    private val conflictResolver: ConflictResolver
+    private val conflictResolver: ConflictResolver,
+    private val syncCoordinatorProvider: Provider<SyncCoordinator>
 ) {
     
     private val workManager: WorkManager
@@ -184,22 +182,7 @@ class RealtimeSyncManager @Inject constructor(
             Timber.d("Force syncing all data for user: $userId")
             _syncState.value = SyncState.Syncing(userId, "manual_sync")
             
-            // Trigger immediate background sync
-            val syncRequest = androidx.work.OneTimeWorkRequestBuilder<WidgetSyncWorker>()
-                .setInputData(
-                    androidx.work.workDataOf(
-                        "userId" to userId,
-                        "syncType" to "manual_force"
-                    )
-                )
-                .setConstraints(
-                    Constraints.Builder()
-                        .setRequiredNetworkType(NetworkType.CONNECTED)
-                        .build()
-                )
-                .build()
-            
-            workManager.enqueue(syncRequest)
+            syncCoordinatorProvider.get().triggerImmediateSync(userId).getOrThrow()
             
             _syncState.value = SyncState.Active(userId)
             Result.success(Unit)
@@ -346,6 +329,7 @@ class RealtimeSyncManager @Inject constructor(
                             
                             // Trigger local data update through sync strategy
                             syncStrategy.handleWorkoutSessionUpdate(context, userId, sessionData)
+                            syncCoordinatorProvider.get().triggerEntitySync(userId, "analytics")
                         }
                         else -> { /* No action needed for REMOVED */ }
                     }
@@ -369,6 +353,7 @@ class RealtimeSyncManager @Inject constructor(
                             
                             // Trigger analytics recalculation
                             syncStrategy.handlePersonalRecordUpdate(context, userId, prData)
+                            syncCoordinatorProvider.get().triggerEntitySync(userId, "analytics")
                         }
                         else -> { /* Handle other change types if needed */ }
                     }
@@ -381,28 +366,8 @@ class RealtimeSyncManager @Inject constructor(
     }
     
     private fun scheduleBackgroundSync(userId: String) {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .setRequiresBatteryNotLow(true)
-            .build()
-        
-        val syncRequest = PeriodicWorkRequestBuilder<WidgetSyncWorker>(15, TimeUnit.MINUTES)
-            .setInputData(
-                androidx.work.workDataOf(
-                    "userId" to userId,
-                    "syncType" to "background_periodic"
-                )
-            )
-            .setConstraints(constraints)
-            .build()
-        
-        workManager.enqueueUniquePeriodicWork(
-            "widget_sync_$userId",
-            ExistingPeriodicWorkPolicy.UPDATE,
-            syncRequest
-        )
-        
-        Timber.d("Scheduled background sync for user: $userId")
+        syncCoordinatorProvider.get().schedulePeriodicSync(userId)
+        Timber.d("Scheduled unified periodic sync for realtime user: $userId")
     }
     
     private fun handleSyncError(userId: String, error: Throwable) {

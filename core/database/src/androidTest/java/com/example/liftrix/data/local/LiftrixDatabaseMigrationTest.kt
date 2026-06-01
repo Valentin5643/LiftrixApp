@@ -7,6 +7,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.example.liftrix.data.local.migrations.MIGRATION_7_8
 import com.example.liftrix.data.local.migrations.MIGRATION_8_9
 import com.example.liftrix.data.local.migrations.MIGRATION_9_10
+import com.example.liftrix.data.local.migrations.MIGRATION_10_11
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -40,9 +41,21 @@ class LiftrixDatabaseMigrationTest {
 
         helper.runMigrationsAndValidate(
             TEST_DATABASE,
-            CURRENT_DATABASE_VERSION,
+            10,
             true,
             MIGRATION_9_10
+        ).close()
+    }
+
+    @Test
+    fun migrate10To11_validatesSchema() {
+        helper.createDatabase(TEST_DATABASE, 10).close()
+
+        helper.runMigrationsAndValidate(
+            TEST_DATABASE,
+            CURRENT_DATABASE_VERSION,
+            true,
+            MIGRATION_10_11
         ).close()
     }
 
@@ -56,13 +69,14 @@ class LiftrixDatabaseMigrationTest {
             true,
             MIGRATION_7_8,
             MIGRATION_8_9,
-            MIGRATION_9_10
+            MIGRATION_9_10,
+            MIGRATION_10_11
         ).close()
     }
 
     private companion object {
         const val TEST_DATABASE = "liftrix-migration-test"
         const val SUPPORTED_MIGRATION_FLOOR = 7
-        const val CURRENT_DATABASE_VERSION = 10
+        const val CURRENT_DATABASE_VERSION = 11
     }
 }

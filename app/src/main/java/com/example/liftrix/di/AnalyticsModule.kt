@@ -14,17 +14,13 @@ import com.example.liftrix.domain.repository.MetDataRepository
 import com.example.liftrix.domain.repository.ProgressStatsRepository
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.domain.service.analytics.AnalyticsWidgetManager
-import com.example.liftrix.feature.AnalyticsABTestManager
-import com.example.liftrix.feature.AnalyticsFeatureFlags
 import com.example.liftrix.monitoring.AnalyticsPerformanceTracker
 import com.example.liftrix.monitoring.ArchitecturePerformanceMonitor
 import com.example.liftrix.monitoring.ChartRenderingMonitor
 import com.example.liftrix.monitoring.NavigationPerformanceTracker
 import com.example.liftrix.service.AnalyticsEngine
 import com.example.liftrix.service.PerformanceBenchmark
-import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.perf.FirebasePerformance
-import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -100,19 +96,6 @@ abstract class AnalyticsModule {
         fun provideAnalyticsWidgetManager(
             widgetResolver: ProgressWidgetResolverPort
         ): AnalyticsWidgetManager = AnalyticsWidgetManager(widgetResolver)
-
-        @Provides
-        @Singleton
-        fun provideAnalyticsFeatureFlags(remoteConfig: FirebaseRemoteConfig): AnalyticsFeatureFlags =
-            AnalyticsFeatureFlags(remoteConfig)
-
-        @Provides
-        @Singleton
-        fun provideAnalyticsABTestManager(
-            remoteConfig: FirebaseRemoteConfig,
-            firebaseAnalytics: FirebaseAnalytics,
-            featureFlags: AnalyticsFeatureFlags
-        ): AnalyticsABTestManager = AnalyticsABTestManager(remoteConfig, firebaseAnalytics, featureFlags)
 
         @Provides
         @Singleton

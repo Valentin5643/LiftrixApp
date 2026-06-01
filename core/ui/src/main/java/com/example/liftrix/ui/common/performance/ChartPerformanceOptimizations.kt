@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.common.performance
 
+import android.os.Trace
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
@@ -33,6 +34,28 @@ import kotlin.math.min
  * - Touch interactions: <10ms response time
  */
 object ChartPerformanceOptimizations {
+    private const val TRACE_PREFIX = "ProgressDashboard"
+
+    /**
+     * Emits a lightweight dashboard milestone into system trace and debug logs.
+     */
+    fun traceDashboardMilestone(
+        milestone: String,
+        attributes: Map<String, Any?> = emptyMap()
+    ) {
+        val sectionName = "$TRACE_PREFIX:$milestone".take(127)
+        Trace.beginSection(sectionName)
+        try {
+            if (attributes.isEmpty()) {
+                Timber.d("ProgressDashboard milestone: $milestone")
+            } else {
+                Timber.d("ProgressDashboard milestone: $milestone $attributes")
+            }
+        } finally {
+            Trace.endSection()
+        }
+    }
+
     
     /**
      * Memoized chart coordinate calculation with intelligent dependency tracking.

@@ -20,6 +20,8 @@ android {
 }
 
 dependencies {
+    api(project(":feature:settings-api"))
+
     implementation(project(":core:analytics"))
     implementation(project(":core:design-system"))
     implementation(project(":core:domain"))
@@ -39,6 +41,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.hilt.navigation.compose)
+    implementation(libs.navigation.compose)
     implementation(libs.hilt.android)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)

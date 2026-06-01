@@ -45,13 +45,11 @@ abstract class ProgressDomainModule {
         @Singleton
         fun provideProgressDataService(
             progressStatsRepository: com.example.liftrix.domain.repository.ProgressStatsRepository,
-            cacheManager: com.example.liftrix.core.cache.EnhancedCacheManager,
             generateVolumeCalendarUseCase: com.example.liftrix.domain.usecase.analytics.GenerateVolumeCalendarUseCase,
             @IoDispatcher ioDispatcher: kotlinx.coroutines.CoroutineDispatcher
         ): com.example.liftrix.service.ProgressDataService =
             com.example.liftrix.service.ProgressDataServiceImpl(
                 progressStatsRepository = progressStatsRepository,
-                cacheManager = cacheManager,
                 generateVolumeCalendarUseCase = generateVolumeCalendarUseCase,
                 ioDispatcher = ioDispatcher
             )
@@ -62,8 +60,6 @@ abstract class ProgressDomainModule {
             widgetManager: com.example.liftrix.domain.service.analytics.AnalyticsWidgetManager,
             preferencesRepository: com.example.liftrix.domain.repository.WidgetPreferencesRepository,
             analyticsEngine: com.example.liftrix.service.AnalyticsEngine,
-            cacheManager: com.example.liftrix.core.cache.CacheManager,
-            widgetCacheManager: com.example.liftrix.service.cache.WidgetCacheManager,
             syncScheduler: com.example.liftrix.domain.sync.SyncScheduler,
             getWidgetDataUseCase: com.example.liftrix.domain.usecase.analytics.GetWidgetDataUseCase,
             @IoDispatcher ioDispatcher: kotlinx.coroutines.CoroutineDispatcher
@@ -72,8 +68,6 @@ abstract class ProgressDomainModule {
                 widgetManager = widgetManager,
                 preferencesRepository = preferencesRepository,
                 analyticsEngine = analyticsEngine,
-                cacheManager = cacheManager,
-                widgetCacheManager = widgetCacheManager,
                 syncScheduler = syncScheduler,
                 getWidgetDataUseCase = getWidgetDataUseCase,
                 ioDispatcher = ioDispatcher
@@ -104,30 +98,6 @@ abstract class ProgressDomainModule {
             @IoDispatcher ioDispatcher: kotlinx.coroutines.CoroutineDispatcher
         ): com.example.liftrix.service.PreferencesService =
             com.example.liftrix.service.PreferencesServiceImpl(preferencesRepository, authRepository, ioDispatcher)
-
-        @Provides
-        @Singleton
-        fun provideDiskCache(
-            @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
-            gson: com.google.gson.Gson,
-            @IoDispatcher ioDispatcher: kotlinx.coroutines.CoroutineDispatcher
-        ): com.example.liftrix.service.cache.DiskCache =
-            com.example.liftrix.service.cache.DiskCache(context, gson, ioDispatcher)
-
-        @Provides
-        @Singleton
-        fun provideCacheStrategy(): com.example.liftrix.service.cache.CacheStrategy =
-            com.example.liftrix.service.cache.CacheStrategyImpl()
-
-        @Provides
-        @Singleton
-        fun provideWidgetCacheManager(
-            memoryCache: com.example.liftrix.core.cache.CacheManager,
-            diskCache: com.example.liftrix.service.cache.DiskCache,
-            cacheStrategy: com.example.liftrix.service.cache.CacheStrategy,
-            @IoDispatcher ioDispatcher: kotlinx.coroutines.CoroutineDispatcher
-        ): com.example.liftrix.service.cache.WidgetCacheManager =
-            com.example.liftrix.service.cache.WidgetCacheManager(memoryCache, diskCache, cacheStrategy, ioDispatcher)
 
         @Provides
         @Singleton

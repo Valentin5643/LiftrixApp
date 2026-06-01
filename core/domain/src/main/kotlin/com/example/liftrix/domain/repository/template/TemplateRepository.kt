@@ -42,9 +42,9 @@ interface TemplateRepository {
      * Get all templates for a specific user.
      * 
      * @param userId The user ID for data scoping
-     * @return Flow of LiftrixResult with list of user's templates
+     * @return Flow of user's templates from the local source of truth
      */
-    fun getAllTemplatesForUser(userId: String): Flow<LiftrixResult<List<WorkoutTemplate>>>
+    fun getAllTemplatesForUser(userId: String): Flow<List<WorkoutTemplate>>
     
     /**
      * Update an existing workout template.
@@ -68,45 +68,45 @@ interface TemplateRepository {
      * 
      * @param userId The user ID for data scoping
      * @param searchQuery Search term for template name or description
-     * @return Flow of LiftrixResult with list of matching templates
+     * @return Flow of matching templates from the local source of truth
      */
-    fun searchTemplates(userId: String, searchQuery: String): Flow<LiftrixResult<List<WorkoutTemplate>>>
+    fun searchTemplates(userId: String, searchQuery: String): Flow<List<WorkoutTemplate>>
     
     /**
      * Get templates filtered by folder for a specific user.
      * 
      * @param userId The user ID for data scoping
      * @param folderId The folder ID to filter by
-     * @return Flow of LiftrixResult with templates in the specified folder
+     * @return Flow of templates in the specified folder from the local source of truth
      */
-    fun getTemplatesByFolder(userId: String, folderId: String): Flow<LiftrixResult<List<WorkoutTemplate>>>
+    fun getTemplatesByFolder(userId: String, folderId: String): Flow<List<WorkoutTemplate>>
     
     /**
      * Get templates filtered by difficulty level for a specific user.
      * 
      * @param userId The user ID for data scoping
      * @param difficultyLevel Difficulty level (1-5, where 1 is beginner and 5 is expert)
-     * @return Flow of LiftrixResult with templates at the specified difficulty level
+     * @return Flow of templates at the specified difficulty level from the local source of truth
      */
-    fun getTemplatesByDifficulty(userId: String, difficultyLevel: Int): Flow<LiftrixResult<List<WorkoutTemplate>>>
+    fun getTemplatesByDifficulty(userId: String, difficultyLevel: Int): Flow<List<WorkoutTemplate>>
     
     /**
      * Get recently used templates for a specific user.
      * 
      * @param userId The user ID for data scoping
      * @param limit Maximum number of templates to return (default: 5)
-     * @return Flow of LiftrixResult with recently used templates ordered by last used date
+     * @return Flow of recently used templates ordered by last used date from the local source of truth
      */
-    fun getRecentlyUsedTemplates(userId: String, limit: Int = 5): Flow<LiftrixResult<List<WorkoutTemplate>>>
+    fun getRecentlyUsedTemplates(userId: String, limit: Int = 5): Flow<List<WorkoutTemplate>>
     
     /**
      * Get most frequently used templates for a specific user.
      * 
      * @param userId The user ID for data scoping
      * @param limit Maximum number of templates to return (default: 10)
-     * @return Flow of LiftrixResult with most used templates ordered by usage count
+     * @return Flow of most used templates ordered by usage count from the local source of truth
      */
-    fun getMostUsedTemplates(userId: String, limit: Int = 10): Flow<LiftrixResult<List<WorkoutTemplate>>>
+    fun getMostUsedTemplates(userId: String, limit: Int = 10): Flow<List<WorkoutTemplate>>
     
     /**
      * Check if a template name exists for a user.

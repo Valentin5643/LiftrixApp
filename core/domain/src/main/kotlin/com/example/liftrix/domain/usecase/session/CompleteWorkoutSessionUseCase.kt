@@ -1,6 +1,5 @@
 package com.example.liftrix.domain.usecase.session
 
-import com.example.liftrix.core.cache.CacheManager
 import com.example.liftrix.domain.model.UnifiedWorkoutSession
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.common.LiftrixResult
@@ -14,7 +13,6 @@ import javax.inject.Inject
 
 class CompleteWorkoutSessionUseCase @Inject constructor(
     private val workoutRepository: WorkoutRepository,
-    private val cacheManager: CacheManager,
     private val cacheInvalidationService: CacheInvalidationService,
     private val workoutCompletionNotifier: WorkoutCompletionNotifier,
     private val homeWidgetUpdateNotifier: HomeWidgetUpdateNotifier
@@ -72,7 +70,7 @@ class CompleteWorkoutSessionUseCase @Inject constructor(
         workout: Workout
     ): CompletionSideEffectStatus {
         return try {
-            Timber.d("Enhanced cache invalidation for workout completion - user: ${workout.userId}")
+            Timber.d("Publishing workout invalidation event for user: ${workout.userId}")
 
             val exerciseIds = workout.exercises.map { it.libraryExercise.id }
             val workoutDate = kotlinx.datetime.LocalDate(
@@ -90,7 +88,7 @@ class CompleteWorkoutSessionUseCase @Inject constructor(
             ).fold(
                 onSuccess = {
                     Timber.i(
-                        "Enhanced cache invalidation completed successfully for user: ${workout.userId}"
+                        "Workout invalidation event published successfully for user: ${workout.userId}"
                     )
                     CompletionSideEffectStatus(
                         effect = CompletionSideEffect.CACHE_INVALIDATION,
@@ -100,38 +98,22 @@ class CompleteWorkoutSessionUseCase @Inject constructor(
                 onFailure = { exception ->
                     Timber.e(
                         exception,
-                        "Enhanced cache invalidation failed for user: ${workout.userId}"
+                        "Workout invalidation event failed for user: ${workout.userId}"
                     )
-                    if (fallbackCacheInvalidation(workout.userId)) {
-                        CompletionSideEffectStatus(
-                            effect = CompletionSideEffect.CACHE_INVALIDATION,
-                            state = CompletionSideEffectState.SUCCESS,
-                            detail = "Fallback invalidation used"
-                        )
-                    } else {
-                        CompletionSideEffectStatus(
-                            effect = CompletionSideEffect.CACHE_INVALIDATION,
-                            state = CompletionSideEffectState.FAILED,
-                            detail = exception.message
-                        )
-                    }
+                    CompletionSideEffectStatus(
+                        effect = CompletionSideEffect.CACHE_INVALIDATION,
+                        state = CompletionSideEffectState.FAILED,
+                        detail = exception.message
+                    )
                 }
             )
         } catch (e: Exception) {
-            Timber.e(e, "Error in enhanced cache invalidation for user: ${workout.userId}")
-            if (fallbackCacheInvalidation(workout.userId)) {
-                CompletionSideEffectStatus(
-                    effect = CompletionSideEffect.CACHE_INVALIDATION,
-                    state = CompletionSideEffectState.SUCCESS,
-                    detail = "Fallback invalidation used after exception"
-                )
-            } else {
-                CompletionSideEffectStatus(
-                    effect = CompletionSideEffect.CACHE_INVALIDATION,
-                    state = CompletionSideEffectState.FAILED,
-                    detail = e.message
-                )
-            }
+            Timber.e(e, "Error publishing workout invalidation event for user: ${workout.userId}")
+            CompletionSideEffectStatus(
+                effect = CompletionSideEffect.CACHE_INVALIDATION,
+                state = CompletionSideEffectState.FAILED,
+                detail = e.message
+            )
         }
     }
 
@@ -173,20 +155,6 @@ class CompleteWorkoutSessionUseCase @Inject constructor(
         }
     }
 
-    private suspend fun fallbackCacheInvalidation(userId: String): Boolean {
-        return try {
-            Timber.d("Fallback cache invalidation for user: $userId")
-            cacheManager.invalidatePattern { cacheKey ->
-                val keyString = cacheKey.keyString
-                keyString.contains(":$userId:") || keyString.contains("user:$userId")
-            }
-            Timber.i("Fallback cache invalidation completed for user: $userId")
-            true
-        } catch (e: Exception) {
-            Timber.e(e, "Fallback cache invalidation failed for user: $userId")
-            false
-        }
-    }
 }
 
 data class CompleteWorkoutSessionResult(

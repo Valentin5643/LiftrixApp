@@ -10,9 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -47,7 +45,6 @@ fun FeedScreen(
 ) {
     val feedUiState by feedViewModel.uiState.collectAsStateWithLifecycle()
     val posts = feedViewModel.posts.collectAsLazyPagingItems()
-    val context = LocalContext.current
     
     // Create a local UI state for feed-specific functionality
     var selectedTab by remember { mutableStateOf(FeedTab.HOME) }
@@ -156,7 +153,11 @@ private fun FeedContent(
     ) {
         // Show shimmer loading state during initial load
         if (posts.loadState.refresh is LoadState.Loading && posts.itemCount == 0) {
-            items(5) { // Show 5 shimmer placeholders
+            items(
+                count = 5,
+                key = { index -> "feed_initial_shimmer_$index" },
+                contentType = { FeedContentType.InitialLoading }
+            ) { // Show 5 shimmer placeholders
                 FeedItemShimmer(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -167,7 +168,10 @@ private fun FeedContent(
         
         // Handle empty state for home feed
         if (posts.itemCount == 0 && posts.loadState.refresh !is LoadState.Loading) {
-            item {
+            item(
+                key = "feed_empty_${selectedTab.name}",
+                contentType = FeedContentType.Empty
+            ) {
                 EmptyFeedState(
                     feedType = selectedTab,
                     onDiscoverPeople = onDiscoverPeople,
@@ -190,7 +194,8 @@ private fun FeedContent(
                 } else {
                     "placeholder_$index"
                 }
-            }
+            },
+            contentType = { FeedContentType.Post }
         ) { index ->
             posts[index]?.let { post ->
                 WorkoutPostCard(
@@ -229,7 +234,10 @@ private fun FeedContent(
         // Loading state
         when (posts.loadState.append) {
             is LoadState.Loading -> {
-                item {
+                item(
+                    key = "feed_append_loading",
+                    contentType = FeedContentType.AppendLoading
+                ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -241,7 +249,10 @@ private fun FeedContent(
                 }
             }
             is LoadState.Error -> {
-                item {
+                item(
+                    key = "feed_append_error",
+                    contentType = FeedContentType.AppendError
+                ) {
                     ErrorDisplay(
                         error = convertThrowableToLiftrixError((posts.loadState.append as LoadState.Error).error),
                         onRetry = { posts.retry() },
@@ -256,7 +267,10 @@ private fun FeedContent(
 
         // Initial loading error
         if (posts.loadState.refresh is LoadState.Error && posts.itemCount == 0) {
-            item {
+            item(
+                key = "feed_refresh_error",
+                contentType = FeedContentType.RefreshError
+            ) {
                 ErrorDisplay(
                     error = convertThrowableToLiftrixError((posts.loadState.refresh as LoadState.Error).error),
                     onRetry = { posts.refresh() },
@@ -268,6 +282,19 @@ private fun FeedContent(
         }
     }
 }
+
+private enum class FeedContentType {
+    InitialLoading,
+    Empty,
+    Post,
+    AppendLoading,
+    AppendError,
+    RefreshError
+}
+
+// Feed scroll measurement notes: compare Compose compiler skippability reports,
+// Layout Inspector recomposition counts, and profiler frame timing before/after
+// changes; verify media rows still use lightweight AsyncImage placeholders.
 
 /**
  * Converts a generic Throwable to LiftrixError for consistent error handling

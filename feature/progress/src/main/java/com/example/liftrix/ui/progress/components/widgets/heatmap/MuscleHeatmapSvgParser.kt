@@ -27,7 +27,8 @@ internal data class MuscleHeatmapPath(
     val path: Path,
     val muscleGroup: MuscleGroup?,
     val isSeparator: Boolean,
-    val isFilledSeparator: Boolean = false
+    val isFilledSeparator: Boolean = false,
+    val sourceStrokeWidth: Float? = null
 )
 
 internal object MuscleHeatmapSvgParser {
@@ -89,7 +90,8 @@ internal object MuscleHeatmapSvgParser {
                                         path = PathParser().parsePathString(pathData).toPath(),
                                         muscleGroup = muscleGroupForSvgId(id, viewSide),
                                         isSeparator = isSeparator,
-                                        isFilledSeparator = isSeparator && isSeparatorGroup && parser.hasVisibleFill()
+                                        isFilledSeparator = isSeparator && isSeparatorGroup && parser.hasVisibleFill(),
+                                        sourceStrokeWidth = parser.sourceStrokeWidth()
                                     )
                                 }.getOrNull()?.let { path ->
                                     paths.add(path)
@@ -122,7 +124,9 @@ internal object MuscleHeatmapSvgParser {
                                     muscleGroup = muscleGroupForSvgId(effectiveId, viewSide)
                                         ?: referencedPath.muscleGroup,
                                     isSeparator = isSeparator,
-                                    isFilledSeparator = isSeparator && isSeparatorGroup && parser.hasVisibleFill()
+                                    isFilledSeparator = isSeparator && isSeparatorGroup && parser.hasVisibleFill(),
+                                    sourceStrokeWidth = parser.sourceStrokeWidth()
+                                        ?: referencedPath.sourceStrokeWidth
                                 )
                             )
                         }
@@ -193,6 +197,14 @@ internal object MuscleHeatmapSvgParser {
     private fun XmlPullParser.hasVisibleFill(): Boolean {
         val fill = getAttributeValue(null, "fill")
         return !fill.isNullOrBlank() && !fill.equals("none", ignoreCase = true)
+    }
+
+    private fun XmlPullParser.sourceStrokeWidth(): Float? {
+        val stroke = getAttributeValue(null, "stroke")
+        if (stroke.isNullOrBlank() || stroke.equals("none", ignoreCase = true)) {
+            return null
+        }
+        return getAttributeValue(null, "stroke-width")?.toFloatOrNull() ?: 1f
     }
 
     private fun Path.transformedBySvgUse(transform: String): Path {

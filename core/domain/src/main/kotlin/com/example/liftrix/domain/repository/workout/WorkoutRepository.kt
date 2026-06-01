@@ -43,18 +43,18 @@ interface WorkoutRepository {
      * Get all workouts for a specific user.
      * 
      * @param userId The user ID for data scoping
-     * @return Flow of LiftrixResult with list of user's workouts
+     * @return Flow of user's workouts from the local source of truth
      */
-    fun getWorkoutsByUser(userId: String): Flow<LiftrixResult<List<Workout>>>
+    fun getWorkoutsByUser(userId: String): Flow<List<Workout>>
     
     /**
      * Get workouts for a specific date and user.
      * 
      * @param date The date to filter by
      * @param userId The user ID for data scoping
-     * @return Flow of LiftrixResult with workouts on the specified date
+     * @return Flow of workouts on the specified date from the local source of truth
      */
-    fun getWorkoutsByDate(date: LocalDate, userId: String): Flow<LiftrixResult<List<Workout>>>
+    fun getWorkoutsByDate(date: LocalDate, userId: String): Flow<List<Workout>>
     
     /**
      * Update an existing workout.
@@ -86,9 +86,9 @@ interface WorkoutRepository {
      * 
      * @param userId The user ID for data scoping
      * @param limit Maximum number of workouts to return (default: 10)
-     * @return Flow of LiftrixResult with recent workouts ordered by date descending
+     * @return Flow of recent workouts ordered by date descending from the local source of truth
      */
-    fun getRecentWorkouts(userId: String, limit: Int = 10): Flow<LiftrixResult<List<Workout>>>
+    fun getRecentWorkouts(userId: String, limit: Int = 10): Flow<List<Workout>>
     
     /**
      * Check if a workout exists for the specified user.

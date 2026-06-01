@@ -1,13 +1,9 @@
 package com.example.liftrix.sync
 
-import android.content.Context
-import androidx.work.ExistingWorkPolicy
-import androidx.work.WorkManager
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.service.CombinedSyncStatus
 import com.example.liftrix.domain.sync.SyncScheduler
 import com.example.liftrix.service.sync.RealtimeSyncManager
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import timber.log.Timber
@@ -17,15 +13,11 @@ import javax.inject.Singleton
 
 @Singleton
 class WorkManagerSyncScheduler @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val syncCoordinator: SyncCoordinator,
     private val syncManagerProvider: Provider<SyncManager>,
     private val realtimeSyncManager: RealtimeSyncManager,
     private val engagementRealtimeSyncService: EngagementRealtimeSyncService
 ) : SyncScheduler {
-
-    private val workManager: WorkManager
-        get() = WorkManager.getInstance(context)
 
     override fun schedulePeriodicSync(userId: String) {
         syncCoordinator.schedulePeriodicSync(userId)
@@ -36,11 +28,11 @@ class WorkManagerSyncScheduler @Inject constructor(
     }
 
     override suspend fun triggerAllSync(userId: String): LiftrixResult<Unit> {
-        return syncManager.syncAllData(userId)
+        return syncCoordinator.triggerImmediateSync(userId)
     }
 
     override suspend fun triggerAnalyticsSync(userId: String): LiftrixResult<Unit> {
-        return syncManager.syncAnalyticsNow(userId)
+        return syncCoordinator.triggerEntitySync(userId, "analytics")
     }
 
     override suspend fun triggerEntitySync(userId: String, entityType: String): LiftrixResult<Unit> {
@@ -68,9 +60,7 @@ class WorkManagerSyncScheduler @Inject constructor(
     }
 
     override fun cancelAllSync() {
-        syncManager.cancelSync()
-        syncManager.cancelAnalyticsSync()
-        workManager.cancelAllWork()
+        syncCoordinator.cancelAllSync()
     }
 
     override fun observeWorkoutSyncStatus(): Flow<com.example.liftrix.domain.service.SyncStatus> {
@@ -99,12 +89,12 @@ class WorkManagerSyncScheduler @Inject constructor(
     }
 
     override fun enqueueUserPublicSync(userId: String, forceSync: Boolean) {
-        workManager.enqueue(UserPublicSyncWorker.createWorkRequest(userId, forceSync))
+        syncCoordinator.enqueueEntitySync(userId, "user_public", forceSync)
         Timber.d("Queued user public sync for user $userId")
     }
 
     override fun enqueueSocialProfileSync(userId: String, forceSync: Boolean) {
-        workManager.enqueue(SocialProfileSyncWorker.createWorkRequest(userId, forceSync))
+        syncCoordinator.enqueueEntitySync(userId, "social_profile", forceSync)
         Timber.d("Queued social profile sync for user $userId")
     }
 
@@ -113,53 +103,33 @@ class WorkManagerSyncScheduler @Inject constructor(
         forceSync: Boolean,
         restoreFromFirebase: Boolean
     ) {
-        val request = if (restoreFromFirebase) {
-            FollowRelationshipSyncWorker.createRestoreWorkRequest(userId)
-        } else {
-            FollowRelationshipSyncWorker.createWorkRequest(
-                userId = userId,
-                forceSync = forceSync,
-                restoreFromFirebase = false
-            )
-        }
-        workManager.enqueue(request)
+        syncCoordinator.enqueueEntitySync(userId, "follow_relationship", forceSync || restoreFromFirebase)
         Timber.d("Queued follow relationship sync for user $userId")
     }
 
     override fun enqueueWorkoutPostSync(userId: String, forceSync: Boolean) {
-        val request = WorkoutPostSyncWorker.createWorkRequest(userId, forceSync)
-        workManager.enqueue(request)
-        Timber.i(
-            "[PUBLIC-LOG] Enqueued workout post sync user=$userId forceSync=$forceSync requestId=${request.id}"
-        )
+        syncCoordinator.enqueueEntitySync(userId, "workout_post", forceSync)
+        Timber.i("[PUBLIC-LOG] Enqueued unified workout post sync user=$userId forceSync=$forceSync")
         Timber.d("Queued workout post sync for user $userId")
     }
 
     override fun enqueueGymBuddySync(userId: String, forceSync: Boolean) {
-        workManager.enqueue(GymBuddySyncWorker.createWorkRequest(userId, forceSync))
+        syncCoordinator.enqueueEntitySync(userId, "gym_buddy", forceSync)
         Timber.d("Queued gym buddy sync for user $userId")
     }
 
     override fun enqueueAchievementSync(userId: String) {
-        workManager.enqueueUniqueWork(
-            "${AchievementSyncWorker.WORK_NAME}_$userId",
-            ExistingWorkPolicy.REPLACE,
-            AchievementSyncWorker.createWorkRequest(userId)
-        )
+        syncCoordinator.enqueueEntitySync(userId, "achievement", forceSync = true)
         Timber.d("Queued achievement sync for user $userId")
     }
 
     override fun enqueueProfileSync(userId: String, forceSync: Boolean) {
-        workManager.enqueueUniqueWork(
-            ProfileSyncWorker.getWorkName(userId),
-            ExistingWorkPolicy.REPLACE,
-            ProfileSyncWorker.createWorkRequest(userId, forceSync)
-        )
+        syncCoordinator.enqueueEntitySync(userId, "profile", forceSync)
         Timber.d("Queued profile sync for user $userId")
     }
 
     override fun enqueueSettingsSync(userId: String, forceSync: Boolean) {
-        workManager.enqueue(SettingsSyncWorkerV2.createWorkRequest(userId, forceSync))
+        syncCoordinator.enqueueEntitySync(userId, "settings", forceSync)
         Timber.d("Queued settings sync for user $userId")
     }
 

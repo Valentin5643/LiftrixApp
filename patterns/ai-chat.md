@@ -1,22 +1,22 @@
 # AI Chat Patterns
 
-Last moved from root `AGENTS.md`: 2026-05-05. Source audit baseline: 2026-05-01.
+Last moved from root `AGENTS.md`: 2026-05-05. Source refresh: 2026-05-31.
 
 Use this when touching chat, AI coach, generated workout programs, abuse prevention, rate limiting, chat persistence, quota accounting, or Firebase AI.
 
 ## Core Flow
 
 ```text
-ChatbotViewModel
+ChatbotViewModel (:feature:chat)
   -> SendChatMessageUseCase / ChatOperationsUseCase
-  -> AIChatService
-  -> AbusePreventionService
-  -> RateLimitingService
+  -> AIChatService (:core:data)
+  -> AbusePreventionService (:core:data)
+  -> RateLimitingService (:core:data)
   -> Firebase AI / Gemini integration
   -> chat persistence and usage accounting
 ```
 
-The source-audited architecture docs identify Firebase AI usage with `gemini-2.5-flash-lite`.
+The source refresh identified Firebase AI usage with `gemini-2.5-flash-lite` in `AIChatServiceImpl` and `WorkoutProgramGenerationServiceImpl`.
 
 ## Core Rules
 
@@ -50,7 +50,7 @@ Prior root guidance listed limits as 100 messages/day, 10k tokens/month, and $1/
 
 - Romanian auto-detection was previously based on Romanian diacritics.
 - Fitness keywords reduce jailbreak score in the existing guidance.
-- Only the last 10 messages are included in context per the prior guide; verify current source before relying on or changing this.
+- Recent-message context is intentionally bounded. `SendChatMessageUseCase` uses a last-10-message window; service-level context truncation also exists in AI service code. Verify both layers before changing prompt context size.
 
 ## Debug Hot Zones
 
@@ -63,4 +63,4 @@ Prior root guidance listed limits as 100 messages/day, 10k tokens/month, and $1/
 ## Related Docs
 
 - Architecture and ownership: `docs/architecture.md`, `docs/module-map.md`.
-- Chat modularization specs live under `docs/specs/` and `docs/specs/modularization/`; treat them as historical/planning docs unless source confirms completion.
+- `:feature:chat` is registered and source-backed. Chat modularization specs under `docs/specs/` and `docs/specs/modularization/` remain useful for intent/history, but source is authoritative for current ownership.

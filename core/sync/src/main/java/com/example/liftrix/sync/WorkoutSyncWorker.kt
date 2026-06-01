@@ -11,6 +11,7 @@ import androidx.work.BackoffPolicy
 import androidx.work.workDataOf
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.local.dao.DeadLetterQueueDao
+import com.example.liftrix.data.local.dao.AnalyticsReadModelDao
 import com.example.liftrix.data.local.entity.DeadLetterQueueEntity
 import androidx.hilt.work.HiltWorker
 import dagger.assisted.Assisted
@@ -41,6 +42,7 @@ class WorkoutSyncWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val workoutDao: WorkoutDao,
     private val deadLetterDao: DeadLetterQueueDao,
+    private val analyticsReadModelDao: AnalyticsReadModelDao,
     private val workoutMapper: WorkoutMapper,
     private val firestore: FirebaseFirestore,
     private val auth: FirebaseAuth,
@@ -55,6 +57,18 @@ class WorkoutSyncWorker @AssistedInject constructor(
     }
 
     override val workerName: String = "WorkoutSyncWorker"
+
+    private suspend fun upsertRemoteWorkoutAndRefreshReadModels(entity: com.example.liftrix.data.local.entity.WorkoutEntity) {
+        val previousReadModelDate = analyticsReadModelDao.getReadModelDateForWorkout(entity.userId, entity.id)
+        val previousExerciseIds = analyticsReadModelDao.getExerciseLibraryIdsForWorkout(entity.userId, entity.id)
+        workoutDao.upsertFromRemote(entity)
+        analyticsReadModelDao.refreshWorkoutReadModels(
+            userId = entity.userId,
+            workoutId = entity.id,
+            oldWorkoutDate = previousReadModelDate,
+            oldExerciseLibraryIds = previousExerciseIds
+        )
+    }
 
     companion object {
         const val WORK_NAME = "workout_sync_work"
@@ -404,7 +418,7 @@ class WorkoutSyncWorker @AssistedInject constructor(
                                         lastModified = effectiveRemoteLastModified,
                                         syncVersion = System.currentTimeMillis()
                                     )
-                                    workoutDao.upsertFromRemote(updatedEntity)
+                                    upsertRemoteWorkoutAndRefreshReadModels(updatedEntity)
                                     Timber.tag("WorkoutSyncDebug").w(
                                         "[DATABASE-DEBUG] operation=FIREBASE_OVERWRITES_ROOM_DURING_UPLOAD_PREFETCH source=Firebase userId=$userId workoutId=${workout.id} timestamp=${System.currentTimeMillis()} beforeCount=$beforeOverwriteCount afterCount=${workoutDao.getWorkoutCountForUser(userId)} localLastModified=$localLastModified remoteLastModified=$effectiveRemoteLastModified localStatus=${workout.status} remoteStatus=${remoteWorkout.status} localEndTimePresent=${workout.endTime != null} remoteEndTimePresent=${remoteWorkout.endTime != null}"
                                     )
@@ -600,7 +614,7 @@ class WorkoutSyncWorker @AssistedInject constructor(
                     lastModified = effectiveRemoteLastModified,
                     syncVersion = System.currentTimeMillis()
                 )
-                workoutDao.upsertFromRemote(localEntity)
+                upsertRemoteWorkoutAndRefreshReadModels(localEntity)
                 Timber.tag("FreshLoginRestoreDebug").i(
                     "operation=WORKOUT_ROOM_INSERT_FROM_FIREBASE userId=$userId workoutId=$remoteId syncType=regular roomBeforeCount=$beforeCount roomAfterCount=${workoutDao.getWorkoutCountForUser(userId)} remoteLastModified=$effectiveRemoteLastModified timestamp=${System.currentTimeMillis()}"
                 )
@@ -668,7 +682,7 @@ class WorkoutSyncWorker @AssistedInject constructor(
                             lastModified = effectiveRemoteLastModified,
                             syncVersion = System.currentTimeMillis()
                         )
-                        workoutDao.upsertFromRemote(updatedEntity)
+                        upsertRemoteWorkoutAndRefreshReadModels(updatedEntity)
                         Timber.tag("WorkoutSyncDebug").w(
                             "[DATABASE-DEBUG] operation=FIREBASE_OVERWRITES_ROOM source=Firebase userId=$userId workoutId=$remoteId timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount afterCount=${workoutDao.getWorkoutCountForUser(userId)} localDirty=$localIsDirty localLastModified=$localLastModified remoteLastModified=$effectiveRemoteLastModified localStatus=${localWorkout.status} remoteStatus=${remoteWorkout.status} localEndTimePresent=${localWorkout.endTime != null} remoteEndTimePresent=${remoteWorkout.endTime != null}"
                         )
@@ -872,7 +886,7 @@ class WorkoutSyncWorker @AssistedInject constructor(
                     lastModified = effectiveRemoteLastModified,
                     syncVersion = System.currentTimeMillis()
                 )
-                workoutDao.upsertFromRemote(localEntity)
+                upsertRemoteWorkoutAndRefreshReadModels(localEntity)
 
                 Timber.d("[SYNC-STARTUP] Inserted new remote workout: $remoteId")
                 "MERGED"
@@ -912,7 +926,7 @@ class WorkoutSyncWorker @AssistedInject constructor(
                             lastModified = effectiveRemoteLastModified,
                             syncVersion = System.currentTimeMillis()
                         )
-                        workoutDao.upsertFromRemote(updatedEntity)
+                        upsertRemoteWorkoutAndRefreshReadModels(updatedEntity)
 
                         Timber.i("[SYNC-STARTUP] Updated local with newer remote: $remoteId")
                         "CONFLICT_RESOLVED"

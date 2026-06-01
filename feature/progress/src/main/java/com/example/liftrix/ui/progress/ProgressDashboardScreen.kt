@@ -106,6 +106,7 @@ import com.example.liftrix.domain.model.analytics.TrendDirection
 import com.example.liftrix.domain.progress.ProgressCalorieSummary
 import com.example.liftrix.domain.model.analytics.UserLevel
 import com.example.liftrix.domain.model.analytics.WidgetPriority
+import com.example.liftrix.ui.common.performance.ChartPerformanceOptimizations
 import com.example.liftrix.ui.common.validation.ViewModelValidator
 import com.example.liftrix.core.extensions.collectAsOptimizedState
 import com.example.liftrix.ui.progress.NavigationCallbacks
@@ -358,6 +359,26 @@ private fun ProgressDashboardContent(
     
     // Get unit conversion service for widgets
     val unitConversionService = coordinator.getUnitConversionService()
+
+    LaunchedEffect(Unit) {
+        ChartPerformanceOptimizations.traceDashboardMilestone("screen_composed")
+    }
+
+    LaunchedEffect(
+        widgetState.isLoading,
+        summaryState.isRefreshing,
+        chartsState.isLoadingChartData()
+    ) {
+        if (!widgetState.isLoading && !summaryState.isRefreshing && !chartsState.isLoadingChartData()) {
+            ChartPerformanceOptimizations.traceDashboardMilestone(
+                milestone = "dashboard_content_ready",
+                attributes = mapOf(
+                    "active_widgets" to widgetState.activeWidgets.size,
+                    "analytics_enabled" to featuresState.analyticsEnabled
+                )
+            )
+        }
+    }
     
     LazyColumn(
         modifier = Modifier
@@ -365,12 +386,18 @@ private fun ProgressDashboardContent(
             .padding(horizontal = 14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp) // Tighter spacing (FR-005)
     ) {
-        item {
+        item(
+            key = "top_spacing",
+            contentType = "spacing"
+        ) {
             Spacer(modifier = Modifier.height(8.dp))
         }
 
         // Modern screen header with enhanced typography and export functionality
-        item {
+        item(
+            key = "dashboard_header",
+            contentType = "header"
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -431,7 +458,10 @@ private fun ProgressDashboardContent(
 
 
         // Time period selector with modern styling
-        item {
+        item(
+            key = "time_range_selector",
+            contentType = "controls"
+        ) {
             GlobalTimeRangeSelector(
                 selectedTimeRange = chartsState.currentTimeRange.type,
                 onTimeRangeChange = { newTimeRangeType ->
@@ -470,7 +500,10 @@ private fun ProgressDashboardContent(
         // }
 
         // Enhanced summary stats with modern card design
-        item {
+        item(
+            key = "summary_section",
+            contentType = "summary"
+        ) {
             SummarySection(
                 summaryState = summaryState,
                 onEvent = onSummaryEvent,
@@ -483,7 +516,10 @@ private fun ProgressDashboardContent(
 
         // Widget-based analytics dashboard with responsive layout
         if (featuresState.analyticsEnabled) {
-            item {
+            item(
+                key = "responsive_widgets",
+                contentType = "widgets"
+            ) {
                 ResponsiveWidgetsSection(
                     widgetState = widgetState,
                     strengthForecastState = strengthForecastState,
@@ -491,14 +527,17 @@ private fun ProgressDashboardContent(
                     onStrengthForecastEvent = onStrengthForecastEvent,
                     onEvent = onWidgetEvent,
                     coordinatorPreferences = coordinatorState.coordinatorPreferences,
-                    unitConversionService = coordinator.getUnitConversionService(),
+                    unitConversionService = unitConversionService,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
         }
 
         // Charts section with enhanced debugging
-        item {
+        item(
+            key = "charts_section",
+            contentType = "charts"
+        ) {
             ChartsSection(
                 chartsState = chartsState,
                 onEvent = onChartsEvent,
@@ -508,7 +547,10 @@ private fun ProgressDashboardContent(
             )
         }
 
-        item {
+        item(
+            key = "bottom_spacing",
+            contentType = "spacing"
+        ) {
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
@@ -966,16 +1008,40 @@ private fun ResponsiveWidgetsSection(
     modifier: Modifier = Modifier
 ) {
     val windowSizeClass = rememberWindowSizeClass()
+    val filteredWidgets = remember(widgetState.activeWidgets) {
+        widgetState.activeWidgets.filterNot { widget -> widget.isDeprecated }
+    }
+    val userPreference = remember(widgetState.preferences?.dashboardLayout) {
+        mapDomainLayoutModeToUI(widgetState.preferences?.dashboardLayout)
+    }
+    val layoutMode = remember(
+        userPreference,
+        windowSizeClass.widthDp,
+        filteredWidgets.size
+    ) {
+        val uiLayoutMode = DashboardLayoutMode.getOptimalMode(
+            screenWidthDp = windowSizeClass.widthDp.value.toInt(),
+            widgetCount = filteredWidgets.size,
+            userPreference = userPreference
+        )
+        DashboardLayoutMode.toDomain(uiLayoutMode)
+    }
+    val enableDragAndDrop = remember(userPreference, windowSizeClass.supportsDragAndDrop) {
+        userPreference == DashboardLayoutMode.CUSTOM || windowSizeClass.supportsDragAndDrop
+    }
+    val widgetDataProvider = remember(widgetState.widgetDataMap) {
+        { widget: com.example.liftrix.domain.model.analytics.AnalyticsWidget ->
+            widgetState.widgetDataMap[widget] ?: createDefaultWidgetData(widget)
+        }
+    }
+    val configurableCount = remember(filteredWidgets) {
+        filteredWidgets.count { it.priority != WidgetPriority.FIXED_BEGINNER }
+    }
     
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Filter out deprecated widgets for modern focused experience
-        val filteredWidgets = widgetState.activeWidgets.filterNot { widget ->
-            widget.isDeprecated
-        }
-        
         // Widget customization button (only for Intermediate/Advanced users)
         val userLevel = widgetState.preferences?.userLevel ?: UserLevel.BEGINNER
         if (userLevel != UserLevel.BEGINNER) {
@@ -988,9 +1054,6 @@ private fun ResponsiveWidgetsSection(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val configurableCount = filteredWidgets.count { 
-                        it.priority != WidgetPriority.FIXED_BEGINNER 
-                    }
                     Text(
                         text = "$configurableCount configurable widgets",
                         style = MaterialTheme.typography.bodySmall,
@@ -1023,30 +1086,16 @@ private fun ResponsiveWidgetsSection(
                 ResponsiveDashboardLayout(
                     widgets = filteredWidgets,
                     configuration = widgetState.configuration,
-                    layoutMode = run {
-                        val userPreference = mapDomainLayoutModeToUI(widgetState.preferences?.dashboardLayout)
-
-                        // Convert UI enum result back to domain enum for ResponsiveDashboardLayout
-                        val uiLayoutMode = DashboardLayoutMode.getOptimalMode(
-                            screenWidthDp = windowSizeClass.widthDp.value.toInt(),
-                            widgetCount = filteredWidgets.size,
-                            userPreference = userPreference
-                        )
-                        val result = DashboardLayoutMode.toDomain(uiLayoutMode)
-
-                        result
-                    },
+                    layoutMode = layoutMode,
                     onWidgetClick = { widget ->
                         onEvent(AnalyticsWidgetEvent.WidgetClicked(widget))
                     },
                     onWidgetReorder = { from, to ->
                         onEvent(AnalyticsWidgetEvent.WidgetReordered(from, to))
                     },
-                    widgetDataProvider = { widget ->
-                        widgetState.widgetDataMap[widget] ?: createDefaultWidgetData(widget)
-                    },
+                    widgetDataProvider = widgetDataProvider,
                     isLoading = widgetState.isLoading,
-                    enableDragAndDrop = mapDomainLayoutModeToUI(widgetState.preferences?.dashboardLayout) == DashboardLayoutMode.CUSTOM || windowSizeClass.supportsDragAndDrop,
+                    enableDragAndDrop = enableDragAndDrop,
                     windowSizeClass = windowSizeClass,
                     coordinatorPreferences = coordinatorPreferences,
                     unitConversionService = unitConversionService

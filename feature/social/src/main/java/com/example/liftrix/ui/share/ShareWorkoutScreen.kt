@@ -1,5 +1,7 @@
 package com.example.liftrix.ui.share
 
+import android.content.Intent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,73 +15,72 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.QrCode
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.IosShare
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import com.example.liftrix.domain.model.ExternalShare
-import com.example.liftrix.domain.model.ShareableContent
-import com.example.liftrix.domain.model.ShareableContentType
-import com.example.liftrix.domain.model.SocialPlatform
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.theme.LiftrixSpacing
+import kotlinx.coroutines.flow.Flow
 
-/**
- * Share workflow screen for sharing workouts to external platforms.
- * Part of content sharing and media management system from SPEC-20250113-content-sharing-media.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShareWorkoutScreen(
-    workoutContent: ShareableContent,
-    shareUrl: String,
+    state: ShareWorkoutViewModel.ShareWorkoutUiState,
+    effects: Flow<WorkoutShareEffect>,
     onNavigateBack: () -> Unit,
-    onShareToPlatform: (SocialPlatform, String?) -> Unit,
-    onGenerateQRCode: () -> Unit,
+    onTemplateSelected: (String) -> Unit,
+    onActionSelected: (WorkoutShareAction) -> Unit,
     modifier: Modifier = Modifier,
     showTopBar: Boolean = true
 ) {
-    var customMessage by remember { mutableStateOf("") }
-    var selectedPlatform by remember { mutableStateOf<SocialPlatform?>(null) }
-    
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(effects) {
+        effects.collect { effect ->
+            when (effect) {
+                is WorkoutShareEffect.LaunchShare -> {
+                    runCatching { context.startActivity(effect.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                        .onFailure { snackbarHostState.showSnackbar("No app can handle this share action") }
+                }
+                is WorkoutShareEffect.SaveSucceeded -> snackbarHostState.showSnackbar("Story saved to device")
+                is WorkoutShareEffect.ShowError -> snackbarHostState.showSnackbar(effect.message)
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             if (showTopBar) {
@@ -87,269 +88,123 @@ fun ShareWorkoutScreen(
                     title = { Text("Share Workout") },
                     navigationIcon = {
                         IconButton(onClick = onNavigateBack) {
-                            Icon(
-                                imageVector = Icons.Default.ArrowBack,
-                                contentDescription = "Back"
-                            )
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                         }
                     }
                 )
             }
         },
-        floatingActionButton = {
-            if (selectedPlatform != null) {
-                FloatingActionButton(
-                    onClick = {
-                        selectedPlatform?.let { platform ->
-                            onShareToPlatform(platform, customMessage.takeIf { it.isNotBlank() })
-                        }
-                    },
-                    containerColor = LiftrixColorsV2.primary
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = "Share",
-                        tint = Color.White
-                    )
-                }
-            }
-        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         modifier = modifier
     ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(LiftrixSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.large)
-        ) {
-            item {
-                WorkoutPreviewCard(
-                    content = workoutContent
-                )
-            }
-            
-            item {
-                ShareLinkCard(
-                    shareUrl = shareUrl,
-                    onGenerateQRCode = onGenerateQRCode
-                )
-            }
-            
-            item {
-                PlatformSelectionSection(
-                    selectedPlatform = selectedPlatform,
-                    onPlatformSelected = { selectedPlatform = it }
-                )
-            }
-            
-            item {
-                CustomMessageSection(
-                    message = customMessage,
-                    onMessageChanged = { customMessage = it },
-                    selectedPlatform = selectedPlatform
-                )
-            }
-            
-            if (selectedPlatform != null) {
-                item {
-                    SharePreviewCard(
-                        platform = selectedPlatform!!,
-                        content = workoutContent,
-                        customMessage = customMessage
-                    )
-                }
-            }
+        when {
+            state.isLoading -> LoadingState(paddingValues)
+            state.errorMessage != null -> ErrorState(paddingValues, state.errorMessage)
+            state.storyStats != null -> StoryContent(
+                paddingValues = paddingValues,
+                state = state,
+                onTemplateSelected = onTemplateSelected,
+                onActionSelected = onActionSelected
+            )
         }
     }
 }
 
 @Composable
-private fun WorkoutPreviewCard(
-    content: ShareableContent
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = LiftrixColorsV2.surface
-        )
+private fun LoadingState(paddingValues: PaddingValues) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues),
+        contentAlignment = Alignment.Center
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(LiftrixSpacing.medium)
-        ) {
-            Text(
-                text = "Workout Summary",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            
-            Spacer(modifier = Modifier.height(LiftrixSpacing.medium))
-            
-            if (content.imageUrl != null) {
-                AsyncImage(
-                    model = content.imageUrl,
-                    contentDescription = "Workout image",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                        .clip(RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.Crop
-                )
-                
-                Spacer(modifier = Modifier.height(LiftrixSpacing.medium))
-            }
-            
-            Text(
-                text = content.title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-            
-            content.subtitle?.let { subtitle ->
-                Spacer(modifier = Modifier.height(LiftrixSpacing.small))
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            
-            if (content.stats.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(LiftrixSpacing.medium))
-                WorkoutStatsRow(stats = content.stats)
-            }
-        }
+        CircularProgressIndicator()
     }
 }
 
 @Composable
-private fun WorkoutStatsRow(
-    stats: Map<String, Any>
+private fun ErrorState(
+    paddingValues: PaddingValues,
+    message: String
 ) {
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.medium)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+            .padding(LiftrixSpacing.large),
+        contentAlignment = Alignment.Center
     ) {
-        items(stats.entries.toList()) { (key, value) ->
-            StatItem(
-                label = key.replace("_", " ").capitalize(),
-                value = value.toString()
-            )
-        }
-    }
-}
-
-@Composable
-private fun StatItem(
-    label: String,
-    value: String
-) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = LiftrixColorsV2.primary.copy(alpha = 0.1f)
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(LiftrixSpacing.small),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = LiftrixColorsV2.primary
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-private fun ShareLinkCard(
-    shareUrl: String,
-    onGenerateQRCode: () -> Unit
-) {
-    val clipboardManager = LocalClipboardManager.current
-    
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = LiftrixColorsV2.surface
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(LiftrixSpacing.medium)
-        ) {
-            Text(
-                text = "Share Link",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            
-            Spacer(modifier = Modifier.height(LiftrixSpacing.medium))
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = shareUrl,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = LiftrixColorsV2.primary,
-                    modifier = Modifier.weight(1f)
-                )
-                
-                IconButton(
-                    onClick = {
-                        clipboardManager.setText(AnnotatedString(shareUrl))
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ContentCopy,
-                        contentDescription = "Copy link"
-                    )
-                }
-                
-                IconButton(onClick = onGenerateQRCode) {
-                    Icon(
-                        imageVector = Icons.Default.QrCode,
-                        contentDescription = "Generate QR Code"
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlatformSelectionSection(
-    selectedPlatform: SocialPlatform?,
-    onPlatformSelected: (SocialPlatform) -> Unit
-) {
-    Column {
         Text(
-            text = "Choose Platform",
+            text = message,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.error
+        )
+    }
+}
+
+@Composable
+private fun StoryContent(
+    paddingValues: PaddingValues,
+    state: ShareWorkoutViewModel.ShareWorkoutUiState,
+    onTemplateSelected: (String) -> Unit,
+    onActionSelected: (WorkoutShareAction) -> Unit
+) {
+    val stats = state.storyStats ?: return
+    val selectedTemplate = state.selectedTemplate ?: WorkoutShareTemplateCatalog.defaultTemplate
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues),
+        contentPadding = PaddingValues(LiftrixSpacing.medium),
+        verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.large)
+    ) {
+        item {
+            WorkoutShareStoryPreview(
+                stats = stats,
+                template = selectedTemplate,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 34.dp)
+            )
+        }
+
+        item {
+            TemplateSelector(
+                templates = state.templates,
+                selectedTemplateId = selectedTemplate.id,
+                onTemplateSelected = onTemplateSelected
+            )
+        }
+
+        item {
+            ShareActions(
+                isGenerating = state.isGenerating,
+                activeAction = state.activeAction,
+                onActionSelected = onActionSelected
+            )
+        }
+    }
+}
+
+@Composable
+private fun TemplateSelector(
+    templates: List<WorkoutShareTemplate>,
+    selectedTemplateId: String,
+    onTemplateSelected: (String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.small)) {
+        Text(
+            text = "Template",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold
         )
-        
-        Spacer(modifier = Modifier.height(LiftrixSpacing.medium))
-        
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.medium)
-        ) {
-            items(getSupportedPlatforms()) { platform ->
-                PlatformItem(
-                    platform = platform,
-                    isSelected = selectedPlatform == platform,
-                    onClick = { onPlatformSelected(platform) }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.small)) {
+            items(templates) { template ->
+                TemplateChip(
+                    template = template,
+                    isSelected = template.id == selectedTemplateId,
+                    onClick = { onTemplateSelected(template.id) }
                 )
             }
         }
@@ -357,361 +212,128 @@ private fun PlatformSelectionSection(
 }
 
 @Composable
-private fun PlatformItem(
-    platform: SocialPlatform,
+private fun TemplateChip(
+    template: WorkoutShareTemplate,
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val platformData = getPlatformData(platform)
-    
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable { onClick() }
-    ) {
-        Box {
-            Card(
-                modifier = Modifier.size(64.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isSelected) {
-                        LiftrixColorsV2.primary
-                    } else {
-                        platformData.color.copy(alpha = 0.1f)
-                    }
-                ),
-                shape = CircleShape
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = platformData.icon,
-                        contentDescription = platform.name,
-                        tint = if (isSelected) Color.White else platformData.color,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
+    Card(
+        modifier = Modifier
+            .size(width = 126.dp, height = 58.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) {
+                LiftrixColorsV2.primary.copy(alpha = 0.16f)
+            } else {
+                MaterialTheme.colorScheme.surface
             }
-            
-            if (isSelected) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .size(20.dp)
-                        .background(
-                            color = LiftrixColorsV2.Dark.Success,
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = "Selected",
-                        tint = Color.White,
-                        modifier = Modifier.size(12.dp)
-                    )
-                }
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(LiftrixSpacing.small))
-        
-        Text(
-            text = platformData.displayName,
-            style = MaterialTheme.typography.labelMedium,
-            textAlign = TextAlign.Center
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (isSelected) LiftrixColorsV2.primary else MaterialTheme.colorScheme.outlineVariant
         )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = template.displayName,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                color = if (isSelected) LiftrixColorsV2.primary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
 @Composable
-private fun CustomMessageSection(
-    message: String,
-    onMessageChanged: (String) -> Unit,
-    selectedPlatform: SocialPlatform?
+private fun ShareActions(
+    isGenerating: Boolean,
+    activeAction: WorkoutShareAction?,
+    onActionSelected: (WorkoutShareAction) -> Unit
 ) {
-    Column {
+    Column(verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.medium)) {
         Text(
-            text = "Custom Message (Optional)",
+            text = "Export",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold
         )
-        
-        Spacer(modifier = Modifier.height(LiftrixSpacing.medium))
-        
-        OutlinedTextField(
-            value = message,
-            onValueChange = onMessageChanged,
-            placeholder = {
-                Text(
-                    text = getMessagePlaceholder(selectedPlatform),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
-            maxLines = 3
-        )
-        
-        selectedPlatform?.let { platform ->
-            Spacer(modifier = Modifier.height(LiftrixSpacing.small))
-            Text(
-                text = getPlatformTip(platform),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+        Row(horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.small)) {
+            ActionButton(
+                label = "Instagram",
+                icon = Icons.Default.IosShare,
+                action = WorkoutShareAction.InstagramStory,
+                isGenerating = isGenerating,
+                activeAction = activeAction,
+                modifier = Modifier.weight(1f),
+                onActionSelected = onActionSelected
+            )
+            ActionButton(
+                label = "WhatsApp",
+                icon = Icons.Default.Send,
+                action = WorkoutShareAction.WhatsApp,
+                isGenerating = isGenerating,
+                activeAction = activeAction,
+                modifier = Modifier.weight(1f),
+                onActionSelected = onActionSelected
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.small)) {
+            ActionButton(
+                label = "Save",
+                icon = Icons.Default.Download,
+                action = WorkoutShareAction.Save,
+                isGenerating = isGenerating,
+                activeAction = activeAction,
+                modifier = Modifier.weight(1f),
+                onActionSelected = onActionSelected
+            )
+            ActionButton(
+                label = "Share",
+                icon = Icons.Default.MoreHoriz,
+                action = WorkoutShareAction.NativeShare,
+                isGenerating = isGenerating,
+                activeAction = activeAction,
+                modifier = Modifier.weight(1f),
+                onActionSelected = onActionSelected
             )
         }
     }
 }
 
 @Composable
-private fun SharePreviewCard(
-    platform: SocialPlatform,
-    content: ShareableContent,
-    customMessage: String
+private fun ActionButton(
+    label: String,
+    icon: ImageVector,
+    action: WorkoutShareAction,
+    isGenerating: Boolean,
+    activeAction: WorkoutShareAction?,
+    modifier: Modifier = Modifier,
+    onActionSelected: (WorkoutShareAction) -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = LiftrixColorsV2.surface
-        )
+    val showSpinner = isGenerating && activeAction == action
+    Button(
+        onClick = { onActionSelected(action) },
+        enabled = !isGenerating,
+        modifier = modifier.height(48.dp),
+        shape = RoundedCornerShape(8.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(LiftrixSpacing.medium)
-        ) {
-            Text(
-                text = "Share Preview",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+        if (showSpinner) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = Color.White
             )
-            
-            Spacer(modifier = Modifier.height(LiftrixSpacing.medium))
-            
-            // Platform-specific preview
-            when (platform) {
-                SocialPlatform.INSTAGRAM -> InstagramPreview(content, customMessage)
-                SocialPlatform.WHATSAPP -> WhatsAppPreview(content, customMessage)
-                SocialPlatform.TWITTER -> TwitterPreview(content, customMessage)
-                SocialPlatform.FACEBOOK -> FacebookPreview(content, customMessage)
-                else -> DefaultSharePreview(content, customMessage)
-            }
+        } else {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
         }
-    }
-}
-
-@Composable
-private fun InstagramPreview(
-    content: ShareableContent,
-    customMessage: String
-) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(LiftrixSpacing.medium)
-        ) {
-            Text(
-                text = "Instagram Story Preview",
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.White
-            )
-            
-            Spacer(modifier = Modifier.height(LiftrixSpacing.small))
-            
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(300.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        shape = RoundedCornerShape(8.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Story preview would be generated here",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun WhatsAppPreview(
-    content: ShareableContent,
-    customMessage: String
-) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF128C7E)
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(LiftrixSpacing.medium)
-        ) {
-            Text(
-                text = "WhatsApp Preview",
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.White
-            )
-            
-            Spacer(modifier = Modifier.height(LiftrixSpacing.small))
-            
-            Text(
-                text = customMessage.ifBlank { "Check out my workout! ${content.title}" },
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White
-            )
-        }
-    }
-}
-
-@Composable
-private fun TwitterPreview(
-    content: ShareableContent,
-    customMessage: String
-) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF1DA1F2)
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(LiftrixSpacing.medium)
-        ) {
-            Text(
-                text = "Twitter Preview",
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.White
-            )
-            
-            Spacer(modifier = Modifier.height(LiftrixSpacing.small))
-            
-            Text(
-                text = customMessage.ifBlank { "Just crushed this workout! 💪 ${content.title}" },
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White
-            )
-        }
-    }
-}
-
-@Composable
-private fun FacebookPreview(
-    content: ShareableContent,
-    customMessage: String
-) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF1877F2)
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(LiftrixSpacing.medium)
-        ) {
-            Text(
-                text = "Facebook Preview",
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.White
-            )
-            
-            Spacer(modifier = Modifier.height(LiftrixSpacing.small))
-            
-            Text(
-                text = customMessage.ifBlank { content.title },
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White
-            )
-        }
-    }
-}
-
-@Composable
-private fun DefaultSharePreview(
-    content: ShareableContent,
-    customMessage: String
-) {
-    Text(
-        text = customMessage.ifBlank { content.title },
-        style = MaterialTheme.typography.bodyMedium
-    )
-}
-
-// Helper functions and data
-private fun getSupportedPlatforms(): List<SocialPlatform> {
-    return listOf(
-        SocialPlatform.INSTAGRAM,
-        SocialPlatform.WHATSAPP,
-        SocialPlatform.TWITTER,
-        SocialPlatform.FACEBOOK,
-        SocialPlatform.TELEGRAM
-    )
-}
-
-private data class PlatformData(
-    val displayName: String,
-    val icon: ImageVector,
-    val color: Color
-)
-
-private fun getPlatformData(platform: SocialPlatform): PlatformData {
-    return when (platform) {
-        SocialPlatform.INSTAGRAM -> PlatformData(
-            "Instagram",
-            Icons.Default.Share, // Would use actual Instagram icon
-            Color(0xFFE4405F)
-        )
-        SocialPlatform.WHATSAPP -> PlatformData(
-            "WhatsApp",
-            Icons.Default.Share, // Would use actual WhatsApp icon
-            Color(0xFF25D366)
-        )
-        SocialPlatform.TWITTER -> PlatformData(
-            "Twitter",
-            Icons.Default.Share, // Would use actual Twitter icon
-            Color(0xFF1DA1F2)
-        )
-        SocialPlatform.FACEBOOK -> PlatformData(
-            "Facebook",
-            Icons.Default.Share, // Would use actual Facebook icon
-            Color(0xFF1877F2)
-        )
-        SocialPlatform.TELEGRAM -> PlatformData(
-            "Telegram",
-            Icons.Default.Share, // Would use actual Telegram icon
-            Color(0xFF0088CC)
-        )
-        else -> PlatformData(
-            platform.name,
-            Icons.Default.Share,
-            LiftrixColorsV2.primary
-        )
-    }
-}
-
-private fun getMessagePlaceholder(platform: SocialPlatform?): String {
-    return when (platform) {
-        SocialPlatform.INSTAGRAM -> "Add a caption for your story..."
-        SocialPlatform.WHATSAPP -> "Add a message to share with your workout..."
-        SocialPlatform.TWITTER -> "What's happening? (280 characters)"
-        SocialPlatform.FACEBOOK -> "What's on your mind?"
-        SocialPlatform.TELEGRAM -> "Share your workout with friends..."
-        else -> "Add a custom message..."
-    }
-}
-
-private fun getPlatformTip(platform: SocialPlatform): String {
-    return when (platform) {
-        SocialPlatform.INSTAGRAM -> "Perfect for sharing your fitness journey with followers"
-        SocialPlatform.WHATSAPP -> "Great for sharing with workout buddies and groups"
-        SocialPlatform.TWITTER -> "Keep it under 280 characters for maximum engagement"
-        SocialPlatform.FACEBOOK -> "Share your achievements with friends and family"
-        SocialPlatform.TELEGRAM -> "Ideal for fitness communities and groups"
-        else -> "Choose the platform that works best for you"
+        Spacer(modifier = Modifier.size(8.dp))
+        Text(text = label, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

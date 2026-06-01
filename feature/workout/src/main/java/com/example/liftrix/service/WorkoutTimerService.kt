@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import timber.log.Timber
+import java.lang.ref.WeakReference
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.seconds
 
@@ -81,11 +82,18 @@ class WorkoutTimerService : Service() {
     @Inject
     lateinit var notificationManager: NotificationManager
 
-    inner class TimerBinder : Binder() {
-        fun getService(): WorkoutTimerService = this@WorkoutTimerService
+    class TimerBinder(service: WorkoutTimerService) : Binder() {
+        private var serviceReference: WeakReference<WorkoutTimerService>? = WeakReference(service)
+
+        fun getService(): WorkoutTimerService? = serviceReference?.get()
+
+        fun clearServiceReference() {
+            serviceReference?.clear()
+            serviceReference = null
+        }
     }
 
-    private val binder = TimerBinder()
+    private val binder = TimerBinder(this)
 
     override fun onCreate() {
         super.onCreate()
@@ -102,9 +110,10 @@ class WorkoutTimerService : Service() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
         stopTimer()
         serviceScope.coroutineContext[Job]?.cancel()
+        binder.clearServiceReference()
+        super.onDestroy()
         Timber.d("WorkoutTimerService destroyed")
     }
 

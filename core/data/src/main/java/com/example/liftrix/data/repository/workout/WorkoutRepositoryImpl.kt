@@ -4,6 +4,7 @@ import android.util.Log
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.local.dao.WorkoutPostDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
+import com.example.liftrix.data.local.dao.AnalyticsReadModelDao
 import com.example.liftrix.data.local.dao.ExerciseDao
 import com.example.liftrix.data.local.dao.ExerciseSetDao
 import com.example.liftrix.data.local.entity.ExerciseSetEntity
@@ -89,6 +90,7 @@ class WorkoutRepositoryImpl @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val workoutPostDao: WorkoutPostDao,
     private val followRelationshipDao: FollowRelationshipDao,
+    private val analyticsReadModelDao: AnalyticsReadModelDao,
     private val exerciseDao: ExerciseDao,
     private val exerciseSetDao: ExerciseSetDao,
     private val workoutMapper: WorkoutMapper,
@@ -235,6 +237,10 @@ class WorkoutRepositoryImpl @Inject constructor(
                     }
                 }
                 validateExerciseConsistency(workout, entity.exercisesJson)
+                analyticsReadModelDao.refreshWorkoutReadModels(
+                    userId = workout.userId,
+                    workoutId = workout.id.value
+                )
                 // Queue workout for sync after successful creation (use original workout for sync, not placeholder version)
                 queueWorkoutForSync(workout)
                 
@@ -298,87 +304,29 @@ class WorkoutRepositoryImpl @Inject constructor(
         }
     }
 
-    override fun getWorkoutsByUser(userId: String): Flow<LiftrixResult<List<Workout>>> {
+    override fun getWorkoutsByUser(userId: String): Flow<List<Workout>> {
         Timber.tag("FreshLoginRestoreDebug").d(
             "operation=ROOM_OBSERVE_WORKOUTS_REGISTERED layer=repository userId=$userId timestamp=${System.currentTimeMillis()}"
         )
         return workoutDao.getAllWorkoutsForUser(userId)
             .map { entities ->
-                try {
-                    val statusCounts = entities.groupingBy { it.status }.eachCount()
-                    val completedWithoutEndTime = entities.count { it.status.name == "COMPLETED" && it.endTime == null }
-                    Timber.tag("FreshLoginRestoreDebug").d(
-                        "operation=ROOM_OBSERVE_WORKOUTS_EMIT layer=repository userId=$userId emittedCount=${entities.size} statusCounts=$statusCounts completedWithoutEndTime=$completedWithoutEndTime dirtyCount=${entities.count { it.isDirty }} unsyncedCount=${entities.count { !it.isSynced }} timestamp=${System.currentTimeMillis()}"
-                    )
-                    Timber.tag("WorkoutSyncDebug").d(
-                        "[DATABASE-DEBUG] operation=REPOSITORY_READ_ALL_EMIT source=Room userId=$userId timestamp=${System.currentTimeMillis()} count=${entities.size} statusCounts=$statusCounts completedWithoutEndTime=$completedWithoutEndTime dirtyCount=${entities.count { it.isDirty }} unsyncedCount=${entities.count { !it.isSynced }}"
-                    )
-                    Timber.d("[WORKOUT-DEBUG] getWorkoutsByUser storage read entities=${entities.size} userId=$userId")
-                    val workouts = entities.map { workoutMapper.toDomain(it) }
-                    LiftrixResult.success(workouts)
-                } catch (throwable: Throwable) {
-                    Timber.e(throwable, "Failed to map workout entities to domain models for user: $userId")
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Failed to retrieve workouts for user",
-                            operation = "READ",
-                            table = "workouts",
-                            analyticsContext = mapOf("user_id" to userId)
-                        )
-                    )
-                }
-            }
-            .catch { throwable ->
-                Timber.e(throwable, "Database flow error for user workouts: $userId")
-                emit(
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Database connection error while retrieving workouts",
-                            operation = "READ",
-                            table = "workouts",
-                            analyticsContext = mapOf("user_id" to userId)
-                        )
-                    )
+                val statusCounts = entities.groupingBy { it.status }.eachCount()
+                val completedWithoutEndTime = entities.count { it.status.name == "COMPLETED" && it.endTime == null }
+                Timber.tag("FreshLoginRestoreDebug").d(
+                    "operation=ROOM_OBSERVE_WORKOUTS_EMIT layer=repository userId=$userId emittedCount=${entities.size} statusCounts=$statusCounts completedWithoutEndTime=$completedWithoutEndTime dirtyCount=${entities.count { it.isDirty }} unsyncedCount=${entities.count { !it.isSynced }} timestamp=${System.currentTimeMillis()}"
                 )
+                Timber.tag("WorkoutSyncDebug").d(
+                    "[DATABASE-DEBUG] operation=REPOSITORY_READ_ALL_EMIT source=Room userId=$userId timestamp=${System.currentTimeMillis()} count=${entities.size} statusCounts=$statusCounts completedWithoutEndTime=$completedWithoutEndTime dirtyCount=${entities.count { it.isDirty }} unsyncedCount=${entities.count { !it.isSynced }}"
+                )
+                Timber.d("[WORKOUT-DEBUG] getWorkoutsByUser storage read entities=${entities.size} userId=$userId")
+                entities.map { workoutMapper.toDomain(it) }
             }
     }
 
-    override fun getWorkoutsByDate(date: KotlinxLocalDate, userId: String): Flow<LiftrixResult<List<Workout>>> {
+    override fun getWorkoutsByDate(date: KotlinxLocalDate, userId: String): Flow<List<Workout>> {
         return workoutDao.getWorkoutsByDateForUser(date.toString(), userId)
             .map { entities ->
-                try {
-                    val workouts = entities.map { workoutMapper.toDomain(it) }
-                    LiftrixResult.success(workouts)
-                } catch (throwable: Throwable) {
-                    Timber.e(throwable, "Failed to map workout entities for date: $date, user: $userId")
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Failed to retrieve workouts for date",
-                            operation = "READ",
-                            table = "workouts",
-                            analyticsContext = mapOf(
-                                "date" to date.toString(),
-                                "user_id" to userId
-                            )
-                        )
-                    )
-                }
-            }
-            .catch { throwable ->
-                Timber.e(throwable, "Database flow error for workouts by date: $date, user: $userId")
-                emit(
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Database connection error while retrieving workouts by date",
-                            operation = "READ",
-                            table = "workouts",
-                            analyticsContext = mapOf(
-                                "date" to date.toString(),
-                                "user_id" to userId
-                            )
-                        )
-                    )
-                )
+                entities.map { workoutMapper.toDomain(it) }
             }
     }
 
@@ -426,6 +374,14 @@ class WorkoutRepositoryImpl @Inject constructor(
             // Convert workout to entity for database storage (preserve original data)
             val entity = workoutMapper.toEntity(workout, isSynced = false)
             Timber.d("🔥 UPDATE-WORKOUT-DEBUG: Updating entity with ID: ${entity.id}, Status: ${entity.status}, UserId: ${entity.userId}")
+            val previousReadModelDate = analyticsReadModelDao.getReadModelDateForWorkout(
+                userId = workout.userId,
+                workoutId = workout.id.value
+            )
+            val previousExerciseIds = analyticsReadModelDao.getExerciseLibraryIdsForWorkout(
+                userId = workout.userId,
+                workoutId = workout.id.value
+            )
             
             // Use upsertLocal to mark workout dirty and refresh lastModified for sync
             // 🔥 DEBUG: Log before database update
@@ -493,6 +449,12 @@ class WorkoutRepositoryImpl @Inject constructor(
                     }
                 }
                 validateExerciseConsistency(workout, entity.exercisesJson)
+                analyticsReadModelDao.refreshWorkoutReadModels(
+                    userId = workout.userId,
+                    workoutId = workout.id.value,
+                    oldWorkoutDate = previousReadModelDate,
+                    oldExerciseLibraryIds = previousExerciseIds
+                )
                 // Queue workout for sync after successful update
                 queueWorkoutForSync(workout)
                 
@@ -523,6 +485,14 @@ class WorkoutRepositoryImpl @Inject constructor(
                 )
             }
         ) {
+            val previousReadModelDate = analyticsReadModelDao.getReadModelDateForWorkout(
+                userId = userId,
+                workoutId = workoutId.value
+            )
+            val previousExerciseIds = analyticsReadModelDao.getExerciseLibraryIdsForWorkout(
+                userId = userId,
+                workoutId = workoutId.value
+            )
             val deletedRows = workoutDao.deleteWorkoutByIdForUser(workoutId.value, userId)
             Timber.w("[WORKOUT-DEBUG] deleteWorkout storage delete rows=$deletedRows id=${workoutId.value} userId=$userId")
             val afterCount = workoutDao.getWorkoutCountForUser(userId)
@@ -533,6 +503,12 @@ class WorkoutRepositoryImpl @Inject constructor(
             if (deletedRows == 0) {
                 throw RuntimeException("No workout found to delete with ID: ${workoutId.value} for user: $userId")
             }
+            analyticsReadModelDao.deleteWorkoutReadModels(
+                userId = userId,
+                workoutId = workoutId.value,
+                oldWorkoutDate = previousReadModelDate,
+                oldExerciseLibraryIds = previousExerciseIds
+            )
         }
     }
 
@@ -552,7 +528,7 @@ class WorkoutRepositoryImpl @Inject constructor(
         }
     }
 
-    override fun getRecentWorkouts(userId: String, limit: Int): Flow<LiftrixResult<List<Workout>>> {
+    override fun getRecentWorkouts(userId: String, limit: Int): Flow<List<Workout>> {
         // Check total workout count on startup
         applicationScope.launch {
             try {
@@ -577,50 +553,19 @@ class WorkoutRepositoryImpl @Inject constructor(
         
         return workoutDao.getRecentCompletedWorkouts(userId, limit)
             .map { entities ->
-                try {
-                    Timber.d("WORKOUT-DEBUG: Found ${entities.size} workouts from getRecentCompletedWorkouts (limit: $limit)")
-                    entities.forEach { entity ->
-                        val updatedAtMillis = entity.updatedAt.toEpochMilli()
-                        val createdAtMillis = entity.createdAt.toEpochMilli()
-                        Timber.d("WORKOUT-DEBUG: Recent workout - ID: ${entity.id.take(8)}..., Status: ${entity.status}, updatedAt: $updatedAtMillis, createdAt: $createdAtMillis, isSynced: ${entity.isSynced}")
-                    }
-                    
-                    val workouts = entities.map { entity ->
-                        workoutMapper.toDomain(entity)
-                    }
-                    
-                    Timber.d("WORKOUT-DEBUG: Successfully mapped ${workouts.size} workouts to domain models")
-                    LiftrixResult.success(workouts)
-                } catch (throwable: Throwable) {
-                    Timber.e(throwable, "Failed to map recent workout entities for user: $userId, limit: $limit")
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Failed to retrieve recent workouts",
-                            operation = "READ",
-                            table = "workouts",
-                            analyticsContext = mapOf(
-                                "user_id" to userId,
-                                "limit" to limit.toString()
-                            )
-                        )
-                    )
+                Timber.d("WORKOUT-DEBUG: Found ${entities.size} workouts from getRecentCompletedWorkouts (limit: $limit)")
+                entities.forEach { entity ->
+                    val updatedAtMillis = entity.updatedAt.toEpochMilli()
+                    val createdAtMillis = entity.createdAt.toEpochMilli()
+                    Timber.d("WORKOUT-DEBUG: Recent workout - ID: ${entity.id.take(8)}..., Status: ${entity.status}, updatedAt: $updatedAtMillis, createdAt: $createdAtMillis, isSynced: ${entity.isSynced}")
                 }
-            }
-            .catch { throwable ->
-                Timber.e(throwable, "Database flow error for recent workouts: user: $userId, limit: $limit")
-                emit(
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Database connection error while retrieving recent workouts",
-                            operation = "READ",
-                            table = "workouts",
-                            analyticsContext = mapOf(
-                                "user_id" to userId,
-                                "limit" to limit.toString()
-                            )
-                        )
-                    )
-                )
+
+                val workouts = entities.map { entity ->
+                    workoutMapper.toDomain(entity)
+                }
+
+                Timber.d("WORKOUT-DEBUG: Successfully mapped ${workouts.size} workouts to domain models")
+                workouts
             }
     }
 
@@ -675,6 +620,7 @@ class WorkoutRepositoryImpl @Inject constructor(
         ) {
             val deletedRows = workoutDao.deleteAllWorkoutsForUser(userId)
             Timber.w("[WORKOUT-DEBUG] deleteAllWorkouts storage delete rows=$deletedRows userId=$userId")
+            analyticsReadModelDao.deleteAllReadModelsForUser(userId)
             val afterCount = workoutDao.getWorkoutCountForUser(userId)
             Timber.tag("WorkoutSyncDebug").w(
                 "[DATABASE-DEBUG] operation=REPOSITORY_DELETE_ALL_WRITTEN source=Room userId=$userId timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount afterCount=$afterCount deletedRows=$deletedRows"
@@ -796,15 +742,7 @@ class WorkoutRepositoryImpl @Inject constructor(
     }
 
     override fun getAllWorkoutsForUser(userId: String): Flow<List<Workout>> {
-        return getWorkoutsByUser(userId).map { result ->
-            result.fold(
-                onSuccess = { workouts -> workouts },
-                onFailure = { throwable -> 
-                    Timber.e("Error getting workouts for user: ${throwable.message}")
-                    emptyList<Workout>()
-                }
-            )
-        }
+        return getWorkoutsByUser(userId)
     }
 
     override suspend fun getUnsyncedCount(userId: String): LiftrixResult<Int> {
