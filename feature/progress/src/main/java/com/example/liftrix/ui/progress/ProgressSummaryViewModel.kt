@@ -86,6 +86,12 @@ class ProgressSummaryViewModel @Inject constructor(
     private val _currentUser = MutableStateFlow<com.example.liftrix.domain.model.User?>(null)
 
     /**
+     * Once summary has a valid user, ignore transient null auth broadcasts. The app shell
+     * handles real logout navigation, while demo-mode startup can briefly report no Firebase user.
+     */
+    private var userStabilized = false
+
+    /**
      * Combined state flow that reactively updates when user authentication or time range changes.
      * Uses Flow.combine to efficiently handle multiple data sources and automatically
      * trigger data loading when dependencies change.
@@ -198,43 +204,28 @@ class ProgressSummaryViewModel @Inject constructor(
                 when (event) {
                     is CoordinatorEvent.UserAuthChanged -> {
                         val previousUserId = _currentUser.value?.uid
-                        
-                        // FIXED: Added proper validation and null handling
-                        _currentUser.value = event.userId?.let { userId ->
-                            // Only create User object if we have a valid userId
-                            if (userId.isNotBlank()) {
-                                // Create a minimal User object that passes validation
-                                // Using a temporary email to satisfy the validation requirement
-                                // The actual email will be populated when the full user profile is loaded
-                                com.example.liftrix.domain.model.User(
-                                    uid = userId,
-                                    email = "temp@liftrix.app", // FIXED: Use valid email instead of blank
-                                    displayName = null,
-                                    photoUrl = null,
-                                    isAnonymous = false, // FIXED: Keep as false since we have a userId
-                                    subscriptionTier = com.example.liftrix.domain.model.SubscriptionTier.FREE,
-                                    subscriptionStatus = com.example.liftrix.domain.model.SubscriptionStatus.ACTIVE, // FIXED: Use ACTIVE instead of EXPIRED
-                                    subscriptionExpiresAt = null,
-                                    premiumFeaturesEnabled = false,
-                                    onboardingCompleted = false,
-                                    profileVersion = 1L,
-                                    createdAt = java.time.LocalDateTime.now(),
-                                    lastSignInAt = java.time.LocalDateTime.now(),
-                                    updatedAt = java.time.LocalDateTime.now()
-                                )
-                            } else {
-                                // FIXED: Handle blank userId case
-                                null
-                            }
+                        val nextUserId = event.userId?.takeIf { it.isNotBlank() }
+                        val shouldUpdateUser = when {
+                            previousUserId == null && nextUserId != null -> true
+                            previousUserId != null && nextUserId != null && previousUserId != nextUserId -> true
+                            previousUserId != null && nextUserId == null && userStabilized -> false
+                            else -> previousUserId != nextUserId
                         }
-                        
+
+                        if (!shouldUpdateUser) {
+                            return@launch
+                        }
+
+                        _currentUser.value = nextUserId?.let(::createPresentationUser)
+                        userStabilized = _currentUser.value != null
+
                         // Auto-load summary when user is available and changed
                         if (previousUserId != _currentUser.value?.uid && _currentUser.value != null) {
                             handleEvent(ProgressSummaryEvent.LoadSummary)
                             Timber.d("Summary: User auth changed to ${event.userId}, loading summary")
                         } else if (_currentUser.value == null) {
                             // Clear state when user logs out
-                            _uiState.value = UiState.Loading
+                            _uiState.value = UiState.Success(ProgressSummaryState.createUnauthenticatedState())
                             Timber.d("Summary: User logged out, clearing state")
                         }
                     }
@@ -312,7 +303,23 @@ class ProgressSummaryViewModel @Inject constructor(
         _uiState.value = UiState.Loading
 
         // Load data from service
-        val result = progressDataService.getProgressSummary(userId, timeRange)
+        val result = try {
+            kotlinx.coroutines.withTimeout(SUMMARY_LOAD_TIMEOUT_MS) {
+                progressDataService.getProgressSummary(userId, timeRange)
+            }
+        } catch (timeout: kotlinx.coroutines.TimeoutCancellationException) {
+            Result.failure(
+                LiftrixError.DatabaseError(
+                    errorMessage = "Progress summary loading timed out. Please try again.",
+                    operation = "getProgressSummary",
+                    analyticsContext = mapOf(
+                        "userId" to userId,
+                        "timeRange" to timeRange.toString(),
+                        "timeoutMs" to SUMMARY_LOAD_TIMEOUT_MS.toString()
+                    )
+                )
+            )
+        }
         
         result.fold(
             onSuccess = { data ->
@@ -331,7 +338,7 @@ class ProgressSummaryViewModel @Inject constructor(
                         "errorType" to (throwable::class.simpleName ?: "Unknown")
                     )
                 )
-                _uiState.value = UiState.Error(error)
+                _uiState.value = UiState.Success(state.toErrorState(error))
                 logError(error, "loadSummaryDataForState")
             }
         )
@@ -535,3 +542,25 @@ class ProgressSummaryViewModel @Inject constructor(
         return TimeRange(startDate, endDate)
     }
 }
+
+private fun createPresentationUser(userId: String): com.example.liftrix.domain.model.User {
+    val now = java.time.LocalDateTime.now()
+    return com.example.liftrix.domain.model.User(
+        uid = userId,
+        email = "temp@liftrix.app",
+        displayName = null,
+        photoUrl = null,
+        isAnonymous = false,
+        subscriptionTier = com.example.liftrix.domain.model.SubscriptionTier.FREE,
+        subscriptionStatus = com.example.liftrix.domain.model.SubscriptionStatus.ACTIVE,
+        subscriptionExpiresAt = null,
+        premiumFeaturesEnabled = false,
+        onboardingCompleted = false,
+        profileVersion = 1L,
+        createdAt = now,
+        lastSignInAt = now,
+        updatedAt = now
+    )
+}
+
+private const val SUMMARY_LOAD_TIMEOUT_MS = 20_000L

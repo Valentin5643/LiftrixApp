@@ -5,6 +5,7 @@ import com.example.liftrix.data.local.dao.DailyVolumeResult
 import com.example.liftrix.data.local.dao.ExerciseLibraryDao
 import com.example.liftrix.data.local.dao.ExercisePerformanceHistoryResult
 import com.example.liftrix.data.local.dao.ExerciseSetDao
+import com.example.liftrix.data.local.dao.MuscleGroupVolumeResult
 import com.example.liftrix.data.local.dao.MuscleGroupRepActivityResult
 import com.example.liftrix.data.local.dao.OneRmResult
 import com.example.liftrix.data.local.dao.PersonalRecordDao
@@ -149,6 +150,62 @@ class ProgressReportDataBuilderTest {
     }
 
     @Test
+    fun `muscle group rows include summarized remainder so visible volume and reps reconcile`() = runTest {
+        val volumeRows = listOf(
+            MuscleGroupVolumeResult("CHEST", total_volume = 100.0, exercise_count = 2, total_sets = 10),
+            MuscleGroupVolumeResult("BACK", total_volume = 90.0, exercise_count = 2, total_sets = 9),
+            MuscleGroupVolumeResult("LEGS", total_volume = 80.0, exercise_count = 2, total_sets = 8),
+            MuscleGroupVolumeResult("SHOULDERS", total_volume = 70.0, exercise_count = 1, total_sets = 7),
+            MuscleGroupVolumeResult("BICEPS", total_volume = 60.0, exercise_count = 1, total_sets = 6),
+            MuscleGroupVolumeResult("TRICEPS", total_volume = 50.0, exercise_count = 1, total_sets = 5),
+            MuscleGroupVolumeResult("CORE", total_volume = 40.0, exercise_count = 1, total_sets = 4),
+            MuscleGroupVolumeResult("CALVES", total_volume = 30.0, exercise_count = 1, total_sets = 3),
+            MuscleGroupVolumeResult("GLUTES", total_volume = 20.0, exercise_count = 1, total_sets = 2)
+        )
+        val repRows = volumeRows.mapIndexed { index, row ->
+            MuscleGroupRepActivityResult(row.primary_muscle_group, total_reps = (index + 1) * 10, exercise_count = row.exercise_count, total_sets = row.total_sets)
+        }
+        stubCommonReportData(
+            workouts = listOf(workout("workout-1")),
+            prs = emptyList(),
+            libraryRows = emptyList(),
+            dailyVolume = listOf(DailyVolumeResult("2026-05-10", total_volume = volumeRows.sumOf { it.total_volume }, total_sets = volumeRows.sumOf { it.total_sets }, exercise_count = 12)),
+            dailyRepActivity = listOf(DailyRepActivityResult("2026-05-10", total_reps = repRows.sumOf { it.total_reps }, total_sets = repRows.sumOf { it.total_sets }, exercise_count = 12)),
+            muscleGroupVolume = volumeRows,
+            muscleGroupRepActivity = repRows
+        )
+
+        val data = builder.build(USER_ID, request())
+
+        assertEquals(8, data.muscleGroupRows.size)
+        assertEquals("Other muscle groups", data.muscleGroupRows.last().muscleGroup)
+        assertEquals(data.summary.totalVolumeKg, data.muscleGroupRows.sumOf { it.totalVolumeKg }, 0.01)
+        assertEquals(data.summary.totalReps, data.muscleGroupRows.sumOf { it.repCount })
+    }
+
+    @Test
+    fun `muscle group rows keep rep only activity alongside weighted rows`() = runTest {
+        stubCommonReportData(
+            workouts = listOf(workout("workout-1")),
+            prs = emptyList(),
+            libraryRows = emptyList(),
+            dailyVolume = listOf(DailyVolumeResult("2026-05-10", total_volume = 100.0, total_sets = 4, exercise_count = 1)),
+            dailyRepActivity = listOf(DailyRepActivityResult("2026-05-10", total_reps = 76, total_sets = 9, exercise_count = 2)),
+            muscleGroupVolume = listOf(MuscleGroupVolumeResult("CHEST", total_volume = 100.0, exercise_count = 1, total_sets = 4)),
+            muscleGroupRepActivity = listOf(
+                MuscleGroupRepActivityResult("CHEST", total_reps = 40, exercise_count = 1, total_sets = 4),
+                MuscleGroupRepActivityResult("CORE", total_reps = 36, exercise_count = 1, total_sets = 5)
+            )
+        )
+
+        val data = builder.build(USER_ID, request())
+
+        assertEquals(listOf("CHEST", "CORE"), data.muscleGroupRows.map { it.muscleGroup })
+        assertEquals(76, data.muscleGroupRows.sumOf { it.repCount })
+        assertEquals(9, data.muscleGroupRows.sumOf { it.setCount })
+    }
+
+    @Test
     fun `same day workouts remain separate sessions with per workout details`() = runTest {
         val firstStart = Instant.parse("2026-05-18T09:00:00Z")
         val secondStart = Instant.parse("2026-05-18T17:00:00Z")
@@ -223,8 +280,8 @@ class ProgressReportDataBuilderTest {
             prs = emptyList(),
             libraryRows = emptyList(),
             forecastSamples = listOf(
-                StrengthForecastSetSampleResult("bench", "Bench Press", "2026-05-05", 80f, 5, Instant.parse("2026-05-05T10:00:00Z").toEpochMilli()),
-                StrengthForecastSetSampleResult("bench", "Bench Press", "2026-05-18", 90f, 5, Instant.parse("2026-05-18T10:00:00Z").toEpochMilli())
+                StrengthForecastSetSampleResult("bench", "Bench Press", "workout-1", "2026-05-05", 80f, 5, Instant.parse("2026-05-05T10:00:00Z").toEpochMilli()),
+                StrengthForecastSetSampleResult("bench", "Bench Press", "workout-2", "2026-05-18", 90f, 5, Instant.parse("2026-05-18T10:00:00Z").toEpochMilli())
             )
         )
 
@@ -242,6 +299,7 @@ class ProgressReportDataBuilderTest {
         dailyVolume: List<DailyVolumeResult> = emptyList(),
         dailyRepActivity: List<DailyRepActivityResult> = emptyList(),
         workoutSetActivity: List<WorkoutSetActivityResult> = emptyList(),
+        muscleGroupVolume: List<MuscleGroupVolumeResult> = emptyList(),
         muscleGroupRepActivity: List<MuscleGroupRepActivityResult> = emptyList(),
         oneRmData: List<OneRmResult> = emptyList(),
         performanceHistory: List<ExercisePerformanceHistoryResult> = emptyList(),
@@ -252,7 +310,7 @@ class ProgressReportDataBuilderTest {
         coEvery { exerciseSetDao.getDailyVolumeData(USER_ID, any(), any()) } returns dailyVolume
         coEvery { exerciseSetDao.getDailyRepActivityData(USER_ID, any(), any()) } returns dailyRepActivity
         coEvery { exerciseSetDao.getWorkoutSetActivityData(USER_ID, any(), any()) } returns workoutSetActivity
-        coEvery { exerciseSetDao.getVolumeDataByMuscleGroup(USER_ID, any(), any(), any()) } returns emptyList()
+        coEvery { exerciseSetDao.getVolumeDataByMuscleGroup(USER_ID, any(), any(), any()) } returns muscleGroupVolume
         coEvery { exerciseSetDao.getRepActivityByMuscleGroup(USER_ID, any(), any(), any()) } returns muscleGroupRepActivity
         coEvery { exerciseSetDao.getAllOneRmData(USER_ID, any(), any()) } returns oneRmData
         coEvery { exerciseSetDao.getExercisePerformanceHistory(USER_ID, any(), any()) } returns performanceHistory

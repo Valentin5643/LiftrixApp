@@ -20,8 +20,10 @@ import com.example.liftrix.domain.usecase.profile.ProfileCommandUseCase
 import com.example.liftrix.domain.usecase.social.ApplyOfficialOnboardingFollowsUseCase
 import com.example.liftrix.domain.usecase.social.SocialProfileCommandUseCase
 import com.example.liftrix.domain.model.onboarding.UserProfileData
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.time.LocalDateTime
@@ -60,7 +62,8 @@ class AuthCommandUseCaseImpl @Inject constructor(
     private val onboardingDataStore: OnboardingDataStore,
     private val analyticsService: AnalyticsService,
     private val settingsRepository: SettingsRepository,
-    private val stateCleanupManager: SessionStateCleanup
+    private val stateCleanupManager: SessionStateCleanup,
+    private val applicationScope: CoroutineScope
 ) : AuthCommandUseCase {
 
     // ============== SIGN IN WITH EMAIL ==============
@@ -155,29 +158,7 @@ class AuthCommandUseCaseImpl @Inject constructor(
             onFailure = { throw it }
         )
 
-        try {
-            // Check if UserAccount exists
-            val existingAccountResult = userAccountRepository.getAccountInfoSuspend(user.uid)
-            val existingAccount = existingAccountResult.getOrNull()
-
-            if (existingAccount == null) {
-                // Create UserAccount for new Google user
-                createGoogleUserAccount(user)
-            } else {
-                // Update existing account
-                updateExistingGoogleAccount(user, existingAccount)
-            }
-
-            // Transfer pending onboarding data
-            transferOnboardingDataAfterLogin(UserId(user.uid))
-
-            // Restore follow relationships
-            restoreFollowRelationshipsAfterLogin(UserId(user.uid))
-
-        } catch (e: Exception) {
-            Timber.e(e, "Error handling UserAccount for Google sign-in")
-            // Don't fail sign-in if profile setup fails
-        }
+        scheduleGooglePostLoginSetup(user)
 
         user
     }
@@ -591,6 +572,32 @@ class AuthCommandUseCaseImpl @Inject constructor(
                 Timber.e("Failed to check UserAccount: $error")
             }
         )
+    }
+
+    private fun scheduleGooglePostLoginSetup(user: User) {
+        applicationScope.launch {
+            try {
+                // Check if UserAccount exists
+                val existingAccountResult = userAccountRepository.getAccountInfoSuspend(user.uid)
+                val existingAccount = existingAccountResult.getOrNull()
+
+                if (existingAccount == null) {
+                    // Create UserAccount for new Google user
+                    createGoogleUserAccount(user)
+                } else {
+                    // Update existing account
+                    updateExistingGoogleAccount(user, existingAccount)
+                }
+
+                // Transfer pending onboarding data
+                transferOnboardingDataAfterLogin(UserId(user.uid))
+
+                // Restore follow relationships
+                restoreFollowRelationshipsAfterLogin(UserId(user.uid))
+            } catch (e: Exception) {
+                Timber.e(e, "Error handling UserAccount for Google sign-in")
+            }
+        }
     }
 
     /**

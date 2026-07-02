@@ -87,6 +87,10 @@ import kotlin.math.max
 
 @Singleton
 class DemoProgressDataFactory @Inject constructor() {
+    private companion object {
+        const val MAX_MUSCLE_GROUP_REPORT_ROWS = 8
+    }
+
     fun progressReportData(timeline: DemoTimeline, request: ProgressReportRequest): ProgressReportData {
         val range = resolveReportRange(timeline, request.dateRange)
         val workouts = timeline.workouts.filter { workout ->
@@ -713,20 +717,35 @@ class DemoProgressDataFactory @Inject constructor() {
             .takeLast(12)
 
     private fun buildReportMuscleRows(workouts: List<DemoWorkout>): List<ProgressReportMuscleGroupRow> =
-        workouts
-            .flatMap { it.exercises }
-            .groupBy { it.muscleGroup }
-            .map { (muscleGroup, exercises) ->
-                ProgressReportMuscleGroupRow(
-                    muscleGroup = muscleGroup,
-                    totalVolumeKg = exercises.sumOf { it.totalVolumeKg },
-                    exerciseCount = exercises.map { it.exerciseId }.distinct().size,
-                    setCount = exercises.sumOf { it.sets.size },
-                    repCount = exercises.sumOf { block -> block.sets.sumOf { it.reps } }
-                )
-            }
-            .sortedByDescending { it.totalVolumeKg }
-            .take(8)
+        collapseReportMuscleRows(
+            workouts
+                .flatMap { it.exercises }
+                .groupBy { it.muscleGroup }
+                .map { (muscleGroup, exercises) ->
+                    ProgressReportMuscleGroupRow(
+                        muscleGroup = muscleGroup,
+                        totalVolumeKg = exercises.sumOf { it.totalVolumeKg },
+                        exerciseCount = exercises.map { it.exerciseId }.distinct().size,
+                        setCount = exercises.sumOf { it.sets.size },
+                        repCount = exercises.sumOf { block -> block.sets.sumOf { it.reps } }
+                    )
+                }
+                .sortedByDescending { it.totalVolumeKg }
+        )
+
+    private fun collapseReportMuscleRows(rows: List<ProgressReportMuscleGroupRow>): List<ProgressReportMuscleGroupRow> {
+        if (rows.size <= MAX_MUSCLE_GROUP_REPORT_ROWS) return rows
+
+        val visibleRows = rows.take(MAX_MUSCLE_GROUP_REPORT_ROWS - 1)
+        val hiddenRows = rows.drop(MAX_MUSCLE_GROUP_REPORT_ROWS - 1)
+        return visibleRows + ProgressReportMuscleGroupRow(
+            muscleGroup = "Other muscle groups",
+            totalVolumeKg = hiddenRows.sumOf { it.totalVolumeKg },
+            exerciseCount = hiddenRows.sumOf { it.exerciseCount },
+            setCount = hiddenRows.sumOf { it.setCount },
+            repCount = hiddenRows.sumOf { it.repCount }
+        )
+    }
 
     private fun buildReportConsistencyRows(
         workouts: List<DemoWorkout>,

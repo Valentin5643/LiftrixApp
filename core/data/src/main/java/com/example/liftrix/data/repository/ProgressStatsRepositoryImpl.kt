@@ -9,6 +9,8 @@ import com.example.liftrix.data.extensions.WorkoutDayMetrics
 import com.example.liftrix.data.local.dao.AnalyticsReadModelDao
 import com.example.liftrix.data.local.dao.ExerciseSetDao
 import com.example.liftrix.data.local.dao.WorkoutDao
+import com.example.liftrix.data.local.entity.analytics.DailyWorkoutVolumeReadModelEntity
+import com.example.liftrix.data.local.view.CompletedWorkoutMetricsView
 import com.example.liftrix.data.mapper.AnalyticsMapper
 import com.example.liftrix.domain.model.analytics.ProgressMetrics
 import com.example.liftrix.domain.model.analytics.TimeRange
@@ -64,20 +66,56 @@ class ProgressStatsRepositoryImpl @Inject constructor(
             endDate = endDate.toString()
         )
         if (rows.isNotEmpty()) {
-            return rows.associate { row ->
-                val workoutCount = row.workoutCount.coerceAtLeast(1)
-                LocalDate.parse(row.workoutDate) to WorkoutDayMetrics(
-                    totalVolume = row.totalVolume.toFloat(),
-                    exerciseCount = row.exerciseCount,
-                    workoutCount = row.workoutCount,
-                    totalDurationMinutes = row.totalDurationMinutes,
-                    averageDurationMinutes = row.totalDurationMinutes / workoutCount
-                )
-            }
+            return rows.toDailyMetricsFromReadModels()
+        }
+
+        val completedMetricRows = workoutDao.getCompletedWorkoutMetricsInDateRange(
+            userId = userId,
+            startDate = startDate.toString(),
+            endDate = endDate.toString()
+        )
+        if (completedMetricRows.isNotEmpty()) {
+            return completedMetricRows.toDailyMetricsFromCompletedMetrics()
         }
 
         return workoutDao.getWorkoutsInDateRangeWithMetrics(userId, startDate, endDate)
     }
+
+    private fun List<DailyWorkoutVolumeReadModelEntity>.toDailyMetricsFromReadModels(): Map<LocalDate, WorkoutDayMetrics> =
+        mapNotNull { row ->
+            val workoutDate = runCatching { LocalDate.parse(row.workoutDate) }
+                .getOrElse { error ->
+                    Timber.w(error, "Skipping progress read model row with invalid date: ${row.workoutDate}")
+                    return@mapNotNull null
+                }
+            val workoutCount = row.workoutCount.coerceAtLeast(1)
+            workoutDate to WorkoutDayMetrics(
+                totalVolume = row.totalVolume.toFloat(),
+                exerciseCount = row.exerciseCount,
+                workoutCount = row.workoutCount,
+                totalDurationMinutes = row.totalDurationMinutes,
+                averageDurationMinutes = row.totalDurationMinutes / workoutCount
+            )
+        }.toMap()
+
+    private fun List<CompletedWorkoutMetricsView>.toDailyMetricsFromCompletedMetrics(): Map<LocalDate, WorkoutDayMetrics> =
+        groupBy { row -> row.workoutDate }
+            .mapNotNull { (workoutDateValue, rows) ->
+                val workoutDate = runCatching { LocalDate.parse(workoutDateValue) }
+                    .getOrElse { error ->
+                        Timber.w(error, "Skipping completed workout metrics row with invalid date: $workoutDateValue")
+                        return@mapNotNull null
+                    }
+                val workoutCount = rows.size.coerceAtLeast(1)
+                val totalDurationMinutes = rows.sumOf { it.durationMinutes }
+                workoutDate to WorkoutDayMetrics(
+                    totalVolume = rows.sumOf { it.totalVolume }.toFloat(),
+                    exerciseCount = rows.sumOf { it.exerciseCount },
+                    workoutCount = rows.size,
+                    totalDurationMinutes = totalDurationMinutes,
+                    averageDurationMinutes = totalDurationMinutes / workoutCount
+                )
+            }.toMap()
 
     override fun getWorkoutVolumeData(
         userId: String,

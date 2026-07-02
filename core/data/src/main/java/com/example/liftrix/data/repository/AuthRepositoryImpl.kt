@@ -235,27 +235,37 @@ class AuthRepositoryImpl @Inject constructor(
             Timber.d("[GMAIL-AUTH]   - Display Name: ${user.displayName}")
             Timber.d("[GMAIL-AUTH]   - Is New User: ${authResult.additionalUserInfo?.isNewUser == true}")
 
-            // ONBOARDING FIX: Ensure Firestore auth state synchronization
-            Timber.d("Verifying Firestore auth state synchronization after Google sign-in")
-            val authSyncResult = ensureFirestoreAuthSynchronization(user.uid)
-            if (!authSyncResult) {
-                Timber.w("Failed to synchronize Firestore auth state for current user, will retry in background")
-            }
-
-            // Step 2: Handle profile creation/update gracefully (non-blocking)
-            handleProfileOperationsGracefully(user)
+            scheduleGooglePostAuthenticationWork(user)
             
-            // Step 3: Always trigger sync regardless of profile creation status
-            Timber.d("[GMAIL-AUTH] ðŸ”„ Triggering login sync for current user")
-            triggerLoginSync(user.uid)
-            
-            // Step 4: Always return successful authentication
+            // Step 2: Always return successful authentication once Firebase accepts the token.
             LiftrixResult.success(user)
             
         } catch (authException: Exception) {
             // Only fail for actual Firebase Auth errors, not profile creation errors
             Timber.e(authException, "Google authentication failed at Firebase Auth level")
             LiftrixResult.failure(FirebaseErrorMapper.handleFirebaseError(authException))
+        }
+    }
+
+    private fun scheduleGooglePostAuthenticationWork(user: User) {
+        applicationScope.launch {
+            try {
+                // ONBOARDING FIX: Ensure Firestore auth state synchronization.
+                Timber.d("Verifying Firestore auth state synchronization after Google sign-in")
+                val authSyncResult = ensureFirestoreAuthSynchronization(user.uid)
+                if (!authSyncResult) {
+                    Timber.w("Failed to synchronize Firestore auth state for current user, will retry in background")
+                }
+
+                // Handle profile creation/update without blocking the auth screen.
+                handleProfileOperationsGracefully(user)
+
+                // Always trigger sync regardless of profile creation status.
+                Timber.d("[GMAIL-AUTH] ðŸ”„ Triggering login sync for current user")
+                triggerLoginSync(user.uid)
+            } catch (postAuthError: Exception) {
+                Timber.e(postAuthError, "Google post-authentication work failed for current user")
+            }
         }
     }
 

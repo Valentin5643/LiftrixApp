@@ -51,6 +51,7 @@ class ProgressReportDataBuilder @Inject constructor(
 ) {
     private companion object {
         const val MAX_REPS_FOR_RELIABLE_ONE_RM = 10
+        const val MAX_MUSCLE_GROUP_REPORT_ROWS = 8
         const val UNUSUALLY_HIGH_WORKOUTS_PER_WEEK = 7.0
         val REPORT_LOCALE: Locale = Locale.ENGLISH
     }
@@ -156,7 +157,13 @@ class ProgressReportDataBuilder @Inject constructor(
             hasUnusuallyHighWorkoutFrequency = avgWorkoutsPerWeek > UNUSUALLY_HIGH_WORKOUTS_PER_WEEK ||
                 (activeWeekAverageWorkouts?.let { it > UNUSUALLY_HIGH_WORKOUTS_PER_WEEK } == true)
         )
-        val muscleGroupRows = buildMuscleGroupRows(muscleGroups, muscleGroupRepActivity)
+        val muscleGroupRows = buildMuscleGroupRows(
+            volumeRows = muscleGroups,
+            repRows = muscleGroupRepActivity,
+            totalVolumeKg = totalVolume,
+            totalReps = totalReps,
+            totalSets = totalSets
+        )
         val strengthForecast = if (request.includeOptions.strengthProgress) {
             buildStrengthForecastSection(forecastSamples, forecastEndDate)
         } else {
@@ -323,30 +330,86 @@ class ProgressReportDataBuilder @Inject constructor(
 
     private fun buildMuscleGroupRows(
         volumeRows: List<com.example.liftrix.data.local.dao.MuscleGroupVolumeResult>,
-        repRows: List<com.example.liftrix.data.local.dao.MuscleGroupRepActivityResult>
+        repRows: List<com.example.liftrix.data.local.dao.MuscleGroupRepActivityResult>,
+        totalVolumeKg: Double,
+        totalReps: Int,
+        totalSets: Int
     ): List<ProgressReportMuscleGroupRow> {
-        if (volumeRows.isNotEmpty()) {
-            val repsByMuscle = repRows.associateBy { it.primary_muscle_group }
-            return volumeRows.take(8).map {
+        val volumeByMuscle = volumeRows.associateBy { it.primary_muscle_group }
+        val repsByMuscle = repRows.associateBy { it.primary_muscle_group }
+        val rows = (volumeByMuscle.keys + repsByMuscle.keys)
+            .map { muscleGroup ->
+                val volume = volumeByMuscle[muscleGroup]
+                val reps = repsByMuscle[muscleGroup]
                 ProgressReportMuscleGroupRow(
-                    muscleGroup = it.primary_muscle_group,
-                    totalVolumeKg = it.total_volume,
-                    exerciseCount = it.exercise_count,
-                    setCount = it.total_sets,
-                    repCount = repsByMuscle[it.primary_muscle_group]?.total_reps ?: 0
+                    muscleGroup = normalizedMuscleGroupLabel(muscleGroup),
+                    totalVolumeKg = volume?.total_volume ?: 0.0,
+                    exerciseCount = max(volume?.exercise_count ?: 0, reps?.exercise_count ?: 0),
+                    setCount = reps?.total_sets ?: volume?.total_sets ?: 0,
+                    repCount = reps?.total_reps ?: 0
                 )
             }
-        }
-        return repRows.take(8).map {
-            ProgressReportMuscleGroupRow(
-                muscleGroup = it.primary_muscle_group,
-                totalVolumeKg = 0.0,
-                exerciseCount = it.exercise_count,
-                setCount = it.total_sets,
-                repCount = it.total_reps
+            .sortedWith(
+                compareByDescending<ProgressReportMuscleGroupRow> { it.totalVolumeKg }
+                    .thenByDescending { it.repCount }
+                    .thenBy { it.muscleGroup }
+            )
+        val coverageRows = appendCoverageRow(rows, totalVolumeKg, totalReps, totalSets)
+        return collapseMuscleGroupRows(coverageRows)
+    }
+
+    private fun appendCoverageRow(
+        rows: List<ProgressReportMuscleGroupRow>,
+        totalVolumeKg: Double,
+        totalReps: Int,
+        totalSets: Int
+    ): List<ProgressReportMuscleGroupRow> {
+        val missingVolume = totalVolumeKg - rows.sumOf { it.totalVolumeKg }
+        val missingReps = totalReps - rows.sumOf { it.repCount }
+        val missingSets = totalSets - rows.sumOf { it.setCount }
+        val hasMissingActivity = missingVolume > 0.5 || missingReps > 0 || missingSets > 0
+        if (!hasMissingActivity) return rows
+
+        return rows + ProgressReportMuscleGroupRow(
+            muscleGroup = "Unmapped activity",
+            totalVolumeKg = missingVolume.coerceAtLeast(0.0),
+            exerciseCount = 0,
+            setCount = missingSets.coerceAtLeast(0),
+            repCount = missingReps.coerceAtLeast(0)
+        )
+    }
+
+    private fun collapseMuscleGroupRows(rows: List<ProgressReportMuscleGroupRow>): List<ProgressReportMuscleGroupRow> {
+        if (rows.size <= MAX_MUSCLE_GROUP_REPORT_ROWS) return rows
+
+        val coverageRows = rows.filter { it.muscleGroup == "Unmapped activity" }
+        val rankedRows = rows.filterNot { it.muscleGroup == "Unmapped activity" }
+        val reservedRows = if (coverageRows.isEmpty()) 1 else 1 + coverageRows.size
+        val visibleCount = (MAX_MUSCLE_GROUP_REPORT_ROWS - reservedRows).coerceAtLeast(1)
+        val visibleRows = rankedRows.take(visibleCount)
+        val hiddenRows = rankedRows.drop(visibleCount)
+        val remainderRows = if (hiddenRows.isEmpty()) {
+            emptyList()
+        } else {
+            listOf(
+                ProgressReportMuscleGroupRow(
+                    muscleGroup = "Other muscle groups",
+                    totalVolumeKg = hiddenRows.sumOf { it.totalVolumeKg },
+                    exerciseCount = hiddenRows.sumOf { it.exerciseCount },
+                    setCount = hiddenRows.sumOf { it.setCount },
+                    repCount = hiddenRows.sumOf { it.repCount }
+                )
             )
         }
+        return visibleRows + remainderRows + coverageRows
     }
+
+    private fun normalizedMuscleGroupLabel(muscleGroup: String): String =
+        when {
+            muscleGroup.isBlank() -> "Unmapped activity"
+            muscleGroup.equals("UNKNOWN", ignoreCase = true) -> "Unmapped activity"
+            else -> muscleGroup
+        }
 
     private fun buildConsistencyRows(
         sessions: List<ReportSession>,

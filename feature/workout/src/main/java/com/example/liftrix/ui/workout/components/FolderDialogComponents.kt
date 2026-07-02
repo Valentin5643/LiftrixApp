@@ -18,8 +18,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.example.liftrix.ui.workout.components.PrimaryActionButton
-import com.example.liftrix.ui.workout.components.SecondaryActionButton
 import com.example.liftrix.ui.theme.LiftrixSpacing
 
 /**
@@ -46,6 +44,7 @@ fun CreateFolderDialog(
         var folderName by remember { mutableStateOf("") }
         var isError by remember { mutableStateOf(false) }
         val hapticFeedback = LocalHapticFeedback.current
+        val canCreate = folderName.trim().length in 3..30
         
         Dialog(
             onDismissRequest = onDismiss,
@@ -127,13 +126,29 @@ fun CreateFolderDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
                     ) {
-                        SecondaryActionButton(
-                            text = "Cancel",
-                            onClick = onDismiss
-                        )
-                        
-                        PrimaryActionButton(
-                            text = "Create",
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            shape = RoundedCornerShape(20.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.primary
+                            ),
+                            border = ButtonDefaults.outlinedButtonBorder
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Cancel",
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+
+                        Button(
                             onClick = {
                                 val trimmedName = folderName.trim()
                                 if (trimmedName.length in 3..30) {
@@ -145,8 +160,33 @@ fun CreateFolderDialog(
                                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                 }
                             },
-                            enabled = folderName.trim().length in 3..30
-                        )
+                            enabled = canCreate,
+                            shape = RoundedCornerShape(20.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                                disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.38f),
+                                disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.38f)
+                            )
+                        ) {
+                            val createContentColor = if (canCreate) {
+                                MaterialTheme.colorScheme.onPrimary
+                            } else {
+                                MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.38f)
+                            }
+                            Icon(
+                                imageVector = Icons.Filled.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = createContentColor
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Create",
+                                color = createContentColor,
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
                     }
                 }
             }

@@ -366,6 +366,7 @@ dependencies {
     implementation("androidx.compose.runtime:runtime-tracing")
     implementation(libs.androidx.material3.window.size.util)
     implementation("androidx.compose.material:material-icons-extended")
+    implementation(libs.androidx.profileinstaller)
     
     // Chart library - Add explicit core dependency for axis functions
     implementation(libs.vico.compose)
@@ -520,7 +521,13 @@ dependencies {
     debugImplementation(libs.leakcanary.android)
 }
 
-configurations.matching { it.name == "kspBenchmarkRelease" }.all {
+val benchmarkKspConfigurations = setOf(
+    "kspBenchmarkRelease",
+    "kspNonMinifiedRelease",
+)
+
+configurations.matching { it.name in benchmarkKspConfigurations }.all {
+    project.dependencies.add(name, libs.room.compiler)
     project.dependencies.add(name, libs.hilt.compiler)
     project.dependencies.add(name, libs.androidx.hilt.compiler)
 }

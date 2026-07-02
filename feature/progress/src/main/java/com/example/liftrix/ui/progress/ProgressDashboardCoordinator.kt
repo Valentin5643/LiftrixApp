@@ -134,21 +134,7 @@ class ProgressDashboardCoordinator @Inject constructor(
             _coordinatorEvents.tryEmit(CoordinatorEvent.TimePeriodChanged(defaultTimeRange))
         }
         
-        // Add initialization timeout safety
-        viewModelScope.launch {
-            kotlinx.coroutines.delay(5000) // 5 second delay
-            
-            val currentUserState = coordinatorState.value.currentUser
-            
-            if (currentUserState is com.example.liftrix.ui.common.state.AsyncData.NotAsked) {
-                // Force auth state check
-                val currentUser = authRepository.getCurrentUser()
-                
-                if (currentUser != null) {
-                    _coordinatorEvents.tryEmit(CoordinatorEvent.UserAuthChanged(currentUser.uid))
-                }
-            }
-        }
+        startPortBackedAuthRecovery()
         
         Timber.d("ProgressDashboardCoordinator initialized")
     }
@@ -196,6 +182,34 @@ class ProgressDashboardCoordinator @Inject constructor(
         _coordinatorEvents.tryEmit(CoordinatorEvent.TimePeriodChanged(com.example.liftrix.domain.model.analytics.TimeRange.lastMonth()))
         updateUiState()
         return true
+    }
+
+    private fun startPortBackedAuthRecovery() {
+        viewModelScope.launch {
+            repeat(PORT_AUTH_RECOVERY_ATTEMPTS) { attempt ->
+                kotlinx.coroutines.delay(PORT_AUTH_RECOVERY_DELAY_MS)
+
+                val currentUserState = coordinatorState.value.currentUser
+                if (currentUserState is com.example.liftrix.ui.common.state.AsyncData.Success) {
+                    return@launch
+                }
+
+                val currentUser = authRepository.getCurrentUser()
+                if (currentUser != null) {
+                    coordinatorState.value = coordinatorState.value.copy(
+                        currentUser = com.example.liftrix.ui.common.state.AsyncData.Success(currentUser)
+                    )
+                    _coordinatorEvents.tryEmit(CoordinatorEvent.UserAuthChanged(currentUser.uid))
+                    updateUiState()
+                    return@launch
+                }
+
+                if (emitPortBackedUserAuthState()) {
+                    Timber.d("Coordinator recovered port-backed auth state on attempt ${attempt + 1}")
+                    return@launch
+                }
+            }
+        }
     }
 
     /**
@@ -718,3 +732,6 @@ private fun createPresentationUser(userId: String): User {
         updatedAt = now
     )
 }
+
+private const val PORT_AUTH_RECOVERY_ATTEMPTS = 5
+private const val PORT_AUTH_RECOVERY_DELAY_MS = 1_000L

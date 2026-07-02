@@ -1,6 +1,7 @@
 package com.example.liftrix.di.feature.progress
 
 import com.example.liftrix.demo.DemoModeController
+import com.example.liftrix.demo.DemoModeStore
 import com.example.liftrix.demo.DemoProgressDataFactory
 import com.example.liftrix.demo.DemoTimelineGenerator
 import com.example.liftrix.domain.model.AnomalyDetectionSettings
@@ -93,6 +94,7 @@ import com.example.liftrix.service.ProgressDataService
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import com.example.liftrix.service.WidgetResolver
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.Clock
@@ -132,50 +134,53 @@ class AppProgressDataPort @Inject constructor(
 class DemoAwareProgressDataPort @Inject constructor(
     private val delegate: AppProgressDataPort,
     private val demoModeController: DemoModeController,
+    private val demoModeStore: DemoModeStore,
     private val timelineGenerator: DemoTimelineGenerator,
     private val demoProgressDataFactory: DemoProgressDataFactory
 ) : ProgressDataPort {
     override suspend fun getVolumeData(userId: String, timeRange: TimeRange): LiftrixResult<List<VolumeDataPoint>> =
-        demoOrLive({ demoProgressDataFactory.volumeData(activeTimeline(), timeRange) }) {
+        demoOrLive({ timeline -> demoProgressDataFactory.volumeData(timeline, timeRange) }) {
             delegate.getVolumeData(userId, timeRange)
         }
 
     override suspend fun getDurationData(userId: String, timeRange: TimeRange): LiftrixResult<List<DurationDataPoint>> =
-        demoOrLive({ demoProgressDataFactory.durationData(activeTimeline(), timeRange) }) {
+        demoOrLive({ timeline -> demoProgressDataFactory.durationData(timeline, timeRange) }) {
             delegate.getDurationData(userId, timeRange)
         }
 
     override suspend fun getFrequencyData(userId: String, timeRange: TimeRange): LiftrixResult<List<FrequencyDataPoint>> =
-        demoOrLive({ demoProgressDataFactory.frequencyData(activeTimeline(), timeRange) }) {
+        demoOrLive({ timeline -> demoProgressDataFactory.frequencyData(timeline, timeRange) }) {
             delegate.getFrequencyData(userId, timeRange)
         }
 
     override suspend fun getVolumeCalendarData(userId: String): LiftrixResult<VolumeCalendarData> =
-        demoOrLive({ demoProgressDataFactory.volumeCalendarData(activeTimeline()) }) {
+        demoOrLive({ timeline -> demoProgressDataFactory.volumeCalendarData(timeline) }) {
             delegate.getVolumeCalendarData(userId)
         }
 
     override suspend fun getProgressSummary(userId: String, timeRange: TimeRange): LiftrixResult<ProgressSummary> =
-        demoOrLive({ demoProgressDataFactory.progressSummary(activeTimeline(), timeRange) }) {
+        demoOrLive({ timeline -> demoProgressDataFactory.progressSummary(timeline, timeRange) }) {
             delegate.getProgressSummary(userId, timeRange)
         }
 
     override suspend fun refreshAllData(userId: String): LiftrixResult<Unit> =
-        if (demoModeController.state.value.isActive) Result.success(Unit) else delegate.refreshAllData(userId)
+        if (activeDemoTimelineOrNull(demoModeController, demoModeStore, timelineGenerator) != null) {
+            Result.success(Unit)
+        } else {
+            delegate.refreshAllData(userId)
+        }
 
     private suspend fun <T> demoOrLive(
-        demo: () -> T,
+        demo: (com.example.liftrix.demo.DemoTimeline) -> T,
         live: suspend () -> LiftrixResult<T>
     ): LiftrixResult<T> {
-        return if (demoModeController.state.value.isActive) {
-            Result.success(demo())
+        val timeline = activeDemoTimelineOrNull(demoModeController, demoModeStore, timelineGenerator)
+        return if (timeline != null) {
+            Result.success(demo(timeline))
         } else {
             live()
         }
     }
-
-    private fun activeTimeline() =
-        timelineGenerator.generate(requireNotNull(demoModeController.state.value.sessionSeed))
 }
 
 class AppProgressAnalyticsServicePort @Inject constructor(
@@ -243,34 +248,34 @@ class AppProgressAnalyticsServicePort @Inject constructor(
 class DemoAwareProgressAnalyticsServicePort @Inject constructor(
     private val delegate: AppProgressAnalyticsServicePort,
     private val demoModeController: DemoModeController,
+    private val demoModeStore: DemoModeStore,
     private val timelineGenerator: DemoTimelineGenerator,
     private val demoProgressDataFactory: DemoProgressDataFactory
 ) : ProgressAnalyticsServicePort {
-    override suspend fun getWidgetData(userId: String, widget: AnalyticsWidget): LiftrixResult<WidgetData> =
-        if (demoModeController.state.value.isActive) {
-            Result.success(demoProgressDataFactory.widgetData(activeTimeline(), widget))
+    override suspend fun getWidgetData(userId: String, widget: AnalyticsWidget): LiftrixResult<WidgetData> {
+        val timeline = activeDemoTimelineOrNull(demoModeController, demoModeStore, timelineGenerator)
+        return if (timeline != null) {
+            Result.success(demoProgressDataFactory.widgetData(timeline, widget))
         } else {
             delegate.getWidgetData(userId, widget)
         }
+    }
 
     override suspend fun getWidgetPreferences(userId: String): LiftrixResult<WidgetPreferences> =
-        if (demoModeController.state.value.isActive) {
+        if (activeDemoTimelineOrNull(demoModeController, demoModeStore, timelineGenerator) != null) {
             Result.success(createDemoWidgetPreferences(userId))
         } else {
             delegate.getWidgetPreferences(userId)
         }
 
     override suspend fun updateWidgetPreferences(preferences: WidgetPreferences): LiftrixResult<Unit> =
-        if (demoModeController.state.value.isActive) Result.success(Unit) else delegate.updateWidgetPreferences(preferences)
+        if (activeDemoTimelineOrNull(demoModeController, demoModeStore, timelineGenerator) != null) Result.success(Unit) else delegate.updateWidgetPreferences(preferences)
 
     override suspend fun toggleWidgetVisibility(userId: String, widgetId: String): LiftrixResult<Unit> =
-        if (demoModeController.state.value.isActive) Result.success(Unit) else delegate.toggleWidgetVisibility(userId, widgetId)
+        if (activeDemoTimelineOrNull(demoModeController, demoModeStore, timelineGenerator) != null) Result.success(Unit) else delegate.toggleWidgetVisibility(userId, widgetId)
 
     override suspend fun resetPreferences(userId: String): LiftrixResult<Unit> =
-        if (demoModeController.state.value.isActive) Result.success(Unit) else delegate.resetPreferences(userId)
-
-    private fun activeTimeline() =
-        timelineGenerator.generate(requireNotNull(demoModeController.state.value.sessionSeed))
+        if (activeDemoTimelineOrNull(demoModeController, demoModeStore, timelineGenerator) != null) Result.success(Unit) else delegate.resetPreferences(userId)
 }
 
 class AppProgressPreferencesPort @Inject constructor(
@@ -325,14 +330,21 @@ class AppProgressAuthPort @Inject constructor(
 
 class DemoAwareProgressAuthPort @Inject constructor(
     private val delegate: AppProgressAuthPort,
-    private val demoModeController: DemoModeController
+    private val demoModeController: DemoModeController,
+    private val demoModeStore: DemoModeStore
 ) : ProgressAuthPort {
-    override suspend fun invoke(waitForAuth: Boolean): LiftrixResult<com.example.liftrix.domain.model.UserId> =
-        if (demoModeController.state.value.isActive) {
-            Result.success(com.example.liftrix.domain.model.UserId(DEMO_PROGRESS_USER_ID))
-        } else {
-            delegate(waitForAuth)
+    override suspend fun invoke(waitForAuth: Boolean): LiftrixResult<com.example.liftrix.domain.model.UserId> {
+        val currentDemoState = demoModeController.state.value
+        if (currentDemoState.isActive) {
+            return Result.success(com.example.liftrix.domain.model.UserId(DEMO_PROGRESS_USER_ID))
         }
+
+        if (currentDemoState.lastDisabledAtMillis == null && demoModeStore.state.first().isActive) {
+            return Result.success(com.example.liftrix.domain.model.UserId(DEMO_PROGRESS_USER_ID))
+        }
+
+        return delegate(waitForAuth)
+    }
 }
 
 class AppProgressExerciseCatalogPort @Inject constructor(
@@ -390,35 +402,37 @@ class AppProgressDashboardGateway @Inject constructor(
 class DemoAwareProgressDashboardGateway @Inject constructor(
     private val delegate: AppProgressDashboardGateway,
     private val demoModeController: DemoModeController,
+    private val demoModeStore: DemoModeStore,
     private val timelineGenerator: DemoTimelineGenerator,
     private val demoProgressDataFactory: DemoProgressDataFactory
 ) : ProgressDashboardGateway {
     override suspend fun getDashboardConfiguration(userId: String): Flow<LiftrixResult<ProgressDashboardConfiguration>> =
-        if (demoModeController.state.value.isActive) {
+        if (activeDemoTimelineOrNull(demoModeController, demoModeStore, timelineGenerator) != null) {
             flowOf(Result.success(ProgressDashboardConfiguration(createDemoWidgetPreferences(userId), DashboardConfiguration.Advanced)))
         } else {
             delegate.getDashboardConfiguration(userId)
         }
 
-    override suspend fun getWidgetData(userId: String, widget: AnalyticsWidget): LiftrixResult<ProgressDashboardWidgetData> =
-        if (demoModeController.state.value.isActive) {
-            Result.success(demoProgressDataFactory.dashboardWidgetData(activeTimeline(), widget))
+    override suspend fun getWidgetData(userId: String, widget: AnalyticsWidget): LiftrixResult<ProgressDashboardWidgetData> {
+        val timeline = activeDemoTimelineOrNull(demoModeController, demoModeStore, timelineGenerator)
+        return if (timeline != null) {
+            Result.success(demoProgressDataFactory.dashboardWidgetData(timeline, widget))
         } else {
             delegate.getWidgetData(userId, widget)
         }
+    }
 
-    override suspend fun refreshWidgetData(userId: String, widget: AnalyticsWidget): LiftrixResult<ProgressDashboardWidgetData> =
-        if (demoModeController.state.value.isActive) {
-            Result.success(demoProgressDataFactory.dashboardWidgetData(activeTimeline(), widget))
+    override suspend fun refreshWidgetData(userId: String, widget: AnalyticsWidget): LiftrixResult<ProgressDashboardWidgetData> {
+        val timeline = activeDemoTimelineOrNull(demoModeController, demoModeStore, timelineGenerator)
+        return if (timeline != null) {
+            Result.success(demoProgressDataFactory.dashboardWidgetData(timeline, widget))
         } else {
             delegate.refreshWidgetData(userId, widget)
         }
+    }
 
     override suspend fun saveWidgetPreferences(preferences: WidgetPreferences): LiftrixResult<Unit> =
-        if (demoModeController.state.value.isActive) Result.success(Unit) else delegate.saveWidgetPreferences(preferences)
-
-    private fun activeTimeline() =
-        timelineGenerator.generate(requireNotNull(demoModeController.state.value.sessionSeed))
+        if (activeDemoTimelineOrNull(demoModeController, demoModeStore, timelineGenerator) != null) Result.success(Unit) else delegate.saveWidgetPreferences(preferences)
 }
 
 private fun GetWidgetDataUseCase.WidgetData.toProgress() = ProgressDashboardWidgetData(widgetType, data, lastUpdated, isStale)
@@ -510,57 +524,77 @@ class AppProgressDetailAnalyticsGateway @Inject constructor(
 class DemoAwareProgressDetailAnalyticsGateway @Inject constructor(
     private val delegate: AppProgressDetailAnalyticsGateway,
     private val demoModeController: DemoModeController,
+    private val demoModeStore: DemoModeStore,
     private val timelineGenerator: DemoTimelineGenerator,
     private val demoProgressDataFactory: DemoProgressDataFactory
 ) : ProgressDetailAnalyticsGateway {
-    override suspend fun getVolumeAnalysis(userId: String, timeRange: TimeRangeType, muscleGroupFilter: String?, grouping: VolumeGrouping): LiftrixResult<VolumeAnalysisData> =
-        if (demoModeController.state.value.isActive) {
-            Result.success(demoProgressDataFactory.volumeAnalysisData(activeTimeline(), timeRange, muscleGroupFilter, grouping))
+    override suspend fun getVolumeAnalysis(userId: String, timeRange: TimeRangeType, muscleGroupFilter: String?, grouping: VolumeGrouping): LiftrixResult<VolumeAnalysisData> {
+        val timeline = activeDemoTimelineOrNull(demoModeController, demoModeStore, timelineGenerator)
+        return if (timeline != null) {
+            Result.success(demoProgressDataFactory.volumeAnalysisData(timeline, timeRange, muscleGroupFilter, grouping))
         } else {
             delegate.getVolumeAnalysis(userId, timeRange, muscleGroupFilter, grouping)
         }
+    }
 
-    override suspend fun getOneRmProgression(userId: String, exerciseIds: List<String>?, timeRange: TimeRangeType, includeEstimated: Boolean): LiftrixResult<OneRmProgressionData> =
-        if (demoModeController.state.value.isActive) {
-            Result.success(demoProgressDataFactory.oneRmProgressionData(activeTimeline(), exerciseIds, timeRange, includeEstimated))
+    override suspend fun getOneRmProgression(userId: String, exerciseIds: List<String>?, timeRange: TimeRangeType, includeEstimated: Boolean): LiftrixResult<OneRmProgressionData> {
+        val timeline = activeDemoTimelineOrNull(demoModeController, demoModeStore, timelineGenerator)
+        return if (timeline != null) {
+            Result.success(demoProgressDataFactory.oneRmProgressionData(timeline, exerciseIds, timeRange, includeEstimated))
         } else {
             delegate.getOneRmProgression(userId, exerciseIds, timeRange, includeEstimated)
         }
+    }
 
-    override suspend fun getStrengthForecast(userId: String, selectedExerciseId: String?, historyDays: Int, forecastDays: Int) =
-        if (demoModeController.state.value.isActive) {
-            Result.success(demoProgressDataFactory.strengthForecast(activeTimeline(), selectedExerciseId, historyDays, forecastDays))
+    override suspend fun getStrengthForecast(
+        userId: String,
+        selectedExerciseId: String?,
+        historyDays: Int,
+        forecastDays: Int
+    ): LiftrixResult<StrengthForecastResult> {
+        val timeline = activeDemoTimelineOrNull(demoModeController, demoModeStore, timelineGenerator)
+        return if (timeline != null) {
+            Result.success(demoProgressDataFactory.strengthForecast(timeline, selectedExerciseId, historyDays, forecastDays))
         } else {
             delegate.getStrengthForecast(userId, selectedExerciseId, historyDays, forecastDays)
         }
+    }
 
-    override suspend fun getWorkoutFrequency(userId: String, timeRange: TimeRangeType): LiftrixResult<WorkoutFrequencyData> =
-        if (demoModeController.state.value.isActive) {
-            Result.success(demoProgressDataFactory.workoutFrequencyData(activeTimeline(), timeRange))
+    override suspend fun getWorkoutFrequency(userId: String, timeRange: TimeRangeType): LiftrixResult<WorkoutFrequencyData> {
+        val timeline = activeDemoTimelineOrNull(demoModeController, demoModeStore, timelineGenerator)
+        return if (timeline != null) {
+            Result.success(demoProgressDataFactory.workoutFrequencyData(timeline, timeRange))
         } else {
             delegate.getWorkoutFrequency(userId, timeRange)
         }
+    }
 
-    override suspend fun getMuscleGroupAnalytics(userId: String, timeRange: TimeRangeType, muscleGroup: MuscleGroup?): LiftrixResult<MuscleGroupAnalyticsData> =
-        if (demoModeController.state.value.isActive) {
-            Result.success(demoProgressDataFactory.muscleGroupAnalyticsData(activeTimeline(), timeRange, muscleGroup))
+    override suspend fun getMuscleGroupAnalytics(userId: String, timeRange: TimeRangeType, muscleGroup: MuscleGroup?): LiftrixResult<MuscleGroupAnalyticsData> {
+        val timeline = activeDemoTimelineOrNull(demoModeController, demoModeStore, timelineGenerator)
+        return if (timeline != null) {
+            Result.success(demoProgressDataFactory.muscleGroupAnalyticsData(timeline, timeRange, muscleGroup))
         } else {
             delegate.getMuscleGroupAnalytics(userId, timeRange, muscleGroup)
         }
+    }
 
-    override suspend fun getMuscleHeatmapData(userId: String, configuration: Map<String, String>): LiftrixResult<MuscleHeatmapWidgetData> =
-        if (demoModeController.state.value.isActive) {
-            Result.success(demoProgressDataFactory.muscleHeatmapData(activeTimeline(), configuration))
+    override suspend fun getMuscleHeatmapData(userId: String, configuration: Map<String, String>): LiftrixResult<MuscleHeatmapWidgetData> {
+        val timeline = activeDemoTimelineOrNull(demoModeController, demoModeStore, timelineGenerator)
+        return if (timeline != null) {
+            Result.success(demoProgressDataFactory.muscleHeatmapData(timeline, configuration))
         } else {
             delegate.getMuscleHeatmapData(userId, configuration)
         }
+    }
 
-    override suspend fun getExerciseRanking(userId: String, timeRange: TimeRangeType, metric: RankingMetric): LiftrixResult<ExerciseRankingData> =
-        if (demoModeController.state.value.isActive) {
-            Result.success(demoProgressDataFactory.exerciseRankingData(activeTimeline(), timeRange, metric))
+    override suspend fun getExerciseRanking(userId: String, timeRange: TimeRangeType, metric: RankingMetric): LiftrixResult<ExerciseRankingData> {
+        val timeline = activeDemoTimelineOrNull(demoModeController, demoModeStore, timelineGenerator)
+        return if (timeline != null) {
+            Result.success(demoProgressDataFactory.exerciseRankingData(timeline, timeRange, metric))
         } else {
             delegate.getExerciseRanking(userId, timeRange, metric)
         }
+    }
 
     override suspend fun exportOneRm(request: ExportOneRmDataRequest): LiftrixResult<File> =
         delegate.exportOneRm(request)
@@ -571,8 +605,6 @@ class DemoAwareProgressDetailAnalyticsGateway @Inject constructor(
     override suspend fun exportFrequency(request: ExportWorkoutFrequencyDataRequest): LiftrixResult<File> =
         delegate.exportFrequency(request)
 
-    private fun activeTimeline() =
-        timelineGenerator.generate(requireNotNull(demoModeController.state.value.sessionSeed))
 }
 
 class AppProgressAnomalyPort @Inject constructor(
@@ -827,6 +859,22 @@ private fun createDemoWidgetPreferences(userId: String): WidgetPreferences {
         dashboardLayout = DashboardLayoutMode.AUTO,
         userLevel = UserLevel.ADVANCED
     )
+}
+
+private suspend fun activeDemoTimelineOrNull(
+    demoModeController: DemoModeController,
+    demoModeStore: DemoModeStore,
+    timelineGenerator: DemoTimelineGenerator
+): com.example.liftrix.demo.DemoTimeline? {
+    val currentState = demoModeController.state.value
+    val demoState = when {
+        currentState.isActive -> currentState
+        currentState.lastDisabledAtMillis == null -> demoModeStore.state.first()
+        else -> currentState
+    }
+
+    val sessionSeed = demoState.sessionSeed?.takeIf { demoState.isActive } ?: return null
+    return timelineGenerator.generate(sessionSeed)
 }
 
 private const val DEMO_PROGRESS_USER_ID = "demo-user-local"
