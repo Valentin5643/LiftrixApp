@@ -14,12 +14,39 @@ data class WorkoutGenerationRequest(
     val userId: String,
     @SerialName("user_prompt")
     val userPrompt: String,
+    val preferences: WorkoutGenerationPreferences? = null,
     @SerialName("normalized_constraints")
     val normalizedConstraints: WorkoutGenerationConstraints,
     val personalization: WorkoutGenerationPersonalization = WorkoutGenerationPersonalization(),
     @SerialName("save_after_generation")
     val saveAfterGeneration: Boolean = false
 )
+
+@Serializable
+data class WorkoutGenerationPreferences(
+    val goal: WorkoutProgramGoal,
+    val level: WorkoutProgramLevel,
+    @SerialName("available_equipment")
+    val availableEquipment: Set<Equipment>,
+    @SerialName("training_days")
+    val trainingDays: List<WorkoutTrainingDay>,
+    @SerialName("session_duration_minutes")
+    val sessionDurationMinutes: Int,
+    val limitations: String = "",
+    @SerialName("additional_preferences")
+    val additionalPreferences: String = ""
+) {
+    val daysPerWeek: Int get() = trainingDays.size
+
+    companion object {
+        const val MAX_FREE_TEXT_LENGTH = 500
+    }
+}
+
+@Serializable
+enum class WorkoutTrainingDay {
+    MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY
+}
 
 @Serializable
 data class WorkoutGenerationConstraints(
@@ -111,7 +138,7 @@ data class WorkoutGenerationInputPayload(
     @SerialName("exercise_catalog")
     val exerciseCatalog: List<WorkoutGenerationCatalogExercise>,
     @SerialName("output_contract")
-    val outputContract: String = "Return JSON as {schema_version, program}. Program must use workout_name and exercise_type, not program_name or type."
+    val outputContract: String = "Return schema v2 JSON as {schema_version, program}. Program requires workout_name, description, goal, level, and days. Every day requires scheduled_day, day_name, focus, estimated_duration_minutes, warm_up, exercises, and cool_down."
 )
 
 @Serializable

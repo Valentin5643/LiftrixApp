@@ -2,6 +2,8 @@ package com.example.liftrix.data.service
 
 import com.example.liftrix.core.data.BuildConfig
 import com.example.liftrix.data.remote.config.RemoteConfigManager
+import com.example.liftrix.data.local.dao.AiUsageDao
+import com.example.liftrix.data.local.entity.AiUsageEntity
 import com.example.liftrix.domain.model.chat.ChatMessage
 import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.chat.WorkoutContext
@@ -36,6 +38,7 @@ import timber.log.Timber
 import kotlin.random.Random
 import javax.inject.Inject
 import javax.inject.Singleton
+import java.util.UUID
 
 /**
  * Implementation of AIChatService using Firebase AI with Gemini 2.5 Flash Lite.
@@ -48,7 +51,8 @@ class AIChatServiceImpl @Inject constructor(
     private val analyticsTracker: AnalyticsTracker,
     private val remoteConfig: RemoteConfigManager,
     private val abusePreventionService: AbusePreventionService,
-    private val rateLimitingService: RateLimitingService
+    private val rateLimitingService: RateLimitingService,
+    private val aiUsageDao: AiUsageDao
 ) : AIChatService {
     
     companion object {
@@ -332,8 +336,22 @@ class AIChatServiceImpl @Inject constructor(
         val processingTime = System.currentTimeMillis() - startTime
         
         // Extract response text and metadata
+        val usage = response.usageMetadata
         val responseText = response.text ?: "I couldn't generate a response. Please try again."
         val tokensUsed = response.usageMetadata?.totalTokenCount ?: estimateTokens(effectiveMessage, responseText)
+        aiUsageDao.insert(
+            AiUsageEntity(
+                id = UUID.randomUUID().toString(),
+                userId = userId,
+                createdAt = System.currentTimeMillis(),
+                operation = "CHAT_RESPONSE",
+                model = MODEL_NAME,
+                inputTokens = usage?.promptTokenCount ?: estimateTokens(effectiveMessage, ""),
+                outputTokens = usage?.candidatesTokenCount ?: estimateTokens("", responseText),
+                totalTokens = tokensUsed,
+                successCategory = "MODEL_RESPONSE"
+            )
+        )
         
         // 7. Track usage and analytics
         analyticsTracker.trackAIChatResponse(
@@ -835,7 +853,6 @@ class AIChatServiceImpl @Inject constructor(
     private fun handleAppCheckTokenFailure(error: Exception): Nothing {
         val errorMsg = error.message.orEmpty()
         if (isDebugAppCheckTokenMissing(error)) {
-            logDebugAppCheckTokenInstructions(error)
             throw DebugAppCheckTokenNotRegisteredException(error)
         }
 
@@ -852,7 +869,6 @@ class AIChatServiceImpl @Inject constructor(
                 throw AppCheckRateLimitedException(error)
             }
             isAppCheckAttestationFailure(error) -> {
-                logDebugAppCheckTokenInstructions(error)
                 throw DebugAppCheckTokenNotRegisteredException(error)
             }
             else -> throw AppCheckUnavailableException("Failed to obtain App Check token.", error)
@@ -883,16 +899,6 @@ class AIChatServiceImpl @Inject constructor(
                 )
     }
 
-    private fun logDebugAppCheckTokenInstructions(error: Throwable) {
-        Timber.e(error, "$APP_CHECK_DEBUG_SETUP_MARKER Debug App Check token is not registered in Firebase Console for this Firebase app/project.")
-        Timber.e("$APP_CHECK_DEBUG_SETUP_MARKER If Firebase generated a token, the next useful Logcat line contains: Enter this debug secret into the allow list in the Firebase Console")
-        Timber.e("Find the generated token in Logcat by searching for:")
-        Timber.e("Enter this debug secret into the allow list in the Firebase Console")
-        Timber.e("Register it at Firebase Console > App Check > com.example.liftrix > Manage debug tokens.")
-        Timber.e("Expected project: liftrix-390cf; package: com.example.liftrix; appId: 1:734273269747:android:39d5352dabb68d74202c86")
-        Timber.e("After adding the token, uninstall/reinstall the debug app or clear app data and run again.")
-    }
-    
     /**
      * Data class to hold App Check token information.
      */
@@ -921,11 +927,9 @@ class AIResponseMaxTokensException(
     cause: Throwable
 ) : Exception("Firebase AI response stopped because it reached max output tokens.", cause)
 
-internal const val APP_CHECK_DEBUG_SETUP_MARKER = "LIFTRIX_APP_CHECK_DEBUG_SETUP"
-
 internal fun aiUnavailableForAppCheckMessage(): String =
     if (BuildConfig.DEBUG) {
-        "AI is temporarily unavailable in this debug build. In Logcat, search $APP_CHECK_DEBUG_SETUP_MARKER or 'Enter this debug secret', then add the token in Firebase App Check."
+        "AI is temporarily unavailable in this debug build. Register the debug App Check token in Firebase Console and try again."
     } else {
         "AI is temporarily unavailable in this build. Please try again later."
     }

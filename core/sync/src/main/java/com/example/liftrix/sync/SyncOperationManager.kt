@@ -59,6 +59,11 @@ class SyncOperationManager @Inject constructor(
     private val followRelationshipDao: FollowRelationshipDao,
     private val workoutPostDao: WorkoutPostDao,
     private val gymBuddyDao: GymBuddyDao,
+    private val postLikeDao: PostLikeDao,
+    private val postCommentDao: PostCommentDao,
+    private val savedPostDao: SavedPostDao,
+    private val blockedUserDao: BlockedUserDao,
+    private val contentReportsDao: ContentReportsDao,
     private val settingsDao: SettingsDao,
     private val workoutMapper: WorkoutMapper,
     private val workoutTemplateMapper: WorkoutTemplateMapper,
@@ -96,6 +101,11 @@ class SyncOperationManager @Inject constructor(
         const val ENTITY_WORKOUT_POST = "WORKOUT_POST"
         const val ENTITY_GYM_BUDDY = "GYM_BUDDY"
         const val ENTITY_SETTINGS = "SETTINGS"
+        const val ENTITY_POST_LIKE = "POST_LIKE"
+        const val ENTITY_SAVED_POST = "SAVED_POST"
+        const val ENTITY_POST_COMMENT = "POST_COMMENT"
+        const val ENTITY_BLOCKED_USER = "BLOCKED_USER"
+        const val ENTITY_CONTENT_REPORT = "CONTENT_REPORT"
     }
 
     private suspend fun upsertRemoteWorkoutAndRefreshReadModels(entity: com.example.liftrix.data.local.entity.WorkoutEntity) {
@@ -725,7 +735,54 @@ class SyncOperationManager @Inject constructor(
         results.addAll(syncFollowRelationships(userId, cancellationCheck))
         results.addAll(syncWorkoutPosts(userId, cancellationCheck))
         results.addAll(syncGymBuddies(userId, cancellationCheck))
+        results.addAll(syncSocialMutations(userId, cancellationCheck))
         Timber.d("SyncOperationManager: Social sync completed for user $userId results=${results.size}")
+        return results
+    }
+
+    private suspend fun syncSocialMutations(
+        userId: String,
+        cancellationCheck: (suspend () -> Unit)?
+    ): List<SyncOperationResult> {
+        val results = mutableListOf<SyncOperationResult>()
+        suspend fun syncBatch(
+            type: String,
+            collection: String,
+            rows: List<Triple<String, Boolean, Map<String, Any?>>>,
+            markClean: suspend (List<String>, Long) -> Unit
+        ) {
+            rows.chunked(SOCIAL_BATCH_SIZE).forEach { batch ->
+                cancellationCheck?.invoke()
+                val writeBatch = firestore.batch()
+                batch.forEach { (id, deleted, payload) ->
+                    val ref = firestore.collection(collection).document(id)
+                    if (deleted) writeBatch.delete(ref) else writeBatch.set(ref, payload, SetOptions.merge())
+                }
+                writeBatch.commit().await()
+                val version = System.currentTimeMillis()
+                markClean(batch.map { it.first }, version)
+                batch.forEach { (id, deleted, _) ->
+                    offlineQueueManager.completeSocialMutation(userId, type, id)
+                    results += SyncOperationResult(SyncOperation(type, id, if (deleted) "DELETE" else "UPDATE", PRIORITY_MEDIUM, userId), true)
+                }
+            }
+        }
+
+        syncBatch(ENTITY_POST_LIKE, "post_likes", postLikeDao.getDirtyPostLikes(userId).map {
+            Triple(it.id, it.isDeleted, mapOf("id" to it.id, "postId" to it.postId, "userId" to it.userId, "createdAt" to it.createdAt, "lastModified" to it.lastModified))
+        }) { ids, _ -> postLikeDao.markAsClean(ids, userId) }
+        syncBatch(ENTITY_SAVED_POST, "saved_posts", savedPostDao.getDirtySavedPosts(userId).map {
+            Triple(it.id, it.isDeleted, mapOf("id" to it.id, "postId" to it.postId, "userId" to it.userId, "savedAt" to it.savedAt, "lastModified" to it.lastModified))
+        }) { ids, version -> savedPostDao.markAsClean(ids, userId, version) }
+        syncBatch(ENTITY_POST_COMMENT, "post_comments", postCommentDao.getDirtyComments(userId).map {
+            Triple(it.id, it.isDeleted, mapOf("id" to it.id, "postId" to it.postId, "userId" to it.userId, "content" to it.content, "replyToCommentId" to it.replyToCommentId, "createdAt" to it.createdAt, "updatedAt" to it.updatedAt, "lastModified" to it.lastModified))
+        }) { ids, version -> postCommentDao.markAsClean(ids, userId, version) }
+        syncBatch(ENTITY_BLOCKED_USER, "blocked_users", blockedUserDao.getDirtyBlockedUsers(userId).map {
+            Triple(it.id, it.isDeleted, mapOf("id" to it.id, "userId" to it.userId, "blockedUserId" to it.blockedUserId, "reason" to it.reason, "blockedAt" to it.blockedAt, "lastModified" to it.lastModified))
+        }) { ids, _ -> blockedUserDao.markAsClean(ids, userId) }
+        syncBatch(ENTITY_CONTENT_REPORT, "content_reports", contentReportsDao.getDirtyContentReports(userId).map {
+            Triple(it.id, it.isDeleted, it.toFirebaseMap() + mapOf("lastModified" to it.lastModified))
+        }) { ids, version -> contentReportsDao.markAsClean(ids, userId, version) }
         return results
     }
 
@@ -1390,7 +1447,8 @@ class SyncOperationManager @Inject constructor(
         ENTITY_PROFILE -> PRIORITY_CRITICAL
         ENTITY_WORKOUT, ENTITY_TEMPLATE -> PRIORITY_HIGH
         ENTITY_USER_PUBLIC -> PRIORITY_CRITICAL
-        ENTITY_SOCIAL_PROFILE, ENTITY_FOLLOW_RELATIONSHIP, ENTITY_WORKOUT_POST, ENTITY_GYM_BUDDY, ENTITY_SETTINGS -> PRIORITY_MEDIUM
+        ENTITY_SOCIAL_PROFILE, ENTITY_FOLLOW_RELATIONSHIP, ENTITY_WORKOUT_POST, ENTITY_GYM_BUDDY, ENTITY_SETTINGS,
+        ENTITY_POST_LIKE, ENTITY_SAVED_POST, ENTITY_POST_COMMENT, ENTITY_BLOCKED_USER, ENTITY_CONTENT_REPORT -> PRIORITY_MEDIUM
         ENTITY_ACHIEVEMENT -> PRIORITY_LOW
         else -> PRIORITY_LOW
     }

@@ -7,6 +7,7 @@ import com.example.liftrix.data.mapper.EngagementMapper
 import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.example.liftrix.data.remote.legacy.LegacyFollowFirestoreDataSource
 import com.example.liftrix.data.repository.social.*
+import com.example.liftrix.data.sync.OfflineQueueManager
 import com.example.liftrix.data.service.*
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.social.EngagementRepository
@@ -108,11 +109,12 @@ abstract class SocialFeatureModule {
             engagementMapper: EngagementMapper,
             workoutPostMapper: WorkoutPostMapper,
             privacyEnforcementService: PrivacyEnforcementService,
-            analyticsTracker: AnalyticsTracker
+            analyticsTracker: AnalyticsTracker,
+            offlineQueueManager: OfflineQueueManager
         ): EngagementRepository = EngagementRepositoryImpl(
             postLikeDao, postCommentDao, savedPostDao, workoutPostDao,
             socialProfileDao, engagementMapper, workoutPostMapper,
-            privacyEnforcementService, analyticsTracker
+            privacyEnforcementService, analyticsTracker, offlineQueueManager
         )
 
         @Provides

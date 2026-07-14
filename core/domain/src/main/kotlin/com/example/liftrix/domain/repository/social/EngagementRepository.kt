@@ -97,7 +97,11 @@ interface EngagementRepository {
      * @param pageSize Number of comments per page
      * @return Paginated list of top-level comments
      */
-    fun getPostComments(postId: String, pageSize: Int = 20): Flow<PagingData<PostComment>>
+    fun getPostComments(
+        postId: String,
+        viewerId: String,
+        pageSize: Int = 20
+    ): Flow<PagingData<PostComment>>
     
     /**
      * Gets replies to a specific comment.
@@ -105,7 +109,7 @@ interface EngagementRepository {
      * @param commentId Parent comment to get replies for
      * @return List of reply comments
      */
-    suspend fun getCommentReplies(commentId: String): LiftrixResult<List<PostComment>>
+    suspend fun getCommentReplies(commentId: String, viewerId: String): LiftrixResult<List<PostComment>>
     
     /**
      * Observes comment count changes for a post.

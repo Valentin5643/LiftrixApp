@@ -61,5 +61,11 @@ data class PostLikeEntity(
     val isDirty: Boolean = false,
     
     @ColumnInfo(name = "last_modified", defaultValue = "0")
-    val lastModified: Long = 0L
+    val lastModified: Long = 0L,
+
+    @ColumnInfo(name = "sync_version", defaultValue = "0")
+    val syncVersion: Long = 0L,
+
+    @ColumnInfo(name = "is_deleted", defaultValue = "0")
+    val isDeleted: Boolean = false
 )

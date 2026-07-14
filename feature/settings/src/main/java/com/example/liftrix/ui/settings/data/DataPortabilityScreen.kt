@@ -1,8 +1,5 @@
 package com.example.liftrix.ui.settings.data
 
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -23,11 +20,11 @@ import com.example.liftrix.ui.components.actions.PrimaryActionButton
 import com.example.liftrix.ui.components.actions.SecondaryActionButton
 
 /**
- * Data portability screen for importing and exporting workout data.
+ * Data portability screen for exporting workout data and showing import availability.
  * 
  * This screen provides a user-friendly interface for data portability features,
- * allowing users to export their workout data in various formats and import
- * data from other fitness applications.
+ * allowing users to export their workout data in various formats. Import remains
+ * visible as an unavailable capability until persistence is implemented.
  * 
  * @param onNavigateBack Callback to navigate back to previous screen
  * @param modifier Modifier for styling the screen
@@ -43,22 +40,6 @@ fun DataPortabilityScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    
-    // File picker launcher for import functionality
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { selectedUri ->
-            try {
-                val inputStream = context.contentResolver.openInputStream(selectedUri)
-                inputStream?.let { stream ->
-                    viewModel.handleEvent(DataPortabilityEvent.ValidateImportFile(selectedUri, stream))
-                }
-            } catch (e: Exception) {
-                // Error would be handled by the ViewModel
-            }
-        }
-    }
     
     // Observe share export events
     LaunchedEffect(viewModel) {
@@ -141,14 +122,14 @@ fun DataPortabilityScreen(
             item {
                 UnifiedWorkoutCard(
                     title = "Export Data",
-                    subtitle = "Download your workout data in various formats",
+                    subtitle = "Download your workout history",
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(
-                            text = "Export your workout history, routines, and progress data to use in other applications or for backup purposes.",
+                            text = "Export the workout records currently supported by this build as JSON or CSV.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -185,25 +166,23 @@ fun DataPortabilityScreen(
             item {
                 UnifiedWorkoutCard(
                     title = "Import Data",
-                    subtitle = "Import workout data from other applications",
+                    subtitle = "Import is not available in this build",
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(
-                            text = "Import workout data from JSON or CSV files. Your existing data will be preserved.",
+                            text = "Workout import is still being prepared and cannot be used in this build.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         
                         PrimaryActionButton(
-                            text = "Select File to Import",
-                            onClick = { 
-                                // Launch the file picker
-                                filePickerLauncher.launch("*/*")
-                            },
+                            text = "Import unavailable",
+                            onClick = {},
                             leadingIcon = Icons.Default.FileUpload,
+                            enabled = false,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }

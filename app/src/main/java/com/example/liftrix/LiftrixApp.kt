@@ -248,10 +248,10 @@ class LiftrixApp : Application(), Configuration.Provider {
 
     private fun logAppCheckConfigurationGuidance() {
         if (BuildConfig.DEBUG) {
-            Timber.e("Debug App Check token is not registered in Firebase Console for this Firebase app/project.")
-            Timber.e("Search Logcat for: Enter this debug secret into the allow list in the Firebase Console")
-            Timber.e("Firebase Console path: App Check > Apps > $packageName > Manage debug tokens.")
-            Timber.e("Project must be liftrix-390cf and package must be $packageName.")
+            Timber.e(
+                "Debug App Check token is not registered. Register the token emitted during startup at " +
+                    "Firebase Console > App Check > Apps > $packageName > Manage debug tokens."
+            )
         } else {
             Timber.e("Release App Check uses Play Integrity. Verify SHA-1/SHA-256 fingerprints and Play Integrity provider setup.")
         }

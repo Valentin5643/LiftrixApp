@@ -44,9 +44,6 @@ interface UserProfileDao {
     @Query("UPDATE user_profiles SET is_synced = :isSynced, sync_version = :version WHERE user_id = :userId")
     suspend fun updateSyncStatus(userId: String, isSynced: Boolean, version: Long): Int
     
-    @Query("UPDATE user_profiles SET is_synced = 1, sync_version = :version WHERE user_id IN (:userIds)")
-    suspend fun markProfilesAsSynced(userIds: List<String>, version: Long): Int
-    
     @Query("UPDATE user_profiles SET completed_at = :completedAt WHERE user_id = :userId")
     suspend fun markProfileAsCompleted(userId: String, completedAt: String?): Int
     
@@ -55,9 +52,6 @@ interface UserProfileDao {
     
     @Query("DELETE FROM user_profiles WHERE user_id = :userId")
     suspend fun deleteProfileForUser(userId: String): Int
-    
-    @Query("DELETE FROM user_profiles")
-    suspend fun deleteAllProfiles(): Int
     
     @Query("SELECT EXISTS(SELECT 1 FROM user_profiles WHERE user_id = :userId)")
     suspend fun hasProfile(userId: String): Boolean

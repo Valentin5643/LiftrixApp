@@ -5,6 +5,7 @@ import com.example.liftrix.data.local.dao.ChatPreferencesDao
 import com.example.liftrix.data.local.entity.ChatHistoryEntity
 import com.example.liftrix.data.local.entity.ChatPreferencesEntity
 import com.example.liftrix.domain.model.chat.ChatMessage
+import com.example.liftrix.domain.model.chat.ChatConversation
 import com.example.liftrix.domain.model.chat.ChatPreferences
 import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.chat.UsageLimits
@@ -20,7 +21,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import timber.log.Timber
-import java.util.UUID
 import java.util.Calendar
 import java.util.Date
 import javax.inject.Inject
@@ -41,6 +41,7 @@ class ChatRepositoryImpl @Inject constructor(
     }
     
     override suspend fun saveMessage(
+        messageId: String,
         userId: String,
         message: String,
         type: MessageType,
@@ -48,7 +49,8 @@ class ChatRepositoryImpl @Inject constructor(
         language: String,
         workoutContext: WorkoutContext?,
         tokenCount: Int?,
-        processingTimeMs: Long?
+        processingTimeMs: Long?,
+        titleSeed: String?
     ): LiftrixResult<ChatMessage> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
@@ -62,7 +64,7 @@ class ChatRepositoryImpl @Inject constructor(
         }
     ) {
         val entity = ChatHistoryEntity(
-            id = UUID.randomUUID().toString(),
+            id = messageId,
             userId = userId,
             conversationId = conversationId,
             messageType = type.name,
@@ -76,7 +78,7 @@ class ChatRepositoryImpl @Inject constructor(
             syncVersion = 0
         )
         
-        chatHistoryDao.insertMessage(entity)
+        chatHistoryDao.insertMessageWithConversation(entity, titleSeed ?: "New chat")
         Timber.tag(MONTHLY_USAGE_TAG).d(
             "Usage row saved userId=%s messageId=%s conversationId=%s messageType=%s tokenCount=%s createdAt=%s source=Room.chat_history increment=%s",
             userId,
@@ -97,6 +99,37 @@ class ChatRepositoryImpl @Inject constructor(
         )
         
         entity.toDomainModel()
+    }
+
+    override fun observeConversations(userId: String): Flow<List<ChatConversation>> =
+        chatHistoryDao.observeConversationSummaries(userId).map { rows ->
+            rows.map { row ->
+                ChatConversation(
+                    id = row.conversationId,
+                    title = row.title,
+                    lastMessagePreview = row.lastMessagePreview,
+                    lastUpdatedAt = row.lastUpdatedAt,
+                    messageCount = row.messageCount,
+                    isTitleCustom = row.isTitleCustom
+                )
+            }
+        }
+
+    override suspend fun renameConversation(
+        userId: String,
+        conversationId: String,
+        title: String
+    ): LiftrixResult<Unit> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "CONVERSATION_RENAME_FAILED",
+                errorMessage = throwable.message ?: "Failed to rename conversation"
+            )
+        }
+    ) {
+        check(chatHistoryDao.renameConversation(userId, conversationId, title, System.currentTimeMillis()) == 1) {
+            "Conversation not found"
+        }
     }
     
     override fun observeConversation(
@@ -246,7 +279,11 @@ class ChatRepositoryImpl @Inject constructor(
             )
         }
     ) {
-        val deletedCount = chatHistoryDao.deleteConversation(userId, conversationId)
+        val deletedCount = chatHistoryDao.tombstoneAndDeleteConversation(
+            userId = userId,
+            conversationId = conversationId,
+            now = System.currentTimeMillis()
+        )
         deletedCount
     }
     

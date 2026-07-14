@@ -49,10 +49,16 @@ class PostCommentsViewModel @Inject constructor(
     /**
      * Flow of paginated comments for the current post
      */
-    val comments: Flow<PagingData<PostComment>> = _postId
-        .filterNotNull()
-        .flatMapLatest { postId ->
-            engagementRepository.getPostComments(postId, pageSize = 20)
+    val comments: Flow<PagingData<PostComment>> = combine(
+        _postId.filterNotNull(),
+        _currentUserId.filterNotNull()
+    ) { postId, viewerId -> postId to viewerId }
+        .flatMapLatest { (postId, viewerId) ->
+            engagementRepository.getPostComments(
+                postId = postId,
+                viewerId = viewerId.value,
+                pageSize = 20
+            )
         }
         .cachedIn(viewModelScope)
 
@@ -227,6 +233,18 @@ class PostCommentsViewModel @Inject constructor(
         notes: String
     ) {
         val currentUserId = _currentUserId.value ?: return
+        val comment = _reportingComment.value
+        if (comment == null || comment.id != commentId) {
+            updateState {
+                PostCommentsUiState.Error(
+                    LiftrixError.BusinessLogicError(
+                        code = "REPORT_TARGET_INVALID",
+                        errorMessage = "The selected comment is no longer available"
+                    )
+                )
+            }
+            return
+        }
 
         viewModelScope.launch {
             _isSubmittingReport.value = true
@@ -234,7 +252,8 @@ class PostCommentsViewModel @Inject constructor(
             try {
                 val hasReported = reportRepository.hasExistingReport(
                     reporterId = currentUserId.value,
-                    targetUserId = commentId
+                    targetUserId = commentId,
+                    contentType = ReportRepository.ContentType.COMMENT
                 )
 
                 if (hasReported) {
@@ -247,7 +266,9 @@ class PostCommentsViewModel @Inject constructor(
                     reporterId = currentUserId.value,
                     targetUserId = commentId,
                     reason = reason.toDomainReportReason(),
-                    description = notes.takeIf { it.isNotBlank() }
+                    description = notes.takeIf { it.isNotBlank() },
+                    contentType = ReportRepository.ContentType.COMMENT,
+                    targetAuthorId = comment.userId
                 )
                 result.getOrThrow()
 

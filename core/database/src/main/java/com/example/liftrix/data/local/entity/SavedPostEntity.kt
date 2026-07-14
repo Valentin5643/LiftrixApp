@@ -48,5 +48,20 @@ data class SavedPostEntity(
     val postId: String,
 
     @ColumnInfo(name = "saved_at")
-    val savedAt: Long
+    val savedAt: Long,
+
+    @ColumnInfo(name = "is_synced", defaultValue = "0")
+    val isSynced: Boolean = false,
+
+    @ColumnInfo(name = "sync_version", defaultValue = "0")
+    val syncVersion: Long = 0L,
+
+    @ColumnInfo(name = "is_dirty", defaultValue = "0")
+    val isDirty: Boolean = false,
+
+    @ColumnInfo(name = "last_modified", defaultValue = "0")
+    val lastModified: Long = 0L,
+
+    @ColumnInfo(name = "is_deleted", defaultValue = "0")
+    val isDeleted: Boolean = false
 )

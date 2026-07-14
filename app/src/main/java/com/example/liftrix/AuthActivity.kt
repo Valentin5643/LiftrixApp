@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.domain.model.AuthEvent
 import com.example.liftrix.domain.model.AuthState
@@ -31,14 +33,26 @@ import com.example.liftrix.ui.branding.LiftrixLaunchAnimation
 import com.example.liftrix.ui.auth.AuthScreen
 import com.example.liftrix.ui.auth.AuthViewModel
 import com.example.liftrix.ui.auth.StartingScreen
+import com.example.liftrix.domain.service.ConsentManagementServiceImpl
+import com.example.liftrix.ui.settings.legal.PrivacyPolicyScreen
+import com.example.liftrix.ui.settings.legal.TermsOfServiceScreen
 import com.example.liftrix.ui.theme.LiftrixTheme
+import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.crashlytics.FirebaseCrashlytics
+import com.google.firebase.perf.FirebasePerformance
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.catch
 import timber.log.Timber
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class AuthActivity : ComponentActivity() {
+    @Inject lateinit var consentManagementService: ConsentManagementServiceImpl
+    @Inject lateinit var firebaseAnalytics: FirebaseAnalytics
+    @Inject lateinit var firebaseCrashlytics: FirebaseCrashlytics
+    @Inject lateinit var firebasePerformance: FirebasePerformance
     
     override fun onCreate(savedInstanceState: Bundle?) {
         com.example.liftrix.ui.theme.ThemeManager.getInstance(this).applyCurrentThemeToPlatform()
@@ -59,6 +73,10 @@ class AuthActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     AuthFlowContainer(
+                        consentManagementService = consentManagementService,
+                        firebaseAnalytics = firebaseAnalytics,
+                        firebaseCrashlytics = firebaseCrashlytics,
+                        firebasePerformance = firebasePerformance,
                         onNavigateToMain = {
                                     navigateToMainActivity()
                                 }
@@ -103,11 +121,40 @@ class AuthActivity : ComponentActivity() {
 @Composable
 private fun AuthFlowContainer(
     onNavigateToMain: () -> Unit,
+    consentManagementService: ConsentManagementServiceImpl,
+    firebaseAnalytics: FirebaseAnalytics,
+    firebaseCrashlytics: FirebaseCrashlytics,
+    firebasePerformance: FirebasePerformance,
     viewModel: AuthViewModel = hiltViewModel(),
     mainViewModel: MainViewModel = hiltViewModel()
 ) {
     val authState by viewModel.authState.collectAsState()
     var hasNavigated by remember { mutableStateOf(false) }
+
+    LaunchedEffect((authState as? AuthState.Authenticated)?.user?.uid) {
+        val userId = (authState as? AuthState.Authenticated)?.user?.uid
+        if (userId == null) {
+            applyTelemetryConsent(false, firebaseAnalytics, firebaseCrashlytics, firebasePerformance)
+        } else {
+            consentManagementService.observeConsent(userId)
+                .catch {
+                    applyTelemetryConsent(
+                        false,
+                        firebaseAnalytics,
+                        firebaseCrashlytics,
+                        firebasePerformance
+                    )
+                }
+                .collect { consent ->
+                applyTelemetryConsent(
+                    enabled = consent?.analyticsConsent == true,
+                    firebaseAnalytics = firebaseAnalytics,
+                    firebaseCrashlytics = firebaseCrashlytics,
+                    firebasePerformance = firebasePerformance
+                )
+            }
+        }
+    }
     
     // Set explicit auth flow to true when AuthActivity is active
     // This prevents MainViewModel from interfering with auth error states
@@ -195,11 +242,13 @@ private fun AuthFlowScreen(
     var showOnboarding by remember { mutableStateOf(false) }
     var isSignUpMode by remember { mutableStateOf(false) }
     var authenticatedUserId by remember { mutableStateOf<String?>(null) }
+    var legalDocument by remember { mutableStateOf<PreAuthLegalDocument?>(null) }
     val context = LocalContext.current
     val themeManager = remember { com.example.liftrix.ui.theme.ThemeManager.getInstance(context) }
     val isDarkTheme = themeManager.getEffectiveThemeState(androidx.compose.foundation.isSystemInDarkTheme())
     
-    when {
+    Box(modifier = Modifier.fillMaxSize()) {
+        when {
         showOnboarding -> {
             com.example.liftrix.ui.onboarding.navigation.OnboardingNavigation(
                 userId = authenticatedUserId ?: "pre-auth-user",
@@ -218,6 +267,8 @@ private fun AuthFlowScreen(
         showAuthScreen -> {
             AuthScreen(
                 onAuthSuccess = onAuthSuccess,
+                onPrivacyPolicyClick = { legalDocument = PreAuthLegalDocument.PRIVACY_POLICY },
+                onTermsOfServiceClick = { legalDocument = PreAuthLegalDocument.TERMS_OF_SERVICE },
                 initialSignUpMode = isSignUpMode,
                 googleClientId = BuildConfig.GOOGLE_CLIENT_ID,
                 isDarkThemeOverride = isDarkTheme
@@ -235,5 +286,38 @@ private fun AuthFlowScreen(
                 isDarkThemeOverride = isDarkTheme
             )
         }
+        }
+
+        legalDocument?.let { document ->
+            Dialog(
+                onDismissRequest = { legalDocument = null },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    when (document) {
+                        PreAuthLegalDocument.PRIVACY_POLICY -> PrivacyPolicyScreen(
+                            onNavigateBack = { legalDocument = null }
+                        )
+                        PreAuthLegalDocument.TERMS_OF_SERVICE -> TermsOfServiceScreen(
+                            onNavigateBack = { legalDocument = null }
+                        )
+                    }
+                }
+            }
+        }
     }
+}
+
+private enum class PreAuthLegalDocument { PRIVACY_POLICY, TERMS_OF_SERVICE }
+
+private fun applyTelemetryConsent(
+    enabled: Boolean,
+    firebaseAnalytics: FirebaseAnalytics,
+    firebaseCrashlytics: FirebaseCrashlytics,
+    firebasePerformance: FirebasePerformance
+) {
+    firebaseAnalytics.setAnalyticsCollectionEnabled(enabled)
+    firebaseCrashlytics.setCrashlyticsCollectionEnabled(enabled && BuildConfig.ENABLE_CRASHLYTICS)
+    firebasePerformance.isPerformanceCollectionEnabled =
+        enabled && BuildConfig.ENABLE_FIREBASE_PERFORMANCE
 }

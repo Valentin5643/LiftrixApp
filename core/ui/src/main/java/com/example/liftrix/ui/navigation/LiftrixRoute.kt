@@ -513,6 +513,12 @@ sealed class LiftrixRoute {
         val conversationId: String? = null,
         val workoutContext: String? = null
     ) : LiftrixRoute()
+
+    @Serializable
+    data class AIWorkoutBuilder(
+        val conversationId: String? = null,
+        val seedPrompt: String? = null
+    ) : LiftrixRoute()
     
     /**
      * AI Chat Settings screen for configuring AI chatbot preferences

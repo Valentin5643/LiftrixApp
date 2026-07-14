@@ -123,6 +123,7 @@ class OfflineQueueManager @Inject constructor(
         private const val HIGH_PRIORITY = 1    // WORKOUT operations
         private const val MEDIUM_PRIORITY = 2  // PROFILE operations  
         private const val LOW_PRIORITY = 3     // OTHER operations
+        val SOCIAL_MUTATION_TYPES = setOf("POST_LIKE", "SAVED_POST", "POST_COMMENT", "BLOCKED_USER", "CONTENT_REPORT")
     }
     
     /**
@@ -211,6 +212,33 @@ class OfflineQueueManager @Inject constructor(
             )
         }
     }
+
+    suspend fun queueSocialMutation(
+        userId: String,
+        entityType: String,
+        entityId: String,
+        operation: String
+    ): LiftrixResult<Unit> = try {
+        val type = entityType.uppercase()
+        require(type in SOCIAL_MUTATION_TYPES) { "Unsupported social mutation type: $type" }
+        val existing = syncQueueDao.getSyncItem(userId, type, entityId)
+        syncQueueDao.insert(
+            existing?.copy(operation = operation.uppercase(), nextRetryAt = null, lastError = null, failedAt = null)
+                ?: SyncQueueEntity(
+                    id = UUID.randomUUID().toString(), userId = userId, entityType = type,
+                    entityId = entityId, operation = operation.uppercase(), data = "{}",
+                    priority = MEDIUM_PRIORITY, createdAt = System.currentTimeMillis()
+                )
+        )
+        Result.success(Unit)
+    } catch (error: Throwable) {
+        Result.failure(error)
+    }
+
+    suspend fun completeSocialMutation(userId: String, entityType: String, entityId: String) {
+        val item = syncQueueDao.getSyncItem(userId, entityType.uppercase(), entityId)
+        if (item != null) syncQueueDao.delete(item)
+    }
     
     /**
      * Processes all pending sync operations for a user with priority ordering and retry logic.
@@ -232,10 +260,11 @@ class OfflineQueueManager @Inject constructor(
                     "entityTypes=${normalizedEntityTypes ?: "ALL"}"
             )
 
-            val pendingItems = normalizedEntityTypes
+            val pendingItems = (normalizedEntityTypes
                 ?.flatMap { syncQueueDao.getPendingItemsByType(userId, it) }
                 ?.sortedWith(compareBy<SyncQueueEntity> { it.priority }.thenBy { it.createdAt })
-                ?: syncQueueDao.getPendingItems(userId)
+                ?: syncQueueDao.getPendingItems(userId))
+                .filterNot { it.entityType in SOCIAL_MUTATION_TYPES }
 
             // Track queue processing start
             analyticsTracker.trackOfflineQueue(

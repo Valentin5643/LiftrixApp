@@ -661,86 +661,17 @@ private fun ModernUserProfileContent(
                 }
             }
             
-            // Display workouts as feed-style cards by converting them to WorkoutPost format
-            items(profile.recentWorkouts.size) { index ->
+            // Workouts are not social posts. Keep this legacy rendering unreachable until a
+            // dedicated workout-summary component replaces it.
+            if (false) {
+                items(profile.recentWorkouts.size) { index ->
                 val workout = profile.recentWorkouts[index]
 
                 // Debug: Log profile image URL
                 Timber.d("PFP_DEBUG: 📝 SYNTHETIC_POST_CREATION: Creating post for workout ${workout.id}")
                 Timber.d("PFP_DEBUG: 📝 SYNTHETIC_POST_CREATION: profile.profileImageUrl='${profile.profileImageUrl}' | profile.userId='${profile.userId}' | profile.username='${profile.username}'")
 
-                // Create a simplified WorkoutPost from the regular workout data
-                val syntheticPost = com.example.liftrix.domain.model.social.WorkoutPost(
-                    id = workout.id,
-                    userId = profile.userId,
-                    workoutId = workout.id,
-                    authorUsername = profile.username,
-                    authorDisplayName = profile.displayName ?: profile.username,
-                    authorProfilePhotoUrl = profile.profileImageUrl,
-                    caption = workout.name,
-                    exercisesCount = workout.exerciseCount,
-                    workoutDuration = workout.duration.replace("min", "").trim().toIntOrNull(),
-                    totalVolume = null,
-                    prsCount = 0,
-                    mediaItems = emptyList(),
-                    likeCount = 0,
-                    commentCount = 0,
-                    shareCount = 0,
-                    saveCount = 0,
-                    visibility = com.example.liftrix.domain.model.social.PostVisibility.PUBLIC,
-                    createdAt = try {
-                        // Parse date string and convert to timestamp
-                        val dateTime = java.time.LocalDateTime.parse(workout.date + "T00:00:00")
-                        dateTime.toEpochSecond(java.time.ZoneOffset.UTC) * 1000
-                    } catch (e: Exception) {
-                        System.currentTimeMillis()
-                    },
-                    updatedAt = System.currentTimeMillis()
-                )
-                
-                // Load engagement status for synthetic posts too
-                LaunchedEffect(syntheticPost.id) {
-                    onLoadEngagementStatus(syntheticPost.id)
                 }
-                
-                val isLiked = uiState.likedPosts.contains(syntheticPost.id)
-                val isSaved = uiState.savedPosts.contains(syntheticPost.id)
-                val isEngagementLoading = uiState.engagementLoadingPosts.contains(syntheticPost.id)
-                
-                WorkoutPostCard(
-                    post = syntheticPost,
-                    isLiked = isLiked,
-                    isSaved = isSaved,
-                    onLikeClick = { 
-                        if (!isEngagementLoading) {
-                            onLikeClick(syntheticPost.id)
-                        }
-                    },
-                    onCommentClick = { 
-                        if (!isEngagementLoading) {
-                            onCommentClick(syntheticPost.id)
-                        }
-                    },
-                    onShareClick = { 
-                        if (!isEngagementLoading) {
-                            onShareClick(syntheticPost.id)
-                        }
-                    },
-                    onSaveClick = { 
-                        if (!isEngagementLoading) {
-                            onSaveClick(syntheticPost.id)
-                        }
-                    },
-                    onProfileClick = { /* Already on profile */ },
-                    onWorkoutCopyClick = { 
-                        if (!isEngagementLoading) {
-                            onCopyWorkoutClick(syntheticPost.id)
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp)
-                )
             }
         }
         

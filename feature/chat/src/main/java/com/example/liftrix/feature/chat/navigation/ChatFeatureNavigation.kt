@@ -10,6 +10,7 @@ import com.example.liftrix.ui.navigation.LiftrixRoute
 import com.example.liftrix.ui.chat.ChatbotScreen
 import com.example.liftrix.ui.chat.settings.AIChatSettingsScreen
 import com.example.liftrix.ui.coach.CoachScreen
+import com.example.liftrix.ui.chat.workoutbuilder.AIWorkoutBuilderScreen
 
 @Composable
 fun CoachRoute(navController: NavController) {
@@ -20,12 +21,14 @@ fun CoachRoute(navController: NavController) {
 fun ChatbotRoute(
     conversationId: String?,
     initialWorkoutContext: String?,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onCreateWorkoutPlan: (String?, String?) -> Unit
 ) {
     ChatbotScreen(
         conversationId = conversationId,
         initialWorkoutContext = initialWorkoutContext,
-        onNavigateBack = onNavigateBack
+        onNavigateBack = onNavigateBack,
+        onCreateWorkoutPlan = onCreateWorkoutPlan
     )
 }
 
@@ -44,7 +47,24 @@ fun NavGraphBuilder.chatGraph(navController: NavHostController) {
         ChatbotRoute(
             conversationId = route.conversationId,
             initialWorkoutContext = route.workoutContext,
-            onNavigateBack = { navController.popBackStackSafely() }
+            onNavigateBack = { navController.popBackStackSafely() },
+            onCreateWorkoutPlan = { conversationId, seedPrompt ->
+                navController.navigate(LiftrixRoute.AIWorkoutBuilder(conversationId, seedPrompt))
+            }
+        )
+    }
+
+    composable<LiftrixRoute.AIWorkoutBuilder> { backStackEntry ->
+        val route = backStackEntry.toRoute<LiftrixRoute.AIWorkoutBuilder>()
+        AIWorkoutBuilderScreen(
+            onNavigateBack = { navController.popBackStackSafely() },
+            onReturnToConversation = {
+                navController.navigate(LiftrixRoute.AIChatbot(route.conversationId))
+            },
+            onStartWorkout = { templateId ->
+                navController.navigate(LiftrixRoute.ActiveWorkout(templateId, false))
+            },
+            onEditWorkout = { templateId -> navController.navigate(LiftrixRoute.EditWorkout(templateId)) }
         )
     }
 

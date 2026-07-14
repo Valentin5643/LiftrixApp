@@ -24,6 +24,7 @@ import com.example.liftrix.domain.model.WorkoutTemplateId
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.usecase.session.CompleteWorkoutSessionUseCase
+import com.example.liftrix.domain.usecase.session.CompleteWorkoutSessionResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -482,16 +483,16 @@ class UnifiedWorkoutSessionManager @Inject constructor(
     /**
      * Completes the current session and persists it as a finished workout
      */
-    suspend fun completeCurrentSession(): Boolean {
+    suspend fun completeCurrentSession(): Result<CompleteWorkoutSessionResult> {
         val currentSession = _currentSession.value
         if (currentSession == null) {
             Timber.w("No active session to complete")
-            return false
+            return Result.failure(IllegalStateException("No active session to complete"))
         }
         
         if (currentSession.sessionStatus == UnifiedWorkoutSession.SessionStatus.COMPLETED) {
             Timber.w("Session already completed")
-            return false
+            return Result.failure(IllegalStateException("Session already completed"))
         }
         
         try {
@@ -510,14 +511,14 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             )
         } catch (e: Exception) {
             Timber.e(e, "Exception during session completion")
-            return false
+            return Result.failure(e)
         }
     }
 
     private suspend fun persistCompletedSession(
         sessionForPersistence: UnifiedWorkoutSession,
         failedSessionState: UnifiedWorkoutSession
-    ): Boolean {
+    ): Result<CompleteWorkoutSessionResult> {
         return try {
             sessionForPersistence.exercises.forEach { exercise ->
                 exercise.sets
@@ -550,7 +551,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                     }
                     _savedWorkoutId.value = result.savedWorkoutId
                     clearSession()
-                    true
+                    Result.success(result)
                 },
                 onFailure = { exception ->
                     Timber.e(
@@ -559,13 +560,13 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                     )
                     Timber.e("Failed to save completed workout: ${exception.message}")
                     handleCompletionFailure(failedSessionState, exception)
-                    false
+                    Result.failure(exception)
                 }
             )
         } catch (e: Exception) {
             Timber.e(e, "Error in completion process")
             preserveFailedSession(failedSessionState)
-            false
+            Result.failure(e)
         }
     }
 
@@ -668,6 +669,14 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                     
                     val sessionData = json.decodeFromString<SerializableSession>(serializedSession)
                     val session = sessionData.toUnifiedWorkoutSession()
+
+                    if (firebaseUid == null || session.userId != firebaseUid) {
+                        Timber.tag("StartupRestoreFix").w(
+                            "Rejecting persisted workout because authenticated ownership could not be verified"
+                        )
+                        clearSession()
+                        return@launch
+                    }
                     
                     if (session.sessionStatus != UnifiedWorkoutSession.SessionStatus.COMPLETED) {
                         // Immediately set session state for UI visibility
@@ -781,6 +790,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
  */
 @Serializable
 data class SerializableSession(
+    val payloadVersion: Int = 1,
     val id: String,
     val userId: String,
     val name: String,
@@ -803,6 +813,7 @@ data class SerializableSessionExercise(
     val name: String,
     val category: String,
     val primaryMuscle: String,
+    val equipment: String? = null,
     val sets: List<SerializableSessionSet>,
     val orderIndex: Int,
     val restTimeSeconds: Int? = null,
@@ -826,6 +837,7 @@ data class SerializableSessionSet(
  */
 private fun UnifiedWorkoutSession.toSerializable(): SerializableSession {
     return SerializableSession(
+        payloadVersion = CURRENT_SESSION_PAYLOAD_VERSION,
         id = id.value,
         userId = userId,
         name = name,
@@ -849,6 +861,7 @@ private fun SessionExercise.toSerializable(): SerializableSessionExercise {
         name = name,
         category = category.name,
         primaryMuscle = primaryMuscle.name,
+        equipment = equipment.name,
         sets = sets.map { it.toSerializable() },
         orderIndex = orderIndex,
         restTimeSeconds = restTimeSeconds,
@@ -894,12 +907,29 @@ private fun SerializableSessionExercise.toSessionExercise(): SessionExercise {
         name = name,
         category = ExerciseCategory.valueOf(category),
         primaryMuscle = ExerciseCategory.valueOf(primaryMuscle),
-        equipment = Equipment.BODYWEIGHT_ONLY, // Default for deserialized sessions
+        equipment = equipment?.let { serialized ->
+            runCatching { Equipment.valueOf(serialized) }.getOrNull()
+        } ?: inferLegacyEquipment(name),
         sets = sets.map { it.toSessionSet() },
         orderIndex = orderIndex,
         restTimeSeconds = restTimeSeconds,
         notes = notes
     )
+}
+
+private const val CURRENT_SESSION_PAYLOAD_VERSION = 2
+
+/** Explicit migration for v1 payloads, which did not store equipment. */
+private fun inferLegacyEquipment(exerciseName: String): Equipment {
+    val normalized = exerciseName.lowercase()
+    return when {
+        "barbell" in normalized -> Equipment.BARBELL
+        "dumbbell" in normalized -> Equipment.DUMBBELLS
+        "kettlebell" in normalized -> Equipment.KETTLEBELLS
+        "cable" in normalized -> Equipment.CABLE_MACHINE
+        "bodyweight" in normalized || "push-up" in normalized || "pull-up" in normalized -> Equipment.BODYWEIGHT_ONLY
+        else -> Equipment.BODYWEIGHT_ONLY
+    }
 }
 
 private fun SerializableSessionSet.toSessionSet(): SessionSet {

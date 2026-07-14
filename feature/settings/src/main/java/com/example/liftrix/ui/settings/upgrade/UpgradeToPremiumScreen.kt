@@ -2,7 +2,6 @@ package com.example.liftrix.ui.settings.upgrade
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,7 +14,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -30,17 +28,15 @@ import com.example.liftrix.ui.components.actions.UnifiedWorkoutCard
 import com.example.liftrix.ui.components.actions.PrimaryActionButton
 import com.example.liftrix.ui.components.actions.SecondaryActionButton
 import com.example.liftrix.ui.theme.LiftrixTheme
-import timber.log.Timber
 
 /**
  * Upgrade to Premium screen with modern Material 3 design and Liftrix theming.
  * 
  * Features:
  * - Premium feature showcase with compelling benefits
- * - Plan selection with monthly/annual options
+ * - Honest preview-only availability state
  * - Responsive design with proper spacing and cards
  * - Error handling and loading states
- * - Purchase flow integration (placeholder)
  * - Analytics tracking for conversion optimization
  * - Accessibility support with semantic descriptions
  * 
@@ -63,7 +59,6 @@ fun UpgradeToPremiumScreen(
         key = "UpgradeToPremiumScreen"
     ) {
         val uiState by viewModel.uiState.collectAsState()
-        val selectedPlan by viewModel.selectedPlan.collectAsState()
         
         // Stable callbacks to prevent unnecessary recompositions  
         val stableOnEvent: (UpgradeEvent) -> Unit = remember(viewModel) { viewModel::onEvent }
@@ -74,7 +69,7 @@ fun UpgradeToPremiumScreen(
             modifier = modifier
                 .fillMaxSize()
                 .semantics {
-                    contentDescription = "Upgrade to Premium screen with features and pricing plans"
+                    contentDescription = "Premium feature preview"
                 }
         ) {
             if (showTopBar) {
@@ -127,7 +122,6 @@ fun UpgradeToPremiumScreen(
                     uiState.shouldShowContent -> {
                         UpgradeContent(
                             uiState = uiState,
-                            selectedPlan = selectedPlan,
                             onEvent = stableOnEvent,
                             modifier = Modifier.fillMaxSize()
                         )
@@ -136,12 +130,6 @@ fun UpgradeToPremiumScreen(
             }
         }
         
-        // Purchase Success Dialog
-        if (uiState.showPurchaseSuccess) {
-            PurchaseSuccessDialog(
-                onDismiss = { stableOnNavigateBack() }
-            )
-        }
     }
 }
 
@@ -151,7 +139,6 @@ fun UpgradeToPremiumScreen(
 @Composable
 private fun UpgradeContent(
     uiState: UpgradeUiState,
-    selectedPlan: PremiumPlan,
     onEvent: (UpgradeEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -182,48 +169,28 @@ private fun UpgradeContent(
             PremiumFeatureCard(feature = feature)
         }
         
-        // Plan Selection
-        if (uiState.availablePlans.isNotEmpty()) {
-            item {
-                Text(
-                    text = "Choose Your Plan",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
-                )
-            }
-            
-            items(
-                items = uiState.availablePlans,
-                key = { plan -> plan.name }
-            ) { plan ->
-                PlanSelectionCard(
-                    plan = plan,
-                    isSelected = selectedPlan == plan,
-                    onSelect = { onEvent(UpgradeEvent.SelectPlan(plan)) }
-                )
-            }
-        }
-        
-        // Purchase Button
+        // Availability
         item {
             Spacer(modifier = Modifier.height(16.dp))
-            
+            Text(
+                text = "Premium Preview",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Premium purchases are unavailable in this build. You can still preview the features above.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(16.dp))
             PrimaryActionButton(
-                text = if (uiState.isPurchasing) "Processing..." else "Start ${selectedPlan.displayName} Plan",
-                onClick = { onEvent(UpgradeEvent.StartPurchase(selectedPlan)) },
-                enabled = !uiState.isPurchasing,
-                leadingIcon = if (uiState.isPurchasing) null else Icons.Default.Star,
+                text = "Purchases unavailable",
+                onClick = {},
+                enabled = false,
+                leadingIcon = Icons.Default.Star,
                 modifier = Modifier.fillMaxWidth()
             )
-            
-            if (uiState.isPurchasing) {
-                LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
-                )
-            }
         }
         
         // Terms and Support
@@ -233,7 +200,7 @@ private fun UpgradeContent(
                 modifier = Modifier.padding(top = 16.dp)
             ) {
                 Text(
-                    text = "Cancel anytime. Terms and conditions apply.",
+                    text = "Questions about premium availability?",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -346,130 +313,6 @@ private fun PremiumFeatureCard(
 }
 
 /**
- * Plan selection card with pricing and features
- */
-@Composable
-private fun PlanSelectionCard(
-    plan: PremiumPlan,
-    isSelected: Boolean,
-    onSelect: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        onClick = onSelect,
-        modifier = modifier
-            .fillMaxWidth()
-            .then(
-                if (isSelected) {
-                    Modifier.border(
-                        2.dp,
-                        MaterialTheme.colorScheme.primary,
-                        RoundedCornerShape(12.dp)
-                    )
-                } else {
-                    Modifier
-                }
-            ),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant
-            }
-        ),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Box(modifier = Modifier.padding(20.dp)) {
-            // Popular badge
-            if (plan.isPopular) {
-                Card(
-                    modifier = Modifier.align(Alignment.TopEnd),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(
-                        text = "Most Popular",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-            }
-            
-            Column(
-                modifier = Modifier.padding(
-                    top = if (plan.isPopular) 16.dp else 0.dp
-                )
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = plan.displayName,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        
-                        if (plan.savings != null) {
-                            Text(
-                                text = plan.savings,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                    
-                    // Selection indicator
-                    RadioButton(
-                        selected = isSelected,
-                        onClick = onSelect,
-                        colors = RadioButtonDefaults.colors(
-                            selectedColor = MaterialTheme.colorScheme.primary
-                        )
-                    )
-                }
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                Row(
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    Text(
-                        text = plan.price,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    
-                    Spacer(modifier = Modifier.width(4.dp))
-                    
-                    Text(
-                        text = "/${if (plan == PremiumPlan.YEARLY) "year" else "month"}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                
-                if (plan == PremiumPlan.YEARLY) {
-                    Text(
-                        text = "${plan.monthlyPrice}/month billed annually",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
  * Loading state component
  */
 @Composable
@@ -563,43 +406,6 @@ private fun ErrorState(
             )
         }
     }
-}
-
-/**
- * Purchase success dialog
- */
-@Composable
-private fun PurchaseSuccessDialog(
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            PrimaryActionButton(
-                text = "Continue",
-                onClick = onDismiss
-            )
-        },
-        title = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "Success",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Text("Welcome to Premium!")
-            }
-        },
-        text = {
-            Text(
-                text = "Thank you for upgrading! You now have access to all premium features. Enjoy your enhanced workout experience!",
-                style = MaterialTheme.typography.bodyMedium
-            )
-        }
-    )
 }
 
 /**

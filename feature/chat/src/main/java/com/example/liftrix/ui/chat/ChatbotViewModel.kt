@@ -2,8 +2,11 @@ package com.example.liftrix.ui.chat
 
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.SavedStateHandle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collectLatest
 import java.util.UUID
 import javax.inject.Inject
 
@@ -12,6 +15,7 @@ import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.domain.model.ai.WorkoutGenerationResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.chat.ChatMessage
+import com.example.liftrix.domain.model.chat.ChatConversation
 import com.example.liftrix.domain.model.chat.ChatPreferences
 import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.chat.UsageLimits
@@ -25,6 +29,7 @@ import com.example.liftrix.domain.usecase.ai.WorkoutProgramGateway
 import com.example.liftrix.domain.model.ai.WorkoutModificationSaveMode
 import com.example.liftrix.domain.repository.ChatRepository
 import com.example.liftrix.domain.service.AIMessageReportService
+import com.example.liftrix.domain.service.NetworkConnectivityMonitor
 import timber.log.Timber
 
 /**
@@ -51,6 +56,8 @@ class ChatbotViewModel @Inject constructor(
     private val authInteractor: AuthInteractor,
     private val chatRepository: ChatRepository,
     private val chatInteractor: ChatInteractor,
+    private val networkConnectivityMonitor: NetworkConnectivityMonitor,
+    savedStateHandle: SavedStateHandle,
     private val workoutGenerationIntentClassifier: WorkoutGenerationIntentClassifier,
     private val workoutProgramGateway: WorkoutProgramGateway,
     private val aiMessageReportService: AIMessageReportService
@@ -58,15 +65,23 @@ class ChatbotViewModel @Inject constructor(
     initialState = ChatbotUiState()
 ) {
 
-    private var currentConversationId = UUID.randomUUID().toString()
+    private var currentConversationId = savedStateHandle.get<String>("conversationId")
+        ?.takeIf(String::isNotBlank) ?: UUID.randomUUID().toString()
     private var userId: String? = null
     private var isUserMessageInFlight = false
+    private var conversationJob: Job? = null
+    private var requestedConversationId: String? = savedStateHandle.get<String>("conversationId")
 
     private companion object {
         const val MONTHLY_USAGE_TAG = "MonthlyUsageDebug"
     }
 
     init {
+        viewModelScope.launch {
+            networkConnectivityMonitor.isConnected.collectLatest { connected ->
+                _uiState.value = _uiState.value.copy(isOnline = connected)
+            }
+        }
         loadInitialData()
     }
 
@@ -84,8 +99,8 @@ class ChatbotViewModel @Inject constructor(
                         if (userId != null) {
                             _uiState.value = _uiState.value.copy(isAiAccessEnabled = true)
                             observeChatPreferences(userId!!)
+                            observeConversations(userId!!)
                             checkUsageLimits()
-                            setupConversation(userId!!)
                         } else {
                             handleError(LiftrixError.AuthenticationError(
                                 errorMessage = "Failed to get current user ID"
@@ -119,14 +134,59 @@ class ChatbotViewModel @Inject constructor(
         }
     }
 
+    private fun observeConversations(userId: String) {
+        viewModelScope.launch {
+            chatInteractor.observeConversations(userId).collectLatest { result ->
+                result.fold(
+                    onSuccess = { conversations ->
+                        val requested = requestedConversationId
+                        val selected = when {
+                            requested != null && conversations.any { it.id == requested } -> requested
+                            conversations.any { it.id == currentConversationId } -> currentConversationId
+                            conversations.isNotEmpty() -> conversations.first().id
+                            else -> currentConversationId
+                        }
+                        requestedConversationId = null
+                        _uiState.value = _uiState.value.copy(
+                            conversations = conversations,
+                            conversationsState = UiState.Success(conversations),
+                            activeConversationId = selected
+                        )
+                        if (conversationJob == null || selected != currentConversationId) {
+                            openConversation(selected)
+                        }
+                    },
+                    onFailure = { error ->
+                        _uiState.value = _uiState.value.copy(
+                            conversationsState = UiState.Error(
+                                error as? LiftrixError ?: LiftrixError.DatabaseError(
+                                    operation = "LOAD_CONVERSATIONS",
+                                    errorMessage = error.message ?: "Failed to load conversations"
+                                )
+                            )
+                        )
+                    }
+                )
+            }
+        }
+    }
+
     /**
      * Sets up conversation observation and loads chat history.
      */
-    private suspend fun setupConversation(userId: String) {
-        try {
-            // Observe conversation messages
-            chatRepository.observeConversation(userId, currentConversationId)
-                .collect { incomingMessages ->
+    private fun openConversation(conversationId: String) {
+        if (isUserMessageInFlight) return
+        currentConversationId = conversationId
+        conversationJob?.cancel()
+        _uiState.value = _uiState.value.copy(
+            activeConversationId = conversationId,
+            messages = emptyList(),
+            conversationState = UiState.Loading
+        )
+        conversationJob = viewModelScope.launch {
+            try {
+                chatInteractor.observeConversation(userId ?: return@launch, conversationId)
+                    .collectLatest { result -> result.fold(onSuccess = { incomingMessages ->
                     // Merge with any existing local pending messages, avoiding duplicates
                     val currentMessages = _uiState.value.messages
                     val pendingMessages = currentMessages
@@ -146,17 +206,18 @@ class ChatbotViewModel @Inject constructor(
                         messages = mergedMessages,
                         conversationState = UiState.Success(mergedMessages)
                     )
-                }
-        } catch (exception: Exception) {
-            Timber.e(exception, "Failed to setup conversation")
-            _uiState.value = _uiState.value.copy(
-                conversationState = UiState.Error(
-                    LiftrixError.DatabaseError(
-                        operation = "SETUP_CONVERSATION",
-                        errorMessage = "Failed to load conversation history"
+                    }, onFailure = { throw it }) }
+            } catch (exception: Exception) {
+                Timber.e(exception, "Failed to setup conversation")
+                _uiState.value = _uiState.value.copy(
+                    conversationState = UiState.Error(
+                        LiftrixError.DatabaseError(
+                            operation = "SETUP_CONVERSATION",
+                            errorMessage = "Failed to load conversation history"
+                        )
                     )
                 )
-            )
+            }
         }
     }
 
@@ -173,6 +234,17 @@ class ChatbotViewModel @Inject constructor(
             ChatbotEvent.RetryLastMessage -> retryLastMessage()
             ChatbotEvent.ClearConversation -> clearConversation()
             ChatbotEvent.DismissError -> dismissError()
+            ChatbotEvent.NewConversation -> newConversation()
+            is ChatbotEvent.OpenConversation -> openConversation(event.conversationId)
+            is ChatbotEvent.RenameConversation -> renameConversation(event.conversationId, event.title)
+            is ChatbotEvent.DeleteConversation -> deleteConversation(event.conversationId)
+            ChatbotEvent.CreateWorkoutPlan -> _uiState.value = _uiState.value.copy(
+                workoutBuilderNavigation = WorkoutBuilderNavigation(
+                    currentConversationId,
+                    _uiState.value.currentInput.takeIf(String::isNotBlank)
+                )
+            )
+            ChatbotEvent.WorkoutBuilderNavigationConsumed -> _uiState.value = _uiState.value.copy(workoutBuilderNavigation = null)
         }
     }
 
@@ -198,7 +270,13 @@ class ChatbotViewModel @Inject constructor(
             val intent = workoutGenerationIntentClassifier.classify(trimmedContent)
             Timber.i("[AI] ChatbotViewModel: classified chat message intent=${intent.javaClass.simpleName} chars=${trimmedContent.length}")
             when (intent) {
-                ChatIntent.GenerateWorkout -> generateWorkoutProgram(trimmedContent)
+                ChatIntent.GenerateWorkout -> {
+                    _uiState.value = _uiState.value.copy(
+                        currentInput = "",
+                        workoutBuilderNavigation = WorkoutBuilderNavigation(currentConversationId, trimmedContent)
+                    )
+                    isUserMessageInFlight = false
+                }
                 ChatIntent.ModifyWorkout -> modifyWorkoutProgram(trimmedContent, updateFromProgress = false)
                 ChatIntent.UpdatePlanFromProgress -> modifyWorkoutProgram(trimmedContent, updateFromProgress = true)
                 ChatIntent.NeedsClarification -> {
@@ -213,12 +291,12 @@ class ChatbotViewModel @Inject constructor(
         }
     }
 
-    private fun sendChatMessage(content: String) {
+    private fun sendChatMessage(content: String, requestId: String = UUID.randomUUID().toString()) {
         if (content.isBlank() || userId == null) return
 
         // Use timestamp + UUID suffix for guaranteed uniqueness in rapid sends
         val timestamp = System.currentTimeMillis()
-        val optimisticId = "optimistic_${timestamp}_${UUID.randomUUID().toString().takeLast(8)}"
+        val optimisticId = "chat-$requestId-user"
         
         val userMessage = ChatMessage(
             id = optimisticId,
@@ -246,6 +324,7 @@ class ChatbotViewModel @Inject constructor(
                 // Use real AI integration - this will save both user and AI messages
                 chatInteractor.sendMessage(
                     userId = userId!!,
+                    requestId = requestId,
                     message = content.trim(),
                     conversationId = currentConversationId,
                     language = _uiState.value.currentLanguage.code
@@ -284,7 +363,8 @@ class ChatbotViewModel @Inject constructor(
                             messages = updatedMessages,
                             isTyping = false,
                             error = liftrixError,
-                            lastFailedMessage = content.trim() // Store for retry
+                            lastFailedMessage = content.trim(),
+                            failedSubmission = FailedSubmission(requestId, content.trim())
                         )
                     }
                 )
@@ -326,12 +406,14 @@ class ChatbotViewModel @Inject constructor(
                     error = null
                 )
 
-                val savedUserMessage = chatRepository.saveMessage(
+                val savedUserMessage = chatInteractor.recordMessage(
+                    messageId = userMessage.id,
                     userId = userId!!,
-                    message = content,
+                    content = content,
                     type = MessageType.USER,
                     conversationId = currentConversationId,
-                    language = _uiState.value.currentLanguage.code
+                    language = _uiState.value.currentLanguage.code,
+                    titleSeed = content
                 ).getOrElse { error ->
                     Timber.e(error, "ChatbotViewModel: failed to save workout request message")
                     _uiState.value = _uiState.value.copy(
@@ -358,14 +440,13 @@ class ChatbotViewModel @Inject constructor(
                             content = buildGeneratedProgramMessage(result),
                             createdAt = System.currentTimeMillis()
                         )
-                        val savedPreviewMessage = chatRepository.saveMessage(
+                        val savedPreviewMessage = chatInteractor.recordMessage(
+                            messageId = previewMessage.id,
                             userId = userId!!,
-                            message = previewMessage.content,
+                            content = previewMessage.content,
                             type = MessageType.AI_RESPONSE,
                             conversationId = currentConversationId,
-                            language = _uiState.value.currentLanguage.code,
-                            tokenCount = result.tokensUsed,
-                            processingTimeMs = result.processingTimeMs
+                            language = _uiState.value.currentLanguage.code
                         ).getOrElse { error ->
                             Timber.e(error, "ChatbotViewModel: failed to save workout preview message")
                             _uiState.value = _uiState.value.copy(
@@ -496,12 +577,14 @@ class ChatbotViewModel @Inject constructor(
                     generatedProgramSaved = false,
                     error = null
                 )
-                val savedUserMessage = chatRepository.saveMessage(
+                val savedUserMessage = chatInteractor.recordMessage(
+                    messageId = userMessage.id,
                     userId = id,
-                    message = content,
+                    content = content,
                     type = MessageType.USER,
                     conversationId = currentConversationId,
-                    language = _uiState.value.currentLanguage.code
+                    language = _uiState.value.currentLanguage.code,
+                    titleSeed = content
                 ).getOrElse { error ->
                     _uiState.value = _uiState.value.copy(
                         messages = _uiState.value.messages.filterNot { it.id == userMessage.id },
@@ -529,14 +612,13 @@ class ChatbotViewModel @Inject constructor(
                             content = buildGeneratedProgramMessage(result),
                             createdAt = System.currentTimeMillis()
                         )
-                        val savedPreviewMessage = chatRepository.saveMessage(
+                        val savedPreviewMessage = chatInteractor.recordMessage(
+                            messageId = previewMessage.id,
                             userId = id,
-                            message = previewMessage.content,
+                            content = previewMessage.content,
                             type = MessageType.AI_RESPONSE,
                             conversationId = currentConversationId,
-                            language = _uiState.value.currentLanguage.code,
-                            tokenCount = result.tokensUsed,
-                            processingTimeMs = result.processingTimeMs
+                            language = _uiState.value.currentLanguage.code
                         ).getOrElse { error ->
                             _uiState.value = _uiState.value.copy(
                                 messages = _uiState.value.messages.filterNot { it.id == userMessage.id },
@@ -723,8 +805,8 @@ class ChatbotViewModel @Inject constructor(
     }
 
     private fun retryLastMessage() {
-        // First try to use the stored failed message, then fall back to last user message
-        val messageToRetry = _uiState.value.lastFailedMessage 
+        val failed = _uiState.value.failedSubmission
+        val messageToRetry = failed?.content ?: _uiState.value.lastFailedMessage
             ?: _uiState.value.messages.lastOrNull { it.type == MessageType.USER }?.content
         
         if (messageToRetry != null) {
@@ -733,14 +815,14 @@ class ChatbotViewModel @Inject constructor(
                 error = null,
                 lastFailedMessage = null
             )
-            sendMessage(messageToRetry)
+            if (failed != null) sendChatMessage(messageToRetry, failed.requestId) else sendMessage(messageToRetry)
         }
     }
 
     private fun clearConversation() {
         viewModelScope.launch {
             userId?.let { id ->
-                chatRepository.deleteConversation(id, currentConversationId).fold(
+                chatInteractor.deleteConversation(id, currentConversationId).fold(
                     onSuccess = { count ->
                         Timber.d("Cleared $count messages from conversation")
                         currentConversationId = UUID.randomUUID().toString()
@@ -760,6 +842,35 @@ class ChatbotViewModel @Inject constructor(
                     }
                 )
             }
+        }
+    }
+
+    private fun newConversation() {
+        if (!isUserMessageInFlight) openConversation(UUID.randomUUID().toString())
+    }
+
+    private fun renameConversation(conversationId: String, title: String) {
+        val id = userId ?: return
+        viewModelScope.launch {
+            chatInteractor.renameConversation(id, conversationId, title).onFailure {
+                handleError(it as? LiftrixError ?: LiftrixError.UnknownError(it.message ?: "Rename failed"))
+            }
+        }
+    }
+
+    private fun deleteConversation(conversationId: String) {
+        val id = userId ?: return
+        viewModelScope.launch {
+            chatInteractor.deleteConversation(id, conversationId)
+                .onSuccess {
+                    openConversation(
+                        _uiState.value.conversations.firstOrNull { it.id != conversationId }?.id
+                            ?: UUID.randomUUID().toString()
+                    )
+                }
+                .onFailure {
+                    handleError(it as? LiftrixError ?: LiftrixError.UnknownError(it.message ?: "Delete failed"))
+                }
         }
     }
 
@@ -850,6 +961,10 @@ class ChatbotViewModel @Inject constructor(
 @Stable
 data class ChatbotUiState(
     val messages: List<ChatMessage> = emptyList(),
+    val conversations: List<ChatConversation> = emptyList(),
+    val conversationsState: UiState<List<ChatConversation>> = UiState.Loading,
+    val activeConversationId: String? = null,
+    val isOnline: Boolean = true,
     val conversationState: UiState<List<ChatMessage>> = UiState.Loading,
     val currentInput: String = "",
     val isTyping: Boolean = false,
@@ -863,8 +978,13 @@ data class ChatbotUiState(
     val isGeneratingProgram: Boolean = false,
     val isSavingGeneratedProgram: Boolean = false,
     val generatedProgramSaved: Boolean = false,
-    val lastFailedMessage: String? = null // Store last failed message for retry
+    val lastFailedMessage: String? = null,
+    val failedSubmission: FailedSubmission? = null,
+    val workoutBuilderNavigation: WorkoutBuilderNavigation? = null
 )
+
+data class FailedSubmission(val requestId: String, val content: String)
+data class WorkoutBuilderNavigation(val conversationId: String?, val seedPrompt: String?)
 
 /**
  * Events for the chatbot screen.
@@ -886,6 +1006,12 @@ sealed class ChatbotEvent {
     object RetryLastMessage : ChatbotEvent()
     object ClearConversation : ChatbotEvent()
     object DismissError : ChatbotEvent()
+    object NewConversation : ChatbotEvent()
+    data class OpenConversation(val conversationId: String) : ChatbotEvent()
+    data class RenameConversation(val conversationId: String, val title: String) : ChatbotEvent()
+    data class DeleteConversation(val conversationId: String) : ChatbotEvent()
+    object CreateWorkoutPlan : ChatbotEvent()
+    object WorkoutBuilderNavigationConsumed : ChatbotEvent()
 }
 
 /**

@@ -7,10 +7,6 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.liftrix.data.local.DatabasePassphraseProvider
 import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.data.local.dao.*
-import com.example.liftrix.data.local.migrations.MIGRATION_7_8
-import com.example.liftrix.data.local.migrations.MIGRATION_8_9
-import com.example.liftrix.data.local.migrations.MIGRATION_9_10
-import com.example.liftrix.data.local.migrations.MIGRATION_10_11
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -44,7 +40,6 @@ object CoreDatabaseModule {
             .setTransactionExecutor(Dispatchers.IO.asExecutor())
             .setQueryExecutor(Dispatchers.IO.asExecutor())
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-            .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     super.onCreate(db)
@@ -132,6 +127,7 @@ object CoreDatabaseModule {
     @Provides fun provideModerationActionDao(database: LiftrixDatabase): ModerationActionDao = database.moderationActionDao()
     @Provides fun provideTemplateShareEventDao(database: LiftrixDatabase): TemplateShareEventDao = database.templateShareEventDao()
     @Provides fun provideAnalyticsReadModelDao(database: LiftrixDatabase): AnalyticsReadModelDao = database.analyticsReadModelDao()
+    @Provides fun provideAiUsageDao(database: LiftrixDatabase): AiUsageDao = database.aiUsageDao()
 
     private fun repairSettingsUpdatedAt(db: SupportSQLiteDatabase) {
         try {

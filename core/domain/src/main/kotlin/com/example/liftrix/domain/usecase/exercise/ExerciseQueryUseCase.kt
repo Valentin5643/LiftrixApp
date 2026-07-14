@@ -146,12 +146,18 @@ class ExerciseQueryUseCase @Inject constructor(
         return try {
             val validationResult = validateSearchRequest(request)
             if (validationResult.isFailure) {
-                return validationResult as LiftrixResult<SearchExercisesResult>
+                return LiftrixResult.failure(
+                    validationResult.exceptionOrNull()
+                        ?: LiftrixError.UnknownError("Unexpected exercise search validation failure")
+                )
             }
 
             val searchResult = performSearch(request)
             if (searchResult.isFailure) {
-                return searchResult as LiftrixResult<SearchExercisesResult>
+                return LiftrixResult.failure(
+                    searchResult.exceptionOrNull()
+                        ?: LiftrixError.UnknownError("Unexpected exercise search failure")
+                )
             }
 
             val exercises = searchResult.getOrThrow()

@@ -95,16 +95,12 @@ abstract class ExportImportModule {
         fun provideDataImportUseCase(
             formatDetector: com.example.liftrix.domain.service.parser.FormatDetector,
             parserFactory: com.example.liftrix.domain.service.parser.WorkoutParserFactory,
-            exerciseMappingService: com.example.liftrix.domain.service.ExerciseMappingService,
-            workoutDao: com.example.liftrix.data.local.dao.WorkoutDao,
-            dataImportDao: com.example.liftrix.data.local.dao.DataImportDao
+            exerciseMappingService: com.example.liftrix.domain.service.ExerciseMappingService
         ): com.example.liftrix.domain.usecase.data_import.DataImportUseCase =
             com.example.liftrix.domain.usecase.data_import.DataImportUseCaseImpl(
                 formatDetector = formatDetector,
                 parserFactory = parserFactory,
-                exerciseMappingService = exerciseMappingService,
-                workoutDao = workoutDao,
-                dataImportDao = dataImportDao
+                exerciseMappingService = exerciseMappingService
             )
 
         @Provides

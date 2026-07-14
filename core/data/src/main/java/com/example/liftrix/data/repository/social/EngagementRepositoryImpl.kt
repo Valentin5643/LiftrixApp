@@ -7,6 +7,7 @@ import androidx.paging.map
 import com.example.liftrix.data.local.dao.*
 import com.example.liftrix.data.mapper.EngagementMapper
 import com.example.liftrix.data.mapper.WorkoutPostMapper
+import com.example.liftrix.data.sync.OfflineQueueManager
 import com.example.liftrix.domain.repository.social.EngagementRepository
 import com.example.liftrix.domain.model.social.*
 import com.example.liftrix.domain.model.MediaItem
@@ -17,6 +18,8 @@ import com.example.liftrix.domain.service.AnalyticsTracker
 import com.example.liftrix.domain.service.PrivacyEnforcementService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
@@ -39,7 +42,8 @@ class EngagementRepositoryImpl @Inject constructor(
     private val engagementMapper: EngagementMapper,
     private val workoutPostMapper: WorkoutPostMapper,
     private val privacyEnforcementService: PrivacyEnforcementService,
-    private val analyticsTracker: AnalyticsTracker
+    private val analyticsTracker: AnalyticsTracker,
+    private val offlineQueueManager: OfflineQueueManager
 ) : EngagementRepository {
     
     // ==========================================
@@ -74,7 +78,9 @@ class EngagementRepositoryImpl @Inject constructor(
             
             if (isCurrentlyLiked) {
                 // Unlike: Remove like and decrement count
-                postLikeDao.deleteLikeByPostAndUser(postId, userId)
+                val like = postLikeDao.getLikeByPostAndUser(postId, userId)!!
+                postLikeDao.tombstone(postId, userId, System.currentTimeMillis())
+                offlineQueueManager.queueSocialMutation(userId, "POST_LIKE", like.id, "DELETE").getOrThrow()
                 
                 // Update post like count optimistically
                 val currentPost = workoutPostDao.getPostById(postId)
@@ -96,7 +102,8 @@ class EngagementRepositoryImpl @Inject constructor(
             } else {
                 // Like: Add like and increment count
                 val likeEntity = engagementMapper.createLikeEntity(postId, userId)
-                postLikeDao.insertLike(likeEntity)
+                postLikeDao.upsertLocal(likeEntity)
+                offlineQueueManager.queueSocialMutation(userId, "POST_LIKE", likeEntity.id, "CREATE").getOrThrow()
                 
                 // Update post like count optimistically
                 val currentPost = workoutPostDao.getPostById(postId)
@@ -237,7 +244,8 @@ class EngagementRepositoryImpl @Inject constructor(
             }
             
             val commentEntity = engagementMapper.createCommentEntity(userId, request)
-            postCommentDao.insertComment(commentEntity)
+            postCommentDao.upsertLocal(commentEntity)
+            offlineQueueManager.queueSocialMutation(userId, "POST_COMMENT", commentEntity.id, "CREATE").getOrThrow()
             
             // Update post comment count optimistically
             val currentPost = workoutPostDao.getPostById(request.postId)
@@ -289,6 +297,9 @@ class EngagementRepositoryImpl @Inject constructor(
                 editedAt = currentTime,
                 updatedAt = currentTime
             )
+            val locallyEdited = postCommentDao.getCommentById(request.commentId)
+            if (locallyEdited != null) postCommentDao.upsertLocal(locallyEdited)
+            offlineQueueManager.queueSocialMutation(userId, "POST_COMMENT", request.commentId, "UPDATE").getOrThrow()
             
             // Get updated comment and author profile
             val updatedComment = postCommentDao.getCommentById(request.commentId)!!
@@ -327,7 +338,11 @@ class EngagementRepositoryImpl @Inject constructor(
                 throw SecurityException("User not authorized to delete this comment")
             }
             
-            postCommentDao.deleteCommentById(commentId, userId)
+            val deletedRows = postCommentDao.tombstone(commentId, userId, System.currentTimeMillis())
+            if (deletedRows != 1) {
+                throw SecurityException("Comment deletion was not authorized")
+            }
+            offlineQueueManager.queueSocialMutation(userId, "POST_COMMENT", commentId, "DELETE").getOrThrow()
             
             // Update post comment count optimistically
             post?.let {
@@ -337,8 +352,18 @@ class EngagementRepositoryImpl @Inject constructor(
         }
     }
     
-    override fun getPostComments(postId: String, pageSize: Int): Flow<PagingData<PostComment>> {
-        return Pager(
+    override fun getPostComments(
+        postId: String,
+        viewerId: String,
+        pageSize: Int
+    ): Flow<PagingData<PostComment>> = flow {
+        val post = withContext(Dispatchers.IO) { workoutPostDao.getPostById(postId) }
+        if (post == null || !privacyEnforcementService.canViewPost(viewerId, workoutPostMapper.toDomain(post))) {
+            emit(PagingData.empty())
+            return@flow
+        }
+
+        emitAll(Pager(
             config = PagingConfig(
                 pageSize = pageSize,
                 enablePlaceholders = false
@@ -348,10 +373,10 @@ class EngagementRepositoryImpl @Inject constructor(
             pagingData.map { entity ->
                 enhanceCommentWithUserData(entity)
             }
-        }
+        })
     }
     
-    override suspend fun getCommentReplies(commentId: String): LiftrixResult<List<PostComment>> = liftrixCatching(
+    override suspend fun getCommentReplies(commentId: String, viewerId: String): LiftrixResult<List<PostComment>> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
                 code = "GET_COMMENT_REPLIES",
@@ -361,6 +386,13 @@ class EngagementRepositoryImpl @Inject constructor(
         }
     ) {
         withContext(Dispatchers.IO) {
+            val parent = postCommentDao.getCommentById(commentId)
+                ?: throw IllegalArgumentException("Comment not found")
+            val post = workoutPostDao.getPostById(parent.postId)
+                ?: throw IllegalArgumentException("Post not found")
+            if (!privacyEnforcementService.canViewPost(viewerId, workoutPostMapper.toDomain(post))) {
+                throw SecurityException("Viewer cannot access comments for this post")
+            }
             val replyEntities = postCommentDao.getReplies(commentId)
             replyEntities.map { entity ->
                 enhanceCommentWithUserData(entity)
@@ -393,7 +425,9 @@ class EngagementRepositoryImpl @Inject constructor(
             
             if (isCurrentlySaved) {
                 // Unsave: Remove save and decrement count
-                savedPostDao.unsavePostByIds(userId, postId)
+                val saved = savedPostDao.getSavedPost(userId, postId)!!
+                savedPostDao.tombstone(userId, postId, System.currentTimeMillis())
+                offlineQueueManager.queueSocialMutation(userId, "SAVED_POST", saved.id, "DELETE").getOrThrow()
                 
                 // Update post save count optimistically
                 val currentPost = workoutPostDao.getPostById(postId)
@@ -415,7 +449,8 @@ class EngagementRepositoryImpl @Inject constructor(
             } else {
                 // Save: Add save and increment count
                 val saveEntity = engagementMapper.createSavedPostEntity(postId, userId)
-                savedPostDao.savePost(saveEntity)
+                savedPostDao.savePost(saveEntity.copy(isDirty = true, lastModified = System.currentTimeMillis()))
+                offlineQueueManager.queueSocialMutation(userId, "SAVED_POST", saveEntity.id, "CREATE").getOrThrow()
                 
                 // Update post save count optimistically
                 val currentPost = workoutPostDao.getPostById(postId)

@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -51,9 +52,17 @@ import com.example.liftrix.domain.model.ai.WorkoutGenerationResult
 import com.example.liftrix.domain.model.chat.ChatMessage
 import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.chat.UsageLimits
+import com.example.liftrix.domain.model.chat.ChatConversation
+import com.example.liftrix.ui.chat.components.ConversationHistoryPane
+import com.example.liftrix.ui.chat.components.RenameConversationDialog
+import com.example.liftrix.ui.chat.components.DeleteConversationDialog
+import com.example.liftrix.ui.chat.workoutbuilder.components.GeneratedWorkoutPlanPreview
+import com.example.liftrix.ui.common.WindowWidthSizeClass
+import com.example.liftrix.ui.common.rememberWindowSizeClass
 import kotlin.math.absoluteValue
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlinx.coroutines.launch
 
 /**
  * Chatbot screen providing AI-powered workout guidance interface.
@@ -77,19 +86,52 @@ fun ChatbotScreen(
     conversationId: String? = null,
     initialWorkoutContext: String? = null,
     onNavigateBack: () -> Unit,
+    onCreateWorkoutPlan: (String?, String?) -> Unit = { _, _ -> },
     showTopBar: Boolean = true,
     viewModel: ChatbotViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showDisclaimer by remember { mutableStateOf(true) }
+    val windowSize = rememberWindowSizeClass()
+    val compact = windowSize.widthSizeClass == WindowWidthSizeClass.COMPACT
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    var renameTarget by remember { mutableStateOf<ChatConversation?>(null) }
+    var deleteTarget by remember { mutableStateOf<ChatConversation?>(null) }
 
+    LaunchedEffect(uiState.workoutBuilderNavigation) {
+        uiState.workoutBuilderNavigation?.let { request ->
+            onCreateWorkoutPlan(request.conversationId, request.seedPrompt)
+            viewModel.handleEvent(ChatbotEvent.WorkoutBuilderNavigationConsumed)
+        }
+    }
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        gesturesEnabled = compact,
+        drawerContent = {
+            if (compact) ModalDrawerSheet(modifier = Modifier.width(320.dp)) {
+                ConversationHistoryPane(
+                    conversations = uiState.conversations,
+                    activeConversationId = uiState.activeConversationId,
+                    newConversationEnabled = !uiState.isTyping,
+                    onNewConversation = { viewModel.handleEvent(ChatbotEvent.NewConversation); scope.launch { drawerState.close() } },
+                    onOpenConversation = { viewModel.handleEvent(ChatbotEvent.OpenConversation(it)); scope.launch { drawerState.close() } },
+                    onRenameConversation = { renameTarget = it },
+                    onDeleteConversation = { deleteTarget = it }
+                )
+            }
+        }
+    ) {
     Scaffold(
         topBar = {
             if (showTopBar) {
                 ChatbotTopBar(
                     onNavigateBack = onNavigateBack,
                     usageLimits = uiState.usageLimits,
-                    currentLanguage = uiState.currentLanguage
+                    currentLanguage = uiState.currentLanguage,
+                    onOpenHistory = { scope.launch { drawerState.open() } },
+                    showHistoryButton = compact
                 )
             }
         },
@@ -99,6 +141,7 @@ fun ChatbotScreen(
                 onTextChange = { viewModel.handleEvent(ChatbotEvent.UpdateInput(it)) },
                 onSend = { viewModel.handleEvent(ChatbotEvent.SendMessage(it)) },
                 enabled = uiState.isAiAccessEnabled &&
+                    uiState.isOnline &&
                     !uiState.isTyping &&
                     uiState.usageLimits?.canSendMessage() != false,
                 currentLanguage = uiState.currentLanguage
@@ -110,6 +153,19 @@ fun ChatbotScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            Row(Modifier.fillMaxSize()) {
+                if (!compact) {
+                    ConversationHistoryPane(
+                        conversations = uiState.conversations,
+                        activeConversationId = uiState.activeConversationId,
+                        newConversationEnabled = !uiState.isTyping,
+                        onNewConversation = { viewModel.handleEvent(ChatbotEvent.NewConversation) },
+                        onOpenConversation = { viewModel.handleEvent(ChatbotEvent.OpenConversation(it)) },
+                        onRenameConversation = { renameTarget = it },
+                        onDeleteConversation = { deleteTarget = it },
+                        modifier = Modifier.width(300.dp).fillMaxHeight()
+                    )
+                }
             MessageList(
                 messages = uiState.messages,
                 isTyping = uiState.isTyping,
@@ -130,11 +186,22 @@ fun ChatbotScreen(
                     viewModel.handleEvent(ChatbotEvent.ReportAIMessage(messageId, messageContent, reason, notes))
                 },
                 onPromptSelected = { prompt ->
-                    viewModel.handleEvent(ChatbotEvent.UpdateInput(prompt))
+                    if (prompt == "Create a workout plan") {
+                        viewModel.handleEvent(ChatbotEvent.CreateWorkoutPlan)
+                    } else {
+                        viewModel.handleEvent(ChatbotEvent.UpdateInput(prompt))
+                    }
                 },
                 modifier = Modifier
-                    .fillMaxSize()
+                    .weight(1f)
             )
+            }
+
+            if (!uiState.isOnline) {
+                Surface(color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.align(Alignment.TopCenter)) {
+                    Text("Offline — saved chats remain available; sending is disabled.", modifier = Modifier.padding(12.dp))
+                }
+            }
 
             if (!showTopBar) {
                 ChatControlsRow(
@@ -187,6 +254,18 @@ fun ChatbotScreen(
             }
         }
     }
+    }
+
+    renameTarget?.let { conversation ->
+        RenameConversationDialog(conversation, onDismiss = { renameTarget = null }) { title ->
+            viewModel.handleEvent(ChatbotEvent.RenameConversation(conversation.id, title)); renameTarget = null
+        }
+    }
+    deleteTarget?.let { conversation ->
+        DeleteConversationDialog(conversation, onDismiss = { deleteTarget = null }) {
+            viewModel.handleEvent(ChatbotEvent.DeleteConversation(conversation.id)); deleteTarget = null
+        }
+    }
 }
 
 @Composable
@@ -224,7 +303,9 @@ private fun ChatControlsRow(
 private fun ChatbotTopBar(
     onNavigateBack: () -> Unit,
     usageLimits: UsageLimits?,
-    currentLanguage: Language
+    currentLanguage: Language,
+    onOpenHistory: () -> Unit,
+    showHistoryButton: Boolean
 ) {
     TopAppBar(
         title = { 
@@ -242,6 +323,9 @@ private fun ChatbotTopBar(
             }
         },
         actions = {
+            if (showHistoryButton) {
+                IconButton(onClick = onOpenHistory) { Icon(Icons.Default.Menu, contentDescription = "Conversation history") }
+            }
             // Usage limits display
             usageLimits?.let { limits ->
                 if (limits.dailyMessagesRemaining < 20) {
@@ -282,23 +366,37 @@ private fun MessageList(
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    var showJumpToLatest by remember { mutableStateOf(false) }
+    val isNearBottom by remember {
+        derivedStateOf {
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisible >= listState.layoutInfo.totalItemsCount - 3
+        }
+    }
     val generatedProgramAnchorMessageId = remember(messages, generatedProgram) {
         generatedProgram?.let {
             messages.lastOrNull { message -> message.isGeneratedProgramPreviewMessage() }?.id
         }
     }
 
-    // Auto-scroll to bottom when new message arrives
     LaunchedEffect(messages.size, generatedProgram, isTyping) {
         if (messages.isNotEmpty()) {
-            val targetIndex = if (generatedProgram != null || isTyping) messages.size else messages.size - 1
-            listState.animateScrollToItem(targetIndex)
+            val ownSend = messages.lastOrNull()?.type == MessageType.USER
+            if (isNearBottom || ownSend || listState.layoutInfo.totalItemsCount == 0) {
+                val targetIndex = if (generatedProgram != null || isTyping) messages.size else messages.lastIndex
+                listState.animateScrollToItem(targetIndex)
+                showJumpToLatest = false
+            } else {
+                showJumpToLatest = true
+            }
         }
     }
 
+    Box(modifier) {
     LazyColumn(
         state = listState,
-        modifier = modifier,
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(LiftrixSpacing.medium),
         verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.small)
     ) {
@@ -361,6 +459,15 @@ private fun MessageList(
                         .testTag("typing_indicator")
                 )
             }
+        }
+    }
+        if (showJumpToLatest) {
+            FilledTonalButton(
+                onClick = {
+                    scope.launch { listState.animateScrollToItem(messages.lastIndex.coerceAtLeast(0)); showJumpToLatest = false }
+                },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp).heightIn(min = 48.dp)
+            ) { Text("Jump to latest") }
         }
     }
 }
@@ -494,18 +601,8 @@ private fun GeneratedProgramPreviewCard(
                 }
             }
 
-            result.program.days.forEach { day ->
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "${day.dayName} - ${day.estimatedDurationMinutes} min",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    day.exercises.forEach { exercise ->
-                        GeneratedExerciseRow(exercise = exercise)
-                    }
-                }
+            Box(Modifier.heightIn(max = 520.dp)) {
+                GeneratedWorkoutPlanPreview(result = result, compact = true)
             }
 
             if (result.validationWarnings.isNotEmpty()) {

@@ -52,7 +52,10 @@ class GenerateVolumeCalendarUseCase @Inject constructor(
             // Validate request
             val validationResult = validateRequest(request)
             if (validationResult.isFailure) {
-                return validationResult as LiftrixResult<VolumeCalendarData>
+                return LiftrixResult.failure(
+                    validationResult.exceptionOrNull()
+                        ?: LiftrixError.UnknownError("Unexpected volume calendar validation failure")
+                )
             }
             
             // Delegate to analytics engine for calendar generation
@@ -64,11 +67,13 @@ class GenerateVolumeCalendarUseCase @Inject constructor(
             
             // Handle any generation errors through centralized error handler
             if (calendarResult.isFailure) {
-                val error = calendarResult.exceptionOrNull() as? LiftrixError
+                val error = calendarResult.exceptionOrNull()
                     ?: LiftrixError.UnknownError("Unexpected error during volume calendar generation")
                 
-                errorHandler.handleError(error, mapOf("context" to "GenerateVolumeCalendarUseCase"))
-                return liftrixFailure(error)
+                if (error is LiftrixError) {
+                    errorHandler.handleError(error, mapOf("context" to "GenerateVolumeCalendarUseCase"))
+                }
+                return LiftrixResult.failure(error)
             }
             
             val calendarData = calendarResult.getOrThrow()

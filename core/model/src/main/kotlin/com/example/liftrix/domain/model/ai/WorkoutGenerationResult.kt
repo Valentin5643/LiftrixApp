@@ -3,6 +3,7 @@ package com.example.liftrix.domain.model.ai
 import com.example.liftrix.domain.model.WorkoutTemplate
 
 data class WorkoutGenerationResult(
+    val previewId: String = java.util.UUID.randomUUID().toString(),
     val program: GeneratedWorkoutProgram,
     val validationWarnings: List<String> = emptyList(),
     val savedTemplates: List<WorkoutTemplate> = emptyList(),
@@ -21,6 +22,25 @@ data class WorkoutGenerationResult(
 ) {
     val savedTemplateIds: List<String>
         get() = savedTemplates.map { it.id.value }
+}
+
+data class SavedGeneratedWorkoutDay(
+    val dayIndex: Int,
+    val template: WorkoutTemplate
+)
+
+sealed interface WorkoutProgramSaveOutcome {
+    val savedDays: List<SavedGeneratedWorkoutDay>
+
+    data class Complete(
+        override val savedDays: List<SavedGeneratedWorkoutDay>
+    ) : WorkoutProgramSaveOutcome
+
+    data class Partial(
+        override val savedDays: List<SavedGeneratedWorkoutDay>,
+        val failedDayIndex: Int,
+        val error: Throwable
+    ) : WorkoutProgramSaveOutcome
 }
 
 data class WorkoutGenerationValidationResult(

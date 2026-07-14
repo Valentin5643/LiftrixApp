@@ -97,7 +97,7 @@ object FirebaseModule {
     @Singleton
     fun provideFirebaseAnalytics(): FirebaseAnalytics {
         return Firebase.analytics.apply {
-            setAnalyticsCollectionEnabled(true)
+            setAnalyticsCollectionEnabled(false)
         }
     }
 
@@ -105,7 +105,7 @@ object FirebaseModule {
     @Singleton
     fun provideFirebaseCrashlytics(): FirebaseCrashlytics {
         return FirebaseCrashlytics.getInstance().apply {
-            setCrashlyticsCollectionEnabled(BuildConfig.ENABLE_CRASHLYTICS)
+            setCrashlyticsCollectionEnabled(false)
             setCustomKey("build_type", BuildConfig.BUILD_TYPE)
             setCustomKey("environment", BuildConfig.ENVIRONMENT)
             setCustomKey("app_version_name", BuildConfig.APP_VERSION_NAME)
@@ -120,7 +120,7 @@ object FirebaseModule {
     @Singleton
     fun provideFirebasePerformance(): FirebasePerformance {
         return FirebasePerformance.getInstance().apply {
-            isPerformanceCollectionEnabled = BuildConfig.ENABLE_FIREBASE_PERFORMANCE
+            isPerformanceCollectionEnabled = false
         }
     }
 

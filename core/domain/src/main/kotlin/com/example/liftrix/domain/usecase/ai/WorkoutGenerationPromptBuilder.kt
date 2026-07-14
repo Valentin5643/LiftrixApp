@@ -50,13 +50,15 @@ class WorkoutGenerationPromptBuilder @Inject constructor() {
         userPrompt: String,
         sourceReference: WorkoutProgramSourceReference,
         sourceProgram: GeneratedWorkoutProgram,
-        contextSnapshot: WorkoutAiContextSnapshot
+        contextSnapshot: WorkoutAiContextSnapshot,
+        scope: WorkoutModificationScope? = null
     ): WorkoutGenerationPrompt = buildTaskPrompt(
         task = WorkoutProgramAiTask.MODIFY_WORKOUT_PROGRAM,
         userPrompt = userPrompt,
         sourceReference = sourceReference,
         sourceProgram = sourceProgram,
-        contextSnapshot = contextSnapshot
+        contextSnapshot = contextSnapshot,
+        scope = scope
     )
 
     fun buildProgressionUpdate(
@@ -77,7 +79,8 @@ class WorkoutGenerationPromptBuilder @Inject constructor() {
         userPrompt: String,
         sourceReference: WorkoutProgramSourceReference,
         sourceProgram: GeneratedWorkoutProgram,
-        contextSnapshot: WorkoutAiContextSnapshot
+        contextSnapshot: WorkoutAiContextSnapshot,
+        scope: WorkoutModificationScope? = null
     ): WorkoutGenerationPrompt {
         val cappedContext = contextSnapshot.copy(
             exerciseCatalog = contextSnapshot.exerciseCatalog.take(MAX_CATALOG_EXERCISES)
@@ -87,7 +90,8 @@ class WorkoutGenerationPromptBuilder @Inject constructor() {
             userPrompt = userPrompt.trim(),
             sourceReference = sourceReference,
             sourceProgram = sourceProgram,
-            contextSnapshot = cappedContext
+            contextSnapshot = cappedContext,
+            allowedChange = scope?.toPromptValue()
         )
         val catalogHash = sha256(
             listOf(
@@ -153,12 +157,13 @@ class WorkoutGenerationPromptBuilder @Inject constructor() {
         val SYSTEM_PROMPT = """
             You are Liftrix Workout Program Generator.
             Return only valid JSON. Do not return Markdown, comments, explanations, or code fences.
-            Return exactly one top-level object using this response wrapper: {"schema_version":"${GeneratedWorkoutProgram.SCHEMA_VERSION}","program":{"workout_name":"string","goal":"general_fitness","level":"beginner","days":[]}}.
-            The program object must contain workout_name, goal, level, and days. Do not use program_name.
+            Return exactly one top-level object using this response wrapper: {"schema_version":"${GeneratedWorkoutProgram.SCHEMA_VERSION}","program":{"workout_name":"string","description":"string","goal":"general_fitness","level":"beginner","days":[]}}.
+            The program object must contain workout_name, description, goal, level, and days. Each day must contain scheduled_day, day_name, focus, estimated_duration_minutes, warm_up, exercises, and cool_down. warm_up and cool_down each contain duration_minutes and a steps array. Do not use program_name.
             Generate workout programs that are safe, realistic, and directly usable by the Liftrix app.
             Use only exercises from the provided exercise_catalog. Copy exercise_id, exercise_name, primary_muscle, and equipment exactly from the catalog.
             Only use exercise_ids from the provided compatible exercise_catalog. Do not invent exercise IDs or use exercises outside that catalog.
             Respect every requested constraint: number of days, fitness level, goal, equipment, injuries/exclusions, available time, and user preferences.
+            Scheduled days must exactly match normalized explicit training_days when provided. Treat limitations as safety constraints, never as a diagnosis or rehabilitation request.
             Do not use exercises above the requested fitness level. Beginner programs may only use catalog exercises with beginner-compatible difficulty.
             If a requested constraint cannot be satisfied with the catalog, return {"schema_version":"${GeneratedWorkoutProgram.SCHEMA_VERSION}","error":{"code":"UNSATISFIABLE_REQUEST","message":"..."}} using the strict error schema.
             For BEGINNER level, all rep-based exercises must have reps_min >= 8 and reps_max <= 15.
@@ -176,8 +181,14 @@ class WorkoutGenerationPromptBuilder @Inject constructor() {
             Treat source_program as editable plan context only; do not resolve or modify completed workout sessions.
             Use context_snapshot only as bounded personalization context. Do not infer private profile details that are not present in the payload.
             Keep exercise substitutions within context_snapshot.exercise_catalog and preserve valid exercise_id values.
+            When allowed_change is present, change exactly that target and preserve every field outside its scope byte-for-field.
         """.trimIndent()
     }
+}
+
+private fun WorkoutModificationScope.toPromptValue(): String = when (this) {
+    is WorkoutModificationScope.ReplaceExercise -> "replace_exercise:day=$dayIndex:exercise_id=$exerciseId"
+    is WorkoutModificationScope.RegenerateDay -> "regenerate_day:day=$dayIndex"
 }
 
 @Serializable
@@ -193,6 +204,8 @@ private data class WorkoutModificationPromptPayload(
     val sourceProgram: GeneratedWorkoutProgram,
     @SerialName("context_snapshot")
     val contextSnapshot: WorkoutAiContextSnapshot,
+    @SerialName("allowed_change")
+    val allowedChange: String? = null,
     @SerialName("output_contract")
     val outputContract: String = "Return ModifiedWorkoutProgramResponse JSON with source, program, changes including brief reason fields, significance, confirmation_required, and optional_question."
 )

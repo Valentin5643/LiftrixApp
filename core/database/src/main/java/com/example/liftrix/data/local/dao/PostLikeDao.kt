@@ -33,10 +33,10 @@ interface PostLikeDao {
     @Query("SELECT * FROM post_likes WHERE post_id = :postId AND user_id = :userId")
     suspend fun getLikeByPostAndUser(postId: String, userId: String): PostLikeEntity?
     
-    @Query("SELECT EXISTS(SELECT 1 FROM post_likes WHERE post_id = :postId AND user_id = :userId)")
+    @Query("SELECT EXISTS(SELECT 1 FROM post_likes WHERE post_id = :postId AND user_id = :userId AND is_deleted = 0)")
     suspend fun isPostLikedByUser(postId: String, userId: String): Boolean
     
-    @Query("SELECT EXISTS(SELECT 1 FROM post_likes WHERE post_id = :postId AND user_id = :userId)")
+    @Query("SELECT EXISTS(SELECT 1 FROM post_likes WHERE post_id = :postId AND user_id = :userId AND is_deleted = 0)")
     fun observeIsPostLikedByUser(postId: String, userId: String): Flow<Boolean>
     
     @Query("SELECT COUNT(*) FROM post_likes WHERE post_id = :postId")
@@ -139,6 +139,9 @@ interface PostLikeDao {
      */
     @Query("UPDATE post_likes SET is_dirty = 0, is_synced = 1 WHERE id IN (:ids) AND user_id = :userId")
     suspend fun markAsClean(ids: List<String>, userId: String): Int
+
+    @Query("UPDATE post_likes SET is_deleted = 1, is_dirty = 1, is_synced = 0, last_modified = :timestamp WHERE post_id = :postId AND user_id = :userId")
+    suspend fun tombstone(postId: String, userId: String, timestamp: Long): Int
 
     /**
      * Get local postlike for remote deduplication.

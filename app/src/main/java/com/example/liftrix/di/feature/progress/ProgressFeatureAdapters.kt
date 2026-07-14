@@ -14,6 +14,7 @@ import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.DashboardConfiguration
 import com.example.liftrix.domain.model.analytics.DashboardLayoutMode
 import com.example.liftrix.domain.model.analytics.RankingMetric
+import com.example.liftrix.domain.model.analytics.StrengthForecastResult
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.analytics.UserLevel

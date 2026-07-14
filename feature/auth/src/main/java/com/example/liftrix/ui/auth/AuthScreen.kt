@@ -62,6 +62,8 @@ import timber.log.Timber
 @Composable
 fun AuthScreen(
     onAuthSuccess: () -> Unit,
+    onPrivacyPolicyClick: () -> Unit = {},
+    onTermsOfServiceClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     initialSignUpMode: Boolean = false,
     googleClientId: String = "",
@@ -434,9 +436,9 @@ fun AuthScreen(
                     pendingSignUpData = null
                 },
                 onPrivacyPolicyClick = {
-                    // TODO: Navigate to Privacy Policy screen
-                    Timber.d("Privacy Policy link clicked")
-                }
+                    onPrivacyPolicyClick()
+                },
+                onTermsOfServiceClick = onTermsOfServiceClick
             )
         }
     }

@@ -47,7 +47,10 @@ class QRCodeGenerationUseCase @Inject constructor(
             // Validate request
             val validationResult = validateRequest(request, currentUserId)
             if (validationResult.isFailure) {
-                return validationResult as LiftrixResult<QRCodeGenerationResult>
+                return LiftrixResult.failure(
+                    validationResult.exceptionOrNull()
+                        ?: LiftrixError.UnknownError("Unexpected QR code generation validation failure")
+                )
             }
 
             // Determine target user ID (default to current user)
@@ -63,7 +66,10 @@ class QRCodeGenerationUseCase @Inject constructor(
             // Generate QR code data through repository
             val qrCodeResult = userSearchRepository.generateProfileQRCode(targetUserId)
             if (qrCodeResult.isFailure) {
-                return qrCodeResult as LiftrixResult<QRCodeGenerationResult>
+                return LiftrixResult.failure(
+                    qrCodeResult.exceptionOrNull()
+                        ?: LiftrixError.UnknownError("Unexpected QR code generation failure")
+                )
             }
 
             val qrCodeData = qrCodeResult.getOrThrow()
@@ -117,7 +123,10 @@ class QRCodeGenerationUseCase @Inject constructor(
             // Resolve QR code through repository
             val resolutionResult = userSearchRepository.resolveQRCodeProfile(request.qrCodeData)
             if (resolutionResult.isFailure) {
-                return resolutionResult as LiftrixResult<QRCodeResolutionResult>
+                return LiftrixResult.failure(
+                    resolutionResult.exceptionOrNull()
+                        ?: LiftrixError.UnknownError("Unexpected QR code resolution failure")
+                )
             }
 
             val resolvedUserId = resolutionResult.getOrThrow()

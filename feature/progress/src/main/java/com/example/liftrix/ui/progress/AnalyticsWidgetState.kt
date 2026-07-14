@@ -98,6 +98,9 @@ data class AnalyticsWidgetState(
      * Structure: widgetId -> LiftrixError
      */
     val widgetErrors: Map<String, LiftrixError> = emptyMap(),
+
+    /** Widgets whose production metric is not supported or lacks sufficient persisted data. */
+    val unavailableWidgets: Set<String> = emptySet(),
     
     /**
      * Global error state for dashboard-wide operations.
@@ -342,6 +345,15 @@ fun AnalyticsWidgetState.withWidgetData(
     data: WidgetData
 ): AnalyticsWidgetState = copy(
     widgetData = widgetData + (widgetId to data),
+    unavailableWidgets = unavailableWidgets - widgetId,
+    lastRefreshTimestamp = System.currentTimeMillis()
+)
+
+fun AnalyticsWidgetState.withWidgetUnavailable(widgetId: String): AnalyticsWidgetState = copy(
+    widgetData = widgetData - widgetId,
+    widgetErrors = widgetErrors - widgetId,
+    unavailableWidgets = unavailableWidgets + widgetId,
+    widgetLoadingStates = widgetLoadingStates - widgetId,
     lastRefreshTimestamp = System.currentTimeMillis()
 )
 

@@ -31,8 +31,15 @@ interface PostCommentDao {
     @Delete
     suspend fun deleteComment(comment: PostCommentEntity)
     
-    @Query("DELETE FROM post_comments WHERE id = :commentId AND user_id = :userId")
-    suspend fun deleteCommentById(commentId: String, userId: String)
+    @Query("""
+        DELETE FROM post_comments
+        WHERE id = :commentId
+        AND (
+            user_id = :userId
+            OR post_id IN (SELECT id FROM workout_posts WHERE user_id = :userId)
+        )
+    """)
+    suspend fun deleteCommentById(commentId: String, userId: String): Int
     
     @Query("SELECT * FROM post_comments WHERE id = :commentId")
     suspend fun getCommentById(commentId: String): PostCommentEntity?
@@ -41,28 +48,29 @@ interface PostCommentDao {
         SELECT * FROM post_comments 
         WHERE post_id = :postId 
         AND reply_to_comment_id IS NULL
+        AND is_deleted = 0
         ORDER BY created_at ASC
     """)
     fun getTopLevelComments(postId: String): PagingSource<Int, PostCommentEntity>
     
     @Query("""
         SELECT * FROM post_comments 
-        WHERE reply_to_comment_id = :parentCommentId
+        WHERE reply_to_comment_id = :parentCommentId AND is_deleted = 0
         ORDER BY created_at ASC
     """)
     suspend fun getReplies(parentCommentId: String): List<PostCommentEntity>
     
     @Query("""
         SELECT * FROM post_comments 
-        WHERE reply_to_comment_id = :parentCommentId
+        WHERE reply_to_comment_id = :parentCommentId AND is_deleted = 0
         ORDER BY created_at ASC
     """)
     fun observeReplies(parentCommentId: String): Flow<List<PostCommentEntity>>
     
-    @Query("SELECT COUNT(*) FROM post_comments WHERE post_id = :postId")
+    @Query("SELECT COUNT(*) FROM post_comments WHERE post_id = :postId AND is_deleted = 0")
     suspend fun getCommentCount(postId: String): Int
     
-    @Query("SELECT COUNT(*) FROM post_comments WHERE post_id = :postId")
+    @Query("SELECT COUNT(*) FROM post_comments WHERE post_id = :postId AND is_deleted = 0")
     fun observeCommentCount(postId: String): Flow<Int>
     
     @Query("SELECT COUNT(*) FROM post_comments WHERE reply_to_comment_id = :parentCommentId")
@@ -195,6 +203,9 @@ interface PostCommentDao {
      */
     @Query("UPDATE post_comments SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE id IN (:ids) AND user_id = :userId")
     suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    @Query("UPDATE post_comments SET is_deleted = 1, is_dirty = 1, is_synced = 0, last_modified = :timestamp WHERE id = :commentId AND (user_id = :userId OR post_id IN (SELECT id FROM workout_posts WHERE user_id = :userId))")
+    suspend fun tombstone(commentId: String, userId: String, timestamp: Long): Int
 
     // ========== END OFFLINE-FIRST METHODS ==========
 }

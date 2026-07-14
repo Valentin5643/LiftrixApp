@@ -52,6 +52,17 @@ class WorkoutCommandUseCase @Inject constructor(
     private val authQueryUseCase: AuthQueryUseCase
 ) {
 
+    private suspend fun requireAuthenticatedUserId(): String {
+        val userId = authQueryUseCase(waitForAuth = false).getOrThrow().value
+        if (userId.isBlank()) {
+            throw LiftrixError.AuthenticationError(
+                errorMessage = "User not authenticated",
+                errorCode = "AUTH_REQUIRED"
+            )
+        }
+        return userId
+    }
+
     // ============== UPDATE SESSION ==============
 
     /**
@@ -75,6 +86,7 @@ class WorkoutCommandUseCase @Inject constructor(
     ): LiftrixResult<Workout> = liftrixCatching(
         errorMapper = { throwable ->
             when (throwable) {
+                is LiftrixError -> throwable
                 is IllegalStateException -> LiftrixError.AuthenticationError(
                     errorMessage = "User not authenticated",
                     errorCode = "AUTH_REQUIRED",
@@ -113,13 +125,10 @@ class WorkoutCommandUseCase @Inject constructor(
         }
     ) {
         // Get current user ID for security validation
-        val currentUserId = authQueryUseCase(waitForAuth = false).getOrNull()
-        if (currentUserId?.value.isNullOrBlank()) {
-            throw IllegalStateException("User not authenticated")
-        }
+        val currentUserId = requireAuthenticatedUserId()
 
         // Validate that the user owns this session
-        if (updatedSession.userId != currentUserId?.value) {
+        if (updatedSession.userId != currentUserId) {
             throw SecurityException("Cannot update session belonging to another user")
         }
 
@@ -134,7 +143,7 @@ class WorkoutCommandUseCase @Inject constructor(
             updatedAt = Instant.now(),
             // Preserve original creation timestamp and user ID
             createdAt = originalCreatedAt ?: updatedSession.createdAt,
-            userId = currentUserId?.value!!
+            userId = currentUserId
         )
 
         Timber.d("Updating workout session for user: $currentUserId")
@@ -168,19 +177,21 @@ class WorkoutCommandUseCase @Inject constructor(
 
             // Validate set data
             exercise.sets.forEach { set ->
-                if (set.reps != null && set.reps!!.count < 0) {
+                if (set.reps?.count?.let { it < 0 } == true) {
                     return IllegalArgumentException("Reps cannot be negative")
                 }
 
-                if (set.weight != null && set.weight!!.toPounds() < 0) {
+                if (set.weight?.toPounds()?.let { it < 0 } == true) {
                     return IllegalArgumentException("Weight cannot be negative")
                 }
             }
         }
 
         // Validate session timing if present
-        if (session.startTime != null && session.endTime != null) {
-            if (session.endTime!!.isBefore(session.startTime)) {
+        val startTime = session.startTime
+        val endTime = session.endTime
+        if (startTime != null && endTime != null) {
+            if (endTime.isBefore(startTime)) {
                 return IllegalArgumentException("Session end time cannot be before start time")
             }
         }
@@ -213,30 +224,28 @@ class WorkoutCommandUseCase @Inject constructor(
         initialSets: Int = 3
     ): LiftrixResult<Workout> = liftrixCatching(
         errorMapper = { throwable ->
-            LiftrixError.BusinessLogicError(
-                code = "ADD_EXERCISE_TO_WORKOUT_FAILED",
-                errorMessage = "Failed to add exercise to workout: ${throwable.message}",
-                analyticsContext = mapOf(
-                    "workout_id" to workoutId.value,
-                    "exercise_library_id" to exerciseLibraryId,
-                    "operation" to "ADD_EXERCISE_TO_WORKOUT"
+            when (throwable) {
+                is LiftrixError -> throwable
+                else -> LiftrixError.BusinessLogicError(
+                    code = "ADD_EXERCISE_TO_WORKOUT_FAILED",
+                    errorMessage = "Failed to add exercise to workout: ${throwable.message}",
+                    analyticsContext = mapOf(
+                        "workout_id" to workoutId.value,
+                        "exercise_library_id" to exerciseLibraryId,
+                        "operation" to "ADD_EXERCISE_TO_WORKOUT"
+                    )
                 )
-            )
+            }
         }
     ) {
-        Timber.d("🔥 ADD-EXERCISE-DEBUG: Adding exercise $exerciseLibraryId to workout ${workoutId.value}")
-
-        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
-        if (userId?.value.isNullOrBlank()) {
-            throw IllegalStateException("User not authenticated")
-        }
+        val userId = requireAuthenticatedUserId()
 
         // Validate inputs
         if (initialSets < 1 || initialSets > 10) {
             throw IllegalArgumentException("Initial sets must be between 1 and 10")
         }
 
-        val workoutResult = workoutRepository.getWorkoutById(workoutId, userId?.value!!)
+        val workoutResult = workoutRepository.getWorkoutById(workoutId, userId)
         val existingWorkout = workoutResult.fold(
             onSuccess = { workout ->
                 workout ?: throw IllegalArgumentException("Workout not found or access denied")
@@ -264,70 +273,11 @@ class WorkoutCommandUseCase @Inject constructor(
         val libraryExercise = allExercises.find { it.id == exerciseLibraryId }
             ?: throw IllegalArgumentException("Exercise not found in library")
 
-        // Create new exercise with smart default sets
-        val newExerciseId = ExerciseId(UUID.randomUUID().toString())
-        val defaultSets = (1..initialSets).map { setNumber ->
-            // Apply smart defaults based on exercise type
-            val defaultReps = when {
-                // Time-based exercises (planks, holds, core) - no reps needed if time is provided
-                libraryExercise.name.contains("plank", ignoreCase = true) ||
-                libraryExercise.name.contains("hold", ignoreCase = true) ||
-                libraryExercise.primaryMuscleGroup == ExerciseCategory.CORE -> null
-
-                // Distance-based exercises - no reps needed if distance provided
-                libraryExercise.name.contains("run", ignoreCase = true) ||
-                libraryExercise.name.contains("walk", ignoreCase = true) ||
-                libraryExercise.name.contains("cycle", ignoreCase = true) -> null
-
-                // Standard strength exercises - default to 10 reps
-                else -> 10
-            }
-
-            val defaultTime = when {
-                // Time-based exercises get default time if no reps
-                (libraryExercise.name.contains("plank", ignoreCase = true) ||
-                 libraryExercise.name.contains("hold", ignoreCase = true) ||
-                 libraryExercise.primaryMuscleGroup == ExerciseCategory.CORE) && defaultReps == null -> {
-                    java.time.Duration.ofSeconds(30)
-                }
-                else -> null
-            }
-
-            val defaultDistance = when {
-                // Distance-based exercises get default distance if no reps or time
-                (libraryExercise.name.contains("run", ignoreCase = true) ||
-                 libraryExercise.name.contains("walk", ignoreCase = true) ||
-                 libraryExercise.name.contains("cycle", ignoreCase = true)) &&
-                 defaultReps == null && defaultTime == null -> {
-                    Distance(1000.0f) // 1000 meters default
-                }
-                else -> null
-            }
-
-            ExerciseSet(
-                id = ExerciseSetId(UUID.randomUUID().toString()),
-                setNumber = setNumber,
-                reps = defaultReps?.let { Reps(it) },
-                weight = null,
-                time = defaultTime,
-                distance = defaultDistance,
-                completedAt = null
-            )
-        }
-
-        val newExercise = Exercise(
-            id = newExerciseId,
-            workoutId = workoutId,
+        val newExercise = createExerciseWithSets(
             libraryExercise = libraryExercise,
-            orderIndex = existingWorkout.exercises.size, // Add at end
-            targetSets = initialSets,
-            targetReps = null,
-            targetWeight = null,
-            targetTime = null,
-            targetDistance = null,
-            sets = defaultSets,
-            notes = null,
-            createdAt = Instant.now()
+            workoutId = workoutId,
+            orderIndex = existingWorkout.exercises.size,
+            initialSets = initialSets
         )
 
         // Update workout with new exercise
@@ -345,15 +295,11 @@ class WorkoutCommandUseCase @Inject constructor(
             }
         )
 
-        Timber.i("🔥 ADD-EXERCISE-DEBUG: Successfully added exercise '${libraryExercise.name}' to workout '${savedWorkout.name}'")
         savedWorkout
     }
 
     /**
      * Add multiple exercises to an existing workout.
-     *
-     * 🚀 PERF-P1-OPT3: Optimized with parallel exercise creation.
-     * Reduces time from 500ms to ~100ms for 5 exercises (80% improvement).
      *
      * Replaces: AddExerciseToWorkoutUseCase.invokeMultiple()
      *
@@ -368,35 +314,32 @@ class WorkoutCommandUseCase @Inject constructor(
         initialSets: Int = 3
     ): LiftrixResult<Workout> = liftrixCatching(
         errorMapper = { throwable ->
-            LiftrixError.BusinessLogicError(
-                code = "ADD_MULTIPLE_EXERCISES_FAILED",
-                errorMessage = "Failed to add exercises to workout: ${throwable.message}",
-                analyticsContext = mapOf(
-                    "workout_id" to workoutId.value,
-                    "exercise_count" to exerciseLibraryIds.size.toString(),
-                    "operation" to "ADD_MULTIPLE_EXERCISES_TO_WORKOUT"
+            when (throwable) {
+                is LiftrixError -> throwable
+                else -> LiftrixError.BusinessLogicError(
+                    code = "ADD_MULTIPLE_EXERCISES_FAILED",
+                    errorMessage = "Failed to add exercises to workout: ${throwable.message}",
+                    analyticsContext = mapOf(
+                        "workout_id" to workoutId.value,
+                        "exercise_count" to exerciseLibraryIds.size.toString(),
+                        "operation" to "ADD_MULTIPLE_EXERCISES_TO_WORKOUT"
+                    )
                 )
-            )
+            }
         }
     ) {
-        val startTime = System.currentTimeMillis()
-
         if (exerciseLibraryIds.isEmpty()) {
             throw IllegalArgumentException("No exercises to add")
         }
 
-        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
-        if (userId?.value.isNullOrBlank()) {
-            throw IllegalStateException("User not authenticated")
-        }
+        val userId = requireAuthenticatedUserId()
 
         // Validate inputs
         if (initialSets < 1 || initialSets > 10) {
             throw IllegalArgumentException("Initial sets must be between 1 and 10")
         }
 
-        // 🚀 PERF-P1-OPT3: Load workout and exercise library ONCE upfront
-        val currentWorkout = workoutRepository.getWorkoutById(workoutId, userId?.value!!).fold(
+        val currentWorkout = workoutRepository.getWorkoutById(workoutId, userId).fold(
             onSuccess = { it ?: throw IllegalArgumentException("Workout not found") },
             onFailure = { error -> throw Exception("Failed to retrieve workout: ${error.message}") }
         )
@@ -417,11 +360,9 @@ class WorkoutCommandUseCase @Inject constructor(
         val uniqueNewExerciseIds = exerciseLibraryIds.filter { it !in existingExerciseIds }
 
         if (uniqueNewExerciseIds.isEmpty()) {
-            Timber.w("🔥 ADD-EXERCISE-DEBUG: All exercises already exist in workout")
             return@liftrixCatching currentWorkout
         }
 
-        // 🚀 PERF-P1-OPT3: Create exercises in PARALLEL
         val newExercises = withContext(Dispatchers.Default) {
             uniqueNewExerciseIds.mapIndexed { index, exerciseId ->
                 async {
@@ -438,7 +379,6 @@ class WorkoutCommandUseCase @Inject constructor(
             }.awaitAll()
         }
 
-        // 🚀 PERF-P1-OPT3: Single workout update with all new exercises
         val updatedWorkout = currentWorkout.copy(
             exercises = currentWorkout.exercises + newExercises,
             updatedAt = Instant.now()
@@ -452,14 +392,11 @@ class WorkoutCommandUseCase @Inject constructor(
             }
         )
 
-        val duration = System.currentTimeMillis() - startTime
-        Timber.i("🚀 PERF: Added ${newExercises.size} exercises in ${duration}ms (parallel)")
         savedWorkout
     }
 
     /**
-     * 🚀 PERF-P1-OPT3: Helper to create exercise with default sets.
-     * Extracted for parallel execution.
+     * Creates an exercise with default sets.
      */
     private fun createExerciseWithSets(
         libraryExercise: ExerciseLibrary,
@@ -598,25 +535,25 @@ class WorkoutCommandUseCase @Inject constructor(
      */
     suspend fun saveWorkout(workout: Workout): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
-            LiftrixError.BusinessLogicError(
-                code = "SAVE_WORKOUT_FAILED",
-                errorMessage = "Failed to save workout: ${throwable.message}",
-                analyticsContext = mapOf(
-                    "workout_id" to workout.id.value,
-                    "workout_name" to workout.name,
-                    "user_id" to workout.userId,
-                    "operation" to "SAVE_WORKOUT"
+            when (throwable) {
+                is LiftrixError -> throwable
+                else -> LiftrixError.BusinessLogicError(
+                    code = "SAVE_WORKOUT_FAILED",
+                    errorMessage = "Failed to save workout: ${throwable.message}",
+                    analyticsContext = mapOf(
+                        "workout_id" to workout.id.value,
+                        "workout_name" to workout.name,
+                        "user_id" to workout.userId,
+                        "operation" to "SAVE_WORKOUT"
+                    )
                 )
-            )
+            }
         }
     ) {
-        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
-        if (userId?.value.isNullOrBlank()) {
-            throw IllegalStateException("User not authenticated")
-        }
+        val userId = requireAuthenticatedUserId()
 
         // Validate user ownership
-        if (workout.userId != userId?.value) {
+        if (workout.userId != userId) {
             throw SecurityException("Cannot save workout belonging to another user")
         }
 
@@ -655,26 +592,25 @@ class WorkoutCommandUseCase @Inject constructor(
      */
     suspend fun createWorkout(request: CreateWorkoutRequest): LiftrixResult<Workout> = liftrixCatching(
         errorMapper = { throwable ->
-            LiftrixError.BusinessLogicError(
-                code = "CREATE_WORKOUT_FAILED",
-                errorMessage = "Failed to create workout: ${throwable.message}",
-                analyticsContext = mapOf(
-                    "workout_name" to request.name,
-                    "user_id" to request.userId,
-                    "status" to request.status.toString(),
-                    "operation" to "CREATE_WORKOUT"
+            when (throwable) {
+                is LiftrixError -> throwable
+                else -> LiftrixError.BusinessLogicError(
+                    code = "CREATE_WORKOUT_FAILED",
+                    errorMessage = "Failed to create workout: ${throwable.message}",
+                    analyticsContext = mapOf(
+                        "workout_name" to request.name,
+                        "user_id" to request.userId,
+                        "status" to request.status.toString(),
+                        "operation" to "CREATE_WORKOUT"
+                    )
                 )
-            )
+            }
         }
     ) {
-        // Validate user authentication
-        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
-        if (userId?.value.isNullOrBlank()) {
-            throw IllegalStateException("User not authenticated")
-        }
+        val userId = requireAuthenticatedUserId()
 
         // Validate request matches authenticated user
-        if (request.userId != userId?.value) {
+        if (request.userId != userId) {
             throw SecurityException("Cannot create workout for another user")
         }
 
@@ -711,7 +647,7 @@ class WorkoutCommandUseCase @Inject constructor(
 
         // Check for existing active workout if creating an active workout
         if (request.status == WorkoutStatus.IN_PROGRESS) {
-            val activeWorkoutResult = workoutRepository.getActiveWorkout(userId?.value!!)
+            val activeWorkoutResult = workoutRepository.getActiveWorkout(userId)
             val existingActiveWorkout = activeWorkoutResult.fold(
                 onSuccess = { it },
                 onFailure = { error -> throw Exception("Failed to check for active workout: ${error.message}") }
@@ -725,7 +661,7 @@ class WorkoutCommandUseCase @Inject constructor(
         // Check for duplicate workout name on the same date
         val workoutsOnDate = workoutRepository.getWorkoutsByDate(
             request.date.toKotlinxLocalDate(),
-            userId?.value!!
+            userId
         ).first()
 
         val duplicateName = workoutsOnDate.any { workout ->
@@ -739,7 +675,7 @@ class WorkoutCommandUseCase @Inject constructor(
         // Build workout
         val now = Instant.now()
         val newWorkout = Workout(
-            userId = userId?.value!!,
+            userId = userId,
             id = WorkoutId.generate(),
             name = request.name,
             date = request.date,

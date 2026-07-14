@@ -1,6 +1,7 @@
 package com.example.liftrix.domain.repository
 
 import com.example.liftrix.domain.model.chat.ChatMessage
+import com.example.liftrix.domain.model.chat.ChatConversation
 import com.example.liftrix.domain.model.chat.ChatPreferences
 import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.chat.UsageLimits
@@ -16,6 +17,7 @@ interface ChatRepository {
      * Saves a chat message to the database.
      */
     suspend fun saveMessage(
+        messageId: String,
         userId: String,
         message: String,
         type: MessageType,
@@ -23,8 +25,13 @@ interface ChatRepository {
         language: String = "en",
         workoutContext: WorkoutContext? = null,
         tokenCount: Int? = null,
-        processingTimeMs: Long? = null
+        processingTimeMs: Long? = null,
+        titleSeed: String? = null
     ): LiftrixResult<ChatMessage>
+
+    fun observeConversations(userId: String): Flow<List<ChatConversation>>
+
+    suspend fun renameConversation(userId: String, conversationId: String, title: String): LiftrixResult<Unit>
     
     /**
      * Observes messages in a conversation.

@@ -67,6 +67,8 @@ class RealtimeSyncManager @Inject constructor(
     
     // Track active listeners to prevent memory leaks
     private val activeListeners = mutableMapOf<String, ListenerRegistration>()
+    private val listenerOwnerLock = Any()
+    private var activeListenerUserId: String? = null
     
     // Sync state management
     private val _syncState = MutableStateFlow<SyncState>(SyncState.Idle)
@@ -85,6 +87,16 @@ class RealtimeSyncManager @Inject constructor(
             Timber.w("Cannot start sync - invalid userId")
             return
         }
+
+        synchronized(listenerOwnerLock) {
+            if (activeListenerUserId == userId) {
+                Timber.d("Real-time sync already owned by user: $userId")
+                return
+            }
+            activeListeners.values.forEach(ListenerRegistration::remove)
+            activeListeners.clear()
+            activeListenerUserId = userId
+        }
         
         scope.launch {
             try {
@@ -93,6 +105,9 @@ class RealtimeSyncManager @Inject constructor(
                 // Validate authentication before setting up listeners
                 val authValidation = validateAuthentication(userId)
                 if (!authValidation.isValid) {
+                    synchronized(listenerOwnerLock) {
+                        if (activeListenerUserId == userId) activeListenerUserId = null
+                    }
                     Timber.w("Skipping real-time sync: ${authValidation.reason}")
                     _syncState.value = SyncState.Error(
                         userId = userId,
@@ -116,6 +131,9 @@ class RealtimeSyncManager @Inject constructor(
                 Timber.i("Real-time sync started successfully for user: $userId")
                 
             } catch (e: Exception) {
+                synchronized(listenerOwnerLock) {
+                    if (activeListenerUserId == userId) activeListenerUserId = null
+                }
                 Timber.e(e, "Failed to start real-time sync for user: $userId")
                 handleSyncError(userId, e)
             }

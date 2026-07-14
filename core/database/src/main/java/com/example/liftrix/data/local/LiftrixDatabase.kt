@@ -79,10 +79,12 @@ import com.example.liftrix.data.local.dao.ConsentDao
 import com.example.liftrix.data.local.dao.AccountRestrictionDao
 import com.example.liftrix.data.local.dao.ModerationActionDao
 import com.example.liftrix.data.local.dao.TemplateShareEventDao
+import com.example.liftrix.data.local.dao.AiUsageDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.local.entity.ChatPreferencesEntity
 import com.example.liftrix.data.local.entity.ChatHistoryEntity
+import com.example.liftrix.data.local.entity.ChatConversationEntity
 import com.example.liftrix.data.local.entity.PRReactionEntity
 import com.example.liftrix.data.local.entity.PRNotificationPreferencesEntity
 import com.example.liftrix.data.local.entity.PersonalRecordEntity
@@ -149,6 +151,7 @@ import com.example.liftrix.data.local.entity.UserConsentEntity
 import com.example.liftrix.data.local.entity.AccountRestrictionEntity
 import com.example.liftrix.data.local.entity.ModerationActionEntity
 import com.example.liftrix.data.local.entity.TemplateShareEventEntity
+import com.example.liftrix.data.local.entity.AiUsageEntity
 import com.example.liftrix.data.local.entity.analytics.CompletedWorkoutMetricReadModelEntity
 import com.example.liftrix.data.local.entity.analytics.DailyWorkoutVolumeReadModelEntity
 import com.example.liftrix.data.local.entity.analytics.ExercisePrReadModelEntity
@@ -223,6 +226,7 @@ import com.example.liftrix.data.local.view.ExerciseSetPerformanceView
         SyncPreferencesEntity::class,
         ChatPreferencesEntity::class,
         ChatHistoryEntity::class,
+        ChatConversationEntity::class,
         PRReactionEntity::class,
         PRNotificationPreferencesEntity::class,
         PersonalRecordEntity::class,
@@ -230,6 +234,7 @@ import com.example.liftrix.data.local.view.ExerciseSetPerformanceView
         AccountRestrictionEntity::class,
         ModerationActionEntity::class,
         TemplateShareEventEntity::class,
+        AiUsageEntity::class,
         CompletedWorkoutMetricReadModelEntity::class,
         DailyWorkoutVolumeReadModelEntity::class,
         WeeklyWorkoutVolumeReadModelEntity::class,
@@ -240,7 +245,7 @@ import com.example.liftrix.data.local.view.ExerciseSetPerformanceView
         CompletedWorkoutMetricsView::class,
         ExerciseSetPerformanceView::class,
     ],
-    version = 11,
+    version = 14,
     exportSchema = true
 )
 @TypeConverters(
@@ -253,7 +258,7 @@ import com.example.liftrix.data.local.view.ExerciseSetPerformanceView
 )
 abstract class LiftrixDatabase : RoomDatabase() {
     companion object {
-        const val DATABASE_NAME = "liftrix_database_encrypted"
+        const val DATABASE_NAME = "liftrix_database_encrypted_v14"
     }
 
     abstract fun workoutDao(): WorkoutDao
@@ -325,4 +330,5 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun moderationActionDao(): ModerationActionDao
     abstract fun templateShareEventDao(): TemplateShareEventDao
     abstract fun analyticsReadModelDao(): AnalyticsReadModelDao
+    abstract fun aiUsageDao(): AiUsageDao
 }

@@ -6,6 +6,9 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.ChatHistoryEntity
+import com.example.liftrix.data.local.entity.ChatConversationEntity
+import com.example.liftrix.data.local.dto.ChatConversationSummaryRow
+import com.example.liftrix.annotations.UserScoped
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -34,9 +37,51 @@ interface ChatHistoryDao {
     @Query("""
         SELECT * FROM chat_history 
         WHERE user_id = :userId AND conversation_id = :conversationId 
-        ORDER BY created_at ASC
+        AND NOT EXISTS (
+            SELECT 1 FROM chat_conversations c
+            WHERE c.user_id = :userId AND c.conversation_id = :conversationId
+            AND c.deleted_at IS NOT NULL
+        )
+        ORDER BY created_at ASC,
+            CASE message_type WHEN 'USER' THEN 0 WHEN 'AI_RESPONSE' THEN 1 ELSE 2 END ASC,
+            id ASC
     """)
+    @UserScoped
     fun getConversationMessages(userId: String, conversationId: String): Flow<List<ChatHistoryEntity>>
+
+    @Query("""
+        SELECT h.conversation_id,
+            COALESCE(NULLIF(c.title, ''), 'New chat') AS title,
+            SUBSTR((SELECT newest.content FROM chat_history newest
+                WHERE newest.user_id = :userId AND newest.conversation_id = h.conversation_id
+                ORDER BY newest.created_at DESC,
+                    CASE newest.message_type WHEN 'AI_RESPONSE' THEN 0 WHEN 'USER' THEN 1 ELSE 2 END,
+                    newest.id DESC LIMIT 1), 1, 160) AS last_message_preview,
+            MAX(h.created_at) AS last_updated_at,
+            COUNT(*) AS message_count,
+            COALESCE(c.is_title_custom, 0) AS is_title_custom
+        FROM chat_history h
+        LEFT JOIN chat_conversations c
+            ON c.user_id = h.user_id AND c.conversation_id = h.conversation_id
+        WHERE h.user_id = :userId AND c.deleted_at IS NULL
+        GROUP BY h.conversation_id
+        ORDER BY last_updated_at DESC, h.conversation_id ASC
+    """)
+    @UserScoped
+    fun observeConversationSummaries(userId: String): Flow<List<ChatConversationSummaryRow>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertConversationIfAbsent(conversation: ChatConversationEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertConversation(conversation: ChatConversationEntity)
+
+    @Query("""
+        UPDATE chat_conversations SET title = :title, is_title_custom = 1, updated_at = :updatedAt
+        WHERE user_id = :userId AND conversation_id = :conversationId AND deleted_at IS NULL
+    """)
+    @UserScoped
+    suspend fun renameConversation(userId: String, conversationId: String, title: String, updatedAt: Long): Int
     
     /**
      * Gets recent messages for a user.
@@ -124,7 +169,35 @@ interface ChatHistoryDao {
         DELETE FROM chat_history 
         WHERE user_id = :userId AND conversation_id = :conversationId
     """)
-    suspend fun deleteConversation(userId: String, conversationId: String): Int
+    suspend fun deleteConversationMessages(userId: String, conversationId: String): Int
+
+    @Query("SELECT * FROM chat_conversations WHERE user_id = :userId AND conversation_id = :conversationId LIMIT 1")
+    @UserScoped
+    suspend fun getConversationMetadata(userId: String, conversationId: String): ChatConversationEntity?
+
+    @Transaction
+    suspend fun tombstoneAndDeleteConversation(userId: String, conversationId: String, now: Long): Int {
+        val existing = getConversationMetadata(userId, conversationId)
+        upsertConversation(
+            (existing ?: ChatConversationEntity(userId, conversationId, "New chat", createdAt = now, updatedAt = now))
+                .copy(updatedAt = now, deletedAt = now)
+        )
+        return deleteConversationMessages(userId, conversationId)
+    }
+
+    @Transaction
+    suspend fun insertMessageWithConversation(message: ChatHistoryEntity, title: String) {
+        insertConversationIfAbsent(
+            ChatConversationEntity(
+                userId = message.userId,
+                conversationId = message.conversationId,
+                title = title,
+                createdAt = message.createdAt,
+                updatedAt = message.createdAt
+            )
+        )
+        _insert(message)
+    }
     
     /**
      * Gets token usage since a specific timestamp.

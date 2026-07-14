@@ -23,10 +23,10 @@ interface BlockedUserDao {
     // Blocked User Queries (User-Scoped)
     // ========================================
 
-    @Query("SELECT * FROM blocked_users WHERE user_id = :userId ORDER BY blocked_at DESC")
+    @Query("SELECT * FROM blocked_users WHERE user_id = :userId AND is_deleted = 0 ORDER BY blocked_at DESC")
     suspend fun getBlockedUsers(userId: String): List<BlockedUserEntity>
 
-    @Query("SELECT * FROM blocked_users WHERE user_id = :userId ORDER BY blocked_at DESC")
+    @Query("SELECT * FROM blocked_users WHERE user_id = :userId AND is_deleted = 0 ORDER BY blocked_at DESC")
     fun observeBlockedUsers(userId: String): Flow<List<BlockedUserEntity>>
 
     @Query("SELECT * FROM blocked_users WHERE user_id = :userId AND blocked_user_id = :blockedUserId")
@@ -35,7 +35,7 @@ interface BlockedUserDao {
     @Query("""
         SELECT EXISTS(
             SELECT 1 FROM blocked_users 
-            WHERE user_id = :userId AND blocked_user_id = :targetUserId
+            WHERE user_id = :userId AND blocked_user_id = :targetUserId AND is_deleted = 0
         )
     """)
     suspend fun isUserBlocked(userId: String, targetUserId: String): Boolean
@@ -61,10 +61,10 @@ interface BlockedUserDao {
     // Blocked User IDs for Privacy Filtering
     // ========================================
 
-    @Query("SELECT blocked_user_id FROM blocked_users WHERE user_id = :userId")
+    @Query("SELECT blocked_user_id FROM blocked_users WHERE user_id = :userId AND is_deleted = 0")
     suspend fun getBlockedUserIds(userId: String): List<String>
 
-    @Query("SELECT blocked_user_id FROM blocked_users WHERE user_id = :userId")
+    @Query("SELECT blocked_user_id FROM blocked_users WHERE user_id = :userId AND is_deleted = 0")
     fun observeBlockedUserIds(userId: String): Flow<List<String>>
 
     @Query("SELECT user_id FROM blocked_users WHERE blocked_user_id = :userId")
@@ -229,6 +229,9 @@ interface BlockedUserDao {
      */
     @Query("UPDATE blocked_users SET is_dirty = 0, is_synced = 1 WHERE id IN (:ids) AND user_id = :userId")
     suspend fun markAsClean(ids: List<String>, userId: String): Int
+
+    @Query("UPDATE blocked_users SET is_deleted = 1, is_dirty = 1, is_synced = 0, last_modified = :timestamp WHERE user_id = :userId AND blocked_user_id = :blockedUserId")
+    suspend fun tombstone(userId: String, blockedUserId: String, timestamp: Long): Int
 
     /**
      * Get local blockeduser for remote deduplication.

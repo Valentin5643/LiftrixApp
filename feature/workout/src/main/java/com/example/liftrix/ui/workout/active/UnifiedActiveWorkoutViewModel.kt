@@ -245,46 +245,20 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
     /**
      */
     private suspend fun completeSessionDirectly() {
-        val success = sessionManager.completeCurrentSession()
-        if (success) {
-            timerServiceManager.stopTimer()
-            Timber.i("Workout completion initiated")
-            
-            // Wait for the save to complete and get the saved workout ID
-            delay(200) // Small delay to ensure save completes
-            
-            // Get the saved workout ID from the session manager after completion
-            val savedWorkoutId = sessionManager.savedWorkoutId.value
-            val workoutId = if (!savedWorkoutId.isNullOrEmpty()) {
-                savedWorkoutId
-            } else {
-                // Fallback to session ID if saved workout ID is not available
-                val currentSession = sessionManager.currentSession.value
-                val fallbackId = currentSession?.id?.value ?: "unknown"
-                Timber.w("No saved workout ID, using fallback: $fallbackId")
-                fallbackId
-            }
-            
-            // Show completion state - user will navigate away via UI buttons
-            _uiState.value = UnifiedActiveWorkoutUiState.WorkoutCompleted(workoutId)
-            
-            // Check if session is in failed state after a delay
-            delay(300) // Additional delay to ensure session state is updated
-            val updatedSession = sessionManager.currentSession.value
-            if (updatedSession?.sessionStatus == UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE) {
-                Timber.w("Session failed to save, showing retry option")
+        sessionManager.completeCurrentSession().fold(
+            onSuccess = { completion ->
+                timerServiceManager.stopTimer()
+                Timber.i("Workout completed and persisted")
+                _uiState.value = UnifiedActiveWorkoutUiState.WorkoutCompleted(completion.savedWorkoutId)
+            },
+            onFailure = { error ->
+                Timber.w(error, "Failed to complete workout")
                 _uiState.value = UnifiedActiveWorkoutUiState.Error(
-                    message = "Workout completed but failed to save. Tap to retry.",
+                    message = error.message ?: "Failed to complete workout. Please try again.",
                     isRetryable = true
                 )
             }
-            // Do NOT transition to NoSession - let user navigate via UI buttons
-        } else {
-            Timber.w("Failed to complete workout")
-            _uiState.value = UnifiedActiveWorkoutUiState.Error(
-                message = "Failed to complete workout. Please try again."
-            )
-        }
+        )
     }
 
     /**

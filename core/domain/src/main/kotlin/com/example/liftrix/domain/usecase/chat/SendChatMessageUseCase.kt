@@ -25,7 +25,8 @@ class SendChatMessageUseCase @Inject constructor(
     private val chatRepository: ChatRepository,
     private val aiChatService: AIChatService,
     private val rateLimitingService: RateLimitingServiceContract,
-    private val abusePreventionService: AbusePreventionServiceContract
+    private val abusePreventionService: AbusePreventionServiceContract,
+    private val titlePolicy: ChatConversationTitlePolicy
 ) {
     private companion object {
         const val MONTHLY_USAGE_TAG = "MonthlyUsageDebug"
@@ -43,6 +44,7 @@ class SendChatMessageUseCase @Inject constructor(
      */
     suspend operator fun invoke(
         userId: String,
+        requestId: String,
         message: String,
         conversationId: String? = null,
         workoutContext: WorkoutContext? = null,
@@ -101,7 +103,8 @@ class SendChatMessageUseCase @Inject constructor(
         }
         
         // Generate conversation ID if not provided
-        val activeConversationId = conversationId ?: generateConversationId()
+        require(requestId.isNotBlank()) { "Request ID cannot be empty" }
+        val activeConversationId = conversationId ?: "chat_$requestId"
         
         Timber.i("[AI] SendChatMessageUseCase: sending message user=$userId conversation=$activeConversationId messageChars=${message.length} language=$language")
         
@@ -184,15 +187,18 @@ class SendChatMessageUseCase @Inject constructor(
         // 6. Save user message when conversation saving is enabled.
         val userMessage = if (shouldSaveConversation) {
             chatRepository.saveMessage(
+                messageId = "chat-$requestId-user",
                 userId = userId,
                 message = message,
                 type = MessageType.USER,
                 conversationId = activeConversationId,
                 language = language,
-                workoutContext = workoutContext
+                workoutContext = workoutContext,
+                titleSeed = titlePolicy.titleFor(message)
             ).getOrThrow()
         } else {
             localChatMessage(
+                messageId = "chat-$requestId-user",
                 userId = userId,
                 conversationId = activeConversationId,
                 type = MessageType.USER,
@@ -229,6 +235,7 @@ class SendChatMessageUseCase @Inject constructor(
         // 9. Save AI response when conversation saving is enabled.
         val assistantMessage = if (shouldSaveConversation) {
             chatRepository.saveMessage(
+                messageId = "chat-$requestId-assistant",
                 userId = userId,
                 message = aiResponse.content,
                 type = MessageType.AI_RESPONSE,
@@ -240,6 +247,7 @@ class SendChatMessageUseCase @Inject constructor(
             ).getOrThrow()
         } else {
             localChatMessage(
+                messageId = "chat-$requestId-assistant",
                 userId = userId,
                 conversationId = activeConversationId,
                 type = MessageType.AI_RESPONSE,
@@ -260,12 +268,8 @@ class SendChatMessageUseCase @Inject constructor(
     /**
      * Generates a unique conversation ID based on timestamp and user ID.
      */
-    private fun generateConversationId(): String {
-        val timestamp = System.currentTimeMillis()
-        return "chat_${timestamp}_${(1000..9999).random()}"
-    }
-
     private fun localChatMessage(
+        messageId: String,
         userId: String,
         conversationId: String,
         type: MessageType,
@@ -276,7 +280,7 @@ class SendChatMessageUseCase @Inject constructor(
         processingTimeMs: Long? = null
     ): ChatMessage {
         return ChatMessage(
-            id = "local_${System.currentTimeMillis()}_${(1000..9999).random()}",
+            id = messageId,
             userId = userId,
             conversationId = conversationId,
             type = type,

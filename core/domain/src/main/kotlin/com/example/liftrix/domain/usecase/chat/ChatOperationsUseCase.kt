@@ -1,6 +1,8 @@
 package com.example.liftrix.domain.usecase.chat
 
 import com.example.liftrix.domain.model.chat.ChatMessage
+import com.example.liftrix.domain.model.chat.ChatConversation
+import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -81,6 +83,54 @@ class ChatOperationsUseCase @Inject constructor(
                     )
                 )
             }
+    }
+
+    fun observeConversations(userId: String): Flow<LiftrixResult<List<ChatConversation>>> =
+        chatRepository.observeConversations(userId)
+            .map { Result.success(it) }
+            .catch { throwable ->
+                emit(Result.failure(LiftrixError.BusinessLogicError(
+                    code = "CONVERSATION_LIST_FAILED",
+                    errorMessage = throwable.message ?: "Failed to load conversations"
+                )))
+            }
+
+    suspend fun renameConversation(
+        userId: String,
+        conversationId: String,
+        title: String
+    ): LiftrixResult<Unit> = liftrixCatching(
+        errorMapper = { it as? LiftrixError ?: LiftrixError.ValidationError("title", listOf(it.message ?: "Invalid title")) }
+    ) {
+        require(userId.isNotBlank()) { "User ID cannot be empty" }
+        require(conversationId.isNotBlank()) { "Conversation ID cannot be empty" }
+        val normalized = title.trim()
+        require(normalized.isNotBlank()) { "Title cannot be empty" }
+        require(normalized.length <= ChatConversationTitlePolicy.MAX_LENGTH) { "Title cannot exceed 60 characters" }
+        chatRepository.renameConversation(userId, conversationId, normalized).getOrThrow()
+    }
+
+    suspend fun recordMessage(
+        messageId: String,
+        userId: String,
+        conversationId: String,
+        content: String,
+        type: MessageType,
+        language: String = "en",
+        titleSeed: String? = null
+    ): LiftrixResult<ChatMessage> = liftrixCatching(
+        errorMapper = { it as? LiftrixError ?: LiftrixError.BusinessLogicError("CHAT_RECORD_FAILED", it.message ?: "Failed to record message") }
+    ) {
+        require(messageId.isNotBlank() && userId.isNotBlank() && conversationId.isNotBlank())
+        chatRepository.saveMessage(
+            messageId = messageId,
+            userId = userId,
+            message = content,
+            type = type,
+            conversationId = conversationId,
+            language = language,
+            titleSeed = titleSeed
+        ).getOrThrow()
     }
 
     /**

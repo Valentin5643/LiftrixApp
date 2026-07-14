@@ -1,6 +1,8 @@
 package com.example.liftrix.data.service
 
 import com.example.liftrix.core.data.BuildConfig
+import com.example.liftrix.data.local.dao.AiUsageDao
+import com.example.liftrix.data.local.entity.AiUsageEntity
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -22,12 +24,14 @@ import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import java.util.UUID
 
 @Singleton
 class WorkoutProgramGenerationServiceImpl @Inject constructor(
     private val analyticsTracker: AnalyticsTracker,
     private val abusePreventionService: AbusePreventionService,
-    private val rateLimitingService: RateLimitingService
+    private val rateLimitingService: RateLimitingService,
+    private val aiUsageDao: AiUsageDao
 ) : WorkoutProgramGenerationService {
     private val generationConfig = GenerationConfig.Builder()
         .setTemperature(TEMPERATURE)
@@ -88,7 +92,8 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
             systemPrompt = systemPrompt,
             requestPayload = repairPayload,
             language = language,
-            stage = "repair"
+            stage = "repair",
+            validateUserPrompt = false
         )
     }
 
@@ -113,7 +118,8 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
         systemPrompt: String,
         requestPayload: String,
         language: Language,
-        stage: String
+        stage: String,
+        validateUserPrompt: Boolean = true
     ): LiftrixResult<WorkoutProgramJsonResponse> = liftrixCatching(
         errorMapper = { throwable ->
             when (throwable) {
@@ -147,7 +153,7 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
     ) {
         Timber.i("[AI] WorkoutProgramGenerationService: request started stage=$stage user=$userId promptChars=${userPrompt.length} payloadChars=${requestPayload.length}")
         require(userId.isNotBlank()) { "User ID cannot be blank" }
-        validateRequest(userId, userPrompt, language)
+        validateRequest(userId, userPrompt, language, validateUserPrompt)
         Timber.d("[AI] WorkoutProgramGenerationService: request validation succeeded stage=$stage")
 
         val startTime = System.currentTimeMillis()
@@ -175,6 +181,21 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
             throw exception
         }
         val responseText = response.text?.trim().orEmpty()
+        val usage = response.usageMetadata
+        val totalTokens = usage?.totalTokenCount ?: estimateTokens(requestPayload, responseText)
+        aiUsageDao.insert(
+            AiUsageEntity(
+                id = UUID.randomUUID().toString(),
+                userId = userId,
+                createdAt = System.currentTimeMillis(),
+                operation = "WORKOUT_${stage.uppercase()}",
+                model = MODEL_NAME,
+                inputTokens = usage?.promptTokenCount ?: estimateTokens(requestPayload, ""),
+                outputTokens = usage?.candidatesTokenCount ?: estimateTokens("", responseText),
+                totalTokens = totalTokens,
+                successCategory = if (responseText.isBlank()) "EMPTY_RESPONSE" else "MODEL_RESPONSE"
+            )
+        )
         Timber.i("[AI] WorkoutProgramGenerationService: raw response received stage=$stage chars=${responseText.length}")
         logSanitizedRawResponse(responseText, stage)
         if (responseText.isBlank()) {
@@ -182,7 +203,7 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
         }
 
         val processingTime = System.currentTimeMillis() - startTime
-        val tokensUsed = response.usageMetadata?.totalTokenCount ?: estimateTokens(requestPayload, responseText)
+        val tokensUsed = totalTokens
 
         analyticsTracker.trackAIWorkoutGenerationResponse(
             userId = userId,
@@ -204,17 +225,24 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
         )
     }
 
-    private suspend fun validateRequest(userId: String, userPrompt: String, language: Language) {
-        if (userPrompt.isBlank()) {
-            throw ValidationException("Message cannot be empty")
-        }
-        if (userPrompt.length > MAX_PROMPT_LENGTH) {
-            throw ValidationException("Message is too long")
-        }
+    private suspend fun validateRequest(
+        userId: String,
+        userPrompt: String,
+        language: Language,
+        validateUserPrompt: Boolean
+    ) {
+        if (validateUserPrompt) {
+            if (userPrompt.isBlank()) {
+                throw ValidationException("Message cannot be empty")
+            }
+            if (userPrompt.length > MAX_PROMPT_LENGTH) {
+                throw ValidationException("Message is too long")
+            }
 
-        val abuseDetection = abusePreventionService.detectAbuse(userId, userPrompt)
-        if (abuseDetection.isAbusive) {
-            throw ValidationException("Your message appears to violate our usage guidelines. Please rephrase and try again.")
+            val abuseDetection = abusePreventionService.detectAbuse(userId, userPrompt)
+            if (abuseDetection.isAbusive) {
+                throw ValidationException("Your message appears to violate our usage guidelines. Please rephrase and try again.")
+            }
         }
 
         val limits = rateLimitingService.checkLimits(userId)
@@ -259,7 +287,6 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
                     Firebase.appCheck.getAppCheckToken(false).await()
                 } catch (e: Exception) {
                     if (isDebugAppCheckTokenMissing(e)) {
-                        logDebugAppCheckTokenInstructions(e)
                         throw DebugAppCheckTokenNotRegisteredException(e)
                     }
                     Timber.w(
@@ -291,16 +318,6 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
             message.contains("app attestation failed", ignoreCase = true)
     }
 
-    private fun logDebugAppCheckTokenInstructions(error: Throwable) {
-        Timber.e(error, "$APP_CHECK_DEBUG_SETUP_MARKER Debug App Check token is not registered in Firebase Console for this Firebase app/project.")
-        Timber.e("$APP_CHECK_DEBUG_SETUP_MARKER If Firebase generated a token, the next useful Logcat line contains: Enter this debug secret into the allow list in the Firebase Console")
-        Timber.e("Find the generated token in Logcat by searching for:")
-        Timber.e("Enter this debug secret into the allow list in the Firebase Console")
-        Timber.e("Register it at Firebase Console > App Check > com.example.liftrix > Manage debug tokens.")
-        Timber.e("Expected project: liftrix-390cf; package: com.example.liftrix; appId: 1:734273269747:android:39d5352dabb68d74202c86")
-        Timber.e("After adding the token, uninstall/reinstall the debug app or clear app data and run again.")
-    }
-
     private fun stripCodeFence(text: String): String {
         val trimmed = text.trim()
         val fenced = Regex("""(?s)```\s*(?:json|JSON)?\s*(.*?)\s*```""")
@@ -308,20 +325,29 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
             ?.groupValues
             ?.getOrNull(1)
             ?.trim()
-        if (fenced != null) return fenced
-        if (!trimmed.startsWith("```")) return extractJsonObject(trimmed)
-        return trimmed
-            .removePrefix("```json")
-            .removePrefix("```JSON")
-            .removePrefix("```")
-            .removeSuffix("```")
-            .trim()
+        return extractJsonObject(fenced ?: trimmed)
     }
 
     private fun extractJsonObject(text: String): String {
         val first = text.indexOf('{')
-        val last = text.lastIndexOf('}')
-        return if (first >= 0 && last > first) text.substring(first, last + 1).trim() else text
+        if (first < 0) return text.trim()
+
+        var depth = 0
+        var inString = false
+        var escaped = false
+        for (index in first until text.length) {
+            when (val character = text[index]) {
+                '\\' -> if (inString) escaped = !escaped else escaped = false
+                '"' -> if (!escaped) inString = !inString
+                '{' -> if (!inString) depth++
+                '}' -> if (!inString) {
+                    depth--
+                    if (depth == 0) return text.substring(first, index + 1).trim()
+                }
+            }
+            if (character != '\\') escaped = false
+        }
+        return text.trim()
     }
 
     private fun logSanitizedRawResponse(responseText: String, stage: String) {

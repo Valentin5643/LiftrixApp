@@ -1,6 +1,7 @@
 package com.example.liftrix.domain.model.common
 
 import com.example.liftrix.domain.model.error.LiftrixError
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Type alias for standardized result handling across all domain operations.
@@ -220,5 +221,11 @@ inline fun <T> liftrixCatching(
     noinline errorMapper: (Throwable) -> LiftrixError,
     block: () -> T
 ): LiftrixResult<T> {
-    return runCatching(block).mapError(errorMapper)
+    return try {
+        Result.success(block())
+    } catch (cancellationException: CancellationException) {
+        throw cancellationException
+    } catch (throwable: Throwable) {
+        Result.failure(errorMapper(throwable))
+    }
 }

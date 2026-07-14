@@ -3,7 +3,6 @@ package com.example.liftrix.data.service
 import android.app.DownloadManager
 import android.content.Context
 import android.database.Cursor
-import android.net.Uri
 import android.os.Environment
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
@@ -15,7 +14,6 @@ import com.example.liftrix.domain.service.DownloadHistoryEntry
 import com.example.liftrix.domain.usecase.legal.DownloadRequest
 import com.example.liftrix.domain.usecase.legal.DownloadProgress
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import timber.log.Timber
@@ -57,34 +55,10 @@ class DownloadManagerServiceImpl @Inject constructor(
             // Copy source file to downloads directory
             copyFile(request.sourceFile, destFile)
             
-            // Create download manager request
-            val downloadUri = Uri.fromFile(destFile)
-            val downloadRequest = DownloadManager.Request(downloadUri).apply {
-                setTitle(request.title)
-                setDescription(request.description)
-                setMimeType(request.mimeType)
-                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "$DOWNLOADS_SUBDIR/${request.fileName}")
-                setNotificationVisibility(request.notificationVisibility)
-                setAllowedNetworkTypes(request.allowedNetworkTypes)
-            }
-            
-            // Since we're copying a local file, we'll simulate the download process
-            // and provide progress feedback
             val fileSize = destFile.length()
-            
-            // Emit initial progress
-            emit(DownloadProgress.InProgress(0f, 0L, fileSize))
-            
-            // Simulate download progress for user feedback
-            val progressSteps = 10
-            for (step in 1..progressSteps) {
-                delay(100) // Small delay to simulate processing
-                val progress = step.toFloat() / progressSteps.toFloat()
-                val bytesProcessed = (fileSize * progress).toLong()
-                emit(DownloadProgress.InProgress(progress, bytesProcessed, fileSize))
+            if (fileSize <= 0L || !destFile.isFile) {
+                throw IllegalStateException("Export produced no downloadable content")
             }
-            
-            // Final success
             emit(DownloadProgress.Success(destFile.absolutePath, fileSize))
             
             // Save to download history

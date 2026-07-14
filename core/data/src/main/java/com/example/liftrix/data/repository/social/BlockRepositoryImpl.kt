@@ -4,6 +4,7 @@ import com.example.liftrix.data.local.dao.BlockedUserDao
 import com.example.liftrix.data.local.entity.BlockedUserEntity
 import com.example.liftrix.config.OfflineArchitectureFlags
 import com.example.liftrix.data.remote.legacy.LegacyBlockFirestoreDataSource
+import com.example.liftrix.data.sync.OfflineQueueManager
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -22,7 +23,8 @@ import javax.inject.Singleton
 @Singleton
 class BlockRepositoryImpl @Inject constructor(
     private val blockedUserDao: BlockedUserDao,
-    private val legacyDataSource: LegacyBlockFirestoreDataSource
+    private val legacyDataSource: LegacyBlockFirestoreDataSource,
+    private val offlineQueueManager: OfflineQueueManager
 ) : BlockRepository {
     
     override suspend fun blockUser(
@@ -50,6 +52,7 @@ class BlockRepositoryImpl @Inject constructor(
 
         if (OfflineArchitectureFlags.FIX_BLOCK_REPOSITORY) {
             blockedUserDao.upsertLocal(blockEntity)
+            offlineQueueManager.queueSocialMutation(blockerId, "BLOCKED_USER", blockId, "CREATE").getOrThrow()
         } else {
             blockedUserDao.insertBlockedUser(blockEntity)
             try {
@@ -75,7 +78,11 @@ class BlockRepositoryImpl @Inject constructor(
         }
     ) {
         // Remove from local database
-        blockedUserDao.unblockUser(blockerId, blockedUserId)
+        val block = blockedUserDao.getBlockedUser(blockerId, blockedUserId)
+        if (block != null) {
+            blockedUserDao.tombstone(blockerId, blockedUserId, System.currentTimeMillis())
+            offlineQueueManager.queueSocialMutation(blockerId, "BLOCKED_USER", block.id, "DELETE").getOrThrow()
+        }
 
         if (!OfflineArchitectureFlags.FIX_BLOCK_REPOSITORY) {
             try {

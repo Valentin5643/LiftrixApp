@@ -158,6 +158,7 @@ object LiftrixRouteMetadata {
         detail(LiftrixRoute.UpgradeToPremium::class, RouteFeature.PROFILE_SETTINGS, "Premium"),
 
         untitled(LiftrixRoute.AIChatbot::class, RouteFeature.AI_RECOMMENDATIONS, showFab = false),
+        detail(LiftrixRoute.AIWorkoutBuilder::class, RouteFeature.AI_RECOMMENDATIONS, "Create workout plan", showFab = false),
         detail(LiftrixRoute.AIChatSettings::class, RouteFeature.AI_RECOMMENDATIONS, "AI Settings", showFab = false, hideSettingsAction = true)
     )
 

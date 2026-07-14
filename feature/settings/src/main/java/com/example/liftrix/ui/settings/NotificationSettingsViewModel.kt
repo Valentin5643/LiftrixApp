@@ -278,18 +278,22 @@ class NotificationSettingsViewModel @Inject constructor(
      */
     private fun loadMutedUsersCount() {
         viewModelScope.launch {
-            notificationInteractor.observeMutedUsersCount()
-                .collect { result ->
-                    result.fold(
-                        onSuccess = { count: Int ->
-                            updateState { it.copy(mutedUsersCount = count) }
-                        },
-                        onFailure = { error: Throwable ->
-                            Timber.w("Failed to load muted users count: $error")
-                            // Don't show error for this, just use default count
-                        }
-                    )
+            val userId = authInteractor.currentUser(waitForAuth = false).fold(
+                onSuccess = { it.value },
+                onFailure = { error ->
+                    Timber.w(error, "Cannot load muted users count: user not authenticated")
+                    return@launch
                 }
+            )
+
+            notificationInteractor.mutedUsersCount(userId).fold(
+                onSuccess = { count ->
+                    updateState { it.copy(mutedUsersCount = count) }
+                },
+                onFailure = { error ->
+                    Timber.w(error, "Failed to load muted users count")
+                }
+            )
         }
     }
 

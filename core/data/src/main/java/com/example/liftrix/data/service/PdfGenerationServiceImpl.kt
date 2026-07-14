@@ -1,13 +1,6 @@
 package com.example.liftrix.data.service
 
 import android.content.Context
-import android.print.PrintAttributes
-import android.print.PrintDocumentAdapter
-import android.print.PrintManager
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.os.Handler
-import android.os.Looper
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -15,13 +8,9 @@ import com.example.liftrix.domain.service.PdfGenerationService
 import com.example.liftrix.domain.usecase.legal.PdfGenerationRequest
 import com.example.liftrix.domain.usecase.legal.PdfPageMargins
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.suspendCancellableCoroutine
 import timber.log.Timber
 import java.io.File
-import java.io.FileOutputStream
 import javax.inject.Inject
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 /**
  * Implementation of PdfGenerationService using Android WebView
@@ -166,12 +155,7 @@ class PdfGenerationServiceImpl @Inject constructor(
             )
         }
     ) {
-        // Check if WebView is available
-        try {
-            WebView(context)
-        } catch (e: Exception) {
-            throw IllegalStateException("WebView not available for PDF generation: ${e.message}")
-        }
+        throw UnsupportedOperationException("PDF generation is unavailable in this build")
         
         // Check storage permissions and space
         val tempDir = File(context.cacheDir, PDF_TEMP_DIR)
@@ -222,47 +206,7 @@ class PdfGenerationServiceImpl @Inject constructor(
         htmlContent: String,
         outputFile: File,
         pageMargins: PdfPageMargins
-    ): Unit = suspendCancellableCoroutine { continuation ->
-        val handler = Handler(Looper.getMainLooper())
-        
-        handler.post {
-            try {
-                val webView = WebView(context)
-                
-                webView.webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(view: WebView?, url: String?) {
-                        super.onPageFinished(view, url)
-                        
-                        try {
-                            // For now, create a simple PDF with basic content
-                            // In production, this would use a proper PDF library like iText or PDFBox
-                            try {
-                                // Create a simple but valid PDF document
-                                val pdfContent = generateSimplePdfContent(htmlContent, "Legal Document")
-                                
-                                FileOutputStream(outputFile).use { fos ->
-                                    fos.write(pdfContent.toByteArray())
-                                }
-                                
-                                continuation.resume(Unit)
-                                
-                            } catch (e: Exception) {
-                                continuation.resumeWithException(e)
-                            }
-                            
-                        } catch (e: Exception) {
-                            continuation.resumeWithException(e)
-                        }
-                    }
-                }
-                
-                webView.loadDataWithBaseURL(null, htmlContent, "text/html", "UTF-8", null)
-                
-            } catch (e: Exception) {
-                continuation.resumeWithException(e)
-            }
-        }
-    }
+    ): Unit = throw UnsupportedOperationException("PDF generation is unavailable in this build")
     
     /**
      * Wraps HTML content with proper document structure and styling
@@ -324,29 +268,6 @@ class PdfGenerationServiceImpl @Inject constructor(
         }
         
         return wrapHtmlContent(html, title, null)
-    }
-    
-    /**
-     * Generates a simple PDF content with basic structure
-     * This is a placeholder implementation - in production would use a proper PDF library
-     */
-    private fun generateSimplePdfContent(htmlContent: String, title: String): String {
-        // Strip HTML tags for plain text content
-        val plainText = htmlContent
-            .replace(Regex("<[^>]*>"), "")
-            .replace(Regex("\\s+"), " ")
-            .trim()
-        
-        // Create a basic PDF structure (this is a simplified example)
-        val pdfHeader = "%PDF-1.4\n"
-        val pdfCatalog = "1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n"
-        val pdfPages = "2 0 obj\n<<\n/Type /Pages\n/Kids [3 0 R]\n/Count 1\n>>\nendobj\n"
-        val pdfPage = "3 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/MediaBox [0 0 612 792]\n/Contents 4 0 R\n>>\nendobj\n"
-        val pdfContent = "4 0 obj\n<<\n/Length ${plainText.length + title.length + 50}\n>>\nstream\nBT\n/F1 12 Tf\n50 750 Td\n($title) Tj\n0 -20 Td\n($plainText) Tj\nET\nendstream\nendobj\n"
-        val pdfXref = "xref\n0 5\n0000000000 65535 f\n0000000010 00000 n\n0000000079 00000 n\n0000000173 00000 n\n0000000301 00000 n\n"
-        val pdfTrailer = "trailer\n<<\n/Size 5\n/Root 1 0 R\n>>\nstartxref\n${pdfHeader.length + pdfCatalog.length + pdfPages.length + pdfPage.length + pdfContent.length + pdfXref.length}\n%%EOF"
-        
-        return pdfHeader + pdfCatalog + pdfPages + pdfPage + pdfContent + pdfXref + pdfTrailer
     }
     
 }

@@ -270,7 +270,7 @@ private fun FormatSelectionCard(
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                ExportFormat.values().forEach { format ->
+                listOf(ExportFormat.JSON, ExportFormat.CSV).forEach { format ->
                     FormatOption(
                         format = format,
                         isSelected = format == selectedFormat,
@@ -302,13 +302,13 @@ private fun FormatOption(
         )
         ExportFormat.FIT -> Triple(
             Icons.Default.FitnessCenter,
-            "FIT",
-            "Industry standard fitness format"
+            "FIT unavailable",
+            "This build does not generate binary FIT files"
         )
         ExportFormat.TCX -> Triple(
             Icons.Default.Timeline,
-            "TCX",
-            "Training Center XML format"
+            "TCX unavailable",
+            "This build does not generate TCX files"
         )
     }
     

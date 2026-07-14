@@ -80,6 +80,7 @@ class EnforceUserScopingDetector : Detector(), SourceCodeScanner {
             "ACHIEVEMENTS",
             "ANALYTICS_CACHE",
             "CHAT_HISTORY",
+            "CHAT_CONVERSATIONS",
             "SOCIAL_PROFILES",
             "WORKOUT_POSTS",
             "SYNC_QUEUE",

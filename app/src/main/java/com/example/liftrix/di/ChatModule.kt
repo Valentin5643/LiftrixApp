@@ -1,6 +1,6 @@
 package com.example.liftrix.di
 
-import com.example.liftrix.data.local.dao.ChatHistoryDao
+import com.example.liftrix.data.local.dao.AiUsageDao
 import com.example.liftrix.data.repository.ChatRepositoryImpl
 import com.example.liftrix.data.service.AIChatServiceImpl
 import com.example.liftrix.data.service.AIMessageReportServiceImpl
@@ -68,13 +68,13 @@ abstract class ChatModule {
         @Singleton
         fun provideRateLimitingService(
             chatRepository: ChatRepository,
-            chatHistoryDao: ChatHistoryDao,
+            aiUsageDao: AiUsageDao,
             subscriptionRepository: SubscriptionRepository,
             remoteConfig: com.example.liftrix.data.remote.config.RemoteConfigManager,
             analyticsTracker: AnalyticsTracker
         ): RateLimitingService = RateLimitingService(
             chatRepository = chatRepository,
-            chatHistoryDao = chatHistoryDao,
+            aiUsageDao = aiUsageDao,
             subscriptionRepository = subscriptionRepository,
             remoteConfig = remoteConfig,
             analyticsTracker = analyticsTracker

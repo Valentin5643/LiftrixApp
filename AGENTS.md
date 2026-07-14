@@ -1,6 +1,6 @@
 # Repository Agent Guide
 
-Last source audit: 2026-06-01. When this guide conflicts with source, trust the source and update the docs.
+Last source audit: 2026-07-12. When this guide conflicts with source, trust the source and update the docs.
 
 This root file is intentionally short. Use it for global rules, essential commands, and routing to deeper agent docs.
 
@@ -39,7 +39,7 @@ Common tasks:
 | Social feed, engagement, privacy, gym buddy, PR notifications | `patterns/social.md` |
 | AI chat, quota, abuse prevention, usage accounting | `patterns/ai-chat.md` |
 | Progress dashboard, widgets, chart/detail routes | `patterns/progress.md` |
-| Verification commands, test locations, risk matrix | `docs/architecture.md`, `docs/module-map.md` until a dedicated `patterns/testing.md` exists |
+| Verification commands, test locations, risk matrix | `patterns/testing.md` |
 | Design system details | `docs/design-system.md`, `docs/component-library.md`, `docs/component-usage-guidelines.md` |
 | Modularization planning | `docs/module-map.md`, `docs/modularization-target-graph.md`, `docs/modularization/inventory/*` |
 | Older product/social planning | `docs/social.md` |
@@ -76,8 +76,8 @@ For `Flow<Result<T>>`, return the flow directly and emit `Result.failure(...)` f
 
 ## Known Global Risk Areas
 
-- `UnifiedNavigationContainer` has known route-registration drift. Verify active graph registration before exposing any destination.
-- Room is at database version 11 without destructive fallback. Current core database DI registers migrations `7->8`, `8->9`, `9->10`, and `10->11`; schema changes require explicit migration review, including older-version upgrade support.
+- The 2026-07-12 source audit found 75 typed `LiftrixRoute` definitions and 75 unique typed registrations, with no missing or duplicate destination. Re-run that check whenever routes change.
+- Room is at database version 14 with no registered migrations or destructive fallback. The versioned filename creates a fresh encrypted database for schema changes.
 - Some older docs and code comments mention stale Hilt module counts; the source-audited docs describe the current app-level module grouping.
-- No `.disabled` files were found under `app`, `core`, or `feature` during the 2026-06-01 refresh. If reintroduced, they are not part of normal Gradle discovery unless explicitly wired.
+- No `.disabled` files were found under `app`, `core`, or `feature` during the 2026-07-12 refresh. If reintroduced, they are not part of normal Gradle discovery unless explicitly wired.
 - Generated/vendor/build-output folders exist in the tree. Do not treat them as source modules unless specifically auditing them.

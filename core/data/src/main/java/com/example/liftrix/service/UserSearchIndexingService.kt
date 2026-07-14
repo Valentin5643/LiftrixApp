@@ -66,7 +66,10 @@ class UserSearchIndexingService @Inject constructor(
             // Get user profile using the suspend version
             val profileResult = profileRepository.getUserProfile(userId)
             if (profileResult.isFailure) {
-                return profileResult as LiftrixResult<Unit>
+                return LiftrixResult.failure(
+                    profileResult.exceptionOrNull()
+                        ?: LiftrixError.UnknownError("Unexpected user profile lookup failure")
+                )
             }
             
             val profile = profileResult.getOrNull()

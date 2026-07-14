@@ -65,39 +65,30 @@ class WorkoutQueryUseCase @Inject constructor(
      * @return LiftrixResult containing the workout if found, null if not found, or error
      */
     suspend fun getById(workoutId: WorkoutId, userId: String): LiftrixResult<Workout?> {
-        Timber.d("🔥 EDIT-WORKOUT-DEBUG: WorkoutQueryUseCase.getById - workoutId: ${workoutId.value}, userId: $userId")
-
         return liftrixCatching(
             errorMapper = { throwable ->
-                LiftrixError.BusinessLogicError(
-                    code = "GET_WORKOUT_BY_ID_FAILED",
-                    errorMessage = "Failed to retrieve workout: ${throwable.message}",
-                    analyticsContext = mapOf(
-                        "operation" to "GET_WORKOUT_BY_ID",
-                        "workout_id" to workoutId.value,
-                        "user_id" to userId
+                when (throwable) {
+                    is LiftrixError -> throwable
+                    else -> LiftrixError.BusinessLogicError(
+                        code = "GET_WORKOUT_BY_ID_FAILED",
+                        errorMessage = "Failed to retrieve workout: ${throwable.message}",
+                        analyticsContext = mapOf(
+                            "operation" to "GET_WORKOUT_BY_ID",
+                            "workout_id" to workoutId.value,
+                            "user_id" to userId
+                        )
                     )
-                )
+                }
             }
         ) {
-            // Validate request
-            val validationResult = validateGetByIdRequest(workoutId, userId)
-            if (validationResult.isFailure) {
-                Timber.e("🔥 EDIT-WORKOUT-DEBUG: Request validation failed - ${validationResult.exceptionOrNull()?.message}")
-                throw validationResult.exceptionOrNull()!!
-            }
-
-            Timber.d("🔥 EDIT-WORKOUT-DEBUG: Request validation passed, calling repository - workoutId: ${workoutId.value}, userId: $userId")
+            validateGetByIdRequest(workoutId, userId).getOrThrow()
 
             // Retrieve workout from repository
             val workoutResult = workoutRepository.getWorkoutById(workoutId, userId)
             val workout = workoutResult.getOrThrow()
 
-            Timber.d("🔥 EDIT-WORKOUT-DEBUG: Repository returned workout - ${if (workout != null) "FOUND" else "NOT FOUND"}")
-
             // Additional authorization check if workout is found
             if (workout != null && workout.userId != userId) {
-                Timber.e("🔥 EDIT-WORKOUT-DEBUG: Authorization failed - workout.userId: ${workout.userId}, request.userId: $userId")
                 throw LiftrixError.AuthenticationError(
                     errorMessage = "Access denied: workout belongs to different user",
                     errorCode = "WORKOUT_ACCESS_DENIED",
@@ -107,12 +98,6 @@ class WorkoutQueryUseCase @Inject constructor(
                         "actualUserId" to workout.userId
                     )
                 )
-            }
-
-            if (workout != null) {
-                Timber.d("🔥 EDIT-WORKOUT-DEBUG: Authorization passed, returning workout - id: ${workout.id.value}, name: ${workout.name}")
-            } else {
-                Timber.d("🔥 EDIT-WORKOUT-DEBUG: Workout is null, returning null result")
             }
 
             workout

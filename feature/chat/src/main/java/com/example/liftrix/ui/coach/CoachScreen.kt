@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
 import com.example.liftrix.ui.chat.ChatbotScreen
+import com.example.liftrix.ui.navigation.LiftrixRoute
 
 /**
  * AI Coach screen that directly embeds the AI chatbot interface.
@@ -27,6 +28,14 @@ fun CoachScreen(
         onNavigateBack = { 
             // Since this is a main tab, there's nowhere to navigate back to
             // The user can switch tabs using the bottom navigation
+        },
+        onCreateWorkoutPlan = { conversationId, seedPrompt ->
+            navController.navigate(
+                LiftrixRoute.AIWorkoutBuilder(
+                    conversationId = conversationId,
+                    seedPrompt = seedPrompt
+                )
+            )
         },
         showTopBar = false
     )

@@ -1,6 +1,6 @@
 package com.example.liftrix.data.service
 
-import com.example.liftrix.data.local.dao.ChatHistoryDao
+import com.example.liftrix.data.local.dao.AiUsageDao
 import com.example.liftrix.data.remote.config.RemoteConfigManager
 import com.example.liftrix.domain.repository.ChatRepository
 import com.example.liftrix.domain.repository.SubscriptionRepository
@@ -24,7 +24,7 @@ import javax.inject.Singleton
 @Singleton
 class RateLimitingService @Inject constructor(
     private val chatRepository: ChatRepository,
-    private val chatHistoryDao: ChatHistoryDao,
+    private val aiUsageDao: AiUsageDao,
     private val subscriptionRepository: SubscriptionRepository,
     private val remoteConfig: RemoteConfigManager,
     private val analyticsTracker: AnalyticsTracker
@@ -213,10 +213,12 @@ class RateLimitingService @Inject constructor(
             
         } catch (e: Exception) {
             Timber.tag(MONTHLY_USAGE_TAG).e(e, "checkLimits failed userId=%s now=%s", userId, formatTimestamp(System.currentTimeMillis()))
-            // In case of error, be conservative and allow the request
+            // Quota state is a paid-operation gate: an unreadable ledger must fail closed.
             return RateLimitStatus(
-                isLimited = false,
-                reason = "Unable to verify limits"
+                isLimited = true,
+                reason = "Unable to verify AI usage limits",
+                messagesRemaining = 0,
+                tokensRemaining = 0
             )
         }
     }
@@ -232,7 +234,7 @@ class RateLimitingService @Inject constructor(
             val oneHourAgo = System.currentTimeMillis() - 3600000
             
             // Get token usage in the last hour
-            val hourlyTokens = chatHistoryDao.getHourlyTokenUsage(userId, oneHourAgo) ?: 0
+            val hourlyTokens = aiUsageDao.tokenUsageSince(userId, oneHourAgo)
             
             // Estimate input/output token split (typically 30% input, 70% output for responses)
             val inputTokens = (hourlyTokens * 0.3).toInt()
@@ -261,18 +263,18 @@ class RateLimitingService @Inject constructor(
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
             }.timeInMillis
-            val count = chatHistoryDao.getTodayMessageCount(userId, todayStart)
+            val count = aiUsageDao.countCallsSince(userId, todayStart)
             Timber.tag(MONTHLY_USAGE_TAG).d(
-                "Daily usage read userId=%s count=%d dayStart=%s source=Room.chat_history now=%s",
+                "Daily usage read userId=%s count=%d dayStart=%s source=Room.ai_usage now=%s",
                 userId,
                 count,
                 formatTimestamp(todayStart),
                 formatTimestamp(System.currentTimeMillis())
             )
-            UsageWindow(count = count, windowStart = todayStart, source = "Room.chat_history")
+            UsageWindow(count = count, windowStart = todayStart, source = "Room.ai_usage")
         } catch (e: Exception) {
-            Timber.tag(MONTHLY_USAGE_TAG).e(e, "Daily usage read failed userId=%s source=Room.chat_history", userId)
-            UsageWindow(count = 0, windowStart = 0L, source = "Room.chat_history.error")
+            Timber.tag(MONTHLY_USAGE_TAG).e(e, "Daily usage read failed userId=%s source=Room.ai_usage", userId)
+            throw e
         }
     }
 
@@ -285,9 +287,9 @@ class RateLimitingService @Inject constructor(
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
             }.timeInMillis
-            val count = chatHistoryDao.getMonthlyTokenUsage(userId, monthStart) ?: 0
+            val count = aiUsageDao.tokenUsageSince(userId, monthStart)
             Timber.tag(MONTHLY_USAGE_TAG).d(
-                "Monthly usage read userId=%s count=%d month=%d year=%d monthStart=%s source=Room.chat_history now=%s",
+                "Monthly usage read userId=%s count=%d month=%d year=%d monthStart=%s source=Room.ai_usage now=%s",
                 userId,
                 count,
                 Calendar.getInstance().get(Calendar.MONTH) + 1,
@@ -295,10 +297,10 @@ class RateLimitingService @Inject constructor(
                 formatTimestamp(monthStart),
                 formatTimestamp(System.currentTimeMillis())
             )
-            UsageWindow(count = count, windowStart = monthStart, source = "Room.chat_history")
+            UsageWindow(count = count, windowStart = monthStart, source = "Room.ai_usage")
         } catch (e: Exception) {
-            Timber.tag(MONTHLY_USAGE_TAG).e(e, "Monthly usage read failed userId=%s source=Room.chat_history", userId)
-            UsageWindow(count = 0, windowStart = 0L, source = "Room.chat_history.error")
+            Timber.tag(MONTHLY_USAGE_TAG).e(e, "Monthly usage read failed userId=%s source=Room.ai_usage", userId)
+            throw e
         }
     }
     
@@ -308,7 +310,7 @@ class RateLimitingService @Inject constructor(
     private suspend fun getHourlyTokenUsage(userId: String): Int {
         return try {
             val oneHourAgo = System.currentTimeMillis() - 3600000
-            chatHistoryDao.getHourlyTokenUsage(userId, oneHourAgo) ?: 0
+            aiUsageDao.tokenUsageSince(userId, oneHourAgo)
         } catch (e: Exception) {
             Timber.e(e, "Error getting hourly token usage for user $userId")
             0
@@ -371,17 +373,14 @@ class RateLimitingService @Inject constructor(
                 set(Calendar.MILLISECOND, 0)
             }.timeInMillis
             
-            val todayMessages = chatHistoryDao.getTodayMessageCount(userId, todayStart)
-            val monthTokens = chatHistoryDao.getMonthlyTokenUsage(userId, monthStart) ?: 0
-            val hourlyTokens = chatHistoryDao.getHourlyTokenUsage(
-                userId, 
-                System.currentTimeMillis() - 3600000
-            ) ?: 0
+            val todayMessages = aiUsageDao.countCallsSince(userId, todayStart)
+            val monthTokens = aiUsageDao.tokenUsageSince(userId, monthStart)
+            val hourlyTokens = aiUsageDao.tokenUsageSince(userId, System.currentTimeMillis() - 3600000)
             
             val estimatedMonthlyCost = (monthTokens / 1000.0) * 
                 ((COST_PER_1K_INPUT_TOKENS + COST_PER_1K_OUTPUT_TOKENS) / 2)
             Timber.tag(MONTHLY_USAGE_TAG).d(
-                "Usage stats read userId=%s dailyMessages=%d monthlyTokens=%d hourlyTokens=%d monthStart=%s source=Room.chat_history now=%s",
+                "Usage stats read userId=%s dailyMessages=%d monthlyTokens=%d hourlyTokens=%d monthStart=%s source=Room.ai_usage now=%s",
                 userId,
                 todayMessages,
                 monthTokens,

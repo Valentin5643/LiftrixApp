@@ -31,6 +31,11 @@ class ValidateGeneratedWorkoutProgramUseCase @Inject constructor() {
 
         validateProgramShape(program, request, violations)
         program.days.forEachIndexed { dayIndex, day ->
+            if (day.dayName.isBlank() || day.dayName.length > 100) violations.add("days[$dayIndex].day_name must be 1-100 characters")
+            if (day.focus.isBlank() || day.focus.length > 160) violations.add("days[$dayIndex].focus must be 1-160 characters")
+            if (day.scheduledDay == null) violations.add("days[$dayIndex].scheduled_day is required")
+            validatePhase(day.warmUp, "days[$dayIndex].warm_up", violations)
+            validatePhase(day.coolDown, "days[$dayIndex].cool_down", violations)
             if (day.exercises.size !in MIN_EXERCISES_PER_DAY..MAX_EXERCISES_PER_DAY) {
                 violations.add("days[$dayIndex].exercises must contain $MIN_EXERCISES_PER_DAY-$MAX_EXERCISES_PER_DAY exercises")
             }
@@ -67,7 +72,8 @@ class ValidateGeneratedWorkoutProgramUseCase @Inject constructor() {
         sourceProgram: GeneratedWorkoutProgram,
         sourceId: String,
         request: WorkoutGenerationRequest,
-        exerciseCatalog: List<ExerciseLibrary>
+        exerciseCatalog: List<ExerciseLibrary>,
+        scope: WorkoutModificationScope? = null
     ): LiftrixResult<WorkoutGenerationValidationResult> {
         val violations = mutableListOf<String>()
         val warnings = mutableListOf<String>()
@@ -113,6 +119,7 @@ class ValidateGeneratedWorkoutProgramUseCase @Inject constructor() {
         )
 
         validateSafeProgression(sourceProgram, response.program, request.normalizedConstraints.level, violations, warnings)
+        validateModificationScope(sourceProgram, response.program, scope, violations)
 
         return if (violations.isEmpty()) {
             Result.success(WorkoutGenerationValidationResult(response.program, warnings))
@@ -139,11 +146,68 @@ class ValidateGeneratedWorkoutProgramUseCase @Inject constructor() {
         if (program.workoutName.isBlank() || program.workoutName.length > 100) {
             violations.add("workout_name must be 1-100 characters")
         }
+        if (program.description.isBlank() || program.description.length > 500) {
+            violations.add("description must be 1-500 characters")
+        }
         if (program.days.size != request.normalizedConstraints.daysPerWeek) {
             violations.add("days count must match requested days_per_week")
         }
         if (program.days.size !in MIN_DAYS_PER_WEEK..MAX_DAYS_PER_WEEK) {
             violations.add("days count must be $MIN_DAYS_PER_WEEK-$MAX_DAYS_PER_WEEK")
+        }
+        request.preferences?.let { preferences ->
+            if (program.days.mapNotNull { it.scheduledDay } != preferences.trainingDays) {
+                violations.add("scheduled days must match reviewed training days")
+            }
+        }
+    }
+
+    private fun validatePhase(
+        phase: com.example.liftrix.domain.model.ai.GeneratedWorkoutPhase,
+        path: String,
+        violations: MutableList<String>
+    ) {
+        if (phase.durationMinutes !in 1..30) violations.add("$path.duration_minutes must be 1-30")
+        if (phase.steps.isEmpty() || phase.steps.size > 8) violations.add("$path.steps must contain 1-8 steps")
+        phase.steps.forEachIndexed { index, step ->
+            if (step.isBlank() || step.length > 160 || UNSAFE_TERMS.containsMatchIn(step)) {
+                violations.add("$path.steps[$index] must be safe and 1-160 characters")
+            }
+        }
+    }
+
+    private fun validateModificationScope(
+        source: GeneratedWorkoutProgram,
+        result: GeneratedWorkoutProgram,
+        scope: WorkoutModificationScope?,
+        violations: MutableList<String>
+    ) {
+        when (scope) {
+            null -> Unit
+            is WorkoutModificationScope.RegenerateDay -> source.days.indices.forEach { index ->
+                if (index != scope.dayIndex && source.days.getOrNull(index) != result.days.getOrNull(index)) {
+                    violations.add("regenerate day changed days[$index] outside the requested scope")
+                }
+            }
+            is WorkoutModificationScope.ReplaceExercise -> {
+                source.days.indices.forEach { dayIndex ->
+                    val before = source.days.getOrNull(dayIndex)
+                    val after = result.days.getOrNull(dayIndex)
+                    if (dayIndex != scope.dayIndex && before != after) {
+                        violations.add("replace exercise changed days[$dayIndex] outside the requested scope")
+                    } else if (dayIndex == scope.dayIndex && before != null && after != null) {
+                        if (before.copy(exercises = emptyList()) != after.copy(exercises = emptyList())) {
+                            violations.add("replace exercise changed day metadata")
+                        }
+                        val target = before.exercises.indexOfFirst { it.exerciseId == scope.exerciseId }
+                        before.exercises.indices.forEach { exerciseIndex ->
+                            if (exerciseIndex != target && before.exercises.getOrNull(exerciseIndex) != after.exercises.getOrNull(exerciseIndex)) {
+                                violations.add("replace exercise changed a non-target exercise")
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

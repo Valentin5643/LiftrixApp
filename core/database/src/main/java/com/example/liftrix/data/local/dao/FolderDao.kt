@@ -88,31 +88,34 @@ interface FolderDao {
      * Update the template count for a specific folder
      * 
      * @param folderId The folder ID to update
+     * @param userId The user ID to ensure user-scoped access
      * @param count The new template count
      * @return Number of rows affected (should be 1 for successful update)
      */
-    @Query("UPDATE folders SET template_count = :count, updated_at = :updatedAt WHERE id = :folderId")
-    suspend fun updateTemplateCount(folderId: String, count: Int, updatedAt: Long): Int
+    @Query("UPDATE folders SET template_count = :count, updated_at = :updatedAt WHERE id = :folderId AND user_id = :userId")
+    suspend fun updateTemplateCount(folderId: String, userId: String, count: Int, updatedAt: Long): Int
     
     /**
      * Increment the template count for a specific folder
      * 
      * @param folderId The folder ID to update
+     * @param userId The user ID to ensure user-scoped access
      * @param updatedAt The timestamp when the update occurred
      * @return Number of rows affected (should be 1 for successful update)
      */
-    @Query("UPDATE folders SET template_count = template_count + 1, updated_at = :updatedAt WHERE id = :folderId")
-    suspend fun incrementTemplateCount(folderId: String, updatedAt: Long): Int
+    @Query("UPDATE folders SET template_count = template_count + 1, updated_at = :updatedAt WHERE id = :folderId AND user_id = :userId")
+    suspend fun incrementTemplateCount(folderId: String, userId: String, updatedAt: Long): Int
     
     /**
      * Decrement the template count for a specific folder
      * 
      * @param folderId The folder ID to update
+     * @param userId The user ID to ensure user-scoped access
      * @param updatedAt The timestamp when the update occurred
      * @return Number of rows affected (should be 1 for successful update)
      */
-    @Query("UPDATE folders SET template_count = template_count - 1, updated_at = :updatedAt WHERE id = :folderId AND template_count > 0")
-    suspend fun decrementTemplateCount(folderId: String, updatedAt: Long): Int
+    @Query("UPDATE folders SET template_count = template_count - 1, updated_at = :updatedAt WHERE id = :folderId AND user_id = :userId AND template_count > 0")
+    suspend fun decrementTemplateCount(folderId: String, userId: String, updatedAt: Long): Int
     
     /**
      * Check if a folder name exists for a user

@@ -27,13 +27,13 @@ interface SavedPostDao {
     @Query("DELETE FROM saved_posts WHERE user_id = :userId AND post_id = :postId")
     suspend fun unsavePostByIds(userId: String, postId: String)
     
-    @Query("SELECT * FROM saved_posts WHERE user_id = :userId AND post_id = :postId")
+    @Query("SELECT * FROM saved_posts WHERE user_id = :userId AND post_id = :postId AND is_deleted = 0")
     suspend fun getSavedPost(userId: String, postId: String): SavedPostEntity?
     
-    @Query("SELECT EXISTS(SELECT 1 FROM saved_posts WHERE user_id = :userId AND post_id = :postId)")
+    @Query("SELECT EXISTS(SELECT 1 FROM saved_posts WHERE user_id = :userId AND post_id = :postId AND is_deleted = 0)")
     suspend fun isPostSaved(userId: String, postId: String): Boolean
     
-    @Query("SELECT EXISTS(SELECT 1 FROM saved_posts WHERE user_id = :userId AND post_id = :postId)")
+    @Query("SELECT EXISTS(SELECT 1 FROM saved_posts WHERE user_id = :userId AND post_id = :postId AND is_deleted = 0)")
     fun observeIsPostSaved(userId: String, postId: String): Flow<Boolean>
     
     @Query("""
@@ -49,7 +49,7 @@ interface SavedPostDao {
         FROM saved_posts sp
         INNER JOIN workout_posts wp ON sp.post_id = wp.id
         INNER JOIN social_profiles prof ON wp.user_id = prof.user_id
-        WHERE sp.user_id = :userId
+        WHERE sp.user_id = :userId AND sp.is_deleted = 0
         ORDER BY sp.saved_at DESC
     """)
     fun getUserSavedPostsWithDetails(userId: String): Flow<List<SavedPostWithDetails>>
@@ -79,4 +79,13 @@ interface SavedPostDao {
         LIMIT :limit
     """)
     suspend fun getMostSavedPostsByUser(userId: String, limit: Int = 10): List<PostSaveStats>
+
+    @Query("UPDATE saved_posts SET is_deleted = 1, is_dirty = 1, is_synced = 0, last_modified = :timestamp WHERE user_id = :userId AND post_id = :postId")
+    suspend fun tombstone(userId: String, postId: String, timestamp: Long): Int
+
+    @Query("SELECT * FROM saved_posts WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtySavedPosts(userId: String): List<SavedPostEntity>
+
+    @Query("UPDATE saved_posts SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long): Int
 }

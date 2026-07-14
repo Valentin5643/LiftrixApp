@@ -191,9 +191,14 @@ class AuthViewModel @Inject constructor(
                             isAuthOperationInProgress = false
                         },
                         onFailure = { consentError ->
-                            // Consent recording failed - this is a critical error
-                            // We should delete the account to maintain GDPR compliance
                             Timber.e(consentError, "Failed to record consent for user: ${user.uid}")
+                            val compensationResult = authRepository.deleteAccount()
+                            compensationResult.onFailure { compensationError ->
+                                Timber.e(compensationError, "Failed to compensate incomplete sign-up")
+                                authCommandUseCase.signOut().onFailure { signOutError ->
+                                    Timber.e(signOutError, "Failed to sign out after incomplete sign-up")
+                                }
+                            }
                             _authState.value = AuthState.Error(
                                 "Account creation failed. Please try again.",
                                 consentError

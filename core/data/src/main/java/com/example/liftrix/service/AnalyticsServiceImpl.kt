@@ -566,47 +566,19 @@ class AnalyticsServiceImpl @Inject constructor(
     }
     
     private suspend fun loadCaloriesBurnedData(userId: String): WidgetData {
-        return MetricWidgetData(
-            widgetType = AnalyticsWidget.AverageDuration,
-            lastUpdated = Clock.System.now(),
-            primaryValue = "245 kcal",
-            unit = "kcal",
-            trend = TrendDirection.UP,
-            isLoading = false
-        )
+        return createNoDataWidgetData(AnalyticsWidget.AverageDuration)
     }
     
     private suspend fun loadDailyCaloriesData(userId: String): WidgetData {
-        return MetricWidgetData(
-            widgetType = AnalyticsWidget.VolumeChart,
-            lastUpdated = Clock.System.now(),
-            primaryValue = "245 kcal",
-            unit = "kcal",
-            trend = TrendDirection.UP,
-            isLoading = false
-        )
+        return createNoDataWidgetData(AnalyticsWidget.VolumeChart)
     }
     
     private suspend fun loadWeeklyCalorieTrendData(userId: String): WidgetData {
-        return MetricWidgetData(
-            widgetType = AnalyticsWidget.FrequencyChart,
-            lastUpdated = Clock.System.now(),
-            primaryValue = "1,680 kcal",
-            unit = "kcal",
-            trend = TrendDirection.UP,
-            isLoading = false
-        )
+        return createNoDataWidgetData(AnalyticsWidget.FrequencyChart)
     }
     
     private suspend fun loadStrengthProgressData(userId: String): WidgetData {
-        return MetricWidgetData(
-            widgetType = AnalyticsWidget.StrengthProgress,
-            lastUpdated = Clock.System.now(),
-            primaryValue = "+12%",
-            unit = "%",
-            trend = TrendDirection.UP,
-            isLoading = false
-        )
+        return createNoDataWidgetData(AnalyticsWidget.StrengthProgress)
     }
 
     private suspend fun loadStrengthAnalyticsData(userId: String): WidgetData {
@@ -1186,69 +1158,27 @@ class AnalyticsServiceImpl @Inject constructor(
     }
     
     private suspend fun loadRecoveryMetricsData(userId: String): WidgetData {
-        return MetricWidgetData(
-            widgetType = AnalyticsWidget.RecoveryMetrics,
-            lastUpdated = Clock.System.now(),
-            primaryValue = "Good",
-            unit = "",
-            trend = TrendDirection.STABLE,
-            isLoading = false
-        )
+        return createNoDataWidgetData(AnalyticsWidget.RecoveryMetrics)
     }
     
     private suspend fun loadPerformanceAnalysisData(userId: String): WidgetData {
-        return MetricWidgetData(
-            widgetType = AnalyticsWidget.MonthlySummary,
-            lastUpdated = Clock.System.now(),
-            primaryValue = "87%",
-            unit = "%",
-            trend = TrendDirection.UP,
-            isLoading = false
-        )
+        return createNoDataWidgetData(AnalyticsWidget.MonthlySummary)
     }
     
     private suspend fun loadAverageDurationData(userId: String): WidgetData {
-        return MetricWidgetData(
-            widgetType = AnalyticsWidget.AverageDuration,
-            lastUpdated = Clock.System.now(),
-            primaryValue = "68 min",
-            unit = "min",
-            trend = TrendDirection.STABLE,
-            isLoading = false
-        )
+        return createNoDataWidgetData(AnalyticsWidget.AverageDuration)
     }
     
     private suspend fun loadVolumeLoadProgressionData(userId: String): WidgetData {
-        return MetricWidgetData(
-            widgetType = AnalyticsWidget.VolumeLoadProgression,
-            lastUpdated = Clock.System.now(),
-            primaryValue = "+15%",
-            unit = "%",
-            trend = TrendDirection.UP,
-            isLoading = false
-        )
+        return createNoDataWidgetData(AnalyticsWidget.VolumeLoadProgression)
     }
     
     private suspend fun loadProgressChartData(userId: String): WidgetData {
-        return MetricWidgetData(
-            widgetType = AnalyticsWidget.ProgressChart,
-            lastUpdated = Clock.System.now(),
-            primaryValue = "Improving",
-            unit = "",
-            trend = TrendDirection.UP,
-            isLoading = false
-        )
+        return createNoDataWidgetData(AnalyticsWidget.ProgressChart)
     }
     
     private suspend fun loadOneRMProgressionData(userId: String): WidgetData {
-        return MetricWidgetData(
-            widgetType = AnalyticsWidget.OneRMProgression,
-            lastUpdated = Clock.System.now(),
-            primaryValue = "+22 kg",
-            unit = "kg",
-            trend = TrendDirection.UP,
-            isLoading = false
-        )
+        return createNoDataWidgetData(AnalyticsWidget.OneRMProgression)
     }
     
     private suspend fun loadWeeklyTrendsData(userId: String): WidgetData {
@@ -1261,9 +1191,9 @@ class AnalyticsServiceImpl @Inject constructor(
                     MetricWidgetData(
                         widgetType = AnalyticsWidget.VolumeTrends,
                         lastUpdated = Clock.System.now(),
-                        primaryValue = "Analysis Available",
+                        primaryValue = "No volume trend data",
                         unit = "",
-                        trend = TrendDirection.UP,
+                        trend = TrendDirection.STABLE,
                         isLoading = false
                     )
                 },
@@ -1382,9 +1312,9 @@ class AnalyticsServiceImpl @Inject constructor(
                     MetricWidgetData(
                         widgetType = AnalyticsWidget.RecoveryMetrics,
                         lastUpdated = Clock.System.now(),
-                        primaryValue = "Optimal",
+                        primaryValue = "No recovery data",
                         unit = "",
-                        trend = TrendDirection.UP,
+                        trend = TrendDirection.STABLE,
                         isLoading = false
                     )
                 },
@@ -1745,53 +1675,7 @@ class AnalyticsServiceImpl @Inject constructor(
      * Generates data points for duration chart using real workout data
      */
     private fun generateDurationDataPoints(progressMetrics: ProgressMetrics): List<DataPoint> {
-        val dataPoints = mutableListOf<DataPoint>()
-        
-        // Use real frequency metrics to derive duration patterns
-        val frequencyMetrics = progressMetrics.frequencyMetrics
-        val avgWorkoutsPerWeek = frequencyMetrics.averageWorkoutsPerWeek
-        
-        if (avgWorkoutsPerWeek > 0) {
-            // Use real consistency data to generate realistic duration progression
-            val consistencyMetrics = progressMetrics.consistencyMetrics
-            val currentStreak = consistencyMetrics.currentStreak
-            
-            // Base duration from actual workout patterns - no hardcoding
-            val baseDuration = when {
-                avgWorkoutsPerWeek >= 5 -> 60.0f  // High frequency = longer sessions
-                avgWorkoutsPerWeek >= 3 -> 45.0f  // Medium frequency = medium sessions  
-                else -> 30.0f                     // Low frequency = shorter sessions
-            }
-            
-            // Create data points based on real consistency streak
-            for (i in 0..6) {
-                // Duration varies based on streak momentum - real behavioral pattern
-                val streakFactor = (currentStreak.toFloat() / 30.0f).coerceIn(0.8f, 1.2f)
-                val dayVariation = if (i % 2 == 0) 1.1f else 0.9f // Realistic weekly pattern
-                val duration = baseDuration * streakFactor * dayVariation
-                
-                dataPoints.add(
-                    DataPoint(
-                        x = i.toFloat(),
-                        y = duration,
-                        label = "Day ${i + 1}",
-                        timestamp = Clock.System.now()
-                    )
-                )
-            }
-        } else {
-            // No workout data - show empty chart
-            dataPoints.add(
-                DataPoint(
-                    x = 0.0f,
-                    y = 0.0f,
-                    label = "No data",
-                    timestamp = Clock.System.now()
-                )
-            )
-        }
-        
-        return dataPoints
+        return emptyList()
     }
     
     /**

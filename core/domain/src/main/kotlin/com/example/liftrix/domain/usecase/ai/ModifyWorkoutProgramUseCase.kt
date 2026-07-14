@@ -68,7 +68,7 @@ class ModifyWorkoutProgramUseCase @Inject constructor(
                     userId = request.userId,
                     message = request.message,
                     pendingTemplateId = request.pendingTemplateId,
-                    pendingGeneratedProgramId = request.pendingGeneratedProgram?.sourceReference?.sourceId,
+                    pendingGeneratedProgramId = request.pendingGeneratedProgram?.previewId,
                     pendingGeneratedProgramName = request.pendingGeneratedProgram?.program?.workoutName
                 )
             ).getOrThrow()
@@ -77,7 +77,7 @@ class ModifyWorkoutProgramUseCase @Inject constructor(
             val taskPrompt = if (request.updateFromProgress) {
                 promptBuilder.buildProgressionUpdate(request.message, source.reference, source.program, context)
             } else {
-                promptBuilder.buildModification(request.message, source.reference, source.program, context)
+                promptBuilder.buildModification(request.message, source.reference, source.program, context, request.scope)
             }
             val cacheKey = cache.keyForOperation(
                 userId = request.userId,
@@ -106,7 +106,8 @@ class ModifyWorkoutProgramUseCase @Inject constructor(
                 exerciseCatalog = (
                     context.exerciseCatalog.map { it.toExerciseLibrary() } +
                         source.program.days.flatMap { day -> day.exercises.map { it.toExerciseLibrary() } }
-                    ).distinctBy { it.id }
+                    ).distinctBy { it.id },
+                scope = request.scope
             ).getOrThrow()
             val result = WorkoutGenerationResult(
                 program = validation.program,

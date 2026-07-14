@@ -81,26 +81,26 @@ class SocialRelationshipUseCase @Inject constructor(
                 followerId = currentUserId.value,
                 targetUserId = targetUserId,
                 requestSource = context
-            )
+            ).getOrThrow()
 
             FollowAction.UNFOLLOW -> {
                 followRepository.unfollowUser(
                     followerId = currentUserId.value,
                     targetUserId = targetUserId
-                )
+                ).getOrThrow()
                 FollowStatus.NONE // Return NONE status after unfollowing
             }
 
             FollowAction.ACCEPT -> followRepository.acceptFollowRequest(
                 targetUserId = currentUserId.value, // Current user is accepting request
                 requesterId = targetUserId    // Target user sent the request
-            )
+            ).getOrThrow()
 
             FollowAction.DECLINE -> {
                 followRepository.declineFollowRequest(
                     targetUserId = currentUserId.value,
                     requesterId = targetUserId
-                )
+                ).getOrThrow()
                 FollowStatus.NONE
             }
 
@@ -108,7 +108,7 @@ class SocialRelationshipUseCase @Inject constructor(
                 followRepository.cancelFollowRequest(
                     followerId = currentUserId.value,
                     targetUserId = targetUserId
-                )
+                ).getOrThrow()
                 FollowStatus.NONE
             }
 
@@ -116,7 +116,7 @@ class SocialRelationshipUseCase @Inject constructor(
                 followRepository.blockUser(
                     blockerId = currentUserId.value,
                     targetUserId = targetUserId
-                )
+                ).getOrThrow()
                 FollowStatus.BLOCKED
             }
 
@@ -124,14 +124,8 @@ class SocialRelationshipUseCase @Inject constructor(
                 followRepository.unblockUser(
                     blockerId = currentUserId.value,
                     targetUserId = targetUserId
-                )
+                ).getOrThrow()
                 FollowStatus.NONE
-            }
-        }.let { status ->
-            when (status) {
-                is FollowStatus -> status
-                is LiftrixResult<*> -> (status as LiftrixResult<FollowStatus>).getOrThrow()
-                else -> throw IllegalStateException("Unexpected result type: ${status::class.simpleName}")
             }
         }
 

@@ -165,7 +165,7 @@ data class UnifiedWorkoutSession(
     fun getTotalDurationSeconds(): Long {
         return when (sessionStatus) {
             SessionStatus.ACTIVE -> {
-                val currentElapsed = Instant.now().epochSecond - startedAt.epochSecond
+                val currentElapsed = Instant.now().epochSecond - lastModified.epochSecond
                 elapsedTimeSeconds + currentElapsed
             }
             SessionStatus.PAUSED -> elapsedTimeSeconds
@@ -188,12 +188,13 @@ data class UnifiedWorkoutSession(
     fun pause(): UnifiedWorkoutSession {
         require(sessionStatus == SessionStatus.ACTIVE) { "Can only pause active sessions" }
         
-        val currentElapsed = Instant.now().epochSecond - startedAt.epochSecond
+        val now = Instant.now()
+        val currentElapsed = now.epochSecond - lastModified.epochSecond
         
         return copy(
             sessionStatus = SessionStatus.PAUSED,
             elapsedTimeSeconds = elapsedTimeSeconds + currentElapsed,
-            lastModified = Instant.now()
+            lastModified = now
         )
     }
 
@@ -205,7 +206,6 @@ data class UnifiedWorkoutSession(
         
         return copy(
             sessionStatus = SessionStatus.ACTIVE,
-            startedAt = Instant.now(), // Reset start time for new active period
             lastModified = Instant.now()
         )
     }
@@ -219,7 +219,7 @@ data class UnifiedWorkoutSession(
         val now = Instant.now()
         val totalElapsed = when (sessionStatus) {
             SessionStatus.ACTIVE -> {
-                elapsedTimeSeconds + (now.epochSecond - startedAt.epochSecond)
+                elapsedTimeSeconds + (now.epochSecond - lastModified.epochSecond)
             }
             SessionStatus.PAUSED -> elapsedTimeSeconds
             SessionStatus.COMPLETED -> elapsedTimeSeconds // Should not happen due to require

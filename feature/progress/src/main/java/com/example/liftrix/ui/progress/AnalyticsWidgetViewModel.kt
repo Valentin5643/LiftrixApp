@@ -16,6 +16,7 @@ import com.example.liftrix.domain.model.SubscriptionStatus
 import com.example.liftrix.domain.model.SubscriptionTier
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
+import com.example.liftrix.domain.model.analytics.MetricWidgetData
 import com.example.liftrix.domain.model.analytics.DashboardConfiguration
 import com.example.liftrix.domain.model.analytics.DashboardLayoutMode
 import com.example.liftrix.domain.model.analytics.UserLevel
@@ -244,7 +245,8 @@ class AnalyticsWidgetViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            try {
+            widgetLoadingSemaphore.withPermit {
+              try {
                 val widget = AnalyticsWidget.fromString(widgetId)
                 if (widget == null) {
                     val error = LiftrixError.ValidationError(
@@ -261,15 +263,19 @@ class AnalyticsWidgetViewModel @Inject constructor(
                 result.fold(
                     onSuccess = { data ->
                         updateState { currentState ->
+                            val unavailable = data is MetricWidgetData && (
+                                data.primaryValue.startsWith("No ") ||
+                                    data.primaryValue.startsWith("Not enough ")
+                                )
                             when (currentState) {
                                 is UiState.Success -> UiState.Success(
-                                    currentState.data
-                                        .withWidgetData(widgetId, data)
+                                    if (unavailable) currentState.data.withWidgetUnavailable(widgetId)
+                                    else currentState.data.withWidgetData(widgetId, data)
                                         .withWidgetLoading(widgetId, false)
                                 )
                                 else -> UiState.Success(
-                                    AnalyticsWidgetState()
-                                        .withWidgetData(widgetId, data)
+                                    if (unavailable) AnalyticsWidgetState().withWidgetUnavailable(widgetId)
+                                    else AnalyticsWidgetState().withWidgetData(widgetId, data)
                                         .withWidgetLoading(widgetId, false)
                                 )
                             }
@@ -299,7 +305,7 @@ class AnalyticsWidgetViewModel @Inject constructor(
                         Timber.e("Failed to load widget data: $widgetId - ${error.message}")
                     }
                 )
-            } catch (exception: Exception) {
+              } catch (exception: Exception) {
                 val error = LiftrixError.UnknownError(
                     errorMessage = "Unexpected error loading widget data",
                     analyticsContext = mapOf(
@@ -312,6 +318,7 @@ class AnalyticsWidgetViewModel @Inject constructor(
                 updateState { UiState.Error(error) }
                 
                 Timber.e(exception, "Unexpected error loading widget data: $widgetId")
+              }
             }
         }
     }
@@ -536,9 +543,7 @@ class AnalyticsWidgetViewModel @Inject constructor(
                 // Load all widgets with concurrency limits
                 val jobs = widgetsToRefresh.map { widgetId ->
                     launch {
-                        widgetLoadingSemaphore.withPermit {
-                            loadWidgetData(widgetId, forceRefresh = true)
-                        }
+                        loadWidgetData(widgetId, forceRefresh = true)
                     }
                 }
 

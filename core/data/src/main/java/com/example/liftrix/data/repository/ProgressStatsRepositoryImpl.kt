@@ -141,7 +141,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         Timber.d("🔍 REPO-DEBUG: emit() completed successfully")
     }.catch { e ->
         Timber.e(e, "Failed to get workout volume data for user: $userId")
-        emit(emptyList())
+        throw e
     }
 
     override fun getWorkoutDurationData(
@@ -156,7 +156,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         emit(durationData)
     }.catch { e ->
         Timber.e(e, "Failed to get workout duration data for user: $userId")
-        emit(emptyList())
+        throw e
     }
 
     override fun getWorkoutFrequencyData(
@@ -171,7 +171,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         emit(frequencyData)
     }.catch { e ->
         Timber.e(e, "Failed to get workout frequency data for user: $userId")
-        emit(emptyList())
+        throw e
     }
 
     override fun getProgressSummary(
@@ -193,16 +193,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         // FIXED: Use Flow.catch operator instead of try-catch with emit
         Timber.e(e, "ProgressStatsRepository: Failed to get progress summary for user: $userId")
         
-        // Emit empty/zero progress summary when error occurs
-        emit(ProgressSummary(
-            totalWorkouts = 0,
-            totalVolume = 0f,
-            averageDuration = 0,
-            currentStreak = 0,
-            longestStreak = 0,
-            averageWorkoutsPerWeek = 0f,
-            totalActiveTime = 0
-        ))
+        throw e
     }
 
     override fun getExerciseVolumeProgression(
@@ -231,7 +222,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
             emit(volumeData)
         } catch (e: Exception) {
             Timber.e(e, "Failed to get exercise volume progression for user: $userId, exercise: $exerciseLibraryId")
-            emit(emptyList())
+            throw e
         }
     }
 

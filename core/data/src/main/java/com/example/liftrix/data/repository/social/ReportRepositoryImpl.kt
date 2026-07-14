@@ -4,6 +4,7 @@ import com.example.liftrix.config.OfflineArchitectureFlags
 import com.example.liftrix.data.local.dao.ContentReportsDao
 import com.example.liftrix.data.local.entity.ContentReportEntity
 import com.example.liftrix.data.remote.legacy.LegacyReportFirestoreDataSource
+import com.example.liftrix.data.sync.OfflineQueueManager
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -23,14 +24,17 @@ import javax.inject.Singleton
 @Singleton
 class ReportRepositoryImpl @Inject constructor(
     private val contentReportsDao: ContentReportsDao,
-    private val legacyDataSource: LegacyReportFirestoreDataSource
+    private val legacyDataSource: LegacyReportFirestoreDataSource,
+    private val offlineQueueManager: OfflineQueueManager
 ) : ReportRepository {
     
     override suspend fun submitReport(
         reporterId: String,
         targetUserId: String,
         reason: ReportReason,
-        description: String?
+        description: String?,
+        contentType: ReportRepository.ContentType,
+        targetAuthorId: String
     ): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.NetworkError(
@@ -42,11 +46,11 @@ class ReportRepositoryImpl @Inject constructor(
         val reportId = UUID.randomUUID().toString()
         val currentTime = System.currentTimeMillis()
         
-        if (OfflineArchitectureFlags.FIX_REPORT_REPOSITORY) {
+        if (OfflineArchitectureFlags.FIX_REPORT_REPOSITORY || contentType != ReportRepository.ContentType.PROFILE) {
             val entity = ContentReportEntity(
                 id = reportId,
                 reporterUserId = reporterId,
-                contentType = ContentReportEntity.CONTENT_TYPE_PROFILE,
+                contentType = contentType.name,
                 contentId = targetUserId,
                 reason = reason.name,
                 description = description,
@@ -55,6 +59,7 @@ class ReportRepositoryImpl @Inject constructor(
                 isSynced = false
             )
             contentReportsDao.upsertLocal(entity)
+            offlineQueueManager.queueSocialMutation(reporterId, "CONTENT_REPORT", reportId, "CREATE").getOrThrow()
         } else {
             legacyDataSource.submitReport(
                 reportId = reportId,
@@ -66,17 +71,18 @@ class ReportRepositoryImpl @Inject constructor(
             )
         }
         
-        Timber.d("Report submitted: $reportId against user $targetUserId")
+        Timber.d("Report submitted: $reportId type=$contentType content=$targetUserId author=$targetAuthorId")
         
         Unit
     }
     
     override suspend fun hasExistingReport(
         reporterId: String,
-        targetUserId: String
+        targetUserId: String,
+        contentType: ReportRepository.ContentType
     ): Boolean {
         return try {
-            if (OfflineArchitectureFlags.FIX_REPORT_REPOSITORY) {
+            if (OfflineArchitectureFlags.FIX_REPORT_REPOSITORY || contentType != ReportRepository.ContentType.PROFILE) {
                 contentReportsDao.hasUserReported(reporterId, targetUserId)
             } else {
                 legacyDataSource.hasExistingReport(reporterId, targetUserId)

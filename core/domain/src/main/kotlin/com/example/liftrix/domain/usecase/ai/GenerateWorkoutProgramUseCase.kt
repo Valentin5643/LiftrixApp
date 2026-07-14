@@ -12,11 +12,17 @@ import com.example.liftrix.domain.model.ai.GeneratedPrescriptionType
 import com.example.liftrix.domain.model.ai.GeneratedWorkoutDay
 import com.example.liftrix.domain.model.ai.GeneratedWorkoutExercise
 import com.example.liftrix.domain.model.ai.GeneratedWorkoutProgram
+import com.example.liftrix.domain.model.ai.GeneratedWorkoutPhase
+import com.example.liftrix.domain.model.ai.WorkoutTrainingDay
 import com.example.liftrix.domain.model.ai.GeneratedWorkoutProgramError
 import com.example.liftrix.domain.model.ai.WorkoutGenerationConstraints
 import com.example.liftrix.domain.model.ai.WorkoutGenerationPersonalization
 import com.example.liftrix.domain.model.ai.WorkoutGenerationRequest
 import com.example.liftrix.domain.model.ai.WorkoutGenerationResult
+import com.example.liftrix.domain.model.ai.WorkoutGenerationPreferences
+import com.example.liftrix.domain.model.ai.WorkoutGenerationStage
+import com.example.liftrix.domain.model.ai.WorkoutProgramSaveOutcome
+import com.example.liftrix.domain.model.ai.SavedGeneratedWorkoutDay
 import com.example.liftrix.domain.model.ai.WorkoutProgramGoal
 import com.example.liftrix.domain.model.ai.WorkoutProgramLevel
 import com.example.liftrix.domain.model.common.LiftrixResult
@@ -119,7 +125,10 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         userId: String,
         prompt: String,
         language: Language = Language.ENGLISH,
-        saveAfterGeneration: Boolean = false
+        saveAfterGeneration: Boolean = false,
+        forceRefresh: Boolean = false,
+        explicitPreferences: WorkoutGenerationPreferences? = null,
+        onStage: suspend (WorkoutGenerationStage) -> Unit = {}
     ): LiftrixResult<WorkoutGenerationResult> {
         Timber.i("[AI] GenerateWorkoutProgramUseCase: request started user=$userId promptChars=${prompt.length} language=${language.code} saveAfterGeneration=$saveAfterGeneration")
         if (userId.isBlank() || prompt.isBlank()) {
@@ -127,12 +136,14 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
             return liftrixFailure(validationError("request", listOf("User ID and prompt are required")))
         }
 
+        onStage(WorkoutGenerationStage.ANALYZING_GOALS)
         Timber.d("[AI] GenerateWorkoutProgramUseCase: loading profile")
         val profile = profileQueryUseCase.getById(userId).getOrElse { return Result.failure(it) }
-        val request = buildRequest(userId, prompt, language, profile, saveAfterGeneration)
+        val request = buildRequest(userId, prompt, language, profile, saveAfterGeneration, explicitPreferences)
         Timber.i(
             "[AI] GenerateWorkoutProgramUseCase: constraints days=${request.normalizedConstraints.daysPerWeek} duration=${request.normalizedConstraints.sessionDurationMinutes} equipment=${request.normalizedConstraints.allowedEquipment} excluded=${request.normalizedConstraints.excludedEquipment} goal=${request.normalizedConstraints.goal} level=${request.normalizedConstraints.level}"
         )
+        onStage(WorkoutGenerationStage.CHOOSING_EXERCISES)
         Timber.d("[AI] GenerateWorkoutProgramUseCase: loading exercise catalog")
         val rawCatalog = exerciseQueryUseCase.invoke().getOrElse { return Result.failure(it) }
         val catalog = rawCatalog.filter { it.equipment in request.normalizedConstraints.allowedEquipment }
@@ -161,13 +172,15 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
             language = language.code,
             catalogHash = generationPrompt.catalogHash
         )
-        if (!saveAfterGeneration) {
+        if (!saveAfterGeneration && !forceRefresh) {
             cache.get(cacheKey)?.let {
                 Timber.i("[AI] GenerateWorkoutProgramUseCase: cache hit for preview")
+                onStage(WorkoutGenerationStage.FINALIZING_PLAN)
                 return Result.success(it.copy(cacheHit = true))
             }
         }
 
+        onStage(WorkoutGenerationStage.BUILDING_WEEKLY_SCHEDULE)
         Timber.i("[AI] GenerateWorkoutProgramUseCase: Firebase JSON generation started")
         val generatedJson = generationService.generateProgramJson(
             userId = userId,
@@ -178,6 +191,7 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         ).getOrElse { return Result.failure(it) }
         Timber.i("[AI] GenerateWorkoutProgramUseCase: Firebase JSON generation succeeded chars=${generatedJson.json.length} tokens=${generatedJson.tokensUsed}")
 
+        onStage(WorkoutGenerationStage.BALANCING_MUSCLE_GROUPS)
         val parsed = parseOrRepair(
             userId = userId,
             request = request,
@@ -187,7 +201,8 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
             processingTimeMs = generatedJson.processingTimeMs,
             modelVersion = generatedJson.modelVersion,
             generationPrompt = generationPrompt,
-            language = language
+            language = language,
+            onRepair = { onStage(WorkoutGenerationStage.REPAIRING_PLAN) }
         ).getOrElse { return Result.failure(it) }
         Timber.i("[AI] GenerateWorkoutProgramUseCase: parsing and validation succeeded days=${parsed.program.days.size} repairAttempts=${parsed.repairAttempts}")
 
@@ -201,6 +216,7 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
             Timber.i("[AI] GenerateWorkoutProgramUseCase: repository save succeeded templates=${savedTemplates.size}")
         }
 
+        onStage(WorkoutGenerationStage.FINALIZING_PLAN)
         val result = WorkoutGenerationResult(
             program = parsed.program,
             validationWarnings = parsed.warnings,
@@ -218,6 +234,21 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         return Result.success(result)
     }
 
+    suspend operator fun invoke(
+        userId: String,
+        preferences: WorkoutGenerationPreferences,
+        language: Language = Language.ENGLISH,
+        forceRefresh: Boolean = false,
+        onStage: suspend (WorkoutGenerationStage) -> Unit = {}
+    ): LiftrixResult<WorkoutGenerationResult> = invoke(
+        userId = userId,
+        prompt = preferences.additionalPreferences.ifBlank { "Create my reviewed workout plan" },
+        language = language,
+        forceRefresh = forceRefresh,
+        explicitPreferences = preferences,
+        onStage = onStage
+    )
+
     suspend fun saveGeneratedProgram(
         userId: String,
         program: GeneratedWorkoutProgram
@@ -233,6 +264,35 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         return Result.success(WorkoutGenerationResult(program = program, savedTemplates = templates))
     }
 
+    suspend fun saveGeneratedProgram(
+        userId: String,
+        program: GeneratedWorkoutProgram,
+        preferences: WorkoutGenerationPreferences,
+        alreadySaved: List<SavedGeneratedWorkoutDay>
+    ): LiftrixResult<WorkoutProgramSaveOutcome> {
+        if (userId.isBlank()) return liftrixFailure(validationError("userId", listOf("User ID is required")))
+        val request = buildExplicitRequest(userId, preferences, Language.ENGLISH, saveAfterGeneration = true)
+        val rawCatalog = exerciseQueryUseCase.invoke().getOrElse { return Result.failure(it) }
+        val compatible = rawCatalog.filter { it.equipment in preferences.availableEquipment }
+        validator(program, request, compatible).getOrElse { return Result.failure(it) }
+
+        val savedByIndex = alreadySaved.associateBy { it.dayIndex }.toMutableMap()
+        program.days.forEachIndexed { index, day ->
+            if (index in savedByIndex) return@forEachIndexed
+            val saved = saveDay(request, program, day).getOrElse { error ->
+                return Result.success(
+                    WorkoutProgramSaveOutcome.Partial(
+                        savedDays = savedByIndex.values.sortedBy { it.dayIndex },
+                        failedDayIndex = index,
+                        error = error
+                    )
+                )
+            }
+            savedByIndex[index] = SavedGeneratedWorkoutDay(index, saved)
+        }
+        return Result.success(WorkoutProgramSaveOutcome.Complete(savedByIndex.values.sortedBy { it.dayIndex }))
+    }
+
     private suspend fun parseOrRepair(
         userId: String,
         request: WorkoutGenerationRequest,
@@ -242,7 +302,8 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         processingTimeMs: Long,
         modelVersion: String,
         generationPrompt: com.example.liftrix.domain.model.ai.WorkoutGenerationPrompt,
-        language: Language
+        language: Language,
+        onRepair: suspend () -> Unit = {}
     ): LiftrixResult<ParsedProgram> {
         Timber.i("[AI] GenerateWorkoutProgramUseCase: parsing started rawChars=${rawJson.length}")
         parseProgram(rawJson, catalog).fold(
@@ -266,6 +327,7 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
                     )
                 }
                 Timber.w("[AI] GenerateWorkoutProgramUseCase: validation failed, repair started: ${validation.exceptionOrNull()?.message}")
+                onRepair()
                 return repairInvalidProgram(
                     userId, request, catalog, rawJson, generationPrompt,
                     tokensUsed, processingTimeMs, modelVersion,
@@ -276,6 +338,7 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
             },
             onFailure = { parseError ->
                 Timber.w("[AI] GenerateWorkoutProgramUseCase: parsing failed, repair started: ${parseError.message}")
+                onRepair()
                 return repairInvalidProgram(
                     userId, request, catalog, rawJson, generationPrompt,
                     tokensUsed, processingTimeMs, modelVersion,
@@ -363,7 +426,9 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         val usedExerciseIds = mutableSetOf<String>()
 
         return program.copy(
-            days = program.days.map { day ->
+            schemaVersion = GeneratedWorkoutProgram.SCHEMA_VERSION,
+            description = program.description.ifBlank { "Personalized workout program" },
+            days = program.days.mapIndexed { dayIndex, day ->
                 val normalizedExercises = day.exercises.mapNotNull { exercise ->
                     val catalogExercise = catalogById[exercise.exerciseId]
                         ?: catalogByName[exercise.exerciseName.normalizedLookupKey()]
@@ -396,10 +461,30 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
                 }
 
                 day.copy(
+                    scheduledDay = request.preferences?.trainingDays?.getOrNull(dayIndex)
+                        ?: day.scheduledDay
+                        ?: WorkoutTrainingDay.entries.getOrNull(dayIndex),
+                    focus = day.focus.ifBlank { day.dayName },
                     estimatedDurationMinutes = day.estimatedDurationMinutes.coerceIn(5, 90),
+                    warmUp = normalizePhase(day.warmUp, "Light movement and mobility"),
+                    coolDown = normalizePhase(day.coolDown, "Easy breathing and mobility"),
                     exercises = normalizedExercises.take(MAX_NORMALIZED_EXERCISES_PER_DAY)
                 )
             }
+        )
+    }
+
+    private fun normalizePhase(
+        phase: GeneratedWorkoutPhase,
+        fallbackStep: String
+    ): GeneratedWorkoutPhase {
+        val steps = phase.steps
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .take(8)
+        return GeneratedWorkoutPhase(
+            durationMinutes = phase.durationMinutes.takeIf { it in 1..30 } ?: 5,
+            steps = steps.ifEmpty { listOf(fallbackStep) }
         )
     }
 
@@ -607,6 +692,7 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         return GeneratedWorkoutProgram(
             schemaVersion = schemaVersion,
             workoutName = resolvedName,
+            description = description.orEmpty(),
             goal = goal.toProgramGoalOrDefault(),
             level = level.toProgramLevelOrDefault(),
             days = days.mapIndexed { dayIndex, day ->
@@ -626,15 +712,24 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
 
         return GeneratedWorkoutDay(
             dayName = name,
+            scheduledDay = scheduledDay?.let { value -> WorkoutTrainingDay.entries.firstOrNull { it.name.equals(value, true) } },
+            focus = focus.orEmpty(),
             estimatedDurationMinutes = estimatedDurationMinutes ?: 45,
+            warmUp = warmUp?.toGeneratedPhase() ?: GeneratedWorkoutPhase(),
             exercises = exercises.mapIndexed { exerciseIndex, exercise ->
                 exercise.toGeneratedExercise(
                     path = "days[$index].exercises[$exerciseIndex]",
                     catalogById = catalogById
                 )
-            }
+            },
+            coolDown = coolDown?.toGeneratedPhase() ?: GeneratedWorkoutPhase()
         )
     }
+
+    private fun AiWorkoutPhaseDto.toGeneratedPhase() = GeneratedWorkoutPhase(
+        durationMinutes = durationMinutes ?: 0,
+        steps = steps
+    )
 
     private fun AiWorkoutExerciseDto.toGeneratedExercise(
         path: String,
@@ -710,10 +805,34 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
             ?.groupValues
             ?.getOrNull(1)
             ?.trim()
-        if (fenced != null) return fenced
-        val first = trimmed.indexOf('{')
-        val last = trimmed.lastIndexOf('}')
-        return if (first >= 0 && last > first) trimmed.substring(first, last + 1).trim() else trimmed
+        return extractFirstJsonObject(fenced ?: trimmed)
+    }
+
+    /**
+     * Models occasionally append a second JSON object or a short explanation after a
+     * complete response. Keep the first balanced object and let the schema validator
+     * handle its contents instead of treating the spillover as part of the JSON.
+     */
+    private fun extractFirstJsonObject(text: String): String {
+        val first = text.indexOf('{')
+        if (first < 0) return text.trim()
+
+        var depth = 0
+        var inString = false
+        var escaped = false
+        for (index in first until text.length) {
+            when (val character = text[index]) {
+                '\\' -> if (inString) escaped = !escaped else escaped = false
+                '"' -> if (!escaped) inString = !inString
+                '{' -> if (!inString) depth++
+                '}' -> if (!inString) {
+                    depth--
+                    if (depth == 0) return text.substring(first, index + 1).trim()
+                }
+            }
+            if (character != '\\') escaped = false
+        }
+        return text.trim()
     }
 
     private suspend fun saveProgram(
@@ -723,11 +842,31 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         val saved = mutableListOf<com.example.liftrix.domain.model.WorkoutTemplate>()
         program.days.forEach { day ->
             Timber.i("[AI] GenerateWorkoutProgramUseCase: saving template day=${day.dayName} exercises=${day.exercises.size}")
-            val result = templateCommandUseCase.create(
+            val result = saveDay(request, program, day)
+            saved.add(result.getOrElse {
+                Timber.e(it, "[AI] GenerateWorkoutProgramUseCase: template save failed day=${day.dayName}")
+                return Result.failure(it)
+            })
+            Timber.i("[AI] GenerateWorkoutProgramUseCase: template save succeeded day=${day.dayName} id=${saved.last().id.value}")
+        }
+        return Result.success(saved)
+    }
+
+    private suspend fun saveDay(
+        request: WorkoutGenerationRequest,
+        program: GeneratedWorkoutProgram,
+        day: GeneratedWorkoutDay
+    ): LiftrixResult<com.example.liftrix.domain.model.WorkoutTemplate> =
+        templateCommandUseCase.create(
                 userId = request.userId,
                 name = "${program.workoutName} - ${day.dayName}".take(100),
                 folderId = null,
-                description = "Generated by Liftrix AI for ${program.goal.name.lowercase().replace('_', ' ')}.",
+                description = listOf(
+                    program.description,
+                    day.focus,
+                    "Warm-up: ${day.warmUp.steps.joinToString()}",
+                    "Cooldown: ${day.coolDown.steps.joinToString()}"
+                ).filter(String::isNotBlank).joinToString(" | ").take(500),
                 exercises = day.exercises.mapIndexed { index, exercise ->
                     TemplateExercise(
                         exerciseId = ExerciseId.fromString(exercise.exerciseId),
@@ -752,14 +891,6 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
                     WorkoutProgramLevel.ADVANCED -> 8
                 }
             )
-            saved.add(result.getOrElse {
-                Timber.e(it, "[AI] GenerateWorkoutProgramUseCase: template save failed day=${day.dayName}")
-                return Result.failure(it)
-            })
-            Timber.i("[AI] GenerateWorkoutProgramUseCase: template save succeeded day=${day.dayName} id=${saved.last().id.value}")
-        }
-        return Result.success(saved)
-    }
 
     private fun buildTemplateNotes(exercise: com.example.liftrix.domain.model.ai.GeneratedWorkoutExercise): String? {
         val prescription = when (exercise.type) {
@@ -777,8 +908,12 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         prompt: String,
         language: Language,
         profile: UserProfile?,
-        saveAfterGeneration: Boolean
+        saveAfterGeneration: Boolean,
+        explicitPreferences: WorkoutGenerationPreferences? = null
     ): WorkoutGenerationRequest {
+        if (explicitPreferences != null) {
+            return buildExplicitRequest(userId, explicitPreferences, language, saveAfterGeneration, profile)
+        }
         val profileEquipment = profile?.availableEquipment?.toSet().orEmpty()
         val level = extractLevel(prompt)
         val allowedEquipment = resolveAllowedEquipment(
@@ -809,6 +944,38 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
             saveAfterGeneration = saveAfterGeneration
         )
     }
+
+    private fun buildExplicitRequest(
+        userId: String,
+        preferences: WorkoutGenerationPreferences,
+        language: Language,
+        saveAfterGeneration: Boolean,
+        profile: UserProfile? = null
+    ): WorkoutGenerationRequest = WorkoutGenerationRequest(
+        userId = userId,
+        userPrompt = preferences.additionalPreferences,
+        preferences = preferences.copy(
+            limitations = preferences.limitations.trim().take(WorkoutGenerationPreferences.MAX_FREE_TEXT_LENGTH),
+            additionalPreferences = preferences.additionalPreferences.trim().take(WorkoutGenerationPreferences.MAX_FREE_TEXT_LENGTH)
+        ),
+        normalizedConstraints = WorkoutGenerationConstraints(
+            daysPerWeek = preferences.daysPerWeek,
+            level = preferences.level,
+            goal = preferences.goal,
+            allowedEquipment = preferences.availableEquipment,
+            excludedEquipment = Equipment.entries.toSet() - preferences.availableEquipment,
+            sessionDurationMinutes = preferences.sessionDurationMinutes,
+            language = language
+        ),
+        personalization = WorkoutGenerationPersonalization(
+            ageBand = ageBand(profile?.age),
+            profileGoals = profile?.fitnessGoals.orEmpty(),
+            profileEquipment = profile?.availableEquipment?.toSet().orEmpty(),
+            experienceLevel = preferences.level,
+            knownExclusions = listOf(preferences.limitations).filter(String::isNotBlank)
+        ),
+        saveAfterGeneration = saveAfterGeneration
+    )
 
     private fun resolveAllowedEquipment(
         requestedEquipment: Set<Equipment>,
@@ -997,6 +1164,7 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         val workoutName: String? = null,
         @SerialName("program_name")
         val programName: String? = null,
+        val description: String? = null,
         val goal: String? = null,
         val level: String? = null,
         val days: List<AiWorkoutDayDto> = emptyList()
@@ -1011,9 +1179,21 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         @JsonNames("day")
         val dayNumber: Int? = null,
         val focus: String? = null,
+        @SerialName("scheduled_day")
+        val scheduledDay: String? = null,
         @SerialName("estimated_duration_minutes")
         val estimatedDurationMinutes: Int? = null,
-        val exercises: List<AiWorkoutExerciseDto> = emptyList()
+        @SerialName("warm_up")
+        val warmUp: AiWorkoutPhaseDto? = null,
+        val exercises: List<AiWorkoutExerciseDto> = emptyList(),
+        @SerialName("cool_down")
+        val coolDown: AiWorkoutPhaseDto? = null
+    )
+
+    @Serializable
+    private data class AiWorkoutPhaseDto(
+        @SerialName("duration_minutes") val durationMinutes: Int? = null,
+        val steps: List<String> = emptyList()
     )
 
     @Serializable

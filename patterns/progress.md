@@ -123,6 +123,11 @@ Performance rules:
 
 ## Debug Hot Zones
 
+Production widgets must resolve from user-scoped Room-backed analytics. Unsupported metrics are
+reported as unavailable, and read failures remain errors; neither case may be represented by a
+fabricated fixed/random value or a successful zero. Dashboard realtime ownership is idempotent per
+user, and widget concurrency limits cover the actual calculation rather than only job scheduling.
+
 - `AnalyticsReadModelDao`, `GetWidgetDataUseCase`, analytics services, and chart/widget ViewModels.
 - Per-widget calculation cost and caching behavior.
 - Time range propagation through `ProgressDashboardCoordinator`.

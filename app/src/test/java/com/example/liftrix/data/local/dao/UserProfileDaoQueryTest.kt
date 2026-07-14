@@ -98,9 +98,6 @@ class UserProfileDaoQueryTest {
         val updateResult = userProfileDao.updateSyncStatus("test_user_1", true, 123L)
         assert(updateResult > 0) { "Update sync status should affect rows" }
 
-        val markSyncedResult = userProfileDao.markProfilesAsSynced(listOf("test_user_1"), 456L)
-        assert(markSyncedResult > 0) { "Mark as synced should affect rows" }
-
         // Test Mark as Completed
         val markCompletedResult = userProfileDao.markProfileAsCompleted(
             "test_user_1", 
@@ -127,7 +124,7 @@ class UserProfileDaoQueryTest {
     }
 
     @Test
-    fun validateBulkOperations() = runBlocking {
+    fun validateUserScopedMutations() = runBlocking {
         // Test bulk insert
         val profiles = listOf(
             UserProfileEntity(
@@ -163,7 +160,7 @@ class UserProfileDaoQueryTest {
                 completedAt = null,
                 createdAt = LocalDateTime.now(),
                 updatedAt = LocalDateTime.now(),
-                isSynced = true,
+                isSynced = false,
                 syncVersion = 2L
             )
         )
@@ -172,13 +169,23 @@ class UserProfileDaoQueryTest {
         assert(bulkInsertResults.size == 2) { "Bulk insert should return 2 results" }
         assert(bulkInsertResults.all { it > 0 }) { "All bulk insert results should be positive" }
 
-        // Test bulk sync operations
-        val bulkSyncResult = userProfileDao.markProfilesAsSynced(listOf("user_1", "user_2"), 999L)
-        assert(bulkSyncResult > 0) { "Bulk sync should affect rows" }
+        val syncResult = userProfileDao.updateSyncStatus("user_1", true, 999L)
+        assert(syncResult == 1) { "Sync update should affect only user_1" }
+        assert(userProfileDao.getProfileForUserSuspend("user_1")?.isSynced == true) {
+            "user_1 should be synced"
+        }
+        assert(userProfileDao.getProfileForUserSuspend("user_2")?.isSynced == false) {
+            "user_2 should remain unsynced"
+        }
 
-        // Test delete all
-        val deleteAllResult = userProfileDao.deleteAllProfiles()
-        assert(deleteAllResult > 0) { "Delete all should affect rows" }
+        val deleteResult = userProfileDao.deleteProfileForUser("user_1")
+        assert(deleteResult == 1) { "Delete should affect only user_1" }
+        assert(userProfileDao.getProfileForUserSuspend("user_1") == null) {
+            "user_1 should be deleted"
+        }
+        assert(userProfileDao.getProfileForUserSuspend("user_2") != null) {
+            "user_2 should remain after deleting user_1"
+        }
     }
 
     @Test
@@ -216,4 +223,4 @@ class UserProfileDaoQueryTest {
         val emptyIncompleteProfiles = userProfileDao.getIncompleteProfiles("non_existent_user")
         assert(emptyIncompleteProfiles.isEmpty()) { "Should have no incomplete profiles in empty database" }
     }
-} 
+}

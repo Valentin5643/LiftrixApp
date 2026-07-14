@@ -27,8 +27,8 @@ import com.example.liftrix.feature.workout.state.WorkoutScreenData
 import com.example.liftrix.feature.workout.state.WorkoutUiState
 import com.example.liftrix.domain.repository.SyncStatusRepository
 import com.example.liftrix.domain.service.SyncStatus
-import com.example.liftrix.feature.workout.sync.StartupRestoreGate
-import com.example.liftrix.feature.workout.sync.TemplateRestoreNotifier
+import com.example.liftrix.domain.sync.StartupRestoreStatusSource
+import com.example.liftrix.domain.sync.TemplateRestoreEventSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -66,8 +66,8 @@ class WorkoutViewModel @Inject constructor(
     private val uxMetricsTracker: UxMetricsTracker,
     private val taskCompletionTracker: TaskCompletionTracker,
     private val sessionManager: com.example.liftrix.service.UnifiedWorkoutSessionManager,
-    private val startupRestoreGate: StartupRestoreGate,
-    private val templateRestoreNotifier: TemplateRestoreNotifier
+    private val startupRestoreGate: StartupRestoreStatusSource,
+    private val templateRestoreNotifier: TemplateRestoreEventSource
 ) : ModernBaseViewModel<WorkoutUiState>(
     initialState = WorkoutUiState.Loading
 ) {
@@ -205,7 +205,7 @@ class WorkoutViewModel @Inject constructor(
                             val completedWithoutEndTime = workouts.count { it.status.name == "COMPLETED" && it.endTime == null }
                             if (workouts.isEmpty() && !startupRestoreGate.isRestoreComplete(user.uid)) {
                                 Timber.tag("StartupRestoreFix").d(
-                                    "operation=UI_EMPTY_WORKOUTS_SUPPRESSED screen=WorkoutViewModel userId=${user.uid} gateState=${startupRestoreGate.currentState(user.uid)} finalEmptyState=false timestamp=${System.currentTimeMillis()}"
+                                    "operation=UI_EMPTY_WORKOUTS_SUPPRESSED screen=WorkoutViewModel userId=${user.uid} gateState=${startupRestoreGate.currentStateLabel(user.uid)} finalEmptyState=false timestamp=${System.currentTimeMillis()}"
                                 )
                                 return@combine
                             }
@@ -276,12 +276,12 @@ class WorkoutViewModel @Inject constructor(
                                     val templates = templatesResult.getOrThrow()
 
                                     Timber.tag("StartupRestoreFix").d(
-                                        "[TEMPLATE-LOAD] operation=TEMPLATE_VIEWMODEL_FLOW_RECEIVED screen=WorkoutViewModel userId=${user.uid} templates=${templates.size} folders=${folders.size} gateState=${startupRestoreGate.currentState(user.uid)} timestamp=${System.currentTimeMillis()}"
+                                        "[TEMPLATE-LOAD] operation=TEMPLATE_VIEWMODEL_FLOW_RECEIVED screen=WorkoutViewModel userId=${user.uid} templates=${templates.size} folders=${folders.size} gateState=${startupRestoreGate.currentStateLabel(user.uid)} timestamp=${System.currentTimeMillis()}"
                                     )
                                     Timber.d("[WORKOUT-DEBUG] Template/folder read emitted folders=${folders.size} templates=${templates.size} userId=${user.uid}")
                                     if (templates.isEmpty() && !startupRestoreGate.isRestoreComplete(user.uid)) {
                                         Timber.tag("StartupRestoreFix").d(
-                                            "[TEMPLATE-LOAD] operation=UI_EMPTY_TEMPLATES_SUPPRESSED screen=WorkoutViewModel userId=${user.uid} gateState=${startupRestoreGate.currentState(user.uid)} folders=${folders.size} finalEmptyState=false timestamp=${System.currentTimeMillis()}"
+                                            "[TEMPLATE-LOAD] operation=UI_EMPTY_TEMPLATES_SUPPRESSED screen=WorkoutViewModel userId=${user.uid} gateState=${startupRestoreGate.currentStateLabel(user.uid)} folders=${folders.size} finalEmptyState=false timestamp=${System.currentTimeMillis()}"
                                         )
                                         return@combine
                                     }

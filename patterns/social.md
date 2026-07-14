@@ -64,7 +64,14 @@ userSearchRepository.getPublicProfile(profileUserId, viewerId)
 
 Do not expose profile data with missing privacy context unless source proves the method is safe for that surface.
 
+Comment paging and reply reads require the authenticated viewer ID. The repository
+checks the parent post with `PrivacyEnforcementService` before exposing any comment.
+Comment reports carry the comment ID, comment-author ID, and `COMMENT` content type;
+repository failures must be surfaced by the ViewModel rather than shown as success.
+
 ## Engagement
+
+Visible likes, saves, comments, reports, and blocks use Room-first durable mutation sync. Repositories write dirty local entities and a user-scoped queue row; `UnifiedSyncWorker` delegates batched idempotent writes to `SyncOperationManager`. Unlike, unsave, comment deletion, and unblock retain tombstones until remote deletion succeeds, and normal UI queries exclude those tombstones.
 
 Use optimistic state and revert on failure:
 
@@ -75,6 +82,11 @@ result.onFailure {
     _likedPosts.value = _likedPosts.value - postId
 }
 ```
+
+Engagement overrides must represent both outcomes. Use a post-ID-to-Boolean override
+so a confirmed unlike or unsave (`false`) replaces stale paging data instead of being
+merged with boolean OR. Comment deletion must use one ownership-aware DAO mutation;
+decrement the post count only when that mutation reports exactly one affected row.
 
 Debug hot zones:
 

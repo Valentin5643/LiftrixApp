@@ -1,6 +1,8 @@
 package com.example.liftrix.domain.interactor.chat
 
 import com.example.liftrix.domain.model.chat.ChatMessage
+import com.example.liftrix.domain.model.chat.ChatConversation
+import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.chat.ChatPreferences
 import com.example.liftrix.domain.model.chat.UsageLimits
 import com.example.liftrix.domain.model.chat.WorkoutContext
@@ -24,6 +26,7 @@ class ChatInteractor @Inject constructor(
 ) {
     suspend fun sendMessage(
         userId: String,
+        requestId: String,
         message: String,
         conversationId: String? = null,
         workoutContext: WorkoutContext? = null,
@@ -31,6 +34,7 @@ class ChatInteractor @Inject constructor(
     ): LiftrixResult<Pair<ChatMessage, ChatMessage>> =
         sendChatMessageUseCase(
             userId = userId,
+            requestId = requestId,
             message = message,
             conversationId = conversationId,
             workoutContext = workoutContext,
@@ -60,6 +64,27 @@ class ChatInteractor @Inject constructor(
         conversationId: String
     ): Flow<LiftrixResult<List<ChatMessage>>> =
         chatOperationsUseCase.observeConversation(userId, conversationId)
+
+    fun observeConversations(userId: String): Flow<LiftrixResult<List<ChatConversation>>> =
+        chatOperationsUseCase.observeConversations(userId)
+
+    suspend fun renameConversation(userId: String, conversationId: String, title: String): LiftrixResult<Unit> =
+        chatOperationsUseCase.renameConversation(userId, conversationId, title)
+
+    suspend fun deleteConversation(userId: String, conversationId: String): LiftrixResult<Int> =
+        chatOperationsUseCase.deleteConversation(userId, conversationId)
+
+    suspend fun recordMessage(
+        messageId: String,
+        userId: String,
+        conversationId: String,
+        content: String,
+        type: MessageType,
+        language: String = "en",
+        titleSeed: String? = null
+    ): LiftrixResult<ChatMessage> = chatOperationsUseCase.recordMessage(
+        messageId, userId, conversationId, content, type, language, titleSeed
+    )
 
     suspend fun recentMessages(
         userId: String,

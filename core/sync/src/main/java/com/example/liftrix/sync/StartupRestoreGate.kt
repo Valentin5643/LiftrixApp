@@ -1,5 +1,6 @@
 package com.example.liftrix.sync
 
+import com.example.liftrix.domain.sync.StartupRestoreStatusSource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,7 +18,7 @@ enum class StartupRestoreState {
 }
 
 @Singleton
-class StartupRestoreGate @Inject constructor() {
+class StartupRestoreGate @Inject constructor() : StartupRestoreStatusSource {
     private val _states = MutableStateFlow<Map<String, StartupRestoreState>>(emptyMap())
     val states: StateFlow<Map<String, StartupRestoreState>> = _states.asStateFlow()
 
@@ -26,9 +27,11 @@ class StartupRestoreGate @Inject constructor() {
         return _states.value[userId] ?: StartupRestoreState.RESTORE_NOT_STARTED
     }
 
-    fun isRestoreComplete(userId: String): Boolean {
+    override fun isRestoreComplete(userId: String): Boolean {
         return currentState(userId) == StartupRestoreState.RESTORE_COMPLETE
     }
+
+    override fun currentStateLabel(userId: String): String = currentState(userId).name
 
     fun transition(userId: String, state: StartupRestoreState, reason: String) {
         val previous = currentState(userId)

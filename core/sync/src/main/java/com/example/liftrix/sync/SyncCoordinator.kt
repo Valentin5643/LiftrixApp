@@ -720,9 +720,12 @@ class SyncCoordinator @Inject constructor(
                 if (workInfo.state == WorkInfo.State.FAILED) {
                     Timber.e("SyncCoordinator: Work failed immediately for $workName - likely worker instantiation error")
                     
-                    // 🔥 NEW: Attempt in-process sync fallback
-                    Timber.i("SyncCoordinator: Attempting in-process sync fallback for user $userId")
-                    attemptInProcessSyncFallback(userId)
+                    syncStatusRepository.updateSyncStatus(
+                        userId,
+                        isInProgress = false,
+                        hasError = true,
+                        errorMessage = "Sync worker failed to start"
+                    )
                     return@launch
                 }
                 
@@ -784,37 +787,4 @@ class SyncCoordinator @Inject constructor(
         }
     }
     
-    /**
-     * 🔥 NEW: In-process sync fallback when WorkManager workers fail to instantiate.
-     * This provides a basic sync mechanism when Hilt worker injection fails.
-     */
-    private suspend fun attemptInProcessSyncFallback(userId: String) {
-        coordinatorScope.launch {
-            try {
-                Timber.i("SyncCoordinator: Starting in-process sync fallback for user $userId")
-                syncStatusRepository.updateSyncStatus(userId, isInProgress = true)
-                
-                // Simple fallback: just update sync status to allow manual retry
-                // In a production app, you could implement basic profile sync here
-                delay(2000) // Simulate work
-                
-                Timber.i("SyncCoordinator: In-process sync fallback completed - sync reset to allow manual retry")
-                syncStatusRepository.updateSyncStatus(
-                    userId = userId, 
-                    isInProgress = false, 
-                    hasError = true, 
-                    errorMessage = "Worker failed - tap to retry sync"
-                )
-                
-            } catch (e: Exception) {
-                Timber.e(e, "SyncCoordinator: In-process sync fallback failed for user $userId")
-                syncStatusRepository.updateSyncStatus(
-                    userId = userId,
-                    isInProgress = false, 
-                    hasError = true,
-                    errorMessage = "Sync system unavailable - check network and retry"
-                )
-            }
-        }
-    }
 }

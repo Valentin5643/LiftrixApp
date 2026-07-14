@@ -15,6 +15,7 @@ import androidx.room.PrimaryKey
         Index(value = ["user_id", "created_at"]),
         Index(value = ["conversation_id", "created_at"]),
         Index(value = ["user_id", "is_synced"]),
+        Index(value = ["user_id", "conversation_id", "created_at"]),
         Index(value = ["expires_at"])
     ]
 )

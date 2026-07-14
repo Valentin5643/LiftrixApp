@@ -15,12 +15,13 @@ data class GeneratedWorkoutProgram(
     @SerialName("workout_name")
     @JsonNames("program_name")
     val workoutName: String,
+    val description: String = "",
     val goal: WorkoutProgramGoal,
     val level: WorkoutProgramLevel,
     val days: List<GeneratedWorkoutDay>
 ) {
     companion object {
-        const val SCHEMA_VERSION = "1.0"
+        const val SCHEMA_VERSION = "2.0"
     }
 }
 
@@ -121,9 +122,23 @@ enum class WorkoutModificationSaveMode {
 data class GeneratedWorkoutDay(
     @SerialName("day_name")
     val dayName: String,
+    @SerialName("scheduled_day")
+    val scheduledDay: WorkoutTrainingDay? = null,
+    val focus: String = "",
     @SerialName("estimated_duration_minutes")
     val estimatedDurationMinutes: Int,
-    val exercises: List<GeneratedWorkoutExercise>
+    @SerialName("warm_up")
+    val warmUp: GeneratedWorkoutPhase = GeneratedWorkoutPhase(),
+    val exercises: List<GeneratedWorkoutExercise>,
+    @SerialName("cool_down")
+    val coolDown: GeneratedWorkoutPhase = GeneratedWorkoutPhase()
+)
+
+@Serializable
+data class GeneratedWorkoutPhase(
+    @SerialName("duration_minutes")
+    val durationMinutes: Int = 0,
+    val steps: List<String> = emptyList()
 )
 
 @Serializable

@@ -133,12 +133,16 @@ class WorkoutGenerationPromptBuilderTest {
 
     private fun sourceProgram() = GeneratedWorkoutProgram(
         workoutName = "Push Day",
+        description = "Chest focused training",
         goal = WorkoutProgramGoal.HYPERTROPHY,
         level = WorkoutProgramLevel.BEGINNER,
         days = listOf(
             GeneratedWorkoutDay(
                 dayName = "Day 1",
+                scheduledDay = com.example.liftrix.domain.model.ai.WorkoutTrainingDay.MONDAY,
+                focus = "Chest",
                 estimatedDurationMinutes = 45,
+                warmUp = com.example.liftrix.domain.model.ai.GeneratedWorkoutPhase(5, listOf("Shoulder mobility")),
                 exercises = listOf(
                     GeneratedWorkoutExercise(
                         exerciseId = "db_press",
@@ -152,7 +156,8 @@ class WorkoutGenerationPromptBuilderTest {
                         isUnilateral = false,
                         restSeconds = 90
                     )
-                )
+                ),
+                coolDown = com.example.liftrix.domain.model.ai.GeneratedWorkoutPhase(5, listOf("Easy stretch"))
             )
         )
     )

@@ -76,7 +76,10 @@ class SocialProfileQueryUseCase @Inject constructor(
             // Validate request
             val validationResult = validateRequest(request, currentUserId)
             if (validationResult.isFailure) {
-                return validationResult as LiftrixResult<GetPublicProfileResult>
+                return LiftrixResult.failure(
+                    validationResult.exceptionOrNull()
+                        ?: LiftrixError.UnknownError("Unexpected public profile validation failure")
+                )
             }
 
             // Retrieve public profile with privacy filtering
@@ -86,7 +89,10 @@ class SocialProfileQueryUseCase @Inject constructor(
             )
 
             if (profileResult.isFailure) {
-                return profileResult as LiftrixResult<GetPublicProfileResult>
+                return LiftrixResult.failure(
+                    profileResult.exceptionOrNull()
+                        ?: LiftrixError.UnknownError("Unexpected public profile lookup failure")
+                )
             }
 
             val profile = profileResult.getOrThrow()

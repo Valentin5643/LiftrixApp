@@ -27,8 +27,8 @@ class FeedViewModel @Inject constructor(
 ) : ModernBaseViewModel<FeedUiState>(
     initialState = FeedUiState(
         selectedTab = FeedTab.HOME,
-        likedPosts = emptySet(),
-        savedPosts = emptySet(),
+        likedPosts = emptyMap(),
+        savedPosts = emptyMap(),
         currentUserId = null,
         isLoading = false,
         error = null
@@ -36,8 +36,8 @@ class FeedViewModel @Inject constructor(
 ) {
 
     private val _selectedTab = MutableStateFlow(FeedTab.HOME)
-    private val _likedPosts = MutableStateFlow<Set<String>>(emptySet())
-    private val _savedPosts = MutableStateFlow<Set<String>>(emptySet())
+    private val _likedPosts = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    private val _savedPosts = MutableStateFlow<Map<String, Boolean>>(emptyMap())
     
     // Track posts that have been loaded to initialize engagement state
     private val _loadedPosts = MutableStateFlow<List<WorkoutPost>>(emptyList())
@@ -142,8 +142,8 @@ class FeedViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = FeedUiState(
                 selectedTab = FeedTab.HOME,
-                likedPosts = emptySet(),
-                savedPosts = emptySet(),
+                likedPosts = emptyMap(),
+                savedPosts = emptyMap(),
                 isLoading = true,
                 error = null
             )
@@ -178,19 +178,16 @@ class FeedViewModel @Inject constructor(
             )
             if (userId != null) {
                 val currentLiked = _likedPosts.value
-                val isCurrentlyLiked = currentLiked.contains(postId)
+                val isCurrentlyLiked = currentLiked[postId] ?: false
                 
                 // Optimistic update
-                _likedPosts.value = if (isCurrentlyLiked) {
-                    currentLiked - postId
-                } else {
-                    currentLiked + postId
-                }
+                _likedPosts.value = currentLiked + (postId to !isCurrentlyLiked)
                 
                 // Perform the actual like/unlike operation
                 val result = feedPort.toggleLike(postId, userId)
                 result.fold(
-                    onSuccess = {
+                    onSuccess = { isLiked ->
+                        _likedPosts.value = _likedPosts.value + (postId to isLiked)
                         Timber.d("Like toggled successfully for post: $postId")
                     },
                     onFailure = { error ->
@@ -221,19 +218,16 @@ class FeedViewModel @Inject constructor(
             )
             if (userId != null) {
                 val currentSaved = _savedPosts.value
-                val isCurrentlySaved = currentSaved.contains(postId)
+                val isCurrentlySaved = currentSaved[postId] ?: false
                 
                 // Optimistic update
-                _savedPosts.value = if (isCurrentlySaved) {
-                    currentSaved - postId
-                } else {
-                    currentSaved + postId
-                }
+                _savedPosts.value = currentSaved + (postId to !isCurrentlySaved)
                 
                 // Perform the actual save/unsave operation
                 val result = feedPort.toggleSave(postId, userId)
                 result.fold(
-                    onSuccess = {
+                    onSuccess = { isSaved ->
+                        _savedPosts.value = _savedPosts.value + (postId to isSaved)
                         Timber.d("Save toggled successfully for post: $postId")
                     },
                     onFailure = { error ->
@@ -380,8 +374,8 @@ class FeedViewModel @Inject constructor(
             if (userId != null) {
                 seedSampleData(userId)
                 // Clear engagement state before refresh to ensure fresh state
-                _likedPosts.value = emptySet()
-                _savedPosts.value = emptySet()
+                _likedPosts.value = emptyMap()
+                _savedPosts.value = emptyMap()
                 
                 val result = feedPort.refreshFeed(userId)
                 result.fold(
@@ -414,8 +408,8 @@ class FeedViewModel @Inject constructor(
 @Stable
 data class FeedUiState(
     val selectedTab: FeedTab = FeedTab.HOME,
-    val likedPosts: Set<String> = emptySet(),
-    val savedPosts: Set<String> = emptySet(),
+    val likedPosts: Map<String, Boolean> = emptyMap(),
+    val savedPosts: Map<String, Boolean> = emptyMap(),
     val currentUserId: String? = null,
     val isLoading: Boolean = false,
     val error: LiftrixError? = null

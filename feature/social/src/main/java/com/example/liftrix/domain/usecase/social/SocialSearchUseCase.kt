@@ -98,7 +98,10 @@ class SocialSearchUseCase @Inject constructor(
             // Validate search request
             val validationResult = validateRequest(request)
             if (validationResult.isFailure) {
-                return validationResult as LiftrixResult<SearchUsersResult>
+                return LiftrixResult.failure(
+                    validationResult.exceptionOrNull()
+                        ?: LiftrixError.UnknownError("Unexpected user search validation failure")
+                )
             }
 
             // Check cache first for performance
@@ -113,7 +116,10 @@ class SocialSearchUseCase @Inject constructor(
             // Perform fresh search
             val searchResult = performSearch(currentUserId, request)
             if (searchResult.isFailure) {
-                return searchResult as LiftrixResult<SearchUsersResult>
+                return LiftrixResult.failure(
+                    searchResult.exceptionOrNull()
+                        ?: LiftrixError.UnknownError("Unexpected user search failure")
+                )
             }
 
             val users = searchResult.getOrThrow()

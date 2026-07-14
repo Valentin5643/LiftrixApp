@@ -135,8 +135,8 @@ fun FeedScreen(
 private fun FeedContent(
     posts: LazyPagingItems<WorkoutPost>,
     selectedTab: FeedTab,
-    likedPosts: Set<String>,
-    savedPosts: Set<String>,
+    likedPosts: Map<String, Boolean>,
+    savedPosts: Map<String, Boolean>,
     currentUserId: String?,
     onPostInteraction: (PostInteraction) -> Unit,
     onDiscoverPeople: () -> Unit,
@@ -200,8 +200,8 @@ private fun FeedContent(
             posts[index]?.let { post ->
                 WorkoutPostCard(
                     post = post,
-                    isLiked = post.isLikedByViewer || likedPosts.contains(post.id),
-                    isSaved = post.isSavedByViewer || savedPosts.contains(post.id),
+                    isLiked = likedPosts[post.id] ?: post.isLikedByViewer,
+                    isSaved = savedPosts[post.id] ?: post.isSavedByViewer,
                     onLikeClick = { 
                         onPostInteraction(PostInteraction.Like(post.id))
                     },

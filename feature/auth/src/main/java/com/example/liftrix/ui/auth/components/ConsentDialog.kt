@@ -103,6 +103,13 @@ fun ConsentDialog(
                     required = false,
                     description = "We use Firebase Analytics and Crashlytics with pseudonymous identifiers to understand app usage and fix bugs. Data is processed by Google (Firebase) on our behalf as described in the Privacy Policy."
                 )
+
+                TextButton(onClick = onTermsOfServiceClick) {
+                    Text(
+                        text = "Review Terms of Service",
+                        textDecoration = TextDecoration.Underline
+                    )
+                }
             }
         },
         confirmButton = {

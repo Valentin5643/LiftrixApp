@@ -60,13 +60,18 @@ class ValidateGeneratedWorkoutProgramUseCaseTest {
 
     private fun program(exercise: GeneratedWorkoutExercise) = GeneratedWorkoutProgram(
         workoutName = "Beginner Plan",
+        description = "A safe beginner plan",
         goal = com.example.liftrix.domain.model.ai.WorkoutProgramGoal.GENERAL_FITNESS,
         level = com.example.liftrix.domain.model.ai.WorkoutProgramLevel.BEGINNER,
         days = listOf(
             GeneratedWorkoutDay(
                 dayName = "Day 1",
+                scheduledDay = com.example.liftrix.domain.model.ai.WorkoutTrainingDay.MONDAY,
+                focus = "Back",
                 estimatedDurationMinutes = 45,
-                exercises = listOf(exercise)
+                warmUp = com.example.liftrix.domain.model.ai.GeneratedWorkoutPhase(5, listOf("Easy mobility")),
+                exercises = listOf(exercise),
+                coolDown = com.example.liftrix.domain.model.ai.GeneratedWorkoutPhase(5, listOf("Easy breathing"))
             )
         )
     )

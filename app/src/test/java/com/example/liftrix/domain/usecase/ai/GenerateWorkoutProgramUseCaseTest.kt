@@ -5,6 +5,10 @@ import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.model.TemplateExercise
 import com.example.liftrix.domain.model.WorkoutTemplate
+import com.example.liftrix.domain.model.ai.WorkoutGenerationPreferences
+import com.example.liftrix.domain.model.ai.WorkoutProgramGoal
+import com.example.liftrix.domain.model.ai.WorkoutProgramLevel
+import com.example.liftrix.domain.model.ai.WorkoutTrainingDay
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.service.Language
 import com.example.liftrix.domain.service.WorkoutProgramGenerationService
@@ -158,6 +162,42 @@ class GenerateWorkoutProgramUseCaseTest {
         assertTrue(result.isSuccess)
         assertEquals("Beginner Dumbbell Plan", result.getOrThrow().program.workoutName)
         assertEquals(0, result.getOrThrow().repairAttempts)
+        coVerify(exactly = 0) {
+            generationService.repairProgramJson(any(), any(), any(), any(), any(), any(), any())
+        }
+    }
+
+    @Test
+    fun `canonicalizes concatenated v2 response and applies reviewed training days`() = runTest {
+        coEvery { profileQueryUseCase.getById("user-1") } returns Result.success(null)
+        coEvery { exerciseQueryUseCase.invoke() } returns Result.success(listOf(catalog()))
+        coEvery {
+            generationService.generateProgramJson(any(), any(), any(), any(), any())
+        } returns Result.success(
+            WorkoutProgramJsonResponse(
+                json = explicitV2Json() + "\n" + explicitV2Json(),
+                tokensUsed = 100,
+                processingTimeMs = 50,
+                modelVersion = "test"
+            )
+        )
+
+        val result = useCase(
+            userId = "user-1",
+            preferences = WorkoutGenerationPreferences(
+                goal = WorkoutProgramGoal.GENERAL_FITNESS,
+                level = WorkoutProgramLevel.BEGINNER,
+                availableEquipment = setOf(Equipment.DUMBBELLS),
+                trainingDays = listOf(WorkoutTrainingDay.MONDAY, WorkoutTrainingDay.WEDNESDAY),
+                sessionDurationMinutes = 45
+            )
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals(
+            listOf(WorkoutTrainingDay.MONDAY, WorkoutTrainingDay.WEDNESDAY),
+            result.getOrThrow().program.days.map { it.scheduledDay }
+        )
         coVerify(exactly = 0) {
             generationService.repairProgramJson(any(), any(), any(), any(), any(), any(), any())
         }
@@ -393,6 +433,64 @@ class GenerateWorkoutProgramUseCaseTest {
                     "notes": "Control each rep."
                   }
                 ]
+              }
+            ]
+          }
+        }
+    """.trimIndent()
+
+    private fun explicitV2Json() = """
+        {
+          "schema_version": "2.0",
+          "program": {
+            "workout_name": "Reviewed Dumbbell Plan",
+            "description": "A safe beginner plan.",
+            "goal": "general_fitness",
+            "level": "beginner",
+            "days": [
+              {
+                "day_name": "Day 1",
+                "focus": "Back",
+                "estimated_duration_minutes": 45,
+                "warm_up": {"duration_minutes": 5, "steps": ["Easy mobility"]},
+                "exercises": [
+                  {
+                    "exercise_id": "db_row",
+                    "exercise_name": "Dumbbell Row",
+                    "primary_muscle": "BACK",
+                    "equipment": "DUMBBELLS",
+                    "sets": 3,
+                    "type": "REPS",
+                    "reps_min": 8,
+                    "reps_max": 12,
+                    "duration_seconds": null,
+                    "is_unilateral": false,
+                    "rest_seconds": 90
+                  }
+                ],
+                "cool_down": {"duration_minutes": 5, "steps": ["Easy breathing"]}
+              },
+              {
+                "day_name": "Day 2",
+                "focus": "Back",
+                "estimated_duration_minutes": 45,
+                "warm_up": {"duration_minutes": 5, "steps": ["Easy mobility"]},
+                "exercises": [
+                  {
+                    "exercise_id": "db_row",
+                    "exercise_name": "Dumbbell Row",
+                    "primary_muscle": "BACK",
+                    "equipment": "DUMBBELLS",
+                    "sets": 3,
+                    "type": "REPS",
+                    "reps_min": 8,
+                    "reps_max": 12,
+                    "duration_seconds": null,
+                    "is_unilateral": false,
+                    "rest_seconds": 90
+                  }
+                ],
+                "cool_down": {"duration_minutes": 5, "steps": ["Easy breathing"]}
               }
             ]
           }

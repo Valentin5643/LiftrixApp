@@ -161,40 +161,40 @@ class FolderRepositoryImpl @Inject constructor(
         userId: String
     ): Result<Unit> {
         return try {
-            // Verify target folder exists and is owned by user
-            val targetFolder = folderDao.getFolderById(targetFolderId.value, userId)
-            if (targetFolder == null) {
-                return Result.failure(
-                    IllegalArgumentException("Target folder not found or not owned by user")
-                )
-            }
+            database.withTransaction {
+                val newFolderId = targetFolderId.value
+                folderDao.getFolderById(newFolderId, userId)
+                    ?: throw IllegalArgumentException("Target folder not found or not owned by user")
 
-            // Use WorkoutTemplateDao to move template with user scoping
-            val updateResult = workoutTemplateDao.updateFolderId(templateId, targetFolderId.value, userId)
-            
-            if (updateResult > 0) {
-                // Get template info for folder count updates
                 val template = workoutTemplateDao.getTemplateById(templateId, userId)
-                if (template != null) {
-                    val oldFolderId = template.folderId
-                    val newFolderId = targetFolderId.value
-                    
-                    // Update folder template counts
-                    database.withTransaction {
-                        // Decrement old folder count (only if it's not null and different)
-                        if (oldFolderId != null && oldFolderId != newFolderId) {
-                            folderDao.decrementTemplateCount(oldFolderId, System.currentTimeMillis())
-                        }
-                        // Increment new folder count
-                        folderDao.incrementTemplateCount(newFolderId, System.currentTimeMillis())
+                    ?: throw IllegalArgumentException("Template not found or not owned by user")
+                val oldFolderId = template.folderId
+
+                if (oldFolderId == newFolderId) {
+                    return@withTransaction
+                }
+
+                val updateResult = workoutTemplateDao.updateFolderId(templateId, newFolderId, userId)
+                check(updateResult == 1) {
+                    "Failed to update template folder - expected 1 row, updated $updateResult"
+                }
+
+                val updatedAt = System.currentTimeMillis()
+                if (oldFolderId != null) {
+                    val decrementResult = folderDao.decrementTemplateCount(oldFolderId, userId, updatedAt)
+                    check(decrementResult == 1) {
+                        "Failed to decrement old folder count - expected 1 row, updated $decrementResult"
                     }
                 }
-                
-                Timber.d("Successfully moved template $templateId to folder ${targetFolderId.value}")
-                Result.success(Unit)
-            } else {
-                Result.failure(RuntimeException("Failed to update template folder - no rows affected"))
+
+                val incrementResult = folderDao.incrementTemplateCount(newFolderId, userId, updatedAt)
+                check(incrementResult == 1) {
+                    "Failed to increment target folder count - expected 1 row, updated $incrementResult"
+                }
             }
+
+            Timber.d("Successfully moved template $templateId to folder ${targetFolderId.value}")
+            Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Failed to move template $templateId to folder ${targetFolderId.value}")
             Result.failure(e)
@@ -223,6 +223,7 @@ class FolderRepositoryImpl @Inject constructor(
 
             val updateResult = folderDao.updateTemplateCount(
                 folderId.value,
+                userId,
                 newCount,
                 Instant.now().toEpochMilli()
             )

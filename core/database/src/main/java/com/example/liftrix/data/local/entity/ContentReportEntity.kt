@@ -80,7 +80,10 @@ data class ContentReportEntity(
     val isDirty: Boolean = false,
     
     @ColumnInfo(name = "last_modified", defaultValue = "0")
-    val lastModified: Long = 0L
+    val lastModified: Long = 0L,
+
+    @ColumnInfo(name = "is_deleted", defaultValue = "0")
+    val isDeleted: Boolean = false
 ) {
     companion object {
         // Content types

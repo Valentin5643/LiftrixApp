@@ -206,7 +206,9 @@ class WorkoutTimerService : Service() {
         return try {
             when (val currentState = _serviceState.value.timerState) {
                 is TimerState.SessionPaused -> {
-                    sessionStartTime = Clock.System.now().minus(pausedAtSeconds.seconds)
+                    // Preserve the original start instant. The accumulated active duration is
+                    // already captured by pausedAtSeconds and must not be folded into start twice.
+                    sessionStartTime = Clock.System.now()
                     startSessionTimer()
                     updateNotification()
                     Timber.d("Session timer resumed from $pausedAtSeconds seconds")

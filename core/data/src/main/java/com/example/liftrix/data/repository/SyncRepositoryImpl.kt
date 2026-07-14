@@ -211,8 +211,9 @@ class SyncRepositoryImpl @Inject constructor(
                 when (val result = firebaseDataSource.update(userId, "PROFILE", profile.userId, profileJson)) {
                     is ProcessResult.Success -> {
                         // Mark as synced in local database
-                        userProfileDao.markProfilesAsSynced(
-                            userIds = listOf(profile.userId),
+                        userProfileDao.updateSyncStatus(
+                            userId = userId,
+                            isSynced = true,
                             version = System.currentTimeMillis()
                         )
                         syncedCount++
@@ -228,8 +229,9 @@ class SyncRepositoryImpl @Inject constructor(
                                 // For now, prefer remote data (last-write-wins pattern)
                                 // In production, implement proper conflict resolution
                                 Timber.i("Resolved conflict by accepting remote data for profile ${profile.userId}")
-                                userProfileDao.markProfilesAsSynced(
-                                    userIds = listOf(profile.userId),
+                                userProfileDao.updateSyncStatus(
+                                    userId = userId,
+                                    isSynced = true,
                                     version = System.currentTimeMillis()
                                 )
                                 syncedCount++

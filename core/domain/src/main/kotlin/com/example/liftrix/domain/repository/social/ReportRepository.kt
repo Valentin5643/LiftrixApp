@@ -7,6 +7,12 @@ import com.example.liftrix.domain.model.social.ReportReason
  * Repository interface for managing user reports
  */
 interface ReportRepository {
+
+    enum class ContentType {
+        PROFILE,
+        POST,
+        COMMENT
+    }
     
     /**
      * Submit a report against a user
@@ -20,7 +26,9 @@ interface ReportRepository {
         reporterId: String,
         targetUserId: String,
         reason: ReportReason,
-        description: String?
+        description: String?,
+        contentType: ContentType = ContentType.PROFILE,
+        targetAuthorId: String = targetUserId
     ): LiftrixResult<Unit>
     
     /**
@@ -32,7 +40,8 @@ interface ReportRepository {
      */
     suspend fun hasExistingReport(
         reporterId: String,
-        targetUserId: String
+        targetUserId: String,
+        contentType: ContentType = ContentType.PROFILE
     ): Boolean
     
     /**

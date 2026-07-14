@@ -364,7 +364,12 @@ class UnifiedSyncWorker @AssistedInject constructor(
                 SyncOperationManager.ENTITY_SOCIAL_PROFILE,
                 SyncOperationManager.ENTITY_FOLLOW_RELATIONSHIP,
                 SyncOperationManager.ENTITY_WORKOUT_POST,
-                SyncOperationManager.ENTITY_GYM_BUDDY
+                SyncOperationManager.ENTITY_GYM_BUDDY,
+                SyncOperationManager.ENTITY_POST_LIKE,
+                SyncOperationManager.ENTITY_SAVED_POST,
+                SyncOperationManager.ENTITY_POST_COMMENT,
+                SyncOperationManager.ENTITY_BLOCKED_USER,
+                SyncOperationManager.ENTITY_CONTENT_REPORT
             )
             "settings" -> setOf(SyncOperationManager.ENTITY_SETTINGS)
             "analytics" -> setOf("ANALYTICS", SyncOperationManager.ENTITY_ACHIEVEMENT)
