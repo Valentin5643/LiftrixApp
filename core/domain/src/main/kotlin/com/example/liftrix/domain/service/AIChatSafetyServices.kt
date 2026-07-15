@@ -13,5 +13,11 @@ data class AIUsageStats(
     val dailyMessages: Int = 0,
     val monthlyTokens: Int = 0,
     val hourlyTokens: Int = 0,
-    val estimatedMonthlyCost: Double = 0.0
+    val estimatedMonthlyCost: Double = 0.0,
+    val dailyMessageLimit: Int = 0,
+    val monthlyTokenLimit: Int = 0,
+    val dailyMessagesRemaining: Int = 0,
+    val monthlyTokensRemaining: Int = 0,
+    val isNearDailyLimit: Boolean = false,
+    val isNearMonthlyLimit: Boolean = false
 )

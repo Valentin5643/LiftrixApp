@@ -2,6 +2,7 @@ package com.example.liftrix.domain.usecase.chat
 
 import com.example.liftrix.domain.model.chat.ChatMessage
 import com.example.liftrix.domain.model.chat.ChatConversation
+import com.example.liftrix.domain.model.chat.ChatPreferences
 import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
@@ -94,6 +95,9 @@ class ChatOperationsUseCase @Inject constructor(
                     errorMessage = throwable.message ?: "Failed to load conversations"
                 )))
             }
+
+    fun observePreferences(userId: String): Flow<ChatPreferences?> =
+        chatRepository.observePreferences(userId)
 
     suspend fun renameConversation(
         userId: String,

@@ -35,6 +35,7 @@ class WorkoutGenerationPromptBuilder @Inject constructor() {
         val payload = WorkoutGenerationInputPayload(
             userPrompt = request.userPrompt.trim(),
             normalizedConstraints = request.normalizedConstraints,
+            reviewedTrainingDays = request.preferences?.trainingDays.orEmpty(),
             personalization = request.personalization,
             exerciseCatalog = rankedCatalog
         )
@@ -163,7 +164,7 @@ class WorkoutGenerationPromptBuilder @Inject constructor() {
             Use only exercises from the provided exercise_catalog. Copy exercise_id, exercise_name, primary_muscle, and equipment exactly from the catalog.
             Only use exercise_ids from the provided compatible exercise_catalog. Do not invent exercise IDs or use exercises outside that catalog.
             Respect every requested constraint: number of days, fitness level, goal, equipment, injuries/exclusions, available time, and user preferences.
-            Scheduled days must exactly match normalized explicit training_days when provided. Treat limitations as safety constraints, never as a diagnosis or rehabilitation request.
+            Scheduled days must exactly match reviewed_training_days when that field is non-empty, in the same order. Treat limitations as safety constraints, never as a diagnosis or rehabilitation request.
             Do not use exercises above the requested fitness level. Beginner programs may only use catalog exercises with beginner-compatible difficulty.
             If a requested constraint cannot be satisfied with the catalog, return {"schema_version":"${GeneratedWorkoutProgram.SCHEMA_VERSION}","error":{"code":"UNSATISFIABLE_REQUEST","message":"..."}} using the strict error schema.
             For BEGINNER level, all rep-based exercises must have reps_min >= 8 and reps_max <= 15.

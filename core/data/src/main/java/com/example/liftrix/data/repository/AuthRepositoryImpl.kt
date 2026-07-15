@@ -463,12 +463,12 @@ class AuthRepositoryImpl @Inject constructor(
                     updatedAt = now
                 )
                 val existingProfile = userProfileDao.getProfileForUserSuspend(user.uid)
-                val profileEntity = if (existingProfile != null) {
-                    userProfileMapper.toEntityWithId(baseProfile, existingProfile.id, isSynced = false)
+                if (existingProfile == null) {
+                    val profileEntity = userProfileMapper.toEntity(baseProfile, isSynced = false)
+                    userProfileDao.upsertLocal(profileEntity)
                 } else {
-                    userProfileMapper.toEntity(baseProfile, isSynced = false)
+                    Timber.d("Profile already exists for ${user.uid}; preserving existing profile fields")
                 }
-                userProfileDao.upsertLocal(profileEntity)
 
                 // 3. Insert SettingsEntity
                 val existingSettings = settingsDao.getUserSettingsSync(user.uid)
@@ -495,6 +495,10 @@ class AuthRepositoryImpl @Inject constructor(
                     syncVersion = 1L
                 )
                 subscriptionDao.upsertLocal(subscriptionEntity)
+            }
+
+            checkNotNull(userProfileDao.getProfileForUserSuspend(user.uid)) {
+                "Profile creation completed without a usable local profile for ${user.uid}"
             }
 
             // Queue sync after successful transaction
@@ -646,21 +650,11 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     private suspend fun checkUserProfileExistsRoomFirst(uid: String): Boolean {
-        return try {
-            userProfileDao.hasProfile(uid)
-        } catch (exception: Exception) {
-            Timber.e(exception, "Failed to check if user profile exists locally")
-            false
-        }
+        return userProfileDao.hasProfile(uid)
     }
 
     private suspend fun checkUserProfileExistsLegacy(uid: String): Boolean {
-        return try {
-            legacyAuthDataSource.checkUserProfileExists(uid)
-        } catch (exception: Exception) {
-            Timber.e(exception, "Failed to check if user profile exists in legacy storage")
-            false
-        }
+        return legacyAuthDataSource.checkUserProfileExists(uid)
     }
 
     private suspend fun updateEmailRoomFirst(userId: String, newEmail: String) {

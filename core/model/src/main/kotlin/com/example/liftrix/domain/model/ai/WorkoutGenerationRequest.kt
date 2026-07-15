@@ -134,6 +134,9 @@ data class WorkoutGenerationInputPayload(
     val userPrompt: String,
     @SerialName("normalized_constraints")
     val normalizedConstraints: WorkoutGenerationConstraints,
+    /** Exact days selected in the reviewed builder brief. */
+    @SerialName("reviewed_training_days")
+    val reviewedTrainingDays: List<WorkoutTrainingDay> = emptyList(),
     val personalization: WorkoutGenerationPersonalization,
     @SerialName("exercise_catalog")
     val exerciseCatalog: List<WorkoutGenerationCatalogExercise>,

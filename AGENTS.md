@@ -1,6 +1,6 @@
 # Repository Agent Guide
 
-Last source audit: 2026-07-12. When this guide conflicts with source, trust the source and update the docs.
+Last source audit: 2026-07-14. When this guide conflicts with source, trust the source and update the docs.
 
 This root file is intentionally short. Use it for global rules, essential commands, and routing to deeper agent docs.
 
@@ -20,6 +20,8 @@ This root file is intentionally short. Use it for global rules, essential comman
 ./gradlew validateRoomQueries
 ./gradlew lintFull
 ```
+
+`validateRoomQueries` inventories Room entities and checks invalid default-value annotations in `core/database`; it fails if no entities are discovered and delegates DAO/query validation to the Room KSP compile it depends on.
 
 Common tasks:
 

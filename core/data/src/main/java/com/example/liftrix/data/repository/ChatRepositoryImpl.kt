@@ -8,20 +8,18 @@ import com.example.liftrix.domain.model.chat.ChatMessage
 import com.example.liftrix.domain.model.chat.ChatConversation
 import com.example.liftrix.domain.model.chat.ChatPreferences
 import com.example.liftrix.domain.model.chat.MessageType
-import com.example.liftrix.domain.model.chat.UsageLimits
 import com.example.liftrix.domain.model.chat.WorkoutContext
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.ChatRepository
 import com.example.liftrix.domain.sync.SyncScheduler
+import com.example.liftrix.domain.usecase.chat.ChatConversationDeletionPolicy
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import timber.log.Timber
-import java.util.Calendar
 import java.util.Date
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -63,6 +61,8 @@ class ChatRepositoryImpl @Inject constructor(
             )
         }
     ) {
+        ChatConversationDeletionPolicy.requireRealConversationId(conversationId)
+        val retentionDays = chatPreferencesDao.getChatPreferencesSync(userId)?.autoClearDays ?: 30
         val entity = ChatHistoryEntity(
             id = messageId,
             userId = userId,
@@ -78,7 +78,11 @@ class ChatRepositoryImpl @Inject constructor(
             syncVersion = 0
         )
         
-        chatHistoryDao.insertMessageWithConversation(entity, titleSeed ?: "New chat")
+        chatHistoryDao.insertMessageWithConversation(
+            message = entity,
+            title = titleSeed ?: "New chat",
+            retentionDays = retentionDays
+        )
         Timber.tag(MONTHLY_USAGE_TAG).d(
             "Usage row saved userId=%s messageId=%s conversationId=%s messageType=%s tokenCount=%s createdAt=%s source=Room.chat_history increment=%s",
             userId,
@@ -127,9 +131,11 @@ class ChatRepositoryImpl @Inject constructor(
             )
         }
     ) {
+        ChatConversationDeletionPolicy.requireRealConversationId(conversationId)
         check(chatHistoryDao.renameConversation(userId, conversationId, title, System.currentTimeMillis()) == 1) {
             "Conversation not found"
         }
+        syncScheduler.triggerImmediateSync(userId)
     }
     
     override fun observeConversation(
@@ -156,63 +162,6 @@ class ChatRepositoryImpl @Inject constructor(
             .map { it.toDomainModel() }
     }
     
-    override suspend fun checkUsageLimits(userId: String): LiftrixResult<UsageLimits> = liftrixCatching(
-        errorMapper = { throwable ->
-            LiftrixError.BusinessLogicError(
-                code = "USAGE_CHECK_FAILED",
-                errorMessage = "Failed to check usage limits",
-                analyticsContext = mapOf("user_id" to userId)
-            )
-        }
-    ) {
-        val prefs = chatPreferencesDao.getChatPreferences(userId).first()
-            ?: ChatPreferencesEntity(userId = userId)
-        
-        // Calculate today's start timestamp
-        val todayStart = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-        
-        // Calculate month's start timestamp
-        val monthStart = Calendar.getInstance().apply {
-            set(Calendar.DAY_OF_MONTH, 1)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-        
-        val todayCount = chatHistoryDao.getTodayMessageCount(userId, todayStart)
-        val monthTokens = chatHistoryDao.getMonthlyTokenUsage(userId, monthStart) ?: 0
-        val warningThreshold = prefs.usageNotificationsThreshold / 100.0
-        Timber.tag(MONTHLY_USAGE_TAG).d(
-            "Display usage limits read userId=%s todayCount=%d monthTokens=%d dailyLimit=%d monthlyLimit=%d dailyRemaining=%d monthlyRemaining=%d month=%d year=%d monthStart=%s source=Room.chat_history+Room.chat_preferences prefsSynced=%s prefsDirty=%s prefsLastModified=%s",
-            userId,
-            todayCount,
-            monthTokens,
-            prefs.maxMessagesPerDay,
-            prefs.maxTokensPerMonth,
-            maxOf(0, prefs.maxMessagesPerDay - todayCount),
-            maxOf(0, prefs.maxTokensPerMonth - monthTokens),
-            Calendar.getInstance().get(Calendar.MONTH) + 1,
-            Calendar.getInstance().get(Calendar.YEAR),
-            Date(monthStart).toString(),
-            prefs.isSynced,
-            prefs.isDirty,
-            Date(prefs.lastModified).toString()
-        )
-        
-        UsageLimits(
-            dailyMessagesRemaining = maxOf(0, prefs.maxMessagesPerDay - todayCount),
-            monthlyTokensRemaining = maxOf(0, prefs.maxTokensPerMonth - monthTokens),
-            isNearDailyLimit = todayCount >= (prefs.maxMessagesPerDay * warningThreshold).toInt(),
-            isNearMonthlyLimit = monthTokens >= (prefs.maxTokensPerMonth * warningThreshold).toInt()
-        )
-    }
-    
     override fun observePreferences(userId: String): Flow<ChatPreferences?> {
         return chatPreferencesDao.getChatPreferences(userId)
             .map { entity -> entity?.toDomainModel() }
@@ -228,7 +177,7 @@ class ChatRepositoryImpl @Inject constructor(
         }
     ) {
         val entity = preferences.toEntity()
-        chatPreferencesDao.insertOrUpdatePreferences(entity)
+        chatPreferencesDao.upsertLocal(entity)
         
         // Trigger sync for preferences
         syncScheduler.triggerImmediateSync(preferences.userId)
@@ -243,13 +192,8 @@ class ChatRepositoryImpl @Inject constructor(
             )
         }
     ) {
-        val prefs = chatPreferencesDao.getChatPreferences(userId).first()
-            ?: ChatPreferencesEntity(userId = userId)
-        
-        val cutoffTimestamp = System.currentTimeMillis() - (prefs.autoClearDays * 24 * 60 * 60 * 1000L)
-        val deletedCount = chatHistoryDao.deleteOldMessages(userId, cutoffTimestamp)
-        
-        deletedCount
+        syncScheduler.triggerImmediateSync(userId)
+        0
     }
     
     override suspend fun getConversationIds(userId: String): LiftrixResult<List<String>> = liftrixCatching(
@@ -284,12 +228,8 @@ class ChatRepositoryImpl @Inject constructor(
             conversationId = conversationId,
             now = System.currentTimeMillis()
         )
+        syncScheduler.triggerImmediateSync(userId)
         deletedCount
-    }
-    
-    override suspend fun getHourlyTokenUsage(userId: String): Int {
-        val hourAgo = System.currentTimeMillis() - 3600000 // 1 hour ago
-        return chatHistoryDao.getTokenUsageSince(userId, hourAgo) ?: 0
     }
     
     override suspend fun clearAllHistory(userId: String): LiftrixResult<Int> = liftrixCatching(
@@ -301,7 +241,11 @@ class ChatRepositoryImpl @Inject constructor(
             )
         }
     ) {
-        val deletedCount = chatHistoryDao.clearAllHistory(userId)
+        val deletedCount = chatHistoryDao.clearAllHistoryWithTombstone(
+            userId = userId,
+            now = System.currentTimeMillis()
+        )
+        syncScheduler.triggerImmediateSync(userId)
         Timber.i("Cleared all chat history for user: $userId. Deleted $deletedCount messages.")
         deletedCount
     }

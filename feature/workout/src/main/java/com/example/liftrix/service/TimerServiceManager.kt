@@ -22,8 +22,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Service binding wrapper for ViewModel integration with WorkoutTimerService.
- * Provides a reactive interface for timer state management and handles service lifecycle.
+ * Service binding wrapper for the workout rest countdown.
+ * Active-session elapsed time remains owned by UnifiedWorkoutSession.
  */
 @Singleton
 class TimerServiceManager @Inject constructor(
@@ -145,15 +145,6 @@ class TimerServiceManager @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Failed to unbind from WorkoutTimerService")
             Result.failure(e)
-        }
-    }
-    
-    /**
-     * Starts a workout session timer
-     */
-    fun startSession(): Result<Unit> {
-        return executeServiceOperation("startSession") { service ->
-            service.startSession()
         }
     }
     

@@ -1,8 +1,5 @@
 package com.example.liftrix.data.service
 
-import com.example.liftrix.core.data.BuildConfig
-import com.example.liftrix.data.local.dao.AiUsageDao
-import com.example.liftrix.data.local.entity.AiUsageEntity
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -11,27 +8,18 @@ import com.example.liftrix.domain.service.Language
 import com.example.liftrix.domain.service.WorkoutProgramGenerationService
 import com.example.liftrix.domain.service.WorkoutProgramJsonResponse
 import com.google.firebase.Firebase
-import com.google.firebase.FirebaseException
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerationConfig
 import com.google.firebase.ai.type.ResponseStoppedException
 import com.google.firebase.ai.type.content
-import com.google.firebase.appcheck.appCheck
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
-import java.util.UUID
 
 @Singleton
 class WorkoutProgramGenerationServiceImpl @Inject constructor(
     private val analyticsTracker: AnalyticsTracker,
-    private val abusePreventionService: AbusePreventionService,
-    private val rateLimitingService: RateLimitingService,
-    private val aiUsageDao: AiUsageDao
+    private val paidAiCallExecutor: PaidAiCallExecutor
 ) : WorkoutProgramGenerationService {
     private val generationConfig = GenerationConfig.Builder()
         .setTemperature(TEMPERATURE)
@@ -138,6 +126,35 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
                     errorMessage = aiUnavailableForAppCheckMessage(),
                     analyticsContext = mapOf("user_id" to userId, "stage" to stage)
                 )
+                is AppCheckRateLimitedException -> LiftrixError.BusinessLogicError(
+                    code = "APP_CHECK_RATE_LIMITED",
+                    errorMessage = "AI security verification is temporarily rate limited. Please try again later.",
+                    isRecoverable = true,
+                    analyticsContext = mapOf("user_id" to userId, "stage" to stage)
+                )
+                is AppCheckUnavailableException -> LiftrixError.BusinessLogicError(
+                    code = "APP_CHECK_UNAVAILABLE",
+                    errorMessage = "AI security verification is temporarily unavailable. Please try again later.",
+                    isRecoverable = true,
+                    analyticsContext = mapOf("user_id" to userId, "stage" to stage)
+                )
+                is PaidAiDisabledException -> LiftrixError.BusinessLogicError(
+                    code = "AI_DISABLED",
+                    errorMessage = throwable.message.orEmpty(),
+                    analyticsContext = mapOf("user_id" to userId, "stage" to stage)
+                )
+                is PaidAiPolicyDeniedException -> LiftrixError.ValidationError(
+                    field = "message",
+                    violations = listOf(throwable.message.orEmpty()),
+                    errorMessage = throwable.message.orEmpty(),
+                    analyticsContext = mapOf("user_id" to userId, "stage" to stage)
+                )
+                is PaidAiRecoverableDenialException -> LiftrixError.BusinessLogicError(
+                    code = "AI_REQUEST_THROTTLED",
+                    errorMessage = throwable.message.orEmpty(),
+                    isRecoverable = true,
+                    analyticsContext = mapOf("user_id" to userId, "stage" to stage)
+                )
                 is AIResponseMaxTokensException -> LiftrixError.BusinessLogicError(
                     code = "AI_WORKOUT_GENERATION_MAX_TOKENS",
                     errorMessage = "The AI workout response was cut off before it finished. Please try a shorter request or generate again.",
@@ -151,18 +168,10 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
             }
         }
     ) {
-        Timber.i("[AI] WorkoutProgramGenerationService: request started stage=$stage user=$userId promptChars=${userPrompt.length} payloadChars=${requestPayload.length}")
+        Timber.i("[AI] WorkoutProgramGenerationService: request started stage=$stage promptChars=${userPrompt.length} payloadChars=${requestPayload.length}")
         require(userId.isNotBlank()) { "User ID cannot be blank" }
-        validateRequest(userId, userPrompt, language, validateUserPrompt)
+        validateRequest(userPrompt, language, validateUserPrompt)
         Timber.d("[AI] WorkoutProgramGenerationService: request validation succeeded stage=$stage")
-
-        val startTime = System.currentTimeMillis()
-        waitForAppCheck()
-        val appCheckToken = obtainAppCheckTokenWithRetry()
-            ?: throw IllegalStateException("AI service requires valid security tokens.")
-
-        Timber.d("[AI] WorkoutProgramGenerationService: App Check token ready (${if (appCheckToken.fromCache) "cached" else "refreshed"})")
-        Timber.i("[AI] WorkoutProgramGenerationService: Firebase AI call started stage=$stage model=$MODEL_NAME")
 
         val generativeModel = Firebase.ai().generativeModel(
             modelName = MODEL_NAME,
@@ -170,40 +179,51 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
             systemInstruction = content { text(systemPrompt) }
         )
 
-        logRequestPayload(stage, userId, systemPrompt, requestPayload)
-        val response = try {
-            generativeModel.generateContent(content { text(requestPayload) })
-        } catch (exception: ResponseStoppedException) {
-            if (exception.isMaxTokensStop()) {
-                Timber.w(exception, "[AI] WorkoutProgramGenerationService: response reached max output tokens stage=$stage")
-                throw AIResponseMaxTokensException(exception)
-            }
-            throw exception
-        }
-        val responseText = response.text?.trim().orEmpty()
-        val usage = response.usageMetadata
-        val totalTokens = usage?.totalTokenCount ?: estimateTokens(requestPayload, responseText)
-        aiUsageDao.insert(
-            AiUsageEntity(
-                id = UUID.randomUUID().toString(),
+        val estimatedInputTokens = estimateTokens(systemPrompt + requestPayload, "")
+        val startTime = System.currentTimeMillis()
+        val dispatchResult = paidAiCallExecutor.execute(
+            request = PaidAiCallRequest(
                 userId = userId,
-                createdAt = System.currentTimeMillis(),
-                operation = "WORKOUT_${stage.uppercase()}",
+                operation = stage.toPaidOperation(),
                 model = MODEL_NAME,
-                inputTokens = usage?.promptTokenCount ?: estimateTokens(requestPayload, ""),
-                outputTokens = usage?.candidatesTokenCount ?: estimateTokens("", responseText),
-                totalTokens = totalTokens,
-                successCategory = if (responseText.isBlank()) "EMPTY_RESPONSE" else "MODEL_RESPONSE"
+                abuseContent = userPrompt,
+                estimatedInputTokens = estimatedInputTokens
             )
-        )
-        Timber.i("[AI] WorkoutProgramGenerationService: raw response received stage=$stage chars=${responseText.length}")
-        logSanitizedRawResponse(responseText, stage)
-        if (responseText.isBlank()) {
+        ) {
+            Timber.i(
+                "[AI] WorkoutProgramGenerationService: Firebase AI dispatch stage=%s payloadChars=%d",
+                stage,
+                requestPayload.length
+            )
+            val response = try {
+                generativeModel.generateContent(content { text(requestPayload) })
+            } catch (exception: ResponseStoppedException) {
+                if (exception.isMaxTokensStop()) throw AIResponseMaxTokensException(exception)
+                throw exception
+            }
+            val responseText = response.text?.trim().orEmpty()
+            val usage = response.usageMetadata
+            val inputTokens = usage?.promptTokenCount ?: estimatedInputTokens
+            val outputTokens = usage?.candidatesTokenCount ?: estimateTokens("", responseText)
+            val totalTokens = usage?.totalTokenCount ?: inputTokens + outputTokens
+            PaidAiCallResult(
+                value = WorkoutDispatchResult(responseText, totalTokens),
+                inputTokens = inputTokens,
+                outputTokens = outputTokens,
+                totalTokens = totalTokens,
+                category = if (responseText.isBlank()) {
+                    PaidAiCallResult.CATEGORY_EMPTY_RESPONSE
+                } else {
+                    PaidAiCallResult.CATEGORY_MODEL_RESPONSE
+                }
+            )
+        }
+        if (dispatchResult.responseText.isBlank()) {
             throw IllegalStateException("Firebase AI returned an empty workout program response")
         }
 
         val processingTime = System.currentTimeMillis() - startTime
-        val tokensUsed = totalTokens
+        val tokensUsed = dispatchResult.totalTokens
 
         analyticsTracker.trackAIWorkoutGenerationResponse(
             userId = userId,
@@ -214,7 +234,7 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
             stage = stage
         )
 
-        val cleanedJson = stripCodeFence(responseText)
+        val cleanedJson = stripCodeFence(dispatchResult.responseText)
         Timber.i("[AI] WorkoutProgramGenerationService: final JSON returned stage=$stage chars=${cleanedJson.length} tokens=$tokensUsed processingMs=$processingTime")
 
         WorkoutProgramJsonResponse(
@@ -226,7 +246,6 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
     }
 
     private suspend fun validateRequest(
-        userId: String,
         userPrompt: String,
         language: Language,
         validateUserPrompt: Boolean
@@ -239,83 +258,11 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
                 throw ValidationException("Message is too long")
             }
 
-            val abuseDetection = abusePreventionService.detectAbuse(userId, userPrompt)
-            if (abuseDetection.isAbusive) {
-                throw ValidationException("Your message appears to violate our usage guidelines. Please rephrase and try again.")
-            }
-        }
-
-        val limits = rateLimitingService.checkLimits(userId)
-        Timber.tag(MONTHLY_USAGE_TAG).d(
-            "Workout generation rate limit result userId=%s isLimited=%s reason=%s dailyRemaining=%s monthlyRemaining=%s source=RateLimitingService",
-            userId,
-            limits.isLimited,
-            limits.reason ?: "none",
-            limits.messagesRemaining?.toString() ?: "unknown",
-            limits.tokensRemaining?.toString() ?: "unknown"
-        )
-        if (limits.isLimited) {
-            if (limits.tokensRemaining == 0) {
-                Timber.tag(MONTHLY_USAGE_TAG).w(
-                    "Workout generation blocked by monthly limit userId=%s reason=%s source=RateLimitingService",
-                    userId,
-                    limits.reason ?: "unknown"
-                )
-            }
-            throw QuotaExceededException("Rate limit exceeded: ${limits.reason}")
         }
 
         if (language !in listOf(Language.ENGLISH, Language.ROMANIAN)) {
             throw ValidationException("Unsupported language")
         }
-    }
-
-    private suspend fun waitForAppCheck() {
-        // Firebase App Check token retrieval below is the cross-module readiness gate.
-    }
-
-    private suspend fun obtainAppCheckTokenWithRetry(): AppCheckToken? {
-        var currentDelay = 1_000L
-        repeat(APP_CHECK_MAX_RETRIES) { attempt ->
-            if (attempt > 0) {
-                delay(currentDelay)
-                currentDelay = (currentDelay * 2).coerceAtMost(8_000L)
-            }
-
-            val tokenResult = withTimeoutOrNull(APP_CHECK_TOKEN_TIMEOUT_MS) {
-                try {
-                    Firebase.appCheck.getAppCheckToken(false).await()
-                } catch (e: Exception) {
-                    if (isDebugAppCheckTokenMissing(e)) {
-                        throw DebugAppCheckTokenNotRegisteredException(e)
-                    }
-                    Timber.w(
-                        e,
-                        "[AI] WorkoutProgramGenerationService: Failed to obtain App Check token. type=%s, message=%s",
-                        e.javaClass.name,
-                        e.message.orEmpty()
-                    )
-                    null
-                }
-            }
-
-            if (tokenResult != null) {
-                return AppCheckToken(
-                    token = tokenResult.token,
-                    expireTimeMillis = tokenResult.expireTimeMillis,
-                    fromCache = attempt == 0
-                )
-            }
-        }
-        return null
-    }
-
-    private fun isDebugAppCheckTokenMissing(error: Throwable): Boolean {
-        val message = error.message.orEmpty()
-        return BuildConfig.DEBUG &&
-            error is FirebaseException &&
-            message.contains("403", ignoreCase = true) &&
-            message.contains("app attestation failed", ignoreCase = true)
     }
 
     private fun stripCodeFence(text: String): String {
@@ -336,7 +283,8 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
         var inString = false
         var escaped = false
         for (index in first until text.length) {
-            when (val character = text[index]) {
+            val character = text[index]
+            when (character) {
                 '\\' -> if (inString) escaped = !escaped else escaped = false
                 '"' -> if (!escaped) inString = !inString
                 '{' -> if (!inString) depth++
@@ -350,71 +298,28 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
         return text.trim()
     }
 
-    private fun logSanitizedRawResponse(responseText: String, stage: String) {
-        if (!BuildConfig.DEBUG) return
-        val sanitized = responseText
-            .replace(Regex("""(?i)(api[_-]?key|token|secret)["']?\s*[:=]\s*["'][^"']+["']"""), "$1:<redacted>")
-            .take(4_000)
-        Timber.d("[AI] WorkoutProgramGenerationService: sanitized raw response stage=$stage: $sanitized")
-    }
-
-    private fun logRequestPayload(
-        stage: String,
-        userId: String,
-        systemPrompt: String,
-        requestPayload: String
-    ) {
-        if (!BuildConfig.DEBUG) return
-        Timber.d(
-            """
-            [AI] WorkoutProgramGenerationService request payload:
-            {
-              "stage": "$stage",
-              "user_id": "$userId",
-              "model": "$MODEL_NAME",
-              "system_instruction": ${systemPrompt.quoteForLogJson()},
-              "message": ${requestPayload.quoteForLogJson()}
-            }
-            """.trimIndent()
-        )
-    }
-
-    private fun String.quoteForLogJson(): String =
-        buildString {
-            append('"')
-            this@quoteForLogJson.forEach { char ->
-                when (char) {
-                    '\\' -> append("\\\\")
-                    '"' -> append("\\\"")
-                    '\n' -> append("\\n")
-                    '\r' -> append("\\r")
-                    '\t' -> append("\\t")
-                    else -> append(char)
-                }
-            }
-            append('"')
-        }
-
     private fun estimateTokens(input: String, output: String): Int =
         (input.length + output.length) / 4
 
-    private data class AppCheckToken(
-        val token: String,
-        val expireTimeMillis: Long,
-        val fromCache: Boolean
+    private fun String.toPaidOperation(): PaidAiOperation = when (this) {
+        "generate" -> PaidAiOperation.WORKOUT_GENERATE
+        "repair" -> PaidAiOperation.WORKOUT_REPAIR
+        "modify" -> PaidAiOperation.WORKOUT_MODIFY
+        else -> error("Unsupported paid workout operation: $this")
+    }
+
+    private data class WorkoutDispatchResult(
+        val responseText: String,
+        val totalTokens: Int
     )
 
     companion object {
-        private const val MONTHLY_USAGE_TAG = "MonthlyUsageDebug"
         private const val MODEL_NAME = "gemini-2.5-flash-lite"
         private const val MAX_OUTPUT_TOKENS = 8192
         private const val TEMPERATURE = 0.25f
         private const val TOP_K = 40
         private const val TOP_P = 0.9f
         private const val MAX_PROMPT_LENGTH = 2000
-        private const val APP_CHECK_READY_TIMEOUT_MS = 30_000L
-        private const val APP_CHECK_TOKEN_TIMEOUT_MS = 10_000L
-        private const val APP_CHECK_MAX_RETRIES = 1
     }
 
     private fun ResponseStoppedException.isMaxTokensStop(): Boolean =

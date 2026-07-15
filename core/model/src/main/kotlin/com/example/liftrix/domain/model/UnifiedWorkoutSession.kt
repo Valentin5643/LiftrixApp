@@ -165,7 +165,8 @@ data class UnifiedWorkoutSession(
     fun getTotalDurationSeconds(): Long {
         return when (sessionStatus) {
             SessionStatus.ACTIVE -> {
-                val currentElapsed = Instant.now().epochSecond - lastModified.epochSecond
+                val currentElapsed = (Instant.now().epochSecond - lastModified.epochSecond)
+                    .coerceAtLeast(0L)
                 elapsedTimeSeconds + currentElapsed
             }
             SessionStatus.PAUSED -> elapsedTimeSeconds
@@ -189,11 +190,10 @@ data class UnifiedWorkoutSession(
         require(sessionStatus == SessionStatus.ACTIVE) { "Can only pause active sessions" }
         
         val now = Instant.now()
-        val currentElapsed = now.epochSecond - lastModified.epochSecond
+        val timedSession = foldElapsedSegment(now)
         
-        return copy(
+        return timedSession.copy(
             sessionStatus = SessionStatus.PAUSED,
-            elapsedTimeSeconds = elapsedTimeSeconds + currentElapsed,
             lastModified = now
         )
     }
@@ -217,19 +217,11 @@ data class UnifiedWorkoutSession(
         require(sessionStatus != SessionStatus.COMPLETED) { "Session already completed" }
         
         val now = Instant.now()
-        val totalElapsed = when (sessionStatus) {
-            SessionStatus.ACTIVE -> {
-                elapsedTimeSeconds + (now.epochSecond - lastModified.epochSecond)
-            }
-            SessionStatus.PAUSED -> elapsedTimeSeconds
-            SessionStatus.COMPLETED -> elapsedTimeSeconds // Should not happen due to require
-            SessionStatus.FAILED_TO_SAVE -> elapsedTimeSeconds // Should not happen due to require
-        }
+        val timedSession = foldElapsedSegment(now)
         
-        return copy(
+        return timedSession.copy(
             sessionStatus = SessionStatus.COMPLETED,
             endedAt = now,
-            elapsedTimeSeconds = totalElapsed,
             lastModified = now
         )
     }
@@ -241,10 +233,11 @@ data class UnifiedWorkoutSession(
         require(sessionStatus != SessionStatus.COMPLETED) { "Cannot modify completed session" }
         val nextIndex = currentExerciseIndex + 1
         require(nextIndex < exercises.size) { "Already at last exercise" }
+        val now = Instant.now()
 
-        return copy(
+        return foldElapsedSegment(now).copy(
             currentExerciseIndex = nextIndex,
-            lastModified = Instant.now()
+            lastModified = now
         )
     }
 
@@ -254,10 +247,11 @@ data class UnifiedWorkoutSession(
     fun moveToPreviousExercise(): UnifiedWorkoutSession {
         require(sessionStatus != SessionStatus.COMPLETED) { "Cannot modify completed session" }
         require(currentExerciseIndex > 0) { "Already at first exercise" }
+        val now = Instant.now()
 
-        return copy(
+        return foldElapsedSegment(now).copy(
             currentExerciseIndex = currentExerciseIndex - 1,
-            lastModified = Instant.now()
+            lastModified = now
         )
     }
 
@@ -270,10 +264,11 @@ data class UnifiedWorkoutSession(
         }
 
         val newExercise = exercise.copy(orderIndex = exercises.size)
+        val now = Instant.now()
         
-        return copy(
+        return foldElapsedSegment(now).copy(
             exercises = exercises + newExercise,
-            lastModified = Instant.now()
+            lastModified = now
         )
     }
 
@@ -294,11 +289,12 @@ data class UnifiedWorkoutSession(
                 (updatedExercises.size - 1).coerceAtLeast(0)
             else -> currentExerciseIndex
         }
+        val now = Instant.now()
 
-        return copy(
+        return foldElapsedSegment(now).copy(
             exercises = updatedExercises,
             currentExerciseIndex = newCurrentIndex,
-            lastModified = Instant.now()
+            lastModified = now
         )
     }
 
@@ -312,10 +308,11 @@ data class UnifiedWorkoutSession(
 
         val updatedExercises = exercises.toMutableList()
         updatedExercises[exerciseIndex] = updatedExercise.copy(orderIndex = exerciseIndex)
+        val now = Instant.now()
 
-        return copy(
+        return foldElapsedSegment(now).copy(
             exercises = updatedExercises,
-            lastModified = Instant.now()
+            lastModified = now
         )
     }
 
@@ -329,10 +326,29 @@ data class UnifiedWorkoutSession(
         trimmedNotes?.let { notes ->
             require(notes.length <= MAX_NOTES_LENGTH) { "Notes too long" }
         }
+        val now = Instant.now()
 
-        return copy(
+        return foldElapsedSegment(now).copy(
             notes = trimmedNotes,
-            lastModified = Instant.now()
+            lastModified = now
+        )
+    }
+
+    /**
+     * Banks the current active segment before a state-only refresh or mutation.
+     * Paused and terminal sessions never accrue time here.
+     */
+    fun touch(now: Instant = Instant.now()): UnifiedWorkoutSession = foldElapsedSegment(now)
+
+    private fun foldElapsedSegment(now: Instant): UnifiedWorkoutSession {
+        val activeSegmentSeconds = if (sessionStatus == SessionStatus.ACTIVE) {
+            (now.epochSecond - lastModified.epochSecond).coerceAtLeast(0L)
+        } else {
+            0L
+        }
+        return copy(
+            elapsedTimeSeconds = elapsedTimeSeconds + activeSegmentSeconds,
+            lastModified = now
         )
     }
 

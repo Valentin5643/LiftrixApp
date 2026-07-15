@@ -4,7 +4,6 @@ import com.example.liftrix.domain.model.chat.UsageLimits
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.repository.ChatRepository
 import com.example.liftrix.domain.service.AIUsageStats
 import com.example.liftrix.domain.service.RateLimitStatus
 import com.example.liftrix.domain.service.RateLimitingServiceContract
@@ -16,7 +15,6 @@ import javax.inject.Inject
  * Provides comprehensive usage information for UI display and enforcement.
  */
 class CheckUsageLimitsUseCase @Inject constructor(
-    private val chatRepository: ChatRepository,
     private val rateLimitingService: RateLimitingServiceContract
 ) {
     
@@ -40,12 +38,12 @@ class CheckUsageLimitsUseCase @Inject constructor(
             )
         }
     ) {
-        Timber.d("CheckUsageLimitsUseCase: Checking usage limits for user $userId")
+        Timber.d("CheckUsageLimitsUseCase: Checking usage limits")
         
-        val usageLimits = chatRepository.checkUsageLimits(userId).getOrThrow()
+        val usageLimits = rateLimitingService.getUsageStats(userId).toUsageLimits()
         
         Timber.d(
-            "CheckUsageLimitsUseCase: User $userId has ${usageLimits.dailyMessagesRemaining} daily messages " +
+            "CheckUsageLimitsUseCase: ${usageLimits.dailyMessagesRemaining} daily operations " +
             "and ${usageLimits.monthlyTokensRemaining} monthly tokens remaining"
         )
         
@@ -72,16 +70,16 @@ class CheckUsageLimitsUseCase @Inject constructor(
             )
         }
     ) {
-        Timber.d("CheckUsageLimitsUseCase: Checking rate limits for user $userId")
+        Timber.d("CheckUsageLimitsUseCase: Checking rate limits")
         
         val rateLimitStatus = rateLimitingService.checkLimits(userId)
         
         if (rateLimitStatus.isLimited) {
-            Timber.w("CheckUsageLimitsUseCase: User $userId is rate limited: ${rateLimitStatus.reason}")
+            Timber.w("CheckUsageLimitsUseCase: AI usage is rate limited: ${rateLimitStatus.reason}")
         } else if (rateLimitStatus.isNearLimit) {
-            Timber.w("CheckUsageLimitsUseCase: User $userId is near limits: ${rateLimitStatus.reason}")
+            Timber.w("CheckUsageLimitsUseCase: AI usage is near limits: ${rateLimitStatus.reason}")
         } else {
-            Timber.d("CheckUsageLimitsUseCase: User $userId can send messages (${rateLimitStatus.messagesRemaining} remaining)")
+            Timber.d("CheckUsageLimitsUseCase: AI request allowed (${rateLimitStatus.messagesRemaining} remaining)")
         }
         
         rateLimitStatus
@@ -107,12 +105,12 @@ class CheckUsageLimitsUseCase @Inject constructor(
             )
         }
     ) {
-        Timber.d("CheckUsageLimitsUseCase: Getting usage statistics for user $userId")
+        Timber.d("CheckUsageLimitsUseCase: Getting usage statistics")
         
         val usageStats = rateLimitingService.getUsageStats(userId)
         
         Timber.d(
-            "CheckUsageLimitsUseCase: User $userId stats - Daily: ${usageStats.dailyMessages}, " +
+            "CheckUsageLimitsUseCase: usage stats - Daily: ${usageStats.dailyMessages}, " +
             "Monthly: ${usageStats.monthlyTokens} tokens, Hourly: ${usageStats.hourlyTokens} tokens, " +
             "Estimated cost: $${String.format("%.2f", usageStats.estimatedMonthlyCost)}"
         )
@@ -145,10 +143,10 @@ class CheckUsageLimitsUseCase @Inject constructor(
             )
         }
     ) {
-        Timber.d("CheckUsageLimitsUseCase: Validating action '$actionType' for user $userId")
+        Timber.d("CheckUsageLimitsUseCase: Validating action '$actionType'")
         
         val rateLimitStatus = rateLimitingService.checkLimits(userId)
-        val usageLimits = chatRepository.checkUsageLimits(userId).getOrThrow()
+        val usageLimits = rateLimitingService.getUsageStats(userId).toUsageLimits()
         
         val result = when {
             rateLimitStatus.isLimited -> {
@@ -185,6 +183,13 @@ class CheckUsageLimitsUseCase @Inject constructor(
         result
     }
 }
+
+private fun AIUsageStats.toUsageLimits(): UsageLimits = UsageLimits(
+    dailyMessagesRemaining = dailyMessagesRemaining,
+    monthlyTokensRemaining = monthlyTokensRemaining,
+    isNearDailyLimit = isNearDailyLimit,
+    isNearMonthlyLimit = isNearMonthlyLimit
+)
 
 /**
  * Result of usage validation with user-friendly information.

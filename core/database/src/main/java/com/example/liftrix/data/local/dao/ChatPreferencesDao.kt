@@ -25,14 +25,13 @@ interface ChatPreferencesDao {
      * Inserts or updates chat preferences for a user.
      * Uses REPLACE strategy to update existing preferences.
      */
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertOrUpdatePreferences(preferences: ChatPreferencesEntity)
+    suspend fun insertOrUpdatePreferences(preferences: ChatPreferencesEntity) = upsertLocal(preferences)
     
     /**
      * Marks preferences as synced with the specified version.
      * Used after successful Firebase sync.
      */
-    @Query("UPDATE chat_preferences SET is_synced = 1, sync_version = :version WHERE user_id = :userId")
+    @Query("UPDATE chat_preferences SET is_synced = 1, is_dirty = 0, sync_version = :version WHERE user_id = :userId")
     suspend fun markAsSynced(userId: String, version: Int)
     
     /**
@@ -54,28 +53,28 @@ interface ChatPreferencesDao {
      * Updates specific AI response style for a user.
      * Used by settings screen for quick style changes.
      */
-    @Query("UPDATE chat_preferences SET ai_response_style = :style, is_synced = 0, updated_at = :timestamp WHERE user_id = :userId")
+    @Query("UPDATE chat_preferences SET ai_response_style = :style, is_synced = 0, is_dirty = 1, last_modified = :timestamp, updated_at = :timestamp WHERE user_id = :userId")
     suspend fun updateResponseStyle(userId: String, style: String, timestamp: Long = System.currentTimeMillis())
     
     /**
      * Updates user context prompt for personalized AI responses.
      * Used by settings screen for context customization.
      */
-    @Query("UPDATE chat_preferences SET user_context_prompt = :prompt, is_synced = 0, updated_at = :timestamp WHERE user_id = :userId")
+    @Query("UPDATE chat_preferences SET user_context_prompt = :prompt, is_synced = 0, is_dirty = 1, last_modified = :timestamp, updated_at = :timestamp WHERE user_id = :userId")
     suspend fun updateUserContextPrompt(userId: String, prompt: String?, timestamp: Long = System.currentTimeMillis())
     
     /**
      * Updates usage notification threshold for a user.
      * Used by settings screen for usage alert customization.
      */
-    @Query("UPDATE chat_preferences SET usage_notifications_threshold = :threshold, is_synced = 0, updated_at = :timestamp WHERE user_id = :userId")
+    @Query("UPDATE chat_preferences SET usage_notifications_threshold = :threshold, is_synced = 0, is_dirty = 1, last_modified = :timestamp, updated_at = :timestamp WHERE user_id = :userId")
     suspend fun updateUsageThreshold(userId: String, threshold: Int, timestamp: Long = System.currentTimeMillis())
     
     /**
      * Toggles workout history inclusion for AI context.
      * Used by settings screen for context control.
      */
-    @Query("UPDATE chat_preferences SET include_workout_history = :include, is_synced = 0, updated_at = :timestamp WHERE user_id = :userId")
+    @Query("UPDATE chat_preferences SET include_workout_history = :include, is_synced = 0, is_dirty = 1, last_modified = :timestamp, updated_at = :timestamp WHERE user_id = :userId")
     suspend fun updateWorkoutHistoryInclusion(userId: String, include: Boolean, timestamp: Long = System.currentTimeMillis())
     
     /**
@@ -94,6 +93,7 @@ interface ChatPreferencesDao {
     suspend fun upsertLocal(chatPreferences: ChatPreferencesEntity) {
         val entity = chatPreferences.copy(
             isDirty = true,
+            isSynced = false,
             lastModified = System.currentTimeMillis()
         )
         _insert(entity)
@@ -132,8 +132,8 @@ interface ChatPreferencesDao {
     /**
      * Mark chatpreferences as clean after successful Firestore upload.
      */
-    @Query("UPDATE chat_preferences SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE user_id IN (:ids) AND user_id = :userId")
-    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+    @Query("UPDATE chat_preferences SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE user_id = :userId")
+    suspend fun markAsClean(userId: String, syncVersion: Long = System.currentTimeMillis()): Int
 
     /**
      * Get local chatpreferences for remote deduplication.

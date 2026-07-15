@@ -379,37 +379,28 @@ class TemplateCommandUseCase @Inject constructor(
         ) {
             Timber.d("Moving workout '${workoutTemplate.name}' from folder '${workoutTemplate.folderId}' to folder '$targetFolderId'")
 
-            // Check if workout is already in the target folder
-            if (workoutTemplate.folderId == targetFolderId) {
+            val currentUser = authRepository.currentUser.first()
+                ?: throw IllegalStateException("Authenticated user is required to move a template")
+            val authoritativeTemplate = templateRepository.getTemplateById(
+                templateId = workoutTemplate.id,
+                userId = currentUser.uid
+            ).getOrThrow() ?: throw IllegalArgumentException("Workout template does not exist")
+
+            if (authoritativeTemplate.folderId == targetFolderId) {
                 Timber.d("Workout is already in target folder, no move needed")
-                return@liftrixCatching workoutTemplate
+                return@liftrixCatching authoritativeTemplate
             }
 
-            // Validate that target folder exists and belongs to the user
-            val targetFolder = folderRepository.getFolderById(FolderId(targetFolderId))
-            if (targetFolder == null) {
-                Timber.w("Target folder not found: $targetFolderId")
-                throw IllegalArgumentException("Target folder does not exist")
-            }
+            folderRepository.moveTemplateToFolder(
+                templateId = authoritativeTemplate.id.value,
+                targetFolderId = FolderId(targetFolderId),
+                userId = currentUser.uid
+            ).getOrThrow()
 
-            // Validate folder belongs to the same user as the workout template
-            if (targetFolder.userId != workoutTemplate.userId) {
-                Timber.w("Folder user mismatch - Folder User: ${targetFolder.userId}, Workout User: ${workoutTemplate.userId}")
-                throw IllegalArgumentException("Cannot move workout to folder belonging to different user")
-            }
-
-            Timber.d("Target folder validation passed: '${targetFolder.name.value}' owned by user '${targetFolder.userId}'")
-
-            // Update the workout template with new folder ID
-            val updatedTemplate = workoutTemplate.copy(
-                folderId = targetFolderId,
-                updatedAt = Instant.now()
-            )
-
-            Timber.d("Updating workout template in repository")
-
-            // Save the updated template and return the result
-            val updatedWorkout = templateRepository.updateTemplate(updatedTemplate).getOrThrow()
+            val updatedWorkout = templateRepository.getTemplateById(
+                templateId = authoritativeTemplate.id,
+                userId = currentUser.uid
+            ).getOrThrow() ?: throw IllegalStateException("Moved template could not be reloaded")
 
             Timber.d("Successfully moved workout to folder '$targetFolderId'")
 

@@ -53,7 +53,7 @@ interface SocialProfileDao {
     // Username Management
     // ========================================
 
-    @Query("SELECT EXISTS(SELECT 1 FROM social_profiles WHERE username = :username)")
+    @Query("SELECT NOT EXISTS(SELECT 1 FROM social_profiles WHERE username = :username)")
     suspend fun isUsernameAvailable(username: String): Boolean
 
     @Query("SELECT username FROM social_profiles WHERE user_id = :userId")

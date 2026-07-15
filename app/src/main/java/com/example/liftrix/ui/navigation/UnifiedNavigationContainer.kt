@@ -87,6 +87,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 fun UnifiedNavigationContainer(
     navController: NavHostController = rememberNavController(),
     viewModel: UnifiedNavigationViewModel = hiltViewModel(),
+    isAiAccessEnabled: Boolean = false,
     pendingWidgetWorkoutNavigation: Boolean = false,
     onWidgetWorkoutNavigationConsumed: () -> Unit = {}
 ) {
@@ -129,7 +130,8 @@ fun UnifiedNavigationContainer(
             if (routeChrome.showBottomBar) {
                 BottomNavigationBar(
                     navController = navController,
-                    currentDestination = currentDestination
+                    currentDestination = currentDestination,
+                    isAiAccessEnabled = isAiAccessEnabled
                 )
             }
         },
@@ -160,7 +162,10 @@ fun UnifiedNavigationContainer(
                 )
                 activeWorkoutGraph(navController)
                 progressGraph(navController)
-                chatGraph(navController)
+                chatGraph(
+                    navController = navController,
+                    isAiAccessEnabled = isAiAccessEnabled
+                )
                 socialGraph(navController)
                 profileGraph(navController)
                 settingsGraph(navController)
@@ -280,13 +285,16 @@ private fun StopWorkoutDialog(
 @Composable
 private fun BottomNavigationBar(
     navController: NavHostController,
-    currentDestination: NavDestination?
+    currentDestination: NavDestination?,
+    isAiAccessEnabled: Boolean
 ) {
     val items = buildList {
         add(BottomNavItem(LiftrixRoute.Home, "Home", Icons.Default.Home))
         add(BottomNavItem(LiftrixRoute.Workout, "Workout", Icons.Default.FitnessCenter))
         add(BottomNavItem(LiftrixRoute.Progress, "Progress", Icons.Default.TrendingUp))
-        add(BottomNavItem(LiftrixRoute.Coach, "Coach", Icons.Default.Psychology))
+        if (isAiAccessEnabled) {
+            add(BottomNavItem(LiftrixRoute.Coach, "Coach", Icons.Default.Psychology))
+        }
     }
     
     NavigationBar {

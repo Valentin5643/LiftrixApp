@@ -532,7 +532,7 @@ configurations.matching { it.name in benchmarkKspConfigurations }.all {
     project.dependencies.add(name, libs.androidx.hilt.compiler)
 }
 
-// Room Query Validation Task - Configuration Cache Compatible
+// Room entity-source validation. Room/KSP compilation remains the DAO query validator.
 abstract class ValidateRoomQueriesTask : DefaultTask() {
     
     @get:InputDirectory
@@ -550,8 +550,7 @@ abstract class ValidateRoomQueriesTask : DefaultTask() {
         var violationsFound = false
         
         if (!sourceDir.exists()) {
-            println("✅ No source directory found to validate")
-            return
+            throw GradleException("Room entity source directory does not exist: $sourceDir")
         }
         
         // Find all Kotlin files with @Entity annotation
@@ -563,8 +562,7 @@ abstract class ValidateRoomQueriesTask : DefaultTask() {
             .toList()
         
         if (entityFiles.isEmpty()) {
-            println("✅ No Room entity files found to validate")
-            return
+            throw GradleException("No Room entity files found under $sourceDir; validation is misconfigured")
         }
         
         println("📁 Checking ${entityFiles.size} entity files for violations...")
@@ -647,12 +645,12 @@ abstract class ValidateRoomQueriesTask : DefaultTask() {
 
 tasks.register<ValidateRoomQueriesTask>("validateRoomQueries") {
     group = "verification"
-    description = "Validates Room entity default values and DAO queries"
+    description = "Checks core/database Room entity discovery and invalid default-value annotations; Room/KSP compilation validates DAO queries"
     
-    dependsOn("compileDebugKotlin")
+    dependsOn(":core:database:compileDebugKotlin")
     
-    sourceDirectory.set(layout.projectDirectory.dir("src/main/java"))
-    projectDirectory.set(layout.projectDirectory)
+    sourceDirectory.set(rootProject.layout.projectDirectory.dir("core/database/src/main/java"))
+    projectDirectory.set(rootProject.layout.projectDirectory)
 }
 
 // Make Room validation run before tests (using correct task names)

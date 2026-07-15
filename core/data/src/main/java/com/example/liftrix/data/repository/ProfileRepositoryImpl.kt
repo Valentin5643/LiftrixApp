@@ -238,12 +238,8 @@ class ProfileRepositoryImpl @Inject constructor(
     }
 
     override suspend fun hasProfile(userId: String): Boolean {
-        return try {
-            userProfileDao.hasProfile(userId)
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to check if profile exists for user: $userId")
-            false
-        }
+        require(userId.isNotBlank()) { "User ID cannot be blank when checking profile existence" }
+        return userProfileDao.hasProfile(userId)
     }
 
     override suspend fun hasCompletedProfile(userId: String): Boolean {

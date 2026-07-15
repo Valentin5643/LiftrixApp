@@ -1,9 +1,6 @@
 package com.example.liftrix.data.service
 
-import com.example.liftrix.core.data.BuildConfig
 import com.example.liftrix.data.remote.config.RemoteConfigManager
-import com.example.liftrix.data.local.dao.AiUsageDao
-import com.example.liftrix.data.local.entity.AiUsageEntity
 import com.example.liftrix.domain.model.chat.ChatMessage
 import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.chat.WorkoutContext
@@ -21,24 +18,18 @@ import com.example.liftrix.domain.service.ModelStatus
 import com.example.liftrix.domain.service.PromptValidation
 import com.example.liftrix.domain.service.RateLimitStatus
 import com.example.liftrix.domain.service.AnalyticsTracker
+import com.example.liftrix.domain.service.RateLimitingServiceContract
 import com.google.firebase.Firebase
-import com.google.firebase.FirebaseException
 import com.google.firebase.ai.ai
-import com.google.firebase.appcheck.appCheck
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withTimeoutOrNull
 import com.google.firebase.ai.Chat
 import com.google.firebase.ai.type.Content
 import com.google.firebase.ai.type.GenerationConfig
 import com.google.firebase.ai.type.ResponseStoppedException
 import com.google.firebase.ai.type.content
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.tasks.await
 import timber.log.Timber
-import kotlin.random.Random
 import javax.inject.Inject
 import javax.inject.Singleton
-import java.util.UUID
 
 /**
  * Implementation of AIChatService using Firebase AI with Gemini 2.5 Flash Lite.
@@ -50,13 +41,11 @@ class AIChatServiceImpl @Inject constructor(
     private val workoutRepository: WorkoutRepository,
     private val analyticsTracker: AnalyticsTracker,
     private val remoteConfig: RemoteConfigManager,
-    private val abusePreventionService: AbusePreventionService,
-    private val rateLimitingService: RateLimitingService,
-    private val aiUsageDao: AiUsageDao
+    private val rateLimitingService: RateLimitingServiceContract,
+    private val paidAiCallExecutor: PaidAiCallExecutor
 ) : AIChatService {
     
     companion object {
-        private const val MONTHLY_USAGE_TAG = "MonthlyUsageDebug"
         private const val MODEL_NAME = "gemini-2.5-flash-lite"
         private const val MAX_OUTPUT_TOKENS = 1024
         private const val TEMPERATURE = 0.7
@@ -92,6 +81,23 @@ class AIChatServiceImpl @Inject constructor(
                     errorMessage = throwable.message ?: "Invalid message",
                     analyticsContext = mapOf("user_id" to userId)
                 )
+                is PaidAiDisabledException -> LiftrixError.BusinessLogicError(
+                    code = "AI_DISABLED",
+                    errorMessage = throwable.message.orEmpty(),
+                    analyticsContext = mapOf("user_id" to userId)
+                )
+                is PaidAiPolicyDeniedException -> LiftrixError.ValidationError(
+                    field = "message",
+                    violations = listOf(throwable.message.orEmpty()),
+                    errorMessage = throwable.message.orEmpty(),
+                    analyticsContext = mapOf("user_id" to userId)
+                )
+                is PaidAiRecoverableDenialException -> LiftrixError.BusinessLogicError(
+                    code = "AI_REQUEST_THROTTLED",
+                    errorMessage = throwable.message.orEmpty(),
+                    isRecoverable = true,
+                    analyticsContext = mapOf("user_id" to userId)
+                )
                 is DebugAppCheckTokenNotRegisteredException -> LiftrixError.BusinessLogicError(
                     code = "APP_CHECK_DEBUG_TOKEN_NOT_REGISTERED",
                     errorMessage = aiUnavailableForAppCheckMessage(),
@@ -120,10 +126,9 @@ class AIChatServiceImpl @Inject constructor(
             }
         }
     ) {
-        var effectiveMessage = message.trim()
+        val effectiveMessage = message.trim()
         Timber.i(
-            "[AI] AIChatService: generateResponse started user=%s messageChars=%d historyMessages=%d requestedLanguage=%s",
-            userId,
+            "[AI] AIChatService: generateResponse started messageChars=%d historyMessages=%d requestedLanguage=%s",
             effectiveMessage.length,
             conversationContext.recentMessages.size,
             language.code
@@ -140,223 +145,62 @@ class AIChatServiceImpl @Inject constructor(
         val validation = validatePrompt(effectiveMessage, detectedLanguage)
         if (!validation.isValid) {
             Timber.w(
-                "[AI] AIChatService: prompt validation failed user=%s reason=%s messageChars=%d",
-                userId,
+                "[AI] AIChatService: prompt validation failed reason=%s messageChars=%d",
                 validation.reason ?: "unknown",
                 effectiveMessage.length
             )
             throw ValidationException(validation.reason ?: "Invalid prompt")
         }
-        Timber.d("[AI] AIChatService: prompt validation passed user=$userId")
-        
-        // 3. Check for abuse patterns
-        val abuseDetection = abusePreventionService.detectAbuse(userId, effectiveMessage)
-        if (abuseDetection.isAbusive) {
-            Timber.w("[AI] AIChatService: abuse detected user=$userId type=${abuseDetection.type} action=${abuseDetection.action} confidence=${abuseDetection.confidence}")
-            analyticsTracker.trackAbuseDetection(
-                userId = userId,
-                abuseType = abuseDetection.type?.name ?: "UNKNOWN",
-                action = abuseDetection.action?.name ?: "UNKNOWN",
-                confidence = abuseDetection.confidence,
-                messageLength = effectiveMessage.length
-            )
-            
-            when (abuseDetection.action) {
-                com.example.liftrix.domain.service.AbuseAction.BLOCK,
-                com.example.liftrix.domain.service.AbuseAction.REJECT -> {
-                    throw ValidationException("Your message appears to violate our usage guidelines. Please rephrase and try again.")
-                }
-                com.example.liftrix.domain.service.AbuseAction.TRUNCATE -> {
-                    effectiveMessage = effectiveMessage.take(500)
-                    Timber.w("[AI] AIChatService: message truncated by abuse prevention user=$userId truncatedChars=${effectiveMessage.length}")
-                }
-                else -> {
-                    // Continue with warning logged
-                }
-            }
-        }
-        
-        // 4. Check rate limits
-        val rateLimit = checkRateLimit(userId)
-        Timber.tag(MONTHLY_USAGE_TAG).d(
-            "AI chat service rate limit result userId=%s isLimited=%s reason=%s dailyRemaining=%s monthlyRemaining=%s source=RateLimitingService",
-            userId,
-            rateLimit.isLimited,
-            rateLimit.reason ?: "none",
-            rateLimit.messagesRemaining?.toString() ?: "unknown",
-            rateLimit.tokensRemaining?.toString() ?: "unknown"
-        )
-        if (rateLimit.isLimited) {
-            if (rateLimit.tokensRemaining == 0) {
-                Timber.tag(MONTHLY_USAGE_TAG).w(
-                    "AI chat service blocked by monthly limit userId=%s reason=%s source=RateLimitingService",
-                    userId,
-                    rateLimit.reason ?: "unknown"
-                )
-            }
-            throw QuotaExceededException("Rate limit exceeded: ${rateLimit.reason}")
-        }
-        
-        // 5. Build context prompt
+        Timber.d("[AI] AIChatService: prompt validation passed")
+
+        // 3. Build product-specific context and model input. Paid guards run in the executor.
         val contextPrompt = buildContextPrompt(userId, conversationContext, detectedLanguage)
-        
-        // 6. Generate response using Firebase AI with enhanced error handling
-        val startTime = System.currentTimeMillis()
-        
-        val response = try {
-            Timber.d("[AI] AIChatService: Initializing Firebase AI for user $userId")
-            
-            // CRITICAL: Wait for App Check initialization before making AI calls
-            // Increased timeout to 30 seconds to handle slower networks and first-time attestation
-            val isAppCheckReady = true
-            
-            if (!isAppCheckReady) {
-                Timber.e("[AI] AIChatService: App Check not ready after 30 seconds")
-                throw AppCheckUnavailableException("App Check was not initialized before Firebase AI request.")
-            }
-            
-            // Obtain App Check token with proper async handling and exponential backoff
-            val appCheckToken = obtainAppCheckToken()
-            
-            if (appCheckToken == null) {
-                val message = "Failed to obtain App Check token after retries. " +
-                    "Debug builds require a registered App Check debug token; release builds require Play Integrity, package, and SHA setup."
-                Timber.e("[AI] AIChatService: $message")
-                throw AppCheckUnavailableException(message)
-            } else {
-                Timber.d("[AI] AIChatService: App Check token obtained successfully from cache path, expiresAt=${appCheckToken.expireTimeMillis}")
-            }
-            
-            val systemPrompt = getSystemPrompt(detectedLanguage)
-            // Create model with language-specific system instruction
-            val generativeModel = Firebase.ai().generativeModel(
-                modelName = MODEL_NAME,
-                generationConfig = generationConfig,
-                systemInstruction = content { text(systemPrompt) }
-            )
-            
-            // Build conversation history
-            val historyMessages = buildValidChatHistoryMessages(conversationContext.recentMessages)
-            val chatHistory = historyMessages
-                .map { msg ->
-                    content(role = if (msg.type == MessageType.USER) "user" else "model") {
-                        text(msg.content)
-                    }
-                }
-            
-            Timber.d("[AI] AIChatService: Creating chat session with ${chatHistory.size} context messages")
-            
-            // Create chat session
-            val chat = generativeModel.startChat(chatHistory)
-            
-            // Send message with context
-            val fullMessage = if (contextPrompt.isNotEmpty()) {
-                "$contextPrompt\n\nUser: $effectiveMessage"
-            } else {
-                effectiveMessage
-            }
-            
-            Timber.i("[AI] AIChatService: Sending message to Firebase AI payloadChars=${fullMessage.length} historyMessages=${historyMessages.size}")
-            logRequestPayload(
-                userId = userId,
-                language = detectedLanguage,
-                systemPrompt = systemPrompt,
-                historyMessages = historyMessages,
-                fullMessage = fullMessage
-            )
-            
-            chat.sendMessage(content { text(fullMessage) })
-            
-        } catch (e: Exception) {
-            val processingTime = System.currentTimeMillis() - startTime
-            
-            Timber.e(e, "[AI] Firebase AI request failed for user $userId after ${processingTime}ms")
-            
-            // Track the specific Firebase AI error
-            analyticsTracker.trackAIChatError(
-                userId = userId,
-                errorType = "FIREBASE_AI_ERROR",
-                errorMessage = e.message ?: "Unknown Firebase AI error",
-                modelVersion = MODEL_NAME,
-                additionalProperties = mapOf(
-                    "processing_time_ms" to processingTime,
-                    "has_workout_context" to (conversationContext.workoutContext != null)
-                )
-            )
-            
-            // Map specific Firebase AI exceptions
-            when (e) {
-                is java.net.UnknownHostException,
-                is java.net.SocketTimeoutException,
-                is java.io.IOException -> {
-                    Timber.e("[AI] Network error calling Firebase AI: ${e.message}")
-                    throw Exception("Network connectivity issue. Please check your connection and try again.")
-                }
-                is DebugAppCheckTokenNotRegisteredException -> throw e
-                is AppCheckRateLimitedException -> throw e
-                is AppCheckUnavailableException -> throw e
-                is ResponseStoppedException -> {
-                    if (e.isMaxTokensStop()) {
-                        Timber.w("[AI] Firebase AI response reached max output tokens: ${e.message}")
-                        throw AIResponseMaxTokensException(e)
-                    }
-                    throw e
-                }
-                is SecurityException -> {
-                    Timber.e("[AI] Firebase AI permissions error: ${e.message}")
-                    throw Exception("AI service security configuration error. Verify Firebase App Check provider, package name, and SHA fingerprints.")
-                }
-                is IllegalStateException -> {
-                    Timber.e("[AI] Firebase AI state error: ${e.message}")
-                    throw Exception("AI service temporarily unavailable. Please try again in a moment.")
-                }
-                else -> {
-                    Timber.e("[AI] Unexpected Firebase AI error: ${e.javaClass.simpleName} - ${e.message}")
-                    
-                    // Check for specific App Check token errors
-                    val errorMessage = e.message?.lowercase() ?: ""
-                    when {
-                        errorMessage.contains("app check token is invalid") ||
-                        errorMessage.contains("appcheck") -> {
-                            Timber.e("[AI] App Check token validation failed - this indicates Firebase App Check is not properly configured")
-                            throw Exception("AI service security validation failed. Register the debug token for debug builds or verify Play Integrity/SHA setup for release.")
-                        }
-                        e.javaClass.name.contains("firebase") || 
-                        errorMessage.contains("firebase") -> {
-                            throw Exception("AI service temporarily unavailable. Please try again in a moment.")
-                        }
-                        else -> {
-                            throw Exception("Failed to get AI response. Please try again.")
-                        }
-                    }
-                }
+        val systemPrompt = getSystemPrompt(detectedLanguage)
+        val generativeModel = Firebase.ai().generativeModel(
+            modelName = MODEL_NAME,
+            generationConfig = generationConfig,
+            systemInstruction = content { text(systemPrompt) }
+        )
+        val historyMessages = buildValidChatHistoryMessages(conversationContext.recentMessages)
+        val chatHistory = historyMessages.map { chatMessage ->
+            content(role = if (chatMessage.type == MessageType.USER) "user" else "model") {
+                text(chatMessage.content)
             }
         }
-        
-        val processingTime = System.currentTimeMillis() - startTime
-        
-        // Extract response text and metadata
-        val usage = response.usageMetadata
-        val responseText = response.text ?: "I couldn't generate a response. Please try again."
-        val tokensUsed = response.usageMetadata?.totalTokenCount ?: estimateTokens(effectiveMessage, responseText)
-        aiUsageDao.insert(
-            AiUsageEntity(
-                id = UUID.randomUUID().toString(),
-                userId = userId,
-                createdAt = System.currentTimeMillis(),
-                operation = "CHAT_RESPONSE",
-                model = MODEL_NAME,
-                inputTokens = usage?.promptTokenCount ?: estimateTokens(effectiveMessage, ""),
-                outputTokens = usage?.candidatesTokenCount ?: estimateTokens("", responseText),
-                totalTokens = tokensUsed,
-                successCategory = "MODEL_RESPONSE"
-            )
+        val fullMessage = if (contextPrompt.isNotEmpty()) {
+            "$contextPrompt\n\nUser: $effectiveMessage"
+        } else {
+            effectiveMessage
+        }
+        val estimatedInputTokens = estimateTokens(
+            systemPrompt + historyMessages.joinToString(separator = "") { it.content },
+            fullMessage
         )
-        
-        // 7. Track usage and analytics
+        val chatSession = generativeModel.startChat(chatHistory)
+        val startTime = System.currentTimeMillis()
+        val dispatchResult = paidAiCallExecutor.execute(
+            request = PaidAiCallRequest(
+                userId = userId,
+                operation = PaidAiOperation.CHAT_RESPONSE,
+                model = MODEL_NAME,
+                abuseContent = effectiveMessage,
+                estimatedInputTokens = estimatedInputTokens
+            )
+        ) {
+            dispatchChatMessage(
+                chat = chatSession,
+                fullMessage = fullMessage,
+                estimatedInputTokens = estimatedInputTokens
+            )
+        }
+        val processingTime = System.currentTimeMillis() - startTime
+        if (dispatchResult.responseText.isBlank()) {
+            throw IllegalStateException("Firebase AI returned an empty chat response")
+        }
+
         analyticsTracker.trackAIChatResponse(
             userId = userId,
-            tokensUsed = tokensUsed,
+            tokensUsed = dispatchResult.totalTokens,
             processingTimeMs = processingTime,
             modelVersion = MODEL_NAME,
             language = detectedLanguage.code,
@@ -364,8 +208,8 @@ class AIChatServiceImpl @Inject constructor(
         )
         
         AIResponse(
-            content = responseText,
-            tokensUsed = tokensUsed,
+            content = dispatchResult.responseText,
+            tokensUsed = dispatchResult.totalTokens,
             processingTimeMs = processingTime,
             modelVersion = MODEL_NAME
         )
@@ -519,7 +363,7 @@ class AIChatServiceImpl @Inject constructor(
             workoutRepository.getRecentWorkouts(userId, limit = 3)
                 .first()
         } catch (exception: Exception) {
-            Timber.w(exception, "[AI] AIChatService: failed to load recent workout context user=$userId")
+            Timber.w(exception, "[AI] AIChatService: failed to load recent workout context")
             emptyList()
         }
     }
@@ -613,50 +457,35 @@ class AIChatServiceImpl @Inject constructor(
         return alternating.takeLast(MAX_CONTEXT_MESSAGES)
     }
 
-    private fun logRequestPayload(
-        userId: String,
-        language: Language,
-        systemPrompt: String,
-        historyMessages: List<ChatMessage>,
-        fullMessage: String
-    ) {
-        if (!BuildConfig.DEBUG) return
-        val historyPayload = historyMessages.joinToString(separator = "\n") { message ->
-            val role = if (message.type == MessageType.USER) "user" else "model"
-            """{"role":"$role","content":${message.content.quoteForLogJson()}}"""
+    private suspend fun dispatchChatMessage(
+        chat: Chat,
+        fullMessage: String,
+        estimatedInputTokens: Int
+    ): PaidAiCallResult<ChatDispatchResult> {
+        Timber.i("[AI] AIChatService: Firebase AI dispatch payloadChars=%d", fullMessage.length)
+        val response = try {
+            chat.sendMessage(content { text(fullMessage) })
+        } catch (error: ResponseStoppedException) {
+            if (error.isMaxTokensStop()) throw AIResponseMaxTokensException(error)
+            throw error
         }
-        Timber.d(
-            """
-            [AI] AIChatService request payload:
-            {
-              "user_id": "$userId",
-              "model": "$MODEL_NAME",
-              "language": "${language.code}",
-              "system_instruction": ${systemPrompt.quoteForLogJson()},
-              "history": [
-            $historyPayload
-              ],
-              "message": ${fullMessage.quoteForLogJson()}
+        val responseText = response.text?.trim().orEmpty()
+        val usage = response.usageMetadata
+        val inputTokens = usage?.promptTokenCount ?: estimatedInputTokens
+        val outputTokens = usage?.candidatesTokenCount ?: estimateTokens("", responseText)
+        val totalTokens = usage?.totalTokenCount ?: inputTokens + outputTokens
+        return PaidAiCallResult(
+            value = ChatDispatchResult(responseText = responseText, totalTokens = totalTokens),
+            inputTokens = inputTokens,
+            outputTokens = outputTokens,
+            totalTokens = totalTokens,
+            category = if (responseText.isBlank()) {
+                PaidAiCallResult.CATEGORY_EMPTY_RESPONSE
+            } else {
+                PaidAiCallResult.CATEGORY_MODEL_RESPONSE
             }
-            """.trimIndent()
         )
     }
-
-    private fun String.quoteForLogJson(): String =
-        buildString {
-            append('"')
-            this@quoteForLogJson.forEach { char ->
-                when (char) {
-                    '\\' -> append("\\\\")
-                    '"' -> append("\\\"")
-                    '\n' -> append("\\n")
-                    '\r' -> append("\\r")
-                    '\t' -> append("\\t")
-                    else -> append(char)
-                }
-            }
-            append('"')
-        }
     
     private fun getSystemPrompt(language: Language): String {
         return when (language) {
@@ -823,113 +652,10 @@ class AIChatServiceImpl @Inject constructor(
     private fun ResponseStoppedException.isMaxTokensStop(): Boolean =
         message.orEmpty().contains("MAX_TOKENS", ignoreCase = true)
     
-    /**
-     * Obtains an App Check token using the SDK cache path.
-     * 
-     * @return AppCheckToken if successful, null if the request timed out
-     */
-    private suspend fun obtainAppCheckToken(): AppCheckToken? {
-        Timber.d("AIChatService: Attempting cached App Check token retrieval")
-        val tokenResult = withTimeoutOrNull(10_000) {
-            try {
-                Firebase.appCheck.getAppCheckToken(false).await()
-            } catch (e: Exception) {
-                handleAppCheckTokenFailure(e)
-            }
-        }
-
-        if (tokenResult == null) {
-            Timber.w("AIChatService: App Check token request timed out")
-            delay(appCheckBackoffDelayMillis())
-            return null
-        }
-
-        Timber.d("AIChatService: Successfully obtained App Check token via cached retrieval")
-        return AppCheckToken(
-            expireTimeMillis = tokenResult.expireTimeMillis
-        )
-    }
-
-    private fun handleAppCheckTokenFailure(error: Exception): Nothing {
-        val errorMsg = error.message.orEmpty()
-        if (isDebugAppCheckTokenMissing(error)) {
-            throw DebugAppCheckTokenNotRegisteredException(error)
-        }
-
-        Timber.w(
-            error,
-            "AIChatService: Failed to get cached App Check token. type=%s, message=%s",
-            error.javaClass.name,
-            errorMsg
-        )
-
-        when {
-            isAppCheckRateLimited(error) -> {
-                Timber.e("AIChatService: App Check token request was rate limited by Firebase; not retrying in this chat request.")
-                throw AppCheckRateLimitedException(error)
-            }
-            isAppCheckAttestationFailure(error) -> {
-                throw DebugAppCheckTokenNotRegisteredException(error)
-            }
-            else -> throw AppCheckUnavailableException("Failed to obtain App Check token.", error)
-        }
-    }
-
-    private fun appCheckBackoffDelayMillis(): Long {
-        val jitter = Random.nextLong(0L, 250L)
-        return 1_000L + jitter
-    }
-
-    private fun isDebugAppCheckTokenMissing(error: Throwable): Boolean {
-        return BuildConfig.DEBUG &&
-            error is FirebaseException &&
-            isAppCheckAttestationFailure(error)
-    }
-
-    private fun isAppCheckRateLimited(error: Throwable): Boolean =
-        error is FirebaseException &&
-            error.message.orEmpty().contains("too many attempts", ignoreCase = true)
-
-    private fun isAppCheckAttestationFailure(error: Throwable): Boolean {
-        val message = error.message.orEmpty()
-        return error is FirebaseException &&
-            (
-                message.contains("403", ignoreCase = true) &&
-                    message.contains("app attestation failed", ignoreCase = true)
-                )
-    }
-
-    /**
-     * Data class to hold App Check token information.
-     */
-    private data class AppCheckToken(
-        val expireTimeMillis: Long
+    private data class ChatDispatchResult(
+        val responseText: String,
+        val totalTokens: Int
     )
 }
 
-// Custom exceptions
-class QuotaExceededException(message: String) : Exception(message)
 class ValidationException(message: String) : Exception(message)
-class DebugAppCheckTokenNotRegisteredException(
-    cause: Throwable
-) : Exception(
-    "Firebase App Check rejected the debug provider token.",
-    cause
-)
-class AppCheckRateLimitedException(
-    cause: Throwable
-) : Exception("Firebase App Check token exchange is rate limited. Wait before retrying.", cause)
-class AppCheckUnavailableException(
-    message: String,
-    cause: Throwable? = null
-) : Exception(message, cause)
-class AIResponseMaxTokensException(
-    cause: Throwable
-) : Exception("Firebase AI response stopped because it reached max output tokens.", cause)
-
-internal fun aiUnavailableForAppCheckMessage(): String =
-    if (BuildConfig.DEBUG) {
-        "AI is temporarily unavailable in this debug build. Register the debug App Check token in Firebase Console and try again."
-    } else {
-        "AI is temporarily unavailable in this build. Please try again later."
-    }

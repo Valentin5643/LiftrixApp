@@ -69,7 +69,8 @@ class ModifyWorkoutProgramUseCase @Inject constructor(
                     message = request.message,
                     pendingTemplateId = request.pendingTemplateId,
                     pendingGeneratedProgramId = request.pendingGeneratedProgram?.previewId,
-                    pendingGeneratedProgramName = request.pendingGeneratedProgram?.program?.workoutName
+                    pendingGeneratedProgramName = request.pendingGeneratedProgram?.program?.workoutName,
+                    allowGeneratedPreview = request.scope != null
                 )
             ).getOrThrow()
             val source = resolveSource(resolution, request.pendingGeneratedProgram)

@@ -28,7 +28,6 @@ import timber.log.Timber
  *
  * Features:
  * - WebView or text display of privacy policy content
- * - Download as PDF option
  * - Last updated date display
  * - Search functionality within document
  * - Offline content caching
@@ -82,14 +81,6 @@ fun PrivacyPolicyScreen(
                         )
                     }
 
-                    IconButton(
-                        onClick = { viewModel.downloadAsPdf("privacy_policy") }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = "Download as PDF"
-                        )
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -147,7 +138,6 @@ fun PrivacyPolicyScreen(
  * 
  * Features:
  * - WebView or text display of terms content
- * - Download as PDF option  
  * - Last updated date display
  * - Search functionality within document
  * - Offline content caching
@@ -199,14 +189,6 @@ fun TermsOfServiceScreen(
                         )
                     }
 
-                    IconButton(
-                        onClick = { viewModel.downloadAsPdf("terms_of_service") }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = "Download as PDF"
-                        )
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -581,7 +563,6 @@ private fun PrivacyPolicyScreenPreview() {
  *
  * Features:
  * - WebView or text display of AI disclaimer content
- * - Download as PDF option
  * - Last updated date display
  * - Loading and error states
  * - Accessibility support
@@ -631,14 +612,6 @@ fun AIDisclaimerScreen(
                         )
                     }
 
-                    IconButton(
-                        onClick = { viewModel.downloadAsPdf("ai_disclaimer") }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = "Download as PDF"
-                        )
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -739,14 +712,6 @@ fun CommunityGuidelinesScreen(
                         )
                     }
 
-                    IconButton(
-                        onClick = { viewModel.downloadAsPdf("community_guidelines") }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = "Download as PDF"
-                        )
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -847,14 +812,6 @@ fun ContentModerationPolicyScreen(
                         )
                     }
 
-                    IconButton(
-                        onClick = { viewModel.downloadAsPdf("content_moderation_policy") }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = "Download as PDF"
-                        )
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -955,14 +912,6 @@ fun RefundSubscriptionPolicyScreen(
                         )
                     }
 
-                    IconButton(
-                        onClick = { viewModel.downloadAsPdf("refund_subscription_policy") }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = "Download as PDF"
-                        )
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface

@@ -23,12 +23,15 @@ The source refresh identified Firebase AI usage with `gemini-2.5-flash-lite` in 
 - Chat history is user-owned data and must be scoped by `user_id`.
 - Do not call Firebase AI directly from UI.
 - Every paid model response must append one idempotent, user-scoped `ai_usage` event before parsing or persistence can expose success. `RateLimitingService` reads only that ledger; chat retention never owns quota usage.
+- `RateLimitingService` is the sole quota/status owner: limits come only from Remote Config and consumption comes only from `AiUsageDao`. Chat preferences, chat history, and subscriptions must not alter enforcement.
 - Usage accounting must include repair attempts and responses that later fail parsing, validation, or UI persistence.
 - Enforce daily message, monthly token, and hourly cost limits before model calls.
 - Abuse prevention is fitness-aware; fitness context can reduce jailbreak score.
 - Preserve English/Romanian language behavior unless source is updated.
 - Default-enabled chat history persists messages in `chat_history` and local conversation metadata/tombstones in `chat_conversations`; explicit preference opt-out remains ephemeral.
 - Submission retries reuse `chat-{requestId}-user` and `chat-{requestId}-assistant` row IDs. Conversation rename/delete never reads or mutates `ai_usage`.
+- Every Firebase AI dispatch must run through `PaidAiCallExecutor`. A paid-operation change cannot merge unless CHAT_RESPONSE, WORKOUT_GENERATE, WORKOUT_REPAIR, and WORKOUT_MODIFY all demonstrate admin, kill-switch, abuse, quota, App Check, post-dispatch accounting, and metadata-only telemetry coverage with no direct bypass.
+- Pre-dispatch rejection writes no usage event. Every post-dispatch outcome writes exactly one event, including empty output, max-token stops, and provider failures.
 
 ## Required User Scoping
 

@@ -1,6 +1,8 @@
 package com.example.liftrix.data.repository.workout
 
 import android.util.Log
+import androidx.room.withTransaction
+import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.local.dao.WorkoutPostDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
@@ -87,6 +89,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class WorkoutRepositoryImpl @Inject constructor(
+    private val database: LiftrixDatabase,
     private val workoutDao: WorkoutDao,
     private val workoutPostDao: WorkoutPostDao,
     private val followRelationshipDao: FollowRelationshipDao,
@@ -178,39 +181,28 @@ class WorkoutRepositoryImpl @Inject constructor(
             
             // Convert workout to entity for database storage (preserve original data)
             val entity = workoutMapper.toEntity(workout, isSynced = false)
-            
-            val insertResult = try {
-                withContext(Dispatchers.IO) {
-                    workoutDao.upsertLocal(entity)
-                }
-            } catch (e: Exception) {
-                throw e
+            val exerciseWrites = workout.exercises.mapIndexed { exerciseIndex, exercise ->
+                val normalizedExercise = exercise.copy(
+                    workoutId = workout.id,
+                    orderIndex = exerciseIndex
+                )
+                exercise to exerciseMapper.toEntity(normalizedExercise, workout.userId)
             }
-            Timber.d("[WORKOUT-DEBUG] createWorkout storage write result=$insertResult id=${entity.id} userId=${entity.userId} isDirty=${entity.isDirty} isSynced=${entity.isSynced}")
-            val afterCount = workoutDao.getWorkoutCountForUser(workout.userId)
-            Timber.tag("WorkoutSyncDebug").d(
-                "[DATABASE-DEBUG] operation=REPOSITORY_CREATE_WRITTEN source=Room userId=${workout.userId} workoutId=${workout.id.value} timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount afterCount=$afterCount result=$insertResult isDirty=true isSynced=false"
-            )
             
-            if (insertResult > 0) {
-                // Create ExerciseEntity and ExerciseSetEntity records for analytics queries
-                workout.exercises.forEachIndexed { exerciseIndex, exercise ->
-                    val exerciseWithCorrectWorkoutId = exercise.copy(
-                        workoutId = workout.id,
-                        orderIndex = exerciseIndex
-                    )
-                    
-                    val exerciseEntity = exerciseMapper.toEntity(
-                        exerciseWithCorrectWorkoutId,
-                        workout.userId
-                    )
+            val insertResult = database.withTransaction {
+                val result = workoutDao.upsertLocal(entity)
+                if (result <= 0) {
+                    throw RuntimeException("Workout insert operation returned invalid result: $result")
+                }
+
+                exerciseWrites.forEach { (exercise, exerciseEntity) ->
                     val exerciseId = exerciseDao.insertExercise(exerciseEntity)
                     Log.d(
                         "PREV_SAVE",
                         "Saving exercise: workoutId=${workout.id.value} exerciseRowId=$exerciseId " +
                             "exerciseId=${exercise.libraryExercise.id} name=${exercise.libraryExercise.name}"
                     )
-                    
+
                     exercise.sets.forEachIndexed { setIndex, set ->
                         Log.d(
                             "PREV_SAVE",
@@ -227,7 +219,7 @@ class WorkoutRepositoryImpl @Inject constructor(
                             rpe = set.rpe?.value,
                             completedAt = set.completedAt?.toEpochMilli()
                         )
-                        
+
                         val setRowId = exerciseSetDao.insertSet(setEntity)
                         Log.d(
                             "PREV_DB_WRITE",
@@ -241,13 +233,18 @@ class WorkoutRepositoryImpl @Inject constructor(
                     userId = workout.userId,
                     workoutId = workout.id.value
                 )
-                // Queue workout for sync after successful creation (use original workout for sync, not placeholder version)
-                queueWorkoutForSync(workout)
-                
-                workout // Return original workout with preserved ID
-            } else {
-                throw RuntimeException("Workout insert operation returned invalid result: $insertResult")
+                result
             }
+            Timber.d("[WORKOUT-DEBUG] createWorkout storage write result=$insertResult id=${entity.id} userId=${entity.userId} isDirty=${entity.isDirty} isSynced=${entity.isSynced}")
+            val afterCount = workoutDao.getWorkoutCountForUser(workout.userId)
+            Timber.tag("WorkoutSyncDebug").d(
+                "[DATABASE-DEBUG] operation=REPOSITORY_CREATE_WRITTEN source=Room userId=${workout.userId} workoutId=${workout.id.value} timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount afterCount=$afterCount result=$insertResult isDirty=true isSynced=false"
+            )
+
+            // Queue only after the complete local graph commits.
+            queueWorkoutForSync(workout)
+
+            workout // Return original workout with preserved ID
         }
     }
 
@@ -374,95 +371,90 @@ class WorkoutRepositoryImpl @Inject constructor(
             // Convert workout to entity for database storage (preserve original data)
             val entity = workoutMapper.toEntity(workout, isSynced = false)
             Timber.d("🔥 UPDATE-WORKOUT-DEBUG: Updating entity with ID: ${entity.id}, Status: ${entity.status}, UserId: ${entity.userId}")
-            val previousReadModelDate = analyticsReadModelDao.getReadModelDateForWorkout(
-                userId = workout.userId,
-                workoutId = workout.id.value
-            )
-            val previousExerciseIds = analyticsReadModelDao.getExerciseLibraryIdsForWorkout(
-                userId = workout.userId,
-                workoutId = workout.id.value
-            )
-            
-            // Use upsertLocal to mark workout dirty and refresh lastModified for sync
-            // 🔥 DEBUG: Log before database update
-            Timber.d("[WORKOUT-DB-UPDATE] About to update workout entity in database at ${System.currentTimeMillis()}")
-            val insertedId = workoutDao.upsertLocal(entity)
-            // 🔥 DEBUG: Log after database update
-            Timber.d("[WORKOUT-DB-UPDATE] ✅ Database update completed at ${System.currentTimeMillis()}, result: $insertedId")
-            
+            val exerciseWrites = workout.exercises.mapIndexed { exerciseIndex, exercise ->
+                val normalizedExercise = exercise.copy(
+                    workoutId = workout.id,
+                    orderIndex = exerciseIndex
+                )
+                exercise to exerciseMapper.toEntity(normalizedExercise, workout.userId)
+            }
+            val insertedId = database.withTransaction {
+                val previousReadModelDate = analyticsReadModelDao.getReadModelDateForWorkout(
+                    userId = workout.userId,
+                    workoutId = workout.id.value
+                )
+                val previousExerciseIds = analyticsReadModelDao.getExerciseLibraryIdsForWorkout(
+                    userId = workout.userId,
+                    workoutId = workout.id.value
+                )
+
+                // Use upsertLocal to mark workout dirty and refresh lastModified for sync
+                Timber.d("[WORKOUT-DB-UPDATE] About to update workout entity in database at ${System.currentTimeMillis()}")
+                val result = workoutDao.upsertLocal(entity)
+                Timber.d("[WORKOUT-DB-UPDATE] ✅ Database update completed at ${System.currentTimeMillis()}, result: $result")
+                if (result > 0) {
+                    Timber.i("🔥 UPDATE-WORKOUT-DEBUG: Successfully updated workout - ID: ${workout.id.value}, Insert result: $result")
+
+                    // Delete all existing exercises and sets for this workout first, then recreate them.
+                    exerciseDao.deleteExercisesForWorkout(workout.id.value, workout.userId)
+                    exerciseSetDao.deleteSetsForWorkout(workout.id.value, workout.userId)
+
+                    exerciseWrites.forEach { (exercise, exerciseEntity) ->
+                        val exerciseId = exerciseDao.insertExercise(exerciseEntity)
+                        Log.d(
+                            "PREV_SAVE",
+                            "Saving exercise: workoutId=${workout.id.value} exerciseRowId=$exerciseId " +
+                                "exerciseId=${exercise.libraryExercise.id} name=${exercise.libraryExercise.name}"
+                        )
+
+                        exercise.sets.forEachIndexed { setIndex, set ->
+                            Log.d(
+                                "PREV_SAVE",
+                                "Saving set: exerciseId=${exercise.libraryExercise.id} name=${exercise.libraryExercise.name} " +
+                                    "weight=${set.weight?.kilograms} reps=${set.reps?.count} completedAt=${set.completedAt}"
+                            )
+                            val setEntity = ExerciseSetEntity(
+                                userId = workout.userId,
+                                exerciseId = exerciseId,
+                                setNumber = setIndex + 1,
+                                reps = set.reps?.count,
+                                weightKg = set.weight?.kilograms?.toFloat(),
+                                timeSeconds = set.time?.seconds?.toInt(),
+                                rpe = set.rpe?.value,
+                                completedAt = set.completedAt?.toEpochMilli()
+                            )
+
+                            val setRowId = exerciseSetDao.insertSet(setEntity)
+                            Log.d(
+                                "PREV_DB_WRITE",
+                                "DB write completed for ${exercise.libraryExercise.id} setRowId=$setRowId " +
+                                    "weight=${setEntity.weightKg} reps=${setEntity.reps} completedAt=${setEntity.completedAt}"
+                            )
+                        }
+                    }
+                    validateExerciseConsistency(workout, entity.exercisesJson)
+                    analyticsReadModelDao.refreshWorkoutReadModels(
+                        userId = workout.userId,
+                        workoutId = workout.id.value,
+                        oldWorkoutDate = previousReadModelDate,
+                        oldExerciseLibraryIds = previousExerciseIds
+                    )
+                    result
+                } else {
+                    Timber.e("🔥 UPDATE-WORKOUT-DEBUG: Insert/Update failed for workout ID: ${workout.id.value}")
+                    throw RuntimeException("Workout update operation failed for ID: ${workout.id.value}")
+                }
+            }
             Timber.d("[WORKOUT-DEBUG] updateWorkout storage write result=$insertedId id=${entity.id} userId=${entity.userId} isDirty=${entity.isDirty} isSynced=${entity.isSynced}")
             val afterCount = workoutDao.getWorkoutCountForUser(workout.userId)
             Timber.tag("WorkoutSyncDebug").d(
                 "[DATABASE-DEBUG] operation=REPOSITORY_UPDATE_WRITTEN source=Room userId=${workout.userId} workoutId=${workout.id.value} timestamp=${System.currentTimeMillis()} beforeCount=$beforeCount afterCount=$afterCount result=$insertedId isDirty=true isSynced=false"
             )
-            if (insertedId > 0) {
-                Timber.i("🔥 UPDATE-WORKOUT-DEBUG: Successfully updated workout - ID: ${workout.id.value}, Insert result: $insertedId")
-                
-                // 🔥 FIX: Also handle exercises and sets during update 
-                // Delete all existing exercises and sets for this workout first, then recreate them
-                exerciseDao.deleteExercisesForWorkout(workout.id.value, workout.userId)
-                exerciseSetDao.deleteSetsForWorkout(workout.id.value, workout.userId)
-                
-                workout.exercises.forEachIndexed { exerciseIndex, exercise ->
-                    // Create a modified exercise with correct workoutId and orderIndex
-                    val exerciseWithCorrectWorkoutId = exercise.copy(
-                        workoutId = workout.id,
-                        orderIndex = exerciseIndex
-                    )
-                    val exerciseEntity = try {
-                        exerciseMapper.toEntity(exerciseWithCorrectWorkoutId, workout.userId)
-                    } catch (e: Exception) {
-                        throw RuntimeException("Failed to map exercise to entity during update: ${e.message}", e)
-                    }
-                    val exerciseId = exerciseDao.insertExercise(exerciseEntity)
-                    Log.d(
-                        "PREV_SAVE",
-                        "Saving exercise: workoutId=${workout.id.value} exerciseRowId=$exerciseId " +
-                            "exerciseId=${exercise.libraryExercise.id} name=${exercise.libraryExercise.name}"
-                    )
-                    
-                    // Create ExerciseSetEntity records for each set
-                    exercise.sets.forEachIndexed { setIndex, set ->
-                        Log.d(
-                            "PREV_SAVE",
-                            "Saving set: exerciseId=${exercise.libraryExercise.id} name=${exercise.libraryExercise.name} " +
-                                "weight=${set.weight?.kilograms} reps=${set.reps?.count} completedAt=${set.completedAt}"
-                        )
-                        val setEntity = ExerciseSetEntity(
-                            userId = workout.userId,
-                            exerciseId = exerciseId,
-                            setNumber = setIndex + 1,
-                            reps = set.reps?.count,
-                            weightKg = set.weight?.kilograms?.toFloat(),
-                            timeSeconds = set.time?.seconds?.toInt(),
-                            rpe = set.rpe?.value,
-                            completedAt = set.completedAt?.toEpochMilli()
-                        )
-                        
-                        
-                        val setRowId = exerciseSetDao.insertSet(setEntity)
-                        Log.d(
-                            "PREV_DB_WRITE",
-                            "DB write completed for ${exercise.libraryExercise.id} setRowId=$setRowId " +
-                                "weight=${setEntity.weightKg} reps=${setEntity.reps} completedAt=${setEntity.completedAt}"
-                        )
-                    }
-                }
-                validateExerciseConsistency(workout, entity.exercisesJson)
-                analyticsReadModelDao.refreshWorkoutReadModels(
-                    userId = workout.userId,
-                    workoutId = workout.id.value,
-                    oldWorkoutDate = previousReadModelDate,
-                    oldExerciseLibraryIds = previousExerciseIds
-                )
-                // Queue workout for sync after successful update
-                queueWorkoutForSync(workout)
-                
-                workout
-            } else {
-                Timber.e("🔥 UPDATE-WORKOUT-DEBUG: Insert/Update failed for workout ID: ${workout.id.value}")
-                throw RuntimeException("Workout update operation failed for ID: ${workout.id.value}")
-            }
+
+            // Queue only after the complete local graph commits.
+            queueWorkoutForSync(workout)
+
+            workout
         }
     }
 

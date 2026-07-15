@@ -425,50 +425,104 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
             )
         val usedExerciseIds = mutableSetOf<String>()
 
-        return program.copy(
-            schemaVersion = GeneratedWorkoutProgram.SCHEMA_VERSION,
-            description = program.description.ifBlank { "Personalized workout program" },
-            days = program.days.mapIndexed { dayIndex, day ->
-                val normalizedExercises = day.exercises.mapNotNull { exercise ->
-                    val catalogExercise = catalogById[exercise.exerciseId]
-                        ?: catalogByName[exercise.exerciseName.normalizedLookupKey()]
-                    val safeCatalogExercise = catalogExercise
-                        ?.takeIf { it.id !in usedExerciseIds }
-                        ?.takeIf { it in eligibleCatalog }
-                        ?: findCompatibleReplacement(
-                            exercise = exercise,
-                            eligibleCatalog = eligibleCatalog,
-                            usedExerciseIds = usedExerciseIds
-                        )
+        return repairDayCount(
+            program.copy(
+                schemaVersion = GeneratedWorkoutProgram.SCHEMA_VERSION,
+                description = program.description.ifBlank { "Personalized workout program" },
+                days = program.days.mapIndexed { dayIndex, day ->
+                    val normalizedExercises = day.exercises.mapNotNull { exercise ->
+                        val catalogExercise = catalogById[exercise.exerciseId]
+                            ?: catalogByName[exercise.exerciseName.normalizedLookupKey()]
+                        val safeCatalogExercise = catalogExercise
+                            ?.takeIf { it.id !in usedExerciseIds }
+                            ?.takeIf { it in eligibleCatalog }
+                            ?: findCompatibleReplacement(
+                                exercise = exercise,
+                                eligibleCatalog = eligibleCatalog,
+                                usedExerciseIds = usedExerciseIds
+                            )
 
-                    safeCatalogExercise?.let {
-                        usedExerciseIds.add(it.id)
-                        normalizePrescription(
-                            exercise.copy(
-                                exerciseId = it.id,
-                                exerciseName = it.name,
-                                primaryMuscle = it.primaryMuscleGroup,
-                                equipment = it.equipment
-                            ),
-                            beginner
-                        )
+                        safeCatalogExercise?.let {
+                            usedExerciseIds.add(it.id)
+                            normalizePrescription(
+                                exercise.copy(
+                                    exerciseId = it.id,
+                                    exerciseName = it.name,
+                                    primaryMuscle = it.primaryMuscleGroup,
+                                    equipment = it.equipment
+                                ),
+                                beginner
+                            )
+                        }
+                    }.let { exercises ->
+                        exercises.ifEmpty {
+                            fallbackExerciseForDay(day.dayName, eligibleCatalog, usedExerciseIds, beginner)?.let { listOf(it) }
+                                ?: emptyList()
+                        }
                     }
-                }.let { exercises ->
-                    exercises.ifEmpty {
-                        fallbackExerciseForDay(day.dayName, eligibleCatalog, usedExerciseIds, beginner)?.let { listOf(it) }
-                            ?: emptyList()
-                    }
+
+                    day.copy(
+                        scheduledDay = request.preferences?.trainingDays?.getOrNull(dayIndex)
+                            ?: day.scheduledDay
+                            ?: WorkoutTrainingDay.entries.getOrNull(dayIndex),
+                        focus = day.focus.ifBlank { day.dayName },
+                        estimatedDurationMinutes = day.estimatedDurationMinutes.coerceIn(5, 90),
+                        warmUp = normalizePhase(day.warmUp, "Light movement and mobility"),
+                        coolDown = normalizePhase(day.coolDown, "Easy breathing and mobility"),
+                        exercises = normalizedExercises.take(MAX_NORMALIZED_EXERCISES_PER_DAY)
+                    )
                 }
+            ),
+            request = request,
+            eligibleCatalog = eligibleCatalog,
+            usedExerciseIds = usedExerciseIds,
+            beginner = beginner
+        )
+    }
 
+    /**
+     * A model can return a valid JSON document with too few or too many days.
+     * Repair the schedule locally before asking the model to rewrite the whole
+     * document; this preserves the reviewed brief and avoids a fragile repair
+     * response for a deterministic shape error.
+     */
+    private fun repairDayCount(
+        program: GeneratedWorkoutProgram,
+        request: WorkoutGenerationRequest,
+        eligibleCatalog: List<ExerciseLibrary>,
+        usedExerciseIds: MutableSet<String>,
+        beginner: Boolean
+    ): GeneratedWorkoutProgram {
+        val targetDayCount = request.normalizedConstraints.daysPerWeek.coerceIn(1, 6)
+        val reviewedDays = request.preferences?.trainingDays.orEmpty()
+        val repairedDays = program.days.take(targetDayCount).toMutableList()
+
+        while (repairedDays.size < targetDayCount) {
+            val dayIndex = repairedDays.size
+            val scheduledDay = reviewedDays.getOrNull(dayIndex)
+                ?: WorkoutTrainingDay.entries.getOrNull(dayIndex)
+            val dayName = scheduledDay?.displayName() ?: "Day ${dayIndex + 1}"
+            repairedDays += GeneratedWorkoutDay(
+                dayName = dayName,
+                scheduledDay = scheduledDay,
+                focus = dayName,
+                estimatedDurationMinutes = request.normalizedConstraints.sessionDurationMinutes.coerceIn(5, 90),
+                warmUp = normalizePhase(GeneratedWorkoutPhase(), "Light movement and mobility"),
+                exercises = listOfNotNull(
+                    fallbackExerciseForDay(dayName, eligibleCatalog, usedExerciseIds, beginner)
+                ),
+                coolDown = normalizePhase(GeneratedWorkoutPhase(), "Easy breathing and mobility")
+            )
+        }
+
+        return program.copy(
+            days = repairedDays.mapIndexed { index, day ->
+                val scheduledDay = reviewedDays.getOrNull(index)
+                    ?: day.scheduledDay
+                    ?: WorkoutTrainingDay.entries.getOrNull(index)
                 day.copy(
-                    scheduledDay = request.preferences?.trainingDays?.getOrNull(dayIndex)
-                        ?: day.scheduledDay
-                        ?: WorkoutTrainingDay.entries.getOrNull(dayIndex),
-                    focus = day.focus.ifBlank { day.dayName },
-                    estimatedDurationMinutes = day.estimatedDurationMinutes.coerceIn(5, 90),
-                    warmUp = normalizePhase(day.warmUp, "Light movement and mobility"),
-                    coolDown = normalizePhase(day.coolDown, "Easy breathing and mobility"),
-                    exercises = normalizedExercises.take(MAX_NORMALIZED_EXERCISES_PER_DAY)
+                    scheduledDay = scheduledDay,
+                    dayName = day.dayName.ifBlank { scheduledDay?.displayName() ?: "Day ${index + 1}" }
                 )
             }
         )
@@ -609,6 +663,9 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
             else -> null
         }
     }
+
+    private fun WorkoutTrainingDay.displayName(): String =
+        name.lowercase().replaceFirstChar { it.uppercase() }
 
     private fun ExerciseCategory.matchesCategoryHint(hint: ExerciseCategory): Boolean = when (hint) {
         ExerciseCategory.CHEST -> this == ExerciseCategory.CHEST || this == ExerciseCategory.SHOULDERS || this == ExerciseCategory.ARMS || this == ExerciseCategory.TRICEPS
@@ -821,7 +878,8 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         var inString = false
         var escaped = false
         for (index in first until text.length) {
-            when (val character = text[index]) {
+            val character = text[index]
+            when (character) {
                 '\\' -> if (inString) escaped = !escaped else escaped = false
                 '"' -> if (!escaped) inString = !inString
                 '{' -> if (!inString) depth++

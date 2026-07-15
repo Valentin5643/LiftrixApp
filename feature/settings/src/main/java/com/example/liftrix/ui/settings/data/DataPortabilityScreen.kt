@@ -40,6 +40,11 @@ fun DataPortabilityScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val exportInProgress = when (val exportState = uiState.exportState) {
+        is UiState.Loading -> true
+        is UiState.Success -> exportState.data.isExporting
+        else -> false
+    }
     
     // Observe share export events
     LaunchedEffect(viewModel) {
@@ -145,6 +150,7 @@ fun DataPortabilityScreen(
                                     viewModel.handleEvent(DataPortabilityEvent.StartExport)
                                 },
                                 leadingIcon = Icons.Default.FileDownload,
+                                enabled = !exportInProgress,
                                 modifier = Modifier.weight(1f)
                             )
                             
@@ -155,6 +161,7 @@ fun DataPortabilityScreen(
                                     viewModel.handleEvent(DataPortabilityEvent.StartExport)
                                 },
                                 leadingIcon = Icons.Default.FileDownload,
+                                enabled = !exportInProgress,
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -214,35 +221,6 @@ fun DataPortabilityScreen(
                             )
                         }
                         
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "Backup frequency",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                text = "Daily",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "Cloud sync",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                text = "Enabled",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
                     }
                 }
             }
@@ -295,6 +273,56 @@ fun DataPortabilityScreen(
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onErrorContainer
                                 )
+                            }
+                        }
+                    }
+                }
+                is UiState.Success -> {
+                    when {
+                        exportState.data.isExporting -> item {
+                            Card(modifier = Modifier.fillMaxWidth()) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    CircularProgressIndicator()
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = exportState.data.exportStatusMessage
+                                            ?: "Exporting data...",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                        }
+
+                        exportState.data.exportError != null -> item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Error,
+                                        contentDescription = "Export failed",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Export failed. Please try again.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
                             }
                         }
                     }

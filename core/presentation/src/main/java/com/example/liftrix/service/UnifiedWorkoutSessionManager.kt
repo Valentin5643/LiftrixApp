@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.util.Log
 import androidx.core.content.ContextCompat
-import androidx.core.content.edit
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.Exercise
 import com.example.liftrix.domain.model.ExerciseCategory
@@ -29,6 +28,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,6 +39,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import timber.log.Timber
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -70,6 +71,8 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         ignoreUnknownKeys = true
         encodeDefaults = true
     }
+    private val persistenceGeneration = AtomicLong(0L)
+    private val persistenceOperations = Channel<PersistenceOperation>(Channel.UNLIMITED)
 
     private val _currentSession = MutableStateFlow<UnifiedWorkoutSession?>(null)
     val currentSession: StateFlow<UnifiedWorkoutSession?> = _currentSession.asStateFlow()
@@ -82,6 +85,9 @@ class UnifiedWorkoutSessionManager @Inject constructor(
     val savedWorkoutId: StateFlow<String?> = _savedWorkoutId.asStateFlow()
 
     init {
+        scope.launch {
+            processPersistenceOperations()
+        }
         // Ensure session recovery happens immediately
         recoverSessionOnStartup()
     }
@@ -115,9 +121,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             Timber.d("Exercise $index: ${exercise.name} with ${exercise.sets.size} sets")
         }
         
-        scope.launch {
-            persistSession(session)
-        }
+        queueSessionSnapshot(session)
         
         // Start foreground service for force-started sessions too
         startWorkoutForegroundService()
@@ -140,9 +144,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         val pausedSession = session.pause()
         _currentSession.value = pausedSession
         
-        scope.launch {
-            persistSession(pausedSession)
-        }
+        queueSessionSnapshot(pausedSession)
         
         Timber.d("Session paused: ${session.name}")
     }
@@ -162,9 +164,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         val resumedSession = session.resume()
         _currentSession.value = resumedSession
         
-        scope.launch {
-            persistSession(resumedSession)
-        }
+        queueSessionSnapshot(resumedSession)
         
         Timber.d("Session resumed: ${session.name}")
     }
@@ -250,9 +250,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             val updatedSession = session.addExercise(exercise)
             _currentSession.value = updatedSession
             
-            scope.launch {
-                persistSession(updatedSession)
-            }
+            queueSessionSnapshot(updatedSession)
             
             Timber.d("Exercise added to session: ${exercise.name}")
         } catch (e: Exception) {
@@ -276,9 +274,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             val updatedSession = session.removeExercise(exerciseId)
             _currentSession.value = updatedSession
             
-            scope.launch {
-                persistSession(updatedSession)
-            }
+            queueSessionSnapshot(updatedSession)
             
             Timber.d("Exercise removed from session: $exerciseId")
         } catch (e: Exception) {
@@ -302,9 +298,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             val updatedSession = session.updateExercise(exerciseId, updatedExercise)
             _currentSession.value = updatedSession
             
-            scope.launch {
-                persistSession(updatedSession)
-            }
+            queueSessionSnapshot(updatedSession)
             
             Timber.d("Exercise updated in session: ${updatedExercise.name}")
         } catch (e: Exception) {
@@ -353,9 +347,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             // Immediately update state to trigger UI refresh
             _currentSession.value = updatedSession
             
-            scope.launch {
-                persistSession(updatedSession)
-            }
+            queueSessionSnapshot(updatedSession)
             
             Timber.d("Set updated in session: exercise=$exerciseId, set=$setNumber, completed=${updatedSet.isCompleted()}")
         } catch (e: Exception) {
@@ -379,9 +371,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             val updatedSession = session.moveToNextExercise()
             _currentSession.value = updatedSession
             
-            scope.launch {
-                persistSession(updatedSession)
-            }
+            queueSessionSnapshot(updatedSession)
             
             Timber.d("Moved to next exercise in session")
         } catch (e: Exception) {
@@ -405,9 +395,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             val updatedSession = session.moveToPreviousExercise()
             _currentSession.value = updatedSession
             
-            scope.launch {
-                persistSession(updatedSession)
-            }
+            queueSessionSnapshot(updatedSession)
             
             Timber.d("Moved to previous exercise in session")
         } catch (e: Exception) {
@@ -431,9 +419,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             val updatedSession = session.updateNotes(notes)
             _currentSession.value = updatedSession
             
-            scope.launch {
-                persistSession(updatedSession)
-            }
+            queueSessionSnapshot(updatedSession)
             
             Timber.d("Session notes updated")
         } catch (e: Exception) {
@@ -468,13 +454,10 @@ class UnifiedWorkoutSessionManager @Inject constructor(
     override fun refreshSessionState() {
         val session = _currentSession.value
         if (session != null) {
-            // Trigger state update by reassigning the same session
-            // This ensures observers get notified of any changes
-            _currentSession.value = session.copy(lastModified = Instant.now())
+            // A refresh is still a mutation: bank any active elapsed segment first.
+            _currentSession.value = session.touch()
             
-            scope.launch {
-                persistSession(_currentSession.value!!)
-            }
+            queueSessionSnapshot(_currentSession.value!!)
             
             Timber.d("Session state refreshed")
         }
@@ -587,7 +570,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         _currentSession.value = session.copy(
             sessionStatus = UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE
         )
-        persistSession(_currentSession.value!!)
+        queueSessionSnapshot(_currentSession.value!!)
     }
 
     private fun isRecoverableCompletionError(exception: Throwable): Boolean {
@@ -601,17 +584,100 @@ class UnifiedWorkoutSessionManager @Inject constructor(
     /**
      * Persists session to SharedPreferences
      */
-    private suspend fun persistSession(session: UnifiedWorkoutSession) {
-        try {
-            val serializedSession = json.encodeToString(session.toSerializable())
-            sharedPrefs.edit {
-                putString(KEY_CURRENT_SESSION, serializedSession)
-                putLong(KEY_LAST_UPDATED, System.currentTimeMillis())
-            }
-            Timber.d("Session persisted: ${session.name}")
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to persist session: ${session.name}")
+    private fun queueSessionSnapshot(session: UnifiedWorkoutSession) {
+        val generation = persistenceGeneration.incrementAndGet()
+        val result = persistenceOperations.trySend(
+            PersistenceOperation.Snapshot(generation, session)
+        )
+        if (result.isFailure) {
+            reportPersistenceFailure(
+                message = "Failed to queue active workout persistence",
+                throwable = result.exceptionOrNull()
+            )
         }
+    }
+
+    private fun queueSessionClear() {
+        val generation = persistenceGeneration.incrementAndGet()
+        val result = persistenceOperations.trySend(PersistenceOperation.Clear(generation))
+        if (result.isFailure) {
+            reportPersistenceFailure(
+                message = "Failed to queue active workout clear",
+                throwable = result.exceptionOrNull()
+            )
+        }
+    }
+
+    private suspend fun processPersistenceOperations() {
+        for (operation in persistenceOperations) {
+            when (operation) {
+                is PersistenceOperation.Snapshot -> {
+                    if (operation.generation != persistenceGeneration.get()) {
+                        Timber.d(
+                            "Skipping stale session snapshot generation=%s latestGeneration=%s",
+                            operation.generation,
+                            persistenceGeneration.get()
+                        )
+                        continue
+                    }
+                    writeSessionSnapshot(operation)
+                }
+
+                is PersistenceOperation.Clear -> clearPersistedSession(operation)
+            }
+        }
+    }
+
+    private fun writeSessionSnapshot(operation: PersistenceOperation.Snapshot) {
+        try {
+            val serializedSession = json.encodeToString(operation.session.toSerializable())
+            val committed = sharedPrefs.edit()
+                .putString(KEY_CURRENT_SESSION, serializedSession)
+                .putLong(KEY_LAST_UPDATED, System.currentTimeMillis())
+                .commit()
+            if (!committed) {
+                reportPersistenceFailure("Failed to commit active workout snapshot")
+                return
+            }
+            Timber.d(
+                "Session persisted: %s generation=%s",
+                operation.session.name,
+                operation.generation
+            )
+        } catch (e: Exception) {
+            reportPersistenceFailure(
+                message = "Failed to persist session: ${operation.session.name}",
+                throwable = e
+            )
+        }
+    }
+
+    private fun clearPersistedSession(operation: PersistenceOperation.Clear) {
+        try {
+            val committed = sharedPrefs.edit()
+                .remove(KEY_CURRENT_SESSION)
+                .remove(KEY_LAST_UPDATED)
+                .commit()
+            if (!committed) {
+                reportPersistenceFailure("Failed to commit active workout clear")
+                return
+            }
+            Timber.d("Persisted session cleared generation=%s", operation.generation)
+        } catch (e: Exception) {
+            reportPersistenceFailure(
+                message = "Failed to clear persisted active workout",
+                throwable = e
+            )
+        }
+    }
+
+    private fun reportPersistenceFailure(message: String, throwable: Throwable? = null) {
+        if (throwable != null) {
+            Timber.e(throwable, message)
+        } else {
+            Timber.e(message)
+        }
+        _recoveryState.value = RecoveryState.RecoveryError(error = message)
     }
 
     /**
@@ -626,10 +692,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         
         _currentSession.value = null
         // Don't clear the saved workout ID here - it's needed for navigation
-        sharedPrefs.edit {
-            remove(KEY_CURRENT_SESSION)
-            remove(KEY_LAST_UPDATED)
-        }
+        queueSessionClear()
         Timber.d("Session cleared${currentSession?.let { ": ${it.name}" } ?: ""}")
     }
     
@@ -777,6 +840,19 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         data class RecoveryError(
             val error: String
         ) : RecoveryState()
+    }
+
+    private sealed interface PersistenceOperation {
+        val generation: Long
+
+        data class Snapshot(
+            override val generation: Long,
+            val session: UnifiedWorkoutSession
+        ) : PersistenceOperation
+
+        data class Clear(
+            override val generation: Long
+        ) : PersistenceOperation
     }
     
     companion object {

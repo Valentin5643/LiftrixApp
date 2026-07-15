@@ -72,7 +72,6 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
         viewModelScope.launch {
             timerServiceManager.connectionState.collect { state ->
                 if (state is TimerServiceManager.ConnectionState.Connected) {
-                    ensureSessionTimerStarted()
                     startPendingRestTimerIfNeeded()
                 }
             }
@@ -121,10 +120,6 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                                 loadPreviousSetData()
                             }
 
-                            if (session.sessionStatus == UnifiedWorkoutSession.SessionStatus.ACTIVE) {
-                                ensureSessionTimerStarted()
-                            }
-                            
                             // Don't override WorkoutCompleted state when session is completed
                             val currentState = _uiState.value
                             if (currentState is UnifiedActiveWorkoutUiState.WorkoutCompleted && 
@@ -396,17 +391,6 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
     fun adjustRestTimerBy(deltaSeconds: Int) {
         timerServiceManager.adjustRestBySeconds(deltaSeconds).onFailure { error ->
             Timber.w(error, "Failed to adjust rest timer")
-        }
-    }
-
-    private fun ensureSessionTimerStarted() {
-        val session = sessionManager.currentSession.value ?: return
-        if (session.sessionStatus != UnifiedWorkoutSession.SessionStatus.ACTIVE) return
-
-        if (timerServiceManager.getCurrentTimerState().timerState is WorkoutTimerService.TimerState.Stopped) {
-            timerServiceManager.startSession().onFailure { error ->
-                Timber.w(error, "Failed to start workout session timer")
-            }
         }
     }
 

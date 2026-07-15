@@ -487,10 +487,22 @@ class ExportWorkoutsUseCaseImpl @Inject constructor(
     }
 
     private fun File.safeWriteText(content: String) {
-        val writablePath = runCatching { path }.getOrNull()
-        if (writablePath.isNullOrBlank()) return
-        parentFile?.mkdirs()
-        runCatching { writeText(content) }
-            .onFailure { Timber.w(it, "Unable to write export file at $writablePath") }
+        require(path.isNotBlank()) { "Export file path is unavailable" }
+        try {
+            parentFile?.let { parent ->
+                check(parent.exists() || parent.mkdirs()) {
+                    "Unable to create export directory: ${parent.path}"
+                }
+            }
+            writeText(content)
+            val expectedBytes = content.toByteArray(Charsets.UTF_8).size.toLong()
+            check(isFile && length() == expectedBytes) {
+                "Export file write was incomplete: $path"
+            }
+        } catch (error: Exception) {
+            runCatching { delete() }
+            Timber.e(error, "Unable to write export file at $path")
+            throw error
+        }
     }
 }

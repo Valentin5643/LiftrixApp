@@ -234,12 +234,17 @@ class FeedRepositoryImpl @Inject constructor(
         request: CreateWorkoutPostRequest
     ): LiftrixResult<WorkoutPost> = liftrixCatching(
         errorMapper = { throwable ->
+            Timber.e(
+                throwable,
+                "[WORKOUT-POSTS] Failed to create workout post for user=$userId workout=${request.workoutId}"
+            )
             LiftrixError.BusinessLogicError(
                 code = "CREATE_WORKOUT_POST",
                 errorMessage = "Failed to create workout post",
                 analyticsContext = mapOf(
                     "user_id" to userId,
-                    "workout_id" to request.workoutId
+                    "workout_id" to request.workoutId,
+                    "cause_type" to throwable::class.java.simpleName
                 )
             )
         }
@@ -264,6 +269,12 @@ class FeedRepositoryImpl @Inject constructor(
                 exercisesCount = calculateExercisesCount(workout),
                 prsCount = 0 // Will be calculated later
             )
+
+            // WorkoutPostEntity has a foreign key to SocialProfileEntity. Profile creation
+            // belongs in the data layer so every post-creation caller gets the same guarantee.
+            checkNotNull(loadOrCreateAuthorProfile(entity)) {
+                "Cannot create workout post without a social profile for user $userId"
+            }
 
             workoutPostDao.upsertLocal(entity)
             Timber.i(

@@ -4,7 +4,6 @@ import com.example.liftrix.domain.model.chat.ChatMessage
 import com.example.liftrix.domain.model.chat.ChatConversation
 import com.example.liftrix.domain.model.chat.ChatPreferences
 import com.example.liftrix.domain.model.chat.MessageType
-import com.example.liftrix.domain.model.chat.UsageLimits
 import com.example.liftrix.domain.model.chat.WorkoutContext
 import com.example.liftrix.domain.model.common.LiftrixResult
 import kotlinx.coroutines.flow.Flow
@@ -50,11 +49,6 @@ interface ChatRepository {
     ): LiftrixResult<List<ChatMessage>>
     
     /**
-     * Checks current usage against limits.
-     */
-    suspend fun checkUsageLimits(userId: String): LiftrixResult<UsageLimits>
-    
-    /**
      * Gets chat preferences for a user.
      */
     fun observePreferences(userId: String): Flow<ChatPreferences?>
@@ -81,11 +75,6 @@ interface ChatRepository {
         userId: String,
         conversationId: String
     ): LiftrixResult<Int>
-    
-    /**
-     * Gets token usage for the current hour.
-     */
-    suspend fun getHourlyTokenUsage(userId: String): Int
     
     /**
      * Clears all chat history for a user.

@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -22,8 +21,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.FitnessCenter
+import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -98,6 +99,11 @@ fun ChatbotScreen(
     val scope = rememberCoroutineScope()
     var renameTarget by remember { mutableStateOf<ChatConversation?>(null) }
     var deleteTarget by remember { mutableStateOf<ChatConversation?>(null) }
+    val canUseAiAction = uiState.isAiAccessEnabled &&
+        uiState.isOnline &&
+        !uiState.isTyping &&
+        !uiState.isGeneratingProgram &&
+        uiState.usageLimits?.canSendMessage() != false
 
     LaunchedEffect(uiState.workoutBuilderNavigation) {
         uiState.workoutBuilderNavigation?.let { request ->
@@ -136,16 +142,21 @@ fun ChatbotScreen(
             }
         },
         bottomBar = {
-            ChatInputBar(
-                text = uiState.currentInput,
-                onTextChange = { viewModel.handleEvent(ChatbotEvent.UpdateInput(it)) },
-                onSend = { viewModel.handleEvent(ChatbotEvent.SendMessage(it)) },
-                enabled = uiState.isAiAccessEnabled &&
-                    uiState.isOnline &&
-                    !uiState.isTyping &&
-                    uiState.usageLimits?.canSendMessage() != false,
-                currentLanguage = uiState.currentLanguage
-            )
+            Column {
+                CreateWorkoutPlanAction(
+                    currentLanguage = uiState.currentLanguage,
+                    onClick = { viewModel.handleEvent(ChatbotEvent.CreateWorkoutPlan) },
+                    enabled = canUseAiAction,
+                    modifier = Modifier.padding(horizontal = LiftrixSpacing.medium)
+                )
+                ChatInputBar(
+                    text = uiState.currentInput,
+                    onTextChange = { viewModel.handleEvent(ChatbotEvent.UpdateInput(it)) },
+                    onSend = { viewModel.handleEvent(ChatbotEvent.SendMessage(it)) },
+                    enabled = canUseAiAction,
+                    currentLanguage = uiState.currentLanguage
+                )
+            }
         }
     ) { paddingValues ->
         Box(
@@ -186,11 +197,7 @@ fun ChatbotScreen(
                     viewModel.handleEvent(ChatbotEvent.ReportAIMessage(messageId, messageContent, reason, notes))
                 },
                 onPromptSelected = { prompt ->
-                    if (prompt == "Create a workout plan") {
-                        viewModel.handleEvent(ChatbotEvent.CreateWorkoutPlan)
-                    } else {
-                        viewModel.handleEvent(ChatbotEvent.UpdateInput(prompt))
-                    }
+                    viewModel.handleEvent(ChatbotEvent.UpdateInput(prompt))
                 },
                 modifier = Modifier
                     .weight(1f)
@@ -203,14 +210,19 @@ fun ChatbotScreen(
                 }
             }
 
-            if (!showTopBar) {
-                ChatControlsRow(
-                    usageLimits = uiState.usageLimits,
-                    currentLanguage = uiState.currentLanguage,
+            if (!showTopBar && compact) {
+                TextButton(
+                    onClick = { scope.launch { drawerState.open() } },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(LiftrixSpacing.medium)
-                )
+                        .padding(top = LiftrixSpacing.small, end = LiftrixSpacing.medium)
+                        .heightIn(min = 48.dp)
+                        .testTag("conversation_history_button")
+                ) {
+                    Icon(Icons.Outlined.Forum, contentDescription = null)
+                    Spacer(Modifier.width(LiftrixSpacing.small))
+                    Text(if (uiState.currentLanguage == Language.ROMANIAN) "Chat-uri" else "Chats")
+                }
             }
 
             // AI Disclaimer Banner (session-scoped)
@@ -268,36 +280,6 @@ fun ChatbotScreen(
     }
 }
 
-@Composable
-private fun ChatControlsRow(
-    usageLimits: UsageLimits?,
-    currentLanguage: Language,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.small),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        usageLimits?.let { limits ->
-            if (limits.dailyMessagesRemaining < 20) {
-                Text(
-                    text = if (currentLanguage == Language.ROMANIAN)
-                        "${limits.dailyMessagesRemaining} ramase azi"
-                    else
-                        "${limits.dailyMessagesRemaining} left today",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (limits.dailyMessagesRemaining < 5)
-                        MaterialTheme.colorScheme.error
-                    else
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChatbotTopBar(
@@ -317,14 +299,23 @@ private fun ChatbotTopBar(
         navigationIcon = {
             IconButton(onClick = onNavigateBack) {
                 Icon(
-                    Icons.Default.ArrowBack, 
+                    Icons.Default.ArrowBack,
                     contentDescription = if (currentLanguage == Language.ROMANIAN) "Înapoi" else "Back"
                 )
             }
         },
         actions = {
             if (showHistoryButton) {
-                IconButton(onClick = onOpenHistory) { Icon(Icons.Default.Menu, contentDescription = "Conversation history") }
+                TextButton(
+                    onClick = onOpenHistory,
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .testTag("conversation_history_button")
+                ) {
+                    Icon(Icons.Outlined.Forum, contentDescription = null)
+                    Spacer(Modifier.width(LiftrixSpacing.small))
+                    Text(if (currentLanguage == Language.ROMANIAN) "Chat-uri" else "Chats")
+                }
             }
             // Usage limits display
             usageLimits?.let { limits ->
@@ -348,6 +339,36 @@ private fun ChatbotTopBar(
             containerColor = MaterialTheme.colorScheme.surface
         )
     )
+}
+
+@Composable
+private fun CreateWorkoutPlanAction(
+    currentLanguage: Language,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .testTag("create_workout_plan_button")
+    ) {
+        Icon(Icons.Outlined.FitnessCenter, contentDescription = null)
+        Spacer(Modifier.width(LiftrixSpacing.small))
+        Text(
+            text = if (currentLanguage == Language.ROMANIAN) {
+                "Creează un plan de antrenament"
+            } else {
+                "Create a workout plan"
+            },
+            maxLines = 1
+        )
+        Spacer(Modifier.width(LiftrixSpacing.small))
+        Icon(Icons.Outlined.ArrowForward, contentDescription = null)
+    }
 }
 
 @Composable
@@ -403,6 +424,7 @@ private fun MessageList(
         if (messages.isEmpty() && generatedProgram == null && !isTyping) {
             item(key = "empty_ai_coach_state") {
                 AiCoachEmptyState(
+                    currentLanguage = currentLanguage,
                     onPromptSelected = onPromptSelected,
                     modifier = Modifier.fillParentMaxSize()
                 )
@@ -486,14 +508,15 @@ private fun WorkoutGenerationResult.previewItemKey(): String {
 
 @Composable
 private fun AiCoachEmptyState(
+    currentLanguage: Language,
     onPromptSelected: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val prompts = listOf(
-        "Create a workout plan",
-        "Improve my form",
-        "What should I train today?"
-    )
+    val prompts = if (currentLanguage == Language.ROMANIAN) {
+        listOf("Îmbunătățește-mi forma", "Ce ar trebui să antrenez azi?")
+    } else {
+        listOf("Improve my form", "What should I train today?")
+    }
 
     Column(
         modifier = modifier.padding(horizontal = LiftrixSpacing.medium),
@@ -510,29 +533,45 @@ private fun AiCoachEmptyState(
         Spacer(modifier = Modifier.height(LiftrixSpacing.medium))
 
         Text(
-            text = "Your AI Coach is ready.",
+            text = if (currentLanguage == Language.ROMANIAN) {
+                "Antrenorul tău AI este pregătit."
+            } else {
+                "Your AI Coach is ready."
+            },
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center
         )
 
+        Spacer(modifier = Modifier.height(LiftrixSpacing.large))
+
+        Text(
+            text = if (currentLanguage == Language.ROMANIAN) {
+                "Încearcă o întrebare"
+            } else {
+                "Try a quick question"
+            },
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
         Spacer(modifier = Modifier.height(LiftrixSpacing.small))
 
         Column(
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             prompts.forEach { prompt ->
-                AssistChip(
+                OutlinedButton(
                     onClick = { onPromptSelected(prompt) },
-                    label = {
-                        Text(
-                            text = prompt,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                )
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                ) {
+                    Text(text = prompt, textAlign = TextAlign.Center, maxLines = 1)
+                }
             }
         }
     }

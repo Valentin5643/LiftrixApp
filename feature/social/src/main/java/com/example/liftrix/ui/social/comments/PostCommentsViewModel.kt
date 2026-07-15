@@ -67,7 +67,6 @@ class PostCommentsViewModel @Inject constructor(
             is PostCommentsEvent.Initialize -> initializeForPost(event.postId)
             is PostCommentsEvent.UpdateCommentText -> updateCommentText(event.text)
             PostCommentsEvent.PostComment -> postComment()
-            is PostCommentsEvent.LikeComment -> toggleCommentLike(event.commentId)
             is PostCommentsEvent.ReplyToComment -> setReplyingTo(event.comment)
             PostCommentsEvent.CancelReply -> cancelReply()
             PostCommentsEvent.RefreshComments -> refreshComments()
@@ -150,54 +149,6 @@ class PostCommentsViewModel @Inject constructor(
                 updateState { PostCommentsUiState.Error(error) }
             } finally {
                 _isPosting.value = false
-            }
-        }
-    }
-
-    private fun toggleCommentLike(commentId: String) {
-        val currentUserId = _currentUserId.value ?: return
-        val postId = _postId.value ?: return
-        
-        viewModelScope.launch {
-            try {
-                Timber.d("Toggling like for comment: $commentId")
-                
-                // Optimistic update - assume success for immediate UI feedback
-                updateState { currentState ->
-                    when (currentState) {
-                        is PostCommentsUiState.Success -> currentState
-                        else -> PostCommentsUiState.Success
-                    }
-                }
-                
-                // Execute the actual like toggle operation
-                // Note: toggleCommentLike method would need to be added to EngagementRepository
-                // For now, implement a placeholder that tracks the operation
-                Timber.d("Comment like toggle requested for $commentId (implementation pending)")
-                
-                // Simulate successful operation for UI testing
-                kotlinx.coroutines.delay(500) // Simulate network delay
-                
-                // Keep success state - actual implementation would update like count
-                updateState { PostCommentsUiState.Success }
-                
-            } catch (e: Exception) {
-                val liftrixError = LiftrixError.BusinessLogicError(
-                    code = "COMMENT_LIKE_ERROR",
-                    errorMessage = "Error toggling comment like: ${e.message}",
-                    analyticsContext = mapOf(
-                        "comment_id" to commentId,
-                        "post_id" to postId,
-                        "user_id" to currentUserId.value
-                    )
-                )
-                Timber.e(e, "Exception toggling comment like: $commentId")
-                
-                updateState { PostCommentsUiState.Error(liftrixError) }
-                
-                // Auto-recovery after showing error
-                kotlinx.coroutines.delay(2000)
-                updateState { PostCommentsUiState.Success }
             }
         }
     }
@@ -358,7 +309,6 @@ sealed class PostCommentsEvent {
     data class Initialize(val postId: String) : PostCommentsEvent()
     data class UpdateCommentText(val text: String) : PostCommentsEvent()
     object PostComment : PostCommentsEvent()
-    data class LikeComment(val commentId: String) : PostCommentsEvent()
     data class ReplyToComment(val comment: com.example.liftrix.domain.model.social.PostComment) : PostCommentsEvent()
     object CancelReply : PostCommentsEvent()
     object RefreshComments : PostCommentsEvent()

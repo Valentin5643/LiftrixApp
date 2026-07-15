@@ -213,6 +213,10 @@ class DataPortabilityViewModel @Inject constructor(
             updateErrorState(LiftrixError.AuthenticationError("User not authenticated"))
             return
         }
+        if (_uiState.value.exportState.dataOrNull()?.isExporting == true) {
+            Timber.w("Ignoring duplicate export request while an export is active")
+            return
+        }
 
         val currentExportData = when (val state = _uiState.value.exportState) {
             is UiState.Success -> state.data
@@ -287,7 +291,10 @@ class DataPortabilityViewModel @Inject constructor(
                         val exportData = (currentState.exportState.dataOrNull() ?: ExportData()).copy(
                             isExporting = false,
                             exportProgress = 0,
-                            exportError = error as? LiftrixError
+                            exportError = error as? LiftrixError ?: LiftrixError.BusinessLogicError(
+                                code = "EXPORT_FAILED",
+                                errorMessage = error.message ?: "Export failed"
+                            )
                         )
                         currentState.copy(exportState = UiState.Success(exportData))
                     }

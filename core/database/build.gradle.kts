@@ -56,6 +56,8 @@ dependencies {
 
     add("kspDebug", libs.room.compiler)
     add("kspRelease", libs.room.compiler)
+    // Room's KSP compiler is the authoritative DAO/query validator. The root
+    // validateRoomQueries command inventories entity sources and depends on debug compilation.
     add("kspDebug", libs.hilt.compiler)
     add("kspRelease", libs.hilt.compiler)
     add("kspDebug", project(":user-scoping-processor"))

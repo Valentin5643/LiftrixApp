@@ -9,8 +9,6 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.error.withAnalyticsContext
 import com.example.liftrix.domain.repository.ChatRepository
 import com.example.liftrix.domain.service.AIChatService
-import com.example.liftrix.domain.service.AbuseAction
-import com.example.liftrix.domain.service.AbusePreventionServiceContract
 import com.example.liftrix.domain.service.RateLimitingServiceContract
 import com.example.liftrix.domain.util.DomainLogger as Timber
 import kotlinx.coroutines.flow.first
@@ -25,7 +23,6 @@ class SendChatMessageUseCase @Inject constructor(
     private val chatRepository: ChatRepository,
     private val aiChatService: AIChatService,
     private val rateLimitingService: RateLimitingServiceContract,
-    private val abusePreventionService: AbusePreventionServiceContract,
     private val titlePolicy: ChatConversationTitlePolicy
 ) {
     private companion object {
@@ -53,12 +50,11 @@ class SendChatMessageUseCase @Inject constructor(
         errorMapper = { throwable ->
             Timber.e(
                 throwable,
-                "[AI] SendChatMessageUseCase: failed userId=%s conversationId=%s messageChars=%d language=%s cause=%s",
-                userId,
-                conversationId ?: "generated",
+                "[AI] SendChatMessageUseCase: failed requestId=%s messageChars=%d language=%s causeType=%s",
+                requestId,
                 message.length,
                 language,
-                throwable.message ?: throwable.javaClass.simpleName
+                throwable.javaClass.simpleName
             )
             when (throwable) {
                 is LiftrixError -> throwable.withAnalyticsContext(
@@ -106,13 +102,13 @@ class SendChatMessageUseCase @Inject constructor(
         require(requestId.isNotBlank()) { "Request ID cannot be empty" }
         val activeConversationId = conversationId ?: "chat_$requestId"
         
-        Timber.i("[AI] SendChatMessageUseCase: sending message user=$userId conversation=$activeConversationId messageChars=${message.length} language=$language")
+        Timber.i("[AI] SendChatMessageUseCase: sending requestId=$requestId messageChars=${message.length} language=$language")
         
         // 1. Check rate limits
         val rateLimitStatus = rateLimitingService.checkLimits(userId)
         Timber.tag(MONTHLY_USAGE_TAG).d(
-            "Send message rate limit result userId=%s isLimited=%s reason=%s dailyRemaining=%s monthlyRemaining=%s source=RateLimitingService",
-            userId,
+            "Send message rate limit result requestId=%s isLimited=%s reason=%s dailyRemaining=%s monthlyRemaining=%s source=RateLimitingService",
+            requestId,
             rateLimitStatus.isLimited,
             rateLimitStatus.reason ?: "none",
             rateLimitStatus.messagesRemaining?.toString() ?: "unknown",
@@ -121,8 +117,8 @@ class SendChatMessageUseCase @Inject constructor(
         if (rateLimitStatus.isLimited) {
             if (rateLimitStatus.tokensRemaining == 0) {
                 Timber.tag(MONTHLY_USAGE_TAG).w(
-                    "Send message blocked by monthly limit userId=%s reason=%s source=RateLimitingService",
-                    userId,
+                    "Send message blocked by monthly limit requestId=%s reason=%s source=RateLimitingService",
+                    requestId,
                     rateLimitStatus.reason ?: "unknown"
                 )
             }
@@ -131,42 +127,14 @@ class SendChatMessageUseCase @Inject constructor(
             )
         }
         
-        // 2. Check for abuse
-        val abuseDetection = abusePreventionService.detectAbuse(userId, message)
-        if (abuseDetection.isAbusive) {
-            when (abuseDetection.action) {
-                AbuseAction.REJECT -> throw IllegalArgumentException(
-                    abuseDetection.warning ?: "Message violates usage guidelines"
-                )
-                AbuseAction.COOLDOWN -> throw IllegalStateException(
-                    abuseDetection.warning ?: "Please wait before sending another message"
-                )
-                AbuseAction.THROTTLE -> throw IllegalStateException(
-                    abuseDetection.warning ?: "Please slow down"
-                )
-                else -> {
-                    // For REVIEW or TRUNCATE, log but continue
-                    Timber.w("Abuse detection flagged message: ${abuseDetection.warning}")
-                }
-            }
-        }
-        
-        // 3. Get user chat preferences before persistence, limits, and AI personalization.
+        // 2. Get user chat preferences before persistence and AI personalization.
+        // Abuse policy and the authoritative quota check run in PaidAiCallExecutor.
         val currentPreferences = chatRepository.observePreferences(userId).first()
         val shouldSaveConversation = currentPreferences?.conversationSaveEnabled
             ?: currentPreferences?.conversationHistoryEnabled
             ?: true
 
-        // 4. Check user-configured usage limits.
-        val userConfiguredLimits = chatRepository.checkUsageLimits(userId).getOrThrow()
-        if (userConfiguredLimits.dailyMessagesRemaining <= 0) {
-            throw IllegalStateException("Daily message limit reached. Please try again tomorrow.")
-        }
-        if (userConfiguredLimits.monthlyTokensRemaining <= 0) {
-            throw IllegalStateException("Monthly token limit reached. Please try again next month.")
-        }
-
-        // 5. Load prior conversation context before saving the current user message.
+        // 3. Load prior conversation context before saving the current user message.
         // Firebase AI chat history must contain completed prior turns, not the message
         // that is about to be sent again via sendMessage().
         val recentMessages = if (shouldSaveConversation) {
@@ -177,14 +145,14 @@ class SendChatMessageUseCase @Inject constructor(
             emptyList()
         }
         Timber.i(
-            "[AI] SendChatMessageUseCase: loaded prior conversation context conversation=%s messages=%d",
-            activeConversationId,
+            "[AI] SendChatMessageUseCase: loaded prior conversation context requestId=%s messages=%d",
+            requestId,
             recentMessages.size
         )
 
         val userPreferences = currentPreferences?.userContextPrompt
 
-        // 6. Save user message when conversation saving is enabled.
+        // 4. Save user message when conversation saving is enabled.
         val userMessage = if (shouldSaveConversation) {
             chatRepository.saveMessage(
                 messageId = "chat-$requestId-user",
@@ -210,7 +178,7 @@ class SendChatMessageUseCase @Inject constructor(
         
         Timber.i("[AI] SendChatMessageUseCase: user message ready id=${userMessage.id} persisted=$shouldSaveConversation")
         
-        // 7. Build conversation context
+        // 5. Build conversation context
         val conversationContext = com.example.liftrix.domain.service.ConversationContext(
             recentMessages = recentMessages,
             workoutContext = workoutContext,
@@ -220,8 +188,8 @@ class SendChatMessageUseCase @Inject constructor(
             includeExerciseFormTips = currentPreferences?.includeExerciseFormTips ?: true
         )
         
-        // 8. Get AI response
-        Timber.i("[AI] SendChatMessageUseCase: requesting AI response conversation=$activeConversationId priorMessages=${recentMessages.size}")
+        // 6. Get AI response
+        Timber.i("[AI] SendChatMessageUseCase: requesting AI response requestId=$requestId priorMessages=${recentMessages.size}")
         val aiResponse = aiChatService.generateResponse(
             userId = userId,
             message = message,
@@ -232,7 +200,7 @@ class SendChatMessageUseCase @Inject constructor(
         
         Timber.i("[AI] SendChatMessageUseCase: AI response generated processingMs=${aiResponse.processingTimeMs} tokens=${aiResponse.tokensUsed}")
         
-        // 9. Save AI response when conversation saving is enabled.
+        // 7. Save AI response when conversation saving is enabled.
         val assistantMessage = if (shouldSaveConversation) {
             chatRepository.saveMessage(
                 messageId = "chat-$requestId-assistant",

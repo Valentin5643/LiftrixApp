@@ -180,9 +180,10 @@ private fun ActiveWorkoutContent(
     var anomalySetIndex by remember { mutableStateOf(0) }
     var anomalyExerciseId by remember { mutableStateOf("") }
 
-    // Timer state
-    var elapsedTime by remember { mutableStateOf(session.elapsedTimeSeconds) }
-    LaunchedEffect(session.sessionStatus) {
+    // The model owns elapsed time; this local tick is display-only between model emissions.
+    var elapsedTime by remember(session.id) { mutableStateOf(session.getTotalDurationSeconds()) }
+    LaunchedEffect(session.id, session.sessionStatus) {
+        elapsedTime = session.getTotalDurationSeconds()
         while (session.sessionStatus == com.example.liftrix.domain.model.UnifiedWorkoutSession.SessionStatus.ACTIVE) {
             delay(1000)
             elapsedTime++

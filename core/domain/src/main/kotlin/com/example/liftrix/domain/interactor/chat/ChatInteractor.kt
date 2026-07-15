@@ -68,6 +68,9 @@ class ChatInteractor @Inject constructor(
     fun observeConversations(userId: String): Flow<LiftrixResult<List<ChatConversation>>> =
         chatOperationsUseCase.observeConversations(userId)
 
+    fun observePreferences(userId: String): Flow<ChatPreferences?> =
+        chatOperationsUseCase.observePreferences(userId)
+
     suspend fun renameConversation(userId: String, conversationId: String, title: String): LiftrixResult<Unit> =
         chatOperationsUseCase.renameConversation(userId, conversationId, title)
 

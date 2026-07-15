@@ -71,6 +71,7 @@ fun WorkoutPreferencesStep(
                         SelectableControl(
                             text = level.displayLabel(),
                             selected = preferences.level == level,
+                            showSelectionIcon = false,
                             onClick = { onChange(preferences.copy(level = level)) },
                             modifier = Modifier.weight(1f)
                         )
@@ -106,9 +107,11 @@ fun WorkoutPreferencesStep(
                             selected = day in preferences.trainingDays,
                             compact = true,
                             onClick = {
-                                val next = preferences.trainingDays.toMutableList().apply {
-                                    if (!add(day)) remove(day)
-                                }.distinct().sortedBy { it.ordinal }
+                                val next = (if (day in preferences.trainingDays) {
+                                    preferences.trainingDays.filterNot { it == day }
+                                } else {
+                                    preferences.trainingDays + day
+                                }).distinct().sortedBy { it.ordinal }
                                 onChange(preferences.copy(trainingDays = next))
                             },
                             modifier = Modifier.weight(1f)
@@ -209,7 +212,8 @@ private fun SelectableControl(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    compact: Boolean = false
+    compact: Boolean = false,
+    showSelectionIcon: Boolean = !compact
 ) {
     val colors = MaterialTheme.colorScheme
     Surface(
@@ -227,11 +231,18 @@ private fun SelectableControl(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (selected) {
+            if (selected && showSelectionIcon) {
                 Icon(Icons.Rounded.CheckCircle, contentDescription = "Selected", tint = colors.primary, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(7.dp))
             }
-            Text(text, textAlign = TextAlign.Center, maxLines = 2, style = MaterialTheme.typography.bodyMedium, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium)
+            Text(
+                text = text,
+                textAlign = TextAlign.Center,
+                maxLines = if (compact || !showSelectionIcon) 1 else 2,
+                softWrap = !(compact || !showSelectionIcon),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
+            )
         }
     }
 }
@@ -255,5 +266,5 @@ private fun BoundedTextArea(value: String, onValueChange: (String) -> Unit, labe
     )
 }
 
-private fun WorkoutProgramGoal.displayLabel() = name.lowercase().replace('_', ' ')
-private fun WorkoutProgramLevel.displayLabel() = name.lowercase().replace('_', ' ')
+private fun WorkoutProgramGoal.displayLabel() = name.lowercase().replace('_', ' ').replaceFirstChar(Char::uppercase)
+private fun WorkoutProgramLevel.displayLabel() = name.lowercase().replace('_', ' ').replaceFirstChar(Char::uppercase)

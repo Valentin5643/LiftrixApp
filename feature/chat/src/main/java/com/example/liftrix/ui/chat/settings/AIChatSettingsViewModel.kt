@@ -82,20 +82,36 @@ class AIChatSettingsViewModel @Inject constructor(
     
     private suspend fun loadUsageStatistics(userId: String) {
         val messageCountResult = chatRepository.getTotalMessageCount(userId)
-        val tokenUsageResult = chatRepository.getTotalTokenUsage(userId)
+        val usageStatsResult = chatInteractor.usageStats(userId)
+        val usageLimitsResult = chatInteractor.usageLimits(userId)
         
         messageCountResult.fold(
             onSuccess = { messageCount ->
-                tokenUsageResult.fold(
-                    onSuccess = { tokenUsage ->
-                        _uiState.value = _uiState.value.copy(
-                            totalMessages = messageCount,
-                            totalTokens = tokenUsage,
-                            statisticsLoaded = true
+                usageStatsResult.fold(
+                    onSuccess = { stats ->
+                        usageLimitsResult.fold(
+                            onSuccess = { limits ->
+                                _uiState.value = _uiState.value.copy(
+                                    totalMessages = messageCount,
+                                    totalTokens = stats.monthlyTokens,
+                                    dailyAiOperations = stats.dailyMessages,
+                                    dailyAiOperationLimit = stats.dailyMessageLimit,
+                                    dailyAiOperationsRemaining = limits.dailyMessagesRemaining,
+                                    monthlyTokenLimit = stats.monthlyTokenLimit,
+                                    monthlyTokensRemaining = limits.monthlyTokensRemaining,
+                                    hourlyTokens = stats.hourlyTokens,
+                                    estimatedMonthlyCost = stats.estimatedMonthlyCost,
+                                    usageWarning = limits.isNearDailyLimit || limits.isNearMonthlyLimit,
+                                    statisticsLoaded = true
+                                )
+                            },
+                            onFailure = { error ->
+                                Timber.e(error, "Failed to load ledger-backed usage limits")
+                            }
                         )
                     },
                     onFailure = { error ->
-                        Timber.e("Failed to load token usage: $error")
+                        Timber.e(error, "Failed to load ledger-backed AI usage")
                     }
                 )
             },
@@ -199,8 +215,7 @@ class AIChatSettingsViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         clearHistoryInProgress = false,
                         successMessage = "Chat history cleared. $deletedCount messages deleted.",
-                        totalMessages = 0,
-                        totalTokens = 0
+                        totalMessages = 0
                     )
                 },
                 onFailure = { error ->
@@ -292,6 +307,14 @@ data class AIChatSettingsUiState(
     val preferencesState: UiState<ChatPreferences> = UiState.Loading,
     val totalMessages: Int = 0,
     val totalTokens: Int = 0,
+    val dailyAiOperations: Int = 0,
+    val dailyAiOperationLimit: Int = 0,
+    val dailyAiOperationsRemaining: Int = 0,
+    val monthlyTokenLimit: Int = 0,
+    val monthlyTokensRemaining: Int = 0,
+    val hourlyTokens: Int = 0,
+    val estimatedMonthlyCost: Double = 0.0,
+    val usageWarning: Boolean = false,
     val statisticsLoaded: Boolean = false,
     val clearHistoryInProgress: Boolean = false,
     val exportInProgress: Boolean = false,

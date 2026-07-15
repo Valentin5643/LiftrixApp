@@ -132,9 +132,6 @@ fun PostCommentsScreen(
                     CommentsContent(
                         comments = comments,
                         currentUserId = currentUserId,
-                        onCommentLike = { commentId ->
-                            viewModel.handleEvent(PostCommentsEvent.LikeComment(commentId))
-                        },
                         onCommentReply = { comment ->
                             viewModel.handleEvent(PostCommentsEvent.ReplyToComment(comment))
                         },
@@ -242,7 +239,6 @@ fun PostCommentsScreen(
 private fun CommentsContent(
     comments: LazyPagingItems<PostComment>,
     currentUserId: com.example.liftrix.core.identity.UserId?,
-    onCommentLike: (String) -> Unit,
     onCommentReply: (PostComment) -> Unit,
     onCommentReport: (PostComment) -> Unit,
     modifier: Modifier = Modifier
@@ -284,7 +280,6 @@ private fun CommentsContent(
                             CommentItem(
                                 comment = comment,
                                 isOwnComment = comment.userId == currentUserId?.value,
-                                onLikeClick = { onCommentLike(comment.id) },
                                 onReplyClick = { onCommentReply(comment) },
                                 onReportClick = { onCommentReport(comment) },
                                 modifier = Modifier.fillMaxWidth()
@@ -336,7 +331,6 @@ private fun EmptyCommentsState(
 private fun CommentItem(
     comment: PostComment,
     isOwnComment: Boolean,
-    onLikeClick: () -> Unit,
     onReplyClick: () -> Unit,
     onReportClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -398,15 +392,6 @@ private fun CommentItem(
                     text = formatCommentTimestamp(comment.createdAt),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                // Like button
-                Text(
-                    text = if (comment.isLikedByViewer) "Unlike" else "Like",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (comment.isLikedByViewer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = if (comment.isLikedByViewer) FontWeight.SemiBold else FontWeight.Normal,
-                    modifier = Modifier.clickable { onLikeClick() }
                 )
 
                 // Reply button

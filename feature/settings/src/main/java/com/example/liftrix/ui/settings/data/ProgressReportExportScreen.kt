@@ -2,6 +2,7 @@ package com.example.liftrix.ui.settings.data
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -61,6 +62,7 @@ fun ProgressReportExportScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val canSaveToDownloads = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
 
     LaunchedEffect(viewModel) {
         viewModel.fileActionEvents.collect { event ->
@@ -214,7 +216,7 @@ fun ProgressReportExportScreen(
                             }
                             Button(
                                 onClick = { viewModel.onEvent(ProgressReportExportEvent.SaveToDownloads) },
-                                enabled = !uiState.isSavingToDownloads,
+                                enabled = canSaveToDownloads && !uiState.isSavingToDownloads,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 if (uiState.isSavingToDownloads) {
@@ -223,6 +225,13 @@ fun ProgressReportExportScreen(
                                     Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
                                 }
                                 Text("Save to Downloads")
+                            }
+                            if (!canSaveToDownloads) {
+                                Text(
+                                    text = "Saving directly to Downloads requires Android 10 or later.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }

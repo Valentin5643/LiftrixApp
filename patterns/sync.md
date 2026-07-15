@@ -1,6 +1,6 @@
 # Sync, Offline, Firebase, Storage, and Notification Patterns
 
-Last moved from root AGENTS.md: 2026-05-05. Source refresh: 2026-07-12.
+Last moved from root AGENTS.md: 2026-05-05. Source refresh: 2026-07-14.
 
 Use this document when touching Room/Firebase reconciliation, sync queues, WorkManager workers, restore gates, realtime listeners, storage uploads, FCM, or notification delivery.
 
@@ -22,24 +22,24 @@ Use this document when touching Room/Firebase reconciliation, sync queues, WorkM
 | --- | --- |
 | Database module | :core:database |
 | Database | LiftrixDatabase |
-| File name | liftrix_database_encrypted |
-| Room version | 11 |
-| Registered entities | 74 |
+| File name | liftrix_database_encrypted_v14 |
+| Room version | 14 |
+| Registered entities | 77 |
 | Registered views | 2 |
-| DAO accessors | 69 |
-| Schema snapshots | 1 through 11 |
-| Registered migrations | 7->8, 8->9, 9->10, 10->11 |
-| Supported migration floor | 7 |
+| DAO accessors | 70 |
+| Schema snapshots | 1 through 14 |
+| Registered migrations | None |
+| Supported migration floor | None |
 | Destructive fallback | None |
 
 CoreDatabaseModule builds the SQLCipher database. App DatabaseModule provides the encryption/passphrase boundary.
 
-Version 11 adds progress read-model tables. Any schema change requires:
+Version 14 adds the durable `ai_usage` ledger and uses a versioned encrypted filename. No in-place migration chain is registered. Any schema change requires:
 
 - a new exported schema;
-- an explicit migration from version 11;
-- supported-floor migration reasoning;
-- validateRoomQueries and relevant migration review.
+- a new versioned database filename or a separately approved complete migration strategy;
+- explicit review of the unsynced local-data replacement tradeoff and remote restore path;
+- `validateRoomQueries`, whose source scanner fails on zero entities, plus Room/KSP compilation for DAO/query validation.
 
 ## Canonical Flow
 
@@ -172,12 +172,31 @@ Representative paths:
   /achievements/{achievementId}
   /gym_buddies/{buddyId}
   /settings/preferences
+  /chat_conversations/{conversationId}
+  /chat_history/{messageId}
+  /chat_preferences/settings
 /social_profiles/{userId}
 /follow_relationships/{id}
 /workout_posts/{postId}
 ~~~
 
 Backend/deployment freshness is not proven by local source. Treat functions/, cloud-functions/, rules, and indexes as Needs verification until deployment state is checked.
+
+### AI Conversation Durability
+
+`ChatSyncWorker` is the per-user compatibility worker for AI conversation lifecycle data. Its ordering is part of the privacy contract:
+
+1. Reconcile `chat_conversations` metadata and tombstones before handling messages.
+2. Upload a deletion tombstone before deleting matching remote messages, using the worker's configured batch size.
+3. Only treat the metadata operation as complete after remote message deletion succeeds.
+4. Upload dirty preferences and messages, then mark their Room rows clean after Firestore confirms the write.
+5. On restore, download metadata before messages and suppress messages covered by a tombstone.
+
+Local `AI_RESPONSE` maps to remote `ASSISTANT`; download maps `ASSISTANT` back to `AI_RESPONSE`. `USER` and `SYSTEM` are unchanged. Unknown values fail synchronization instead of being silently stored.
+
+Deleting one conversation creates a tombstone for that conversation ID and suppresses all messages for it. Clear-all uses the reserved `ChatConversationDeletionPolicy.ALL_HISTORY_CONVERSATION_ID` row: its `deletedAt` is a cutoff, so messages created at or before the cutoff remain suppressed while later messages may sync normally.
+
+Retention runs inside the authenticated user's `ChatSyncWorker`. It queries only that user's expired Room rows, deletes their Firestore documents first, and deletes the local rows only after remote success. Do not reintroduce a global or unscoped chat cleanup worker.
 
 ## Conflict and Retry Rules
 
@@ -228,7 +247,7 @@ Feature modules consume restore state and completion events through read-only co
 - Missing data: inspect dirty/isSynced/syncVersion/lastModified plus remote-upsert code.
 - Partial sync: inspect entity result, queue retry state, and dead-letter state.
 - Realtime: confirm listener registration/awaitClose and Room upsert.
-- Database: confirm current schema 11 and migration floor 7.
+- Database: confirm current schema 14, `liftrix_database_encrypted_v14`, no registered migration floor, and no destructive fallback.
 
 ## Known Source Risks
 

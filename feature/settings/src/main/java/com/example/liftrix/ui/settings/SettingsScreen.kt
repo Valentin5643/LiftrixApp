@@ -643,13 +643,7 @@ private fun SubscriptionSettings(
                 )
             }
 
-            if (uiState.hasPremiumAccess) {
-                SecondaryActionButton(
-                    text = "Manage",
-                    onClick = { stableOnEvent(SettingsEvent.ManageSubscription) },
-                    leadingIcon = CustomActionIcons.Settings
-                )
-            } else {
+            if (!uiState.hasPremiumAccess) {
                 PrimaryActionButton(
                     text = "Upgrade",
                     onClick = {

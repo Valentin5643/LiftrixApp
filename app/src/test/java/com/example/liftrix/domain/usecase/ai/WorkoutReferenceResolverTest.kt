@@ -103,6 +103,24 @@ class WorkoutReferenceResolverTest {
     }
 
     @Test
+    fun `resolves scoped builder operation to pending generated preview without wording hint`() = runTest {
+        every { templateQueryUseCase("user-1") } returns flowOf(emptyList())
+
+        val result = resolver(
+            WorkoutReferenceRequest(
+                userId = "user-1",
+                message = "Replace the selected exercise with one compatible alternative.",
+                pendingGeneratedProgramId = "preview-1",
+                pendingGeneratedProgramName = "AI Push Plan",
+                allowGeneratedPreview = true
+            )
+        ).getOrThrow()
+
+        val resolved = assertIs<WorkoutReferenceResolution.ResolvedGeneratedPreview>(result)
+        assertEquals("preview-1", resolved.source.sourceId)
+    }
+
+    @Test
     fun `resolves last workout phrase to most recently used template`() = runTest {
         every { templateQueryUseCase("user-1") } returns flowOf(
             listOf(

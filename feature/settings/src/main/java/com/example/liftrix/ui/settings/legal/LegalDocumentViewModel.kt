@@ -2,10 +2,8 @@ package com.example.liftrix.ui.settings.legal
 
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.interactor.auth.AuthInteractor
-import com.example.liftrix.domain.interactor.legal.LegalDocumentInteractor
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.service.LegalDocumentService
-import com.example.liftrix.domain.usecase.legal.DownloadPdfResult
 import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -32,8 +30,7 @@ import javax.inject.Inject
 @HiltViewModel
 class LegalDocumentViewModel @Inject constructor(
     private val legalDocumentService: LegalDocumentService,
-    private val authInteractor: AuthInteractor,
-    private val legalDocumentInteractor: LegalDocumentInteractor
+    private val authInteractor: AuthInteractor
 ) : ModernBaseViewModel<LegalDocumentUiState>(initialState = LegalDocumentUiState.Loading) {
     
     private val _sideEffects = MutableSharedFlow<LegalDocumentSideEffect>()
@@ -403,98 +400,6 @@ class LegalDocumentViewModel @Inject constructor(
                 }
                 emitSideEffect(LegalDocumentSideEffect.ShowError("Failed to refresh documents"))
                 Timber.e(e, "Failed to refresh legal documents")
-            }
-        }
-    }
-    
-    /**
-     * Downloads document as PDF with full implementation
-     */
-    fun downloadAsPdf(documentType: String) {
-        viewModelScope.launch {
-            val currentData = getCurrentData()
-            updateState { 
-                LegalDocumentUiState.Success(currentData.copy(downloadInProgress = true, downloadProgress = 0f))
-            }
-            
-            try {
-                val userId = authInteractor.currentUser(waitForAuth = false).fold(
-                    onSuccess = { it.value },
-                    onFailure = { throw LiftrixError.BusinessLogicError(
-                        code = "USER_NOT_AUTHENTICATED",
-                        errorMessage = "User must be authenticated to download documents",
-                        analyticsContext = mapOf("operation" to "DOWNLOAD_PDF_DOCUMENT")
-                    ) }
-                )
-                
-                val displayName = when (documentType) {
-                    "privacy_policy" -> "Privacy Policy"
-                    "terms_of_service" -> "Terms of Service"
-                    "ai_disclaimer" -> "AI Disclaimer"
-                    "community_guidelines" -> "Community Guidelines"
-                    "content_moderation_policy" -> "Content Moderation Policy"
-                    "refund_subscription_policy" -> "Refund & Subscription Policy"
-                    "eula" -> "End User License Agreement"
-                    "data_processing_agreement" -> "Data Processing Agreement"
-                    else -> documentType.replace("_", " ").split(" ")
-                        .joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
-                }
-                
-                // Start PDF download with progress tracking
-                legalDocumentInteractor.downloadPdf(userId, documentType, displayName).collect { result ->
-                    when (result) {
-                        is DownloadPdfResult.Progress -> {
-                            val data = getCurrentData().copy(
-                                downloadInProgress = true,
-                                downloadProgress = result.progress / 100f
-                            )
-                            updateState { LegalDocumentUiState.Success(data) }
-                            Timber.d("PDF download progress: ${result.progress}% - ${result.message}")
-                        }
-                        is DownloadPdfResult.Success -> {
-                            val data = getCurrentData().copy(
-                                downloadInProgress = false,
-                                downloadProgress = 1.0f
-                            )
-                            updateState { LegalDocumentUiState.Success(data) }
-                            emitSideEffect(LegalDocumentSideEffect.ShowDownloadComplete(result.filePath))
-                            Timber.d("PDF download completed: ${result.filePath} (${result.fileSize} bytes)")
-                        }
-                        is DownloadPdfResult.Error -> {
-                            val data = getCurrentData().copy(
-                                downloadInProgress = false,
-                                downloadProgress = 0f
-                            )
-                            updateState { 
-                                LegalDocumentUiState.Error(result.error, data)
-                            }
-                            emitSideEffect(LegalDocumentSideEffect.ShowError("Failed to download PDF: ${result.error.message}"))
-                            Timber.e("PDF download failed: ${result.error}")
-                        }
-                    }
-                }
-                
-            } catch (e: Exception) {
-                val error = when (e) {
-                    is LiftrixError -> e
-                    else -> LiftrixError.BusinessLogicError(
-                        code = "DOWNLOAD_FAILED",
-                        errorMessage = "Failed to download document: ${e.message}",
-                        analyticsContext = mapOf(
-                            "operation" to "DOWNLOAD_LEGAL_DOCUMENT_PDF",
-                            "document_type" to documentType
-                        )
-                    )
-                }
-                val data = getCurrentData().copy(
-                    downloadInProgress = false,
-                    downloadProgress = 0f
-                )
-                updateState { 
-                    LegalDocumentUiState.Error(error, data)
-                }
-                emitSideEffect(LegalDocumentSideEffect.ShowError("Failed to download document"))
-                Timber.e(e, "Failed to download document as PDF")
             }
         }
     }

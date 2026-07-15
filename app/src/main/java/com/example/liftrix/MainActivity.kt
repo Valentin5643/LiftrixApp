@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -175,6 +177,7 @@ fun MainContent(
     viewModel: MainViewModel = hiltViewModel()
 ) {
     val authState by viewModel.authState.collectAsState()
+    val aiAccessEligibility by viewModel.aiAccessEligibility.collectAsState()
     
     // Set explicit auth flow to false when MainActivity is active
     // This allows MainViewModel to handle auth state normally
@@ -194,6 +197,8 @@ fun MainContent(
         is MainViewModel.AuthenticationState.Authenticated -> {
             AuthenticatedContent(
                 user = currentState.user,
+                isAiAccessEnabled = aiAccessEligibility is MainViewModel.AiAccessEligibility.Eligible &&
+                    (aiAccessEligibility as MainViewModel.AiAccessEligibility.Eligible).userId == currentState.user.uid,
                 pendingWidgetWorkoutNavigation = pendingWidgetWorkoutNavigation,
                 onWidgetWorkoutNavigationConsumed = onWidgetWorkoutNavigationConsumed,
                 onFirstAuthenticatedContent = onFirstAuthenticatedContent
@@ -225,28 +230,68 @@ fun LoadingScreen() {
 @Composable
 fun AuthenticatedContent(
     user: com.example.liftrix.domain.model.User,
+    isAiAccessEnabled: Boolean = false,
     pendingWidgetWorkoutNavigation: Boolean = false,
     onWidgetWorkoutNavigationConsumed: () -> Unit = {},
     onFirstAuthenticatedContent: (String) -> Unit = {},
     viewModel: MainViewModel = hiltViewModel()
 ) {
     val profileReadiness by viewModel.profileReadiness.collectAsState()
-    val profileReady = profileReadiness is MainViewModel.ProfileReadiness.Ready &&
-        (profileReadiness as MainViewModel.ProfileReadiness.Ready).userId == user.uid
+    when (val readiness = profileReadiness) {
+        is MainViewModel.ProfileReadiness.Ready -> {
+            if (readiness.userId != user.uid) {
+                LoadingScreen()
+                return
+            }
 
-    // Show loading while verifying profile existence
-    if (!profileReady) {
-        LoadingScreen()
-    } else {
-        LaunchedEffect(user.uid) {
-            Timber.d("User authenticated in MainActivity")
-            onFirstAuthenticatedContent(user.uid)
+            LaunchedEffect(user.uid) {
+                Timber.d("User authenticated in MainActivity")
+                onFirstAuthenticatedContent(user.uid)
+            }
+
+            UnifiedNavigationContainer(
+                isAiAccessEnabled = isAiAccessEnabled,
+                pendingWidgetWorkoutNavigation = pendingWidgetWorkoutNavigation,
+                onWidgetWorkoutNavigationConsumed = onWidgetWorkoutNavigationConsumed
+            )
         }
 
-        // Main navigation with type-safe navigation system
-        UnifiedNavigationContainer(
-            pendingWidgetWorkoutNavigation = pendingWidgetWorkoutNavigation,
-            onWidgetWorkoutNavigationConsumed = onWidgetWorkoutNavigationConsumed
-        )
+        is MainViewModel.ProfileReadiness.Error -> {
+            if (readiness.userId == user.uid) {
+                ProfileReadinessErrorScreen(
+                    message = readiness.message,
+                    onRetry = viewModel::retryProfileReadiness
+                )
+            } else {
+                LoadingScreen()
+            }
+        }
+
+        else -> LoadingScreen()
+    }
+}
+
+@Composable
+private fun ProfileReadinessErrorScreen(
+    message: String,
+    onRetry: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = onRetry) {
+                Text("Retry")
+            }
+        }
     }
 }

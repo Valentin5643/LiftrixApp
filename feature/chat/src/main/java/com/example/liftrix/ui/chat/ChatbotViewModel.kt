@@ -20,6 +20,7 @@ import com.example.liftrix.domain.model.chat.ChatPreferences
 import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.chat.UsageLimits
 import com.example.liftrix.domain.service.Language as DomainLanguage
+import com.example.liftrix.domain.service.AIUsageStats
 import com.example.liftrix.domain.interactor.auth.AuthInteractor
 import com.example.liftrix.domain.interactor.chat.ChatInteractor
 import com.example.liftrix.domain.usecase.ai.ChatIntent
@@ -97,9 +98,10 @@ class ChatbotViewModel @Inject constructor(
                     onSuccess = { userIdResult ->
                         userId = userIdResult.value
                         if (userId != null) {
+                            val authenticatedUserId = userId!!
                             _uiState.value = _uiState.value.copy(isAiAccessEnabled = true)
-                            observeChatPreferences(userId!!)
-                            observeConversations(userId!!)
+                            observeChatPreferences(authenticatedUserId)
+                            observeConversations(authenticatedUserId)
                             checkUsageLimits()
                         } else {
                             handleError(LiftrixError.AuthenticationError(
@@ -132,6 +134,16 @@ class ChatbotViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    private fun denyAiAccess() {
+        _uiState.value = _uiState.value.copy(
+            isAiAccessEnabled = false,
+            error = LiftrixError.BusinessLogicError(
+                code = "AI_ACCESS_UNAVAILABLE",
+                errorMessage = "AI access is currently unavailable."
+            )
+        )
     }
 
     private fun observeConversations(userId: String) {
@@ -260,6 +272,10 @@ class ChatbotViewModel @Inject constructor(
     private fun sendMessage(content: String) {
         val trimmedContent = content.trim()
         if (trimmedContent.isBlank() || userId == null) return
+        if (!_uiState.value.isAiAccessEnabled) {
+            denyAiAccess()
+            return
+        }
         if (isUserMessageInFlight || _uiState.value.isTyping || _uiState.value.isGeneratingProgram) {
             Timber.w("[AI] ChatbotViewModel: ignored duplicate send while message is already in flight")
             return
@@ -719,7 +735,7 @@ class ChatbotViewModel @Inject constructor(
         if (content.isBlank() || userId == null) return
         val timestamp = System.currentTimeMillis()
         val clarification = if (_uiState.value.currentLanguage == Language.ROMANIAN) {
-            "Do you want me to generate a complete workout program, or answer a general workout question?"
+            "Vrei s\u0103 generez un program complet de antrenament sau s\u0103 r\u0103spund la o \u00eentrebare general\u0103 despre antrenamente?"
         } else {
             "Do you want me to generate a complete workout program, or answer a general workout question?"
         }
@@ -923,8 +939,7 @@ class ChatbotViewModel @Inject constructor(
                 chatInteractor.usageLimits(id).fold(
                     onSuccess = { limits ->
                         Timber.tag(MONTHLY_USAGE_TAG).d(
-                            "UI usage state update userId=%s dailyRemaining=%d monthlyRemaining=%d isNearDaily=%s isNearMonthly=%s showWarning=%s source=CheckUsageLimitsUseCase",
-                            id,
+                            "UI usage state update dailyRemaining=%d monthlyRemaining=%d isNearDaily=%s isNearMonthly=%s showWarning=%s source=CheckUsageLimitsUseCase",
                             limits.dailyMessagesRemaining,
                             limits.monthlyTokensRemaining,
                             limits.isNearDailyLimit,
@@ -933,8 +948,7 @@ class ChatbotViewModel @Inject constructor(
                         )
                         if (limits.monthlyTokensRemaining <= 0) {
                             Timber.tag(MONTHLY_USAGE_TAG).w(
-                                "UI monthly maximum state triggered userId=%s monthlyRemaining=%d source=UsageLimits",
-                                id,
+                                "UI monthly maximum state triggered monthlyRemaining=%d source=UsageLimits",
                                 limits.monthlyTokensRemaining
                             )
                         }
@@ -944,9 +958,17 @@ class ChatbotViewModel @Inject constructor(
                                 showUsageWarning = limits.isNearDailyLimit || limits.isNearMonthlyLimit
                             )
                         }
+                        chatInteractor.usageStats(id).fold(
+                            onSuccess = { stats ->
+                                updateState { currentState -> currentState.copy(usageStats = stats) }
+                            },
+                            onFailure = { error ->
+                                Timber.w(error, "UI usage statistics update failed")
+                            }
+                        )
                     },
                     onFailure = { error ->
-                        Timber.tag(MONTHLY_USAGE_TAG).w("UI usage state update failed userId=%s error=%s", id, error)
+                        Timber.tag(MONTHLY_USAGE_TAG).w(error, "UI usage state update failed")
                         // Don't show error for usage limit checks, just log
                     }
                 )
@@ -969,6 +991,7 @@ data class ChatbotUiState(
     val currentInput: String = "",
     val isTyping: Boolean = false,
     val usageLimits: UsageLimits? = null,
+    val usageStats: AIUsageStats? = null,
     val showUsageWarning: Boolean = false,
     val currentLanguage: Language = Language.ENGLISH,
     val autoDetectLanguage: Boolean = true,

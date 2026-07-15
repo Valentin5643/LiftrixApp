@@ -131,7 +131,7 @@ class ProfileViewModel @Inject constructor(
                         emit(ProfileDataState.Loading)
                         
                         // Check if profile exists to set proper expectations
-                        val profileExists = profileInteractor.hasProfile(userId.value).getOrElse { false }
+                        val profileExists = profileInteractor.hasProfile(userId.value).getOrThrow()
 
                         if (profileExists) {
                             // Profile exists, start observing
@@ -333,9 +333,9 @@ class ProfileViewModel @Inject constructor(
                 }
 
                 // Check if profile exists in database
-                val hasProfile = profileInteractor.hasProfile(userId.value).getOrElse { false }
-                val hasCompletedProfile = profileInteractor.hasCompletedProfile(userId.value).getOrElse { false }
-                val profileData = profileRepository.getUserProfile(userId.value).getOrNull()
+                profileInteractor.hasProfile(userId.value).getOrThrow()
+                profileInteractor.hasCompletedProfile(userId.value).getOrThrow()
+                profileRepository.getUserProfile(userId.value).getOrThrow()
                 
                 updateState { currentState ->
                     currentState.copy(

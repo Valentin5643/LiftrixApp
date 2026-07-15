@@ -4,9 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.content.Context
 import android.content.Intent
-import android.content.pm.ServiceInfo
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
@@ -22,34 +20,26 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import timber.log.Timber
 import java.lang.ref.WeakReference
 import javax.inject.Inject
-import kotlin.time.Duration.Companion.seconds
 
 /**
- * Foreground service for managing workout and rest timers during active workout sessions.
- * Provides persistent timing functionality with notification support for timer state visibility.
+ * Bound service for the short-lived rest countdown shown during an active workout.
+ * Active-session elapsed time and notification actions are owned by
+ * UnifiedWorkoutSession and WorkoutForegroundService.
  */
 @AndroidEntryPoint
 class WorkoutTimerService : Service() {
 
     companion object {
-        private const val NOTIFICATION_CHANNEL_ID = "workout_timer_channel"
-        private const val LONG_WORKOUT_CHANNEL_ID = "long_workout_reminder_channel"
-        private const val NOTIFICATION_ID = 1001
-        private const val LONG_WORKOUT_NOTIFICATION_ID = 1002
+        private const val NOTIFICATION_CHANNEL_ID = "workout_rest_timer_channel"
+        private const val NOTIFICATION_ID = 1003
         private const val ACTION_PAUSE = "com.example.liftrix.PAUSE_TIMER"
         private const val ACTION_RESUME = "com.example.liftrix.RESUME_TIMER"
         private const val ACTION_STOP = "com.example.liftrix.STOP_TIMER"
         private const val ACTION_SKIP_REST = "com.example.liftrix.SKIP_REST"
-        private const val ACTION_CONFIRM_ACTIVE = "com.example.liftrix.CONFIRM_ACTIVE"
-        private const val ACTION_END_WORKOUT = "com.example.liftrix.END_WORKOUT"
-        
-        // 2 hours in seconds
-        private const val LONG_WORKOUT_THRESHOLD_SECONDS = 2 * 60 * 60L
     }
 
     sealed class TimerState {
@@ -73,10 +63,7 @@ class WorkoutTimerService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var timerJob: Job? = null
-    private var sessionStartTime: Instant? = null
-    private var pausedAtSeconds: Long = 0
     private var currentRestTimer: RestTimer? = null
-    private var longWorkoutNotificationShown = false
     private var restCompletionSignalCounter = 0L
 
     @Inject
@@ -98,7 +85,6 @@ class WorkoutTimerService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        createLongWorkoutNotificationChannel()
         Timber.d("WorkoutTimerService created")
     }
 
@@ -106,7 +92,7 @@ class WorkoutTimerService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         handleIntent(intent)
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
@@ -123,62 +109,15 @@ class WorkoutTimerService : Service() {
             ACTION_RESUME -> resumeTimer()
             ACTION_STOP -> stopService()
             ACTION_SKIP_REST -> skipRest()
-            ACTION_CONFIRM_ACTIVE -> confirmWorkoutActive()
-            ACTION_END_WORKOUT -> endWorkoutFromNotification()
         }
     }
 
     /**
-     * Starts the workout session timer
-     */
-    fun startSession(): Result<Unit> {
-        return try {
-            if (_serviceState.value.timerState is TimerState.Stopped) {
-                sessionStartTime = Clock.System.now()
-                pausedAtSeconds = 0
-                longWorkoutNotificationShown = false
-                startSessionTimer()
-                updateNotification()
-                
-                // For Android 14+ (API 34+), specify the service type when starting foreground
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    startForeground(
-                        NOTIFICATION_ID, 
-                        createNotification(), 
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
-                    )
-                } else {
-                    startForeground(NOTIFICATION_ID, createNotification())
-                }
-                
-                Timber.d("Session timer started")
-                Result.success(Unit)
-            } else {
-                Result.failure(IllegalStateException("Session already running"))
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to start session")
-            Result.failure(e)
-        }
-    }
-
-    /**
-     * Pauses the current timer (session or rest)
+     * Pauses the active rest countdown.
      */
     fun pauseTimer(): Result<Unit> {
         return try {
             when (val currentState = _serviceState.value.timerState) {
-                is TimerState.SessionRunning -> {
-                    pausedAtSeconds = currentState.elapsedSeconds
-                    timerJob?.cancel()
-                    _serviceState.value = _serviceState.value.copy(
-                        timerState = TimerState.SessionPaused(currentState.startTime, pausedAtSeconds),
-                        isRunning = false
-                    )
-                    updateNotification()
-                    Timber.d("Session timer paused at $pausedAtSeconds seconds")
-                    Result.success(Unit)
-                }
                 is TimerState.RestActive -> {
                     timerJob?.cancel()
                     _serviceState.value = _serviceState.value.copy(
@@ -200,20 +139,11 @@ class WorkoutTimerService : Service() {
     }
 
     /**
-     * Resumes the paused timer
+     * Resumes the paused rest countdown.
      */
     fun resumeTimer(): Result<Unit> {
         return try {
             when (val currentState = _serviceState.value.timerState) {
-                is TimerState.SessionPaused -> {
-                    // Preserve the original start instant. The accumulated active duration is
-                    // already captured by pausedAtSeconds and must not be folded into start twice.
-                    sessionStartTime = Clock.System.now()
-                    startSessionTimer()
-                    updateNotification()
-                    Timber.d("Session timer resumed from $pausedAtSeconds seconds")
-                    Result.success(Unit)
-                }
                 is TimerState.RestPaused -> {
                     startRestTimer(currentState.restTimer, currentState.remainingSeconds)
                     updateNotification()
@@ -325,21 +255,16 @@ class WorkoutTimerService : Service() {
     }
 
     /**
-     * Stops all timers and ends the service
+     * Stops the rest timer and clears its notification.
      */
     fun stopTimer(): Result<Unit> {
         return try {
             timerJob?.cancel()
-            sessionStartTime = null
-            pausedAtSeconds = 0
             currentRestTimer = null
-            longWorkoutNotificationShown = false
             restCompletionSignalCounter = 0L
             _serviceState.value = TimerServiceState()
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            // Clear any long workout notifications
-            notificationManager.cancel(LONG_WORKOUT_NOTIFICATION_ID)
-            Timber.d("Timer stopped")
+            notificationManager.cancel(NOTIFICATION_ID)
+            Timber.d("Rest timer stopped")
             Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Failed to stop timer")
@@ -350,27 +275,6 @@ class WorkoutTimerService : Service() {
     private fun stopService() {
         stopTimer()
         stopSelf()
-    }
-
-    private fun startSessionTimer() {
-        timerJob?.cancel()
-        timerJob = serviceScope.launch {
-            while (true) {
-                sessionStartTime?.let { startTime ->
-                    val elapsed = (Clock.System.now() - startTime).inWholeSeconds + pausedAtSeconds
-                    _serviceState.value = _serviceState.value.copy(
-                        timerState = TimerState.SessionRunning(startTime, elapsed),
-                        isRunning = true,
-                        sessionDurationSeconds = elapsed
-                    )
-                    updateNotification()
-                    
-                    // Check if we should show the long workout notification
-                    checkForLongWorkoutNotification(elapsed)
-                }
-                delay(1000)
-            }
-        }
     }
 
     private fun startRestTimer(restTimer: RestTimer, initialSeconds: Int) {
@@ -390,55 +294,38 @@ class WorkoutTimerService : Service() {
             }
 
             completeRestTimer(emitCompletionSignal = true)
-            Timber.d("Rest timer completed, returning to session")
+            Timber.d("Rest timer completed")
         }
     }
 
     private fun completeRestTimer(emitCompletionSignal: Boolean): Result<Unit> {
-        return sessionStartTime?.let { startTime ->
-            val completionSignal = if (emitCompletionSignal) {
-                restCompletionSignalCounter += 1
-                restCompletionSignalCounter
-            } else {
-                _serviceState.value.restCompletionSignal
-            }
+        val completionSignal = if (emitCompletionSignal) {
+            restCompletionSignalCounter += 1
+            restCompletionSignalCounter
+        } else {
+            _serviceState.value.restCompletionSignal
+        }
 
-            _serviceState.value = _serviceState.value.copy(
-                timerState = TimerState.SessionRunning(startTime, pausedAtSeconds),
-                isRunning = true,
-                restRemainingSeconds = 0,
-                restCompletionSignal = completionSignal
-            )
-            currentRestTimer = null
-            startSessionTimer()
-            updateNotification()
-            Result.success(Unit)
-        } ?: Result.failure(IllegalStateException("No session to return to"))
+        _serviceState.value = _serviceState.value.copy(
+            timerState = TimerState.Stopped,
+            isRunning = false,
+            restRemainingSeconds = 0,
+            restCompletionSignal = completionSignal
+        )
+        currentRestTimer = null
+        notificationManager.cancel(NOTIFICATION_ID)
+        return Result.success(Unit)
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 NOTIFICATION_CHANNEL_ID,
-                "Workout Timer",
+                "Workout Rest Timer",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Persistent notification for workout and rest timers"
+                description = "Countdown notifications for rest periods between sets"
                 setShowBadge(false)
-            }
-            notificationManager.createNotificationChannel(channel)
-        }
-    }
-
-    private fun createLongWorkoutNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                LONG_WORKOUT_CHANNEL_ID,
-                "Long Workout Reminders",
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = "Notifications asking if you're still working out after 2+ hours"
-                setShowBadge(true)
             }
             notificationManager.createNotificationChannel(channel)
         }
@@ -460,7 +347,7 @@ class WorkoutTimerService : Service() {
                 )
             }
 
-        setContentTitle(getNotificationTitle())
+        setContentTitle("Rest Timer")
         setContentText(getNotificationText())
         setSmallIcon(android.R.drawable.ic_dialog_info)
         setContentIntent(mainPendingIntent)
@@ -468,7 +355,8 @@ class WorkoutTimerService : Service() {
         setSilent(true)
         priority = NotificationCompat.PRIORITY_LOW
 
-        // Add action buttons based on current state
+        // These actions affect only the rest countdown. Session actions belong to
+        // WorkoutForegroundService.
         _serviceState.value.timerState.let { currentTimerState ->
             getNotificationActions(currentTimerState).forEach { (iconRes, text, action) ->
                 addAction(iconRes, text, createActionPendingIntent(action))
@@ -478,9 +366,9 @@ class WorkoutTimerService : Service() {
 
     private fun getNotificationActions(timerState: TimerState): List<NotificationAction> = buildList {
         when (timerState) {
-            is TimerState.SessionRunning, is TimerState.RestActive -> 
+            is TimerState.RestActive ->
                 add(NotificationAction(android.R.drawable.ic_media_pause, "Pause", ACTION_PAUSE))
-            is TimerState.SessionPaused, is TimerState.RestPaused -> 
+            is TimerState.RestPaused ->
                 add(NotificationAction(android.R.drawable.ic_media_play, "Resume", ACTION_RESUME))
             else -> Unit
         }
@@ -504,19 +392,10 @@ class WorkoutTimerService : Service() {
         )
     }
 
-    private fun getNotificationTitle(): String = _serviceState.value.timerState.let { state ->
-        when (state) {
-            is TimerState.Stopped -> "Workout Timer"
-            is TimerState.SessionRunning, is TimerState.SessionPaused -> "Workout Session"
-            is TimerState.RestActive, is TimerState.RestPaused -> "Rest Timer"
-        }
-    }
-
     private fun getNotificationText(): String = _serviceState.value.timerState.let { state ->
         when (state) {
-            is TimerState.Stopped -> "Timer stopped"
-            is TimerState.SessionRunning -> formatTime(state.elapsedSeconds)
-            is TimerState.SessionPaused -> "Paused at ${formatTime(state.pausedAtSeconds)}"
+            is TimerState.Stopped -> "Rest complete"
+            is TimerState.SessionRunning, is TimerState.SessionPaused -> "Rest timer unavailable"
             is TimerState.RestActive -> "Rest: ${formatTime(state.remainingSeconds.toLong())}"
             is TimerState.RestPaused -> "Rest paused: ${formatTime(state.remainingSeconds.toLong())}"
         }
@@ -538,84 +417,4 @@ class WorkoutTimerService : Service() {
         }
     }
 
-    /**
-     * Checks if we should show the long workout notification (after 2 hours)
-     */
-    private fun checkForLongWorkoutNotification(elapsedSeconds: Long) {
-        if (!longWorkoutNotificationShown && elapsedSeconds >= LONG_WORKOUT_THRESHOLD_SECONDS) {
-            showLongWorkoutNotification(elapsedSeconds)
-            longWorkoutNotificationShown = true
-        }
-    }
-
-    /**
-     * Shows a notification asking if the user is still working out
-     */
-    private fun showLongWorkoutNotification(elapsedSeconds: Long) {
-        val mainPendingIntent = launchIntent()
-            .let { intent ->
-                PendingIntent.getActivity(
-                    this, 0, intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-            }
-
-        val confirmActivePendingIntent = Intent(this, WorkoutTimerService::class.java).apply {
-            action = ACTION_CONFIRM_ACTIVE
-        }.let { intent ->
-            PendingIntent.getService(
-                this, ACTION_CONFIRM_ACTIVE.hashCode(), intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-        }
-
-        val endWorkoutPendingIntent = Intent(this, WorkoutTimerService::class.java).apply {
-            action = ACTION_END_WORKOUT
-        }.let { intent ->
-            PendingIntent.getService(
-                this, ACTION_END_WORKOUT.hashCode(), intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-        }
-
-        val notification = NotificationCompat.Builder(this, LONG_WORKOUT_CHANNEL_ID).apply {
-            setContentTitle("Long Workout Detected")
-            setContentText("You've been working out for ${formatTime(elapsedSeconds)}. Are you still active?")
-            setSmallIcon(android.R.drawable.ic_dialog_info)
-            setContentIntent(mainPendingIntent)
-            setAutoCancel(true)
-            priority = NotificationCompat.PRIORITY_DEFAULT
-            
-            addAction(
-                android.R.drawable.ic_menu_send,
-                "Yes, I'm active",
-                confirmActivePendingIntent
-            )
-            addAction(
-                android.R.drawable.ic_menu_close_clear_cancel,
-                "End workout",
-                endWorkoutPendingIntent
-            )
-        }.build()
-
-        notificationManager.notify(LONG_WORKOUT_NOTIFICATION_ID, notification)
-        Timber.d("Showed long workout notification after ${formatTime(elapsedSeconds)}")
-    }
-
-    /**
-     * User confirmed they're still active - dismiss the notification
-     */
-    private fun confirmWorkoutActive() {
-        notificationManager.cancel(LONG_WORKOUT_NOTIFICATION_ID)
-        Timber.d("User confirmed workout is still active")
-    }
-
-    /**
-     * User wants to end the workout from the notification
-     */
-    private fun endWorkoutFromNotification() {
-        notificationManager.cancel(LONG_WORKOUT_NOTIFICATION_ID)
-        stopTimer()
-        Timber.d("Workout ended from long workout notification")
-    }
 }

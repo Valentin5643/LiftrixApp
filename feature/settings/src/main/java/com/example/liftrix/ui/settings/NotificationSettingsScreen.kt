@@ -257,8 +257,7 @@ private fun NotificationSettingsContent(
                     }
                 ) {
                     AchievementNotificationSettings(
-                        uiState = uiState,
-                        onEvent = onEvent
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
@@ -500,16 +499,6 @@ private fun WorkoutNotificationSettings(
             },
             enabled = !uiState.isUpdatingPreferences
         )
-        
-        SettingsToggleItem(
-            title = "Rest Day Reminders",
-            subtitle = "Reminders to take rest days for recovery",
-            isChecked = uiState.restDayReminders,
-            onToggle = { enabled ->
-                onEvent(NotificationSettingsEvent.ToggleRestDayReminders(enabled))
-            },
-            enabled = !uiState.isUpdatingPreferences
-        )
     }
 }
 
@@ -518,32 +507,14 @@ private fun WorkoutNotificationSettings(
  */
 @Composable
 private fun AchievementNotificationSettings(
-    uiState: NotificationSettingsUiState,
-    onEvent: (NotificationSettingsEvent) -> Unit
+    modifier: Modifier = Modifier
 ) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        SettingsToggleItem(
-            title = "Personal Records",
-            subtitle = "When you hit new personal records",
-            isChecked = uiState.personalRecords,
-            onToggle = { enabled ->
-                onEvent(NotificationSettingsEvent.TogglePersonalRecords(enabled))
-            },
-            enabled = !uiState.isUpdatingPreferences
-        )
-        
-        SettingsToggleItem(
-            title = "Milestone Achievements",
-            subtitle = "Major milestones and streak achievements",
-            isChecked = uiState.milestoneAchievements,
-            onToggle = { enabled ->
-                onEvent(NotificationSettingsEvent.ToggleMilestoneAchievements(enabled))
-            },
-            enabled = !uiState.isUpdatingPreferences
-        )
-    }
+    Text(
+        text = "This setting covers personal records, milestones, and streak achievements.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.padding(16.dp)
+    )
 }
 
 /**

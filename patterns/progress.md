@@ -1,6 +1,6 @@
 # Progress Dashboard Patterns
 
-Last moved from root `AGENTS.md`: 2026-05-05. Source refresh: 2026-06-01.
+Last moved from root `AGENTS.md`: 2026-05-05. Source refresh: 2026-07-14.
 
 Use this when touching progress dashboard, analytics widgets, charts, metric cards, detail screens, widget preferences, or progress navigation.
 
@@ -74,7 +74,8 @@ Progress read-model tables are registered in Room v11 and owned by `:core:databa
 ## Progress Report Export
 
 - Progress-report export actions must declare API-level behavior for file save, share, and open paths.
-- Direct Downloads save below API 29 requires an explicit reviewed legacy permission path or a user-mediated document create flow.
+- The active UI disables direct Downloads saving below API 29 and explains that Android 10 or later is required.
+- Supporting older APIs would require a separately reviewed permission path or user-mediated document create flow.
 
 ## Detail Routes
 

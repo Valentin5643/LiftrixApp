@@ -24,9 +24,7 @@ sealed class LegalDocumentUiState {
         val communityGuidelinesLastUpdated: String? = null,
         val contentModerationPolicyLastUpdated: String? = null,
         val refundSubscriptionPolicyLastUpdated: String? = null,
-        val isRefreshing: Boolean = false,
-        val downloadInProgress: Boolean = false,
-        val downloadProgress: Float = 0f
+        val isRefreshing: Boolean = false
     ) {
         /**
          * Checks if any documents are available
@@ -128,11 +126,6 @@ sealed class LegalDocumentEvent : ViewModelEvent {
     data object RefreshContent : LegalDocumentEvent()
     
     /**
-     * Download document as PDF
-     */
-    data class DownloadAsPdf(val documentType: String) : LegalDocumentEvent()
-    
-    /**
      * Search within document content
      */
     data class SearchDocument(val query: String) : LegalDocumentEvent()
@@ -161,11 +154,6 @@ sealed class LegalDocumentSideEffect {
      * Navigate to external browser with document URL
      */
     data class NavigateToExternalBrowser(val url: String) : LegalDocumentSideEffect()
-    
-    /**
-     * Show document download completion
-     */
-    data class ShowDownloadComplete(val filePath: String) : LegalDocumentSideEffect()
     
     /**
      * Show document acceptance confirmation

@@ -63,7 +63,7 @@ class WorkoutReferenceResolver @Inject constructor(
     private fun resolveGeneratedPreview(request: WorkoutReferenceRequest): WorkoutReferenceResolution? {
         val previewId = request.pendingGeneratedProgramId?.takeIf { it.isNotBlank() } ?: return null
         val previewName = request.pendingGeneratedProgramName?.takeIf { it.isNotBlank() } ?: "Generated workout"
-        if (!request.message.hasCurrentWorkoutPhrase()) return null
+        if (!request.allowGeneratedPreview && !request.message.hasCurrentWorkoutPhrase()) return null
 
         return WorkoutReferenceResolution.ResolvedGeneratedPreview(
             source = WorkoutProgramSourceReference(
@@ -202,7 +202,8 @@ data class WorkoutReferenceRequest(
     val message: String,
     val pendingTemplateId: String? = null,
     val pendingGeneratedProgramId: String? = null,
-    val pendingGeneratedProgramName: String? = null
+    val pendingGeneratedProgramName: String? = null,
+    val allowGeneratedPreview: Boolean = false
 )
 
 sealed interface WorkoutReferenceResolution {

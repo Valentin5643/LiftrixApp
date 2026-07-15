@@ -68,6 +68,8 @@ Comment paging and reply reads require the authenticated viewer ID. The reposito
 checks the parent post with `PrivacyEnforcementService` before exposing any comment.
 Comment reports carry the comment ID, comment-author ID, and `COMMENT` content type;
 repository failures must be surfaced by the ViewModel rather than shown as success.
+Comment-like counts are currently read-only. Do not expose like/unlike actions until a
+Room model, repository command, and durable sync path own that mutation.
 
 ## Engagement
 

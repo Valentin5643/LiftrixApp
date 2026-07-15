@@ -10,10 +10,13 @@ import com.example.liftrix.domain.model.ai.SavedGeneratedWorkoutDay
 import com.example.liftrix.domain.model.ai.WorkoutGenerationPreferences
 import com.example.liftrix.domain.model.ai.WorkoutGenerationResult
 import com.example.liftrix.domain.model.ai.WorkoutGenerationStage
+import com.example.liftrix.domain.model.ai.WorkoutModificationSignificance
 import com.example.liftrix.domain.model.ai.WorkoutModificationSaveMode
 import com.example.liftrix.domain.model.ai.WorkoutProgramGoal
 import com.example.liftrix.domain.model.ai.WorkoutProgramLevel
 import com.example.liftrix.domain.model.ai.WorkoutProgramSaveOutcome
+import com.example.liftrix.domain.model.ai.WorkoutProgramChangeSummary
+import com.example.liftrix.domain.model.ai.WorkoutProgramSourceReference
 import com.example.liftrix.domain.model.ai.WorkoutTrainingDay
 import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.service.Language
@@ -27,6 +30,19 @@ import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+
+private const val BUILDER_SNAPSHOT_KEY = "ai_workout_builder_snapshot"
+private const val BUILDER_SNAPSHOT_VERSION = 1
+private const val BUILDER_SNAPSHOT_MAX_BYTES = 200 * 1024
+
+private val builderSnapshotJson = Json {
+    ignoreUnknownKeys = true
+    encodeDefaults = true
+}
 
 @HiltViewModel
 class AIWorkoutBuilderViewModel @Inject constructor(
@@ -50,11 +66,27 @@ class AIWorkoutBuilderViewModel @Inject constructor(
 ) {
     private var userId: String? = null
     private var inFlight = false
+    private var lastSnapshot: String? = null
 
     init {
-        viewModelScope.launch { userId = authInteractor.currentUser(true).getOrNull()?.value }
+        restoreSnapshot()
+        viewModelScope.launch {
+            val id = authInteractor.currentUser(true).getOrNull()?.value
+            userId = id
+            if (id != null) {
+                chatInteractor.observePreferences(id).collectLatest { preferences ->
+                    val language = preferences?.preferredLanguage.toBuilderLanguage()
+                    updateState { state ->
+                        if (state.language == language) state else state.copy(language = language)
+                    }
+                }
+            }
+        }
         viewModelScope.launch {
             connectivity.isConnected.collectLatest { online -> updateState { it.copy(isOnline = online) } }
+        }
+        viewModelScope.launch {
+            uiState.collectLatest { state -> persistSnapshot(state) }
         }
     }
 
@@ -80,7 +112,7 @@ class AIWorkoutBuilderViewModel @Inject constructor(
         inFlight = true
         updateState { it.copy(step = BuilderStep.GENERATING, error = null, activeAction = BuilderAction.GENERATE) }
         viewModelScope.launch {
-            gateway.generate(id, state.draft, Language.ENGLISH, forceRefresh) { stage ->
+            gateway.generate(id, state.draft, state.language, forceRefresh) { stage ->
                 updateState { current -> current.copy(generationStage = stage) }
             }.fold(
                 onSuccess = { result ->
@@ -105,8 +137,9 @@ class AIWorkoutBuilderViewModel @Inject constructor(
 
     private fun modify(scope: WorkoutModificationScope, message: String) {
         val id = userId ?: return
-        val current = _uiState.value.result ?: return
-        if (inFlight || !_uiState.value.isOnline) return
+        val state = _uiState.value
+        val current = state.result ?: return
+        if (inFlight || !state.isOnline) return
         inFlight = true
         updateState { it.copy(activeAction = BuilderAction.MODIFY, error = null) }
         viewModelScope.launch {
@@ -116,7 +149,8 @@ class AIWorkoutBuilderViewModel @Inject constructor(
                     message = message,
                     pendingGeneratedProgram = current,
                     scope = scope,
-                    preferences = _uiState.value.draft
+                    preferences = state.draft,
+                    language = state.language
                 )
             ).fold(
                 onSuccess = { updateState { state -> state.copy(result = it, activeAction = null, dirty = true) } },
@@ -141,8 +175,11 @@ class AIWorkoutBuilderViewModel @Inject constructor(
             gateway.saveGeneratedProgram(id, current.program, _uiState.value.draft, _uiState.value.savedDays).fold(
                 onSuccess = { outcome ->
                     when (outcome) {
-                        is WorkoutProgramSaveOutcome.Complete -> updateState {
-                            it.copy(step = BuilderStep.SAVED, savedDays = outcome.savedDays, dirty = false, activeAction = null)
+                        is WorkoutProgramSaveOutcome.Complete -> {
+                            updateState {
+                                it.copy(step = BuilderStep.SAVED, savedDays = outcome.savedDays, dirty = false, activeAction = null)
+                            }
+                            clearSnapshot()
                         }
                         is WorkoutProgramSaveOutcome.Partial -> updateState {
                             it.copy(step = BuilderStep.PARTIAL, savedDays = outcome.savedDays, error = outcome.error.message, activeAction = null)
@@ -153,6 +190,103 @@ class AIWorkoutBuilderViewModel @Inject constructor(
             )
             inFlight = false
         }
+    }
+
+    private fun restoreSnapshot() {
+        val encoded = savedStateHandle.get<String>(BUILDER_SNAPSHOT_KEY) ?: return
+        if (encoded.toByteArray(Charsets.UTF_8).size > BUILDER_SNAPSHOT_MAX_BYTES) {
+            clearSnapshot()
+            return
+        }
+
+        val snapshot = runCatching {
+            builderSnapshotJson.decodeFromString<BuilderSnapshot>(encoded)
+        }.getOrNull()
+        if (snapshot == null || snapshot.version != BUILDER_SNAPSHOT_VERSION) {
+            clearSnapshot()
+            return
+        }
+
+        val persistedStep = runCatching { BuilderStep.valueOf(snapshot.step) }.getOrNull()
+        val decodedResult = snapshot.result?.toWorkoutGenerationResult()
+        if (persistedStep == null || (snapshot.result != null && decodedResult == null)) {
+            clearSnapshot()
+            return
+        }
+
+        val result = if (persistedStep == BuilderStep.GENERATING) null else decodedResult
+        val restoredStep = when {
+            persistedStep == BuilderStep.GENERATING -> BuilderStep.REVIEW
+            persistedStep == BuilderStep.SAVING || persistedStep == BuilderStep.PARTIAL || persistedStep == BuilderStep.SAVED ->
+                if (result != null) BuilderStep.PREVIEW else BuilderStep.REVIEW
+            result == null && persistedStep in setOf(BuilderStep.PREVIEW, BuilderStep.SAVING, BuilderStep.PARTIAL, BuilderStep.SAVED) ->
+                BuilderStep.REVIEW
+            else -> persistedStep
+        }.let { step ->
+            if (snapshot.draft.sanitized().validationErrors().isEmpty() || step == BuilderStep.FORM) step else BuilderStep.FORM
+        }
+        val warning = when {
+            persistedStep == BuilderStep.GENERATING ->
+                "Generation was interrupted. Review your preferences before generating again."
+            persistedStep == BuilderStep.SAVING || persistedStep == BuilderStep.PARTIAL ||
+                persistedStep == BuilderStep.SAVED || snapshot.saveMayHaveCompleted ->
+                "Saving may have completed before the app closed. Verify your existing workouts before saving again."
+            else -> null
+        }
+
+        setState(
+            _uiState.value.copy(
+                draft = snapshot.draft.sanitized(),
+                conversationId = snapshot.conversationId ?: _uiState.value.conversationId,
+                step = restoredStep,
+                result = result,
+                expandedDays = snapshot.expandedDays.toSet().ifEmpty { setOf(0) },
+                language = snapshot.languageCode.toBuilderLanguage(),
+                dirty = snapshot.dirty || result != null || warning != null,
+                error = warning,
+                generationStage = null,
+                savedDays = emptyList(),
+                activeAction = null,
+                showDiscardDialog = false
+            )
+        )
+    }
+
+    private fun persistSnapshot(state: AIWorkoutBuilderState) {
+        if (state.step == BuilderStep.SAVED) {
+            clearSnapshot()
+            return
+        }
+
+        val encoded = runCatching {
+            builderSnapshotJson.encodeToString(
+                BuilderSnapshot(
+                    version = BUILDER_SNAPSHOT_VERSION,
+                    draft = state.draft,
+                    step = state.step.name,
+                    languageCode = state.language.code,
+                    conversationId = state.conversationId,
+                    result = state.result?.toBuilderResultSnapshot(),
+                    expandedDays = state.expandedDays.toList().sorted(),
+                    dirty = state.dirty,
+                    saveMayHaveCompleted = state.step == BuilderStep.SAVING || state.step == BuilderStep.PARTIAL
+                )
+            )
+        }.getOrNull()
+
+        if (encoded == null || encoded.toByteArray(Charsets.UTF_8).size > BUILDER_SNAPSHOT_MAX_BYTES) {
+            clearSnapshot()
+            return
+        }
+        if (encoded != lastSnapshot) {
+            savedStateHandle[BUILDER_SNAPSHOT_KEY] = encoded
+            lastSnapshot = encoded
+        }
+    }
+
+    private fun clearSnapshot() {
+        savedStateHandle.remove<String>(BUILDER_SNAPSHOT_KEY)
+        lastSnapshot = null
     }
 
     fun toggleDay(index: Int) = updateState {
@@ -184,7 +318,8 @@ class AIWorkoutBuilderViewModel @Inject constructor(
                 userId = id,
                 conversationId = conversation,
                 content = summary,
-                type = MessageType.AI_RESPONSE
+                type = MessageType.AI_RESPONSE,
+                language = _uiState.value.language.code
             )
         }
     }
@@ -203,6 +338,7 @@ data class AIWorkoutBuilderState(
     val expandedDays: Set<Int> = setOf(0),
     val activeAction: BuilderAction? = null,
     val isOnline: Boolean = true,
+    val language: Language = Language.ENGLISH,
     val dirty: Boolean = false,
     val error: String? = null,
     val showDiscardDialog: Boolean = false
@@ -223,3 +359,76 @@ private fun WorkoutGenerationPreferences.sanitized() = copy(
     additionalPreferences = additionalPreferences.take(WorkoutGenerationPreferences.MAX_FREE_TEXT_LENGTH),
     trainingDays = trainingDays.distinct().take(6)
 )
+
+@Serializable
+private data class BuilderSnapshot(
+    val version: Int,
+    val draft: WorkoutGenerationPreferences,
+    val step: String,
+    val languageCode: String,
+    val conversationId: String? = null,
+    val result: BuilderResultSnapshot? = null,
+    val expandedDays: List<Int> = emptyList(),
+    val dirty: Boolean = false,
+    val saveMayHaveCompleted: Boolean = false
+)
+
+@Serializable
+private data class BuilderResultSnapshot(
+    val previewId: String,
+    val program: GeneratedWorkoutProgram,
+    val validationWarnings: List<String>,
+    val cacheHit: Boolean,
+    val repairAttempts: Int,
+    val tokensUsed: Int,
+    val processingTimeMs: Long,
+    val modelVersion: String?,
+    val sourceReference: WorkoutProgramSourceReference?,
+    val changeSummaries: List<WorkoutProgramChangeSummary>,
+    val significance: String,
+    val requiresConfirmation: Boolean,
+    val defaultSaveMode: String,
+    val optionalQuestion: String?,
+    val saveTargetTemplateId: String?
+)
+
+private fun WorkoutGenerationResult.toBuilderResultSnapshot() = BuilderResultSnapshot(
+    previewId = previewId,
+    program = program,
+    validationWarnings = validationWarnings,
+    cacheHit = cacheHit,
+    repairAttempts = repairAttempts,
+    tokensUsed = tokensUsed,
+    processingTimeMs = processingTimeMs,
+    modelVersion = modelVersion,
+    sourceReference = sourceReference,
+    changeSummaries = changeSummaries,
+    significance = significance.name,
+    requiresConfirmation = requiresConfirmation,
+    defaultSaveMode = defaultSaveMode.name,
+    optionalQuestion = optionalQuestion,
+    saveTargetTemplateId = saveTargetTemplateId
+)
+
+private fun BuilderResultSnapshot.toWorkoutGenerationResult(): WorkoutGenerationResult? = runCatching {
+    WorkoutGenerationResult(
+        previewId = previewId,
+        program = program,
+        validationWarnings = validationWarnings,
+        cacheHit = cacheHit,
+        repairAttempts = repairAttempts,
+        tokensUsed = tokensUsed,
+        processingTimeMs = processingTimeMs,
+        modelVersion = modelVersion,
+        sourceReference = sourceReference,
+        changeSummaries = changeSummaries,
+        significance = WorkoutModificationSignificance.valueOf(significance),
+        requiresConfirmation = requiresConfirmation,
+        defaultSaveMode = WorkoutModificationSaveMode.valueOf(defaultSaveMode),
+        optionalQuestion = optionalQuestion,
+        saveTargetTemplateId = saveTargetTemplateId
+    )
+}.getOrNull()
+
+private fun String?.toBuilderLanguage(): Language =
+    if (this == Language.ROMANIAN.code) Language.ROMANIAN else Language.ENGLISH

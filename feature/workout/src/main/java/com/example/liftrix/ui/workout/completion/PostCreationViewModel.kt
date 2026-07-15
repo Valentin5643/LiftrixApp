@@ -78,15 +78,21 @@ class PostCreationViewModel @Inject constructor(
             updateState { UiState.Loading }
             val result = liftrixCatching(
                 errorMapper = { throwable ->
-                    LiftrixError.BusinessLogicError(
-                        code = "POST_CREATION_FAILED",
-                        errorMessage = "Failed to create post: ${throwable.message}",
-                        analyticsContext = mapOf(
-                            "workout_id" to workoutId,
-                            "media_count" to mediaUris.size.toString(),
-                            "privacy" to privacy.name
+                    if (throwable is LiftrixError) {
+                        throwable
+                    } else {
+                        Timber.e(throwable, "Unexpected failure while creating workout post")
+                        LiftrixError.BusinessLogicError(
+                            code = "POST_CREATION_FAILED",
+                            errorMessage = "Failed to create post: ${throwable.message}",
+                            analyticsContext = mapOf(
+                                "workout_id" to workoutId,
+                                "media_count" to mediaUris.size.toString(),
+                                "privacy" to privacy.name,
+                                "cause_type" to throwable::class.java.simpleName
+                            )
                         )
-                    )
+                    }
                 }
             ) {
                 createPostInternal(workoutId, caption, mediaUris, privacy)
@@ -109,14 +115,6 @@ class PostCreationViewModel @Inject constructor(
     }
 
     /**
-     * Ensures a social profile exists for the user before post creation.
-     * IMPORTANT: Only creates a profile if one doesn't exist, never replaces existing ones.
-     */
-    private suspend fun ensureSocialProfileExists(userId: String) {
-        Timber.d("Skipping direct social profile DAO access from feature:workout for user: $userId")
-    }
-
-    /**
      * Internal post creation logic with detailed error handling.
      */
     private suspend fun createPostInternal(
@@ -133,11 +131,6 @@ class PostCreationViewModel @Inject constructor(
                 errorMessage = "User not authenticated for post creation",
                 analyticsContext = mapOf("workout_id" to workoutId)
             )
-
-        // CRITICAL: Ensure social profile exists before creating post
-        // This prevents foreign key constraint failures
-        // But NEVER replaces existing profiles
-        ensureSocialProfileExists(userId.value)
 
         updateState { UiState.Loading }
 

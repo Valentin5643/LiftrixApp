@@ -9,6 +9,7 @@ import com.example.liftrix.data.local.entity.ChatHistoryEntity
 import com.example.liftrix.data.local.entity.ChatConversationEntity
 import com.example.liftrix.data.local.dto.ChatConversationSummaryRow
 import com.example.liftrix.annotations.UserScoped
+import com.example.liftrix.domain.usecase.chat.ChatConversationDeletionPolicy
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -20,15 +21,16 @@ interface ChatHistoryDao {
     /**
      * Inserts a new chat message or replaces existing one.
      */
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertMessage(message: ChatHistoryEntity)
+    suspend fun insertMessage(message: ChatHistoryEntity) = upsertLocal(message)
     
     /**
      * Inserts multiple chat messages in a single batch operation.
      * Used for efficient bulk operations during sync processes.
      */
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertMessages(messages: List<ChatHistoryEntity>)
+    @Transaction
+    suspend fun insertMessages(messages: List<ChatHistoryEntity>) {
+        messages.forEach { upsertLocal(it) }
+    }
     
     /**
      * Observes all messages in a conversation for a specific user.
@@ -75,6 +77,10 @@ interface ChatHistoryDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertConversation(conversation: ChatConversationEntity)
+
+    @Query("SELECT * FROM chat_conversations WHERE user_id = :userId ORDER BY updated_at ASC, conversation_id ASC")
+    @UserScoped
+    suspend fun getConversationMetadataForSync(userId: String): List<ChatConversationEntity>
 
     @Query("""
         UPDATE chat_conversations SET title = :title, is_title_custom = 1, updated_at = :updatedAt
@@ -175,8 +181,16 @@ interface ChatHistoryDao {
     @UserScoped
     suspend fun getConversationMetadata(userId: String, conversationId: String): ChatConversationEntity?
 
+    @Query("SELECT * FROM chat_conversations WHERE user_id = :userId AND conversation_id = :clearAllConversationId LIMIT 1")
+    @UserScoped
+    suspend fun getClearAllTombstone(
+        userId: String,
+        clearAllConversationId: String = ChatConversationDeletionPolicy.ALL_HISTORY_CONVERSATION_ID
+    ): ChatConversationEntity?
+
     @Transaction
     suspend fun tombstoneAndDeleteConversation(userId: String, conversationId: String, now: Long): Int {
+        ChatConversationDeletionPolicy.requireRealConversationId(conversationId)
         val existing = getConversationMetadata(userId, conversationId)
         upsertConversation(
             (existing ?: ChatConversationEntity(userId, conversationId, "New chat", createdAt = now, updatedAt = now))
@@ -186,7 +200,51 @@ interface ChatHistoryDao {
     }
 
     @Transaction
-    suspend fun insertMessageWithConversation(message: ChatHistoryEntity, title: String) {
+    suspend fun clearAllHistoryWithTombstone(userId: String, now: Long): Int {
+        val existing = getClearAllTombstone(userId)
+        upsertConversation(
+            (existing ?: ChatConversationEntity(
+                userId = userId,
+                conversationId = ChatConversationDeletionPolicy.ALL_HISTORY_CONVERSATION_ID,
+                title = ChatConversationDeletionPolicy.ALL_HISTORY_TOMBSTONE_TITLE,
+                createdAt = now,
+                updatedAt = now
+            )).copy(updatedAt = now, deletedAt = now)
+        )
+        return deleteMessagesAtOrBefore(userId, now)
+    }
+
+    @Transaction
+    suspend fun upsertConversationFromRemote(conversation: ChatConversationEntity) {
+        val local = getConversationMetadata(conversation.userId, conversation.conversationId)
+        if (local != null && local.updatedAt >= conversation.updatedAt) {
+            local.deletedAt?.let { deletedAt ->
+                if (ChatConversationDeletionPolicy.isReservedConversationId(local.conversationId)) {
+                    deleteMessagesAtOrBefore(local.userId, deletedAt)
+                } else {
+                    deleteConversationMessages(local.userId, local.conversationId)
+                }
+            }
+            return
+        }
+
+        upsertConversation(conversation)
+        conversation.deletedAt?.let { deletedAt ->
+            if (ChatConversationDeletionPolicy.isReservedConversationId(conversation.conversationId)) {
+                deleteMessagesAtOrBefore(conversation.userId, deletedAt)
+            } else {
+                deleteConversationMessages(conversation.userId, conversation.conversationId)
+            }
+        }
+    }
+
+    @Transaction
+    suspend fun insertMessageWithConversation(
+        message: ChatHistoryEntity,
+        title: String,
+        retentionDays: Int = 30
+    ) {
+        ChatConversationDeletionPolicy.requireRealConversationId(message.conversationId)
         insertConversationIfAbsent(
             ChatConversationEntity(
                 userId = message.userId,
@@ -196,7 +254,7 @@ interface ChatHistoryDao {
                 updatedAt = message.createdAt
             )
         )
-        _insert(message)
+        upsertLocal(message, retentionDays)
     }
     
     /**
@@ -225,8 +283,9 @@ interface ChatHistoryDao {
      * Used by settings screen for complete history clear.
      * Returns the number of deleted messages.
      */
-    @Query("DELETE FROM chat_history WHERE user_id = :userId")
-    suspend fun clearAllHistory(userId: String): Int
+    @Query("DELETE FROM chat_history WHERE user_id = :userId AND created_at <= :cutoffTimestamp")
+    @UserScoped
+    suspend fun deleteMessagesAtOrBefore(userId: String, cutoffTimestamp: Long): Int
     
     /**
      * Gets all chat messages for a user for export purposes.
@@ -265,6 +324,7 @@ interface ChatHistoryDao {
         val expiresAt = currentTime + (retentionDays * 24 * 60 * 60 * 1000L)
         val entity = chatHistory.copy(
             isDirty = true,
+            isSynced = false,
             lastModified = currentTime,
             expiresAt = expiresAt
         )
@@ -278,6 +338,17 @@ interface ChatHistoryDao {
      */
     @Transaction
     suspend fun upsertFromRemote(chatHistory: ChatHistoryEntity) {
+        val conversation = getConversationMetadata(chatHistory.userId, chatHistory.conversationId)
+        val allHistoryTombstone = getClearAllTombstone(chatHistory.userId)
+        if (ChatConversationDeletionPolicy.shouldSuppressMessage(
+                conversationId = chatHistory.conversationId,
+                messageCreatedAt = chatHistory.createdAt,
+                conversationDeletedAt = conversation?.deletedAt,
+                allHistoryDeletedAt = allHistoryTombstone?.deletedAt
+            )
+        ) {
+            return
+        }
         val local = getChatHistoryForSync(chatHistory.id, chatHistory.userId)
         if (local == null || chatHistory.lastModified > local.lastModified) {
             val entity = chatHistory.copy(
@@ -315,44 +386,26 @@ interface ChatHistoryDao {
 
     // ========== END OFFLINE-FIRST METHODS ==========
 
-    // ========== GDPR COMPLIANCE METHODS (SPEC-20251230-google-play-compliance) ==========
+    // ========== USER-SCOPED RETENTION METHODS ==========
 
-    /**
-     * Get expired messages (expires_at < current time).
-     * Used by ChatHistoryCleanupWorker for automatic deletion.
-     */
     @Query("""
         SELECT * FROM chat_history
-        WHERE expires_at IS NOT NULL
+        WHERE user_id = :userId
+        AND expires_at IS NOT NULL
         AND expires_at < :currentTime
         ORDER BY expires_at ASC
         LIMIT :limit
     """)
+    @UserScoped
     suspend fun getExpiredMessages(
+        userId: String,
         currentTime: Long = System.currentTimeMillis(),
-        limit: Int = 1000
+        limit: Int = 20
     ): List<ChatHistoryEntity>
 
-    /**
-     * Delete expired messages (automatic cleanup).
-     * Returns number of deleted messages.
-     */
-    @Query("""
-        DELETE FROM chat_history
-        WHERE expires_at IS NOT NULL
-        AND expires_at < :currentTime
-    """)
-    suspend fun deleteExpiredMessages(currentTime: Long = System.currentTimeMillis()): Int
+    @Query("DELETE FROM chat_history WHERE user_id = :userId AND id IN (:messageIds)")
+    @UserScoped
+    suspend fun deleteMessagesByIds(userId: String, messageIds: List<String>): Int
 
-    /**
-     * Count expired messages for metrics.
-     */
-    @Query("""
-        SELECT COUNT(*) FROM chat_history
-        WHERE expires_at IS NOT NULL
-        AND expires_at < :currentTime
-    """)
-    suspend fun countExpiredMessages(currentTime: Long = System.currentTimeMillis()): Int
-
-    // ========== END GDPR COMPLIANCE METHODS ==========
+    // ========== END USER-SCOPED RETENTION METHODS ==========
 }

@@ -106,11 +106,6 @@ class NotificationSettingsViewModel @Inject constructor(
                 updateNotificationPreference { copy(reminderNotifications = event.enabled) }
             }
             
-            is NotificationSettingsEvent.ToggleRestDayReminders -> {
-                // This would be a new field in NotificationPreferences
-                Timber.d("Rest day reminders toggle: ${event.enabled}")
-            }
-            
             // Achievement Notifications
             is NotificationSettingsEvent.ToggleAchievementNotifications -> {
                 updateNotificationPreference { copy(achievementNotifications = event.enabled) }
@@ -120,16 +115,6 @@ class NotificationSettingsViewModel @Inject constructor(
                 updateState { currentState ->
                     currentState.copy(achievementExpanded = !currentState.achievementExpanded) 
                 }
-            }
-            
-            is NotificationSettingsEvent.TogglePersonalRecords -> {
-                // Personal records are part of achievement notifications
-                updateNotificationPreference { copy(achievementNotifications = event.enabled) }
-            }
-            
-            is NotificationSettingsEvent.ToggleMilestoneAchievements -> {
-                // Milestone achievements are part of achievement notifications
-                updateNotificationPreference { copy(achievementNotifications = event.enabled) }
             }
             
             // Delivery & Timing
@@ -252,10 +237,7 @@ class NotificationSettingsViewModel @Inject constructor(
                             notificationVibration = preferences.notificationVibration,
                             showInAppNotifications = preferences.showInAppNotifications,
                             socialDeliveryFrequency = mapDeliveryFrequency(preferences.deliveryFrequency),
-                            workoutReminders = preferences.reminderNotifications,
-                            restDayReminders = false, // Default until implemented
-                            personalRecords = preferences.achievementNotifications,
-                            milestoneAchievements = preferences.achievementNotifications
+                            workoutReminders = preferences.reminderNotifications
                         )
                     }
                 },
@@ -421,13 +403,8 @@ data class NotificationSettingsUiState(
     val postComments: Boolean = true,
     val mentions: Boolean = true,
     
-    // Workout notification subcategories
+    // Workout notification subcategory
     val workoutReminders: Boolean = true,
-    val restDayReminders: Boolean = false,
-    
-    // Achievement notification subcategories
-    val personalRecords: Boolean = true,
-    val milestoneAchievements: Boolean = true,
     
     // Delivery preferences
     val socialDeliveryFrequency: DeliveryFrequency = DeliveryFrequency.IMMEDIATE,
@@ -479,12 +456,6 @@ sealed class NotificationSettingsEvent {
     
     // Workout subcategories
     data class ToggleWorkoutReminders(val enabled: Boolean) : NotificationSettingsEvent()
-    data class ToggleRestDayReminders(val enabled: Boolean) : NotificationSettingsEvent()
-    
-    // Achievement subcategories
-    data class TogglePersonalRecords(val enabled: Boolean) : NotificationSettingsEvent()
-    data class ToggleMilestoneAchievements(val enabled: Boolean) : NotificationSettingsEvent()
-    
     // Delivery & Timing
     data class ToggleQuietHours(val enabled: Boolean) : NotificationSettingsEvent()
     object ShowQuietHoursStartPicker : NotificationSettingsEvent()
