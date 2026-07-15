@@ -212,3 +212,17 @@ feature/settings/build/outputs
 
 # InfoEducatie deliverables should be visible to Git.
 !/00_InfoEducatie_2026/**
+
+# Canonical competition release operations are tracked; other local scripts/docs remain ignored.
+!/scripts/
+/scripts/*
+!/scripts/firebase_deploy.sh
+!/docs/
+/docs/*
+!/docs/runbooks/
+/docs/runbooks/*
+!/docs/runbooks/competition-release.md
+!/docs/firebase/
+/docs/firebase/*
+!/docs/firebase/firebase-deployment-guide.md
+/.release-receipts/

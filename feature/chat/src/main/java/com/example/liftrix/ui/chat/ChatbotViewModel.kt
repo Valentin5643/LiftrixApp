@@ -27,6 +27,7 @@ import com.example.liftrix.domain.usecase.ai.ChatIntent
 import com.example.liftrix.domain.usecase.ai.ModifyWorkoutProgramRequest
 import com.example.liftrix.domain.usecase.ai.WorkoutGenerationIntentClassifier
 import com.example.liftrix.domain.usecase.ai.WorkoutProgramGateway
+import com.example.liftrix.domain.usecase.admin.CheckAdminPermissionsUseCase
 import com.example.liftrix.domain.model.ai.WorkoutModificationSaveMode
 import com.example.liftrix.domain.repository.ChatRepository
 import com.example.liftrix.domain.service.AIMessageReportService
@@ -61,7 +62,8 @@ class ChatbotViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val workoutGenerationIntentClassifier: WorkoutGenerationIntentClassifier,
     private val workoutProgramGateway: WorkoutProgramGateway,
-    private val aiMessageReportService: AIMessageReportService
+    private val aiMessageReportService: AIMessageReportService,
+    private val checkAdminPermissionsUseCase: CheckAdminPermissionsUseCase
 ) : ModernBaseViewModel<ChatbotUiState>(
     initialState = ChatbotUiState()
 ) {
@@ -70,7 +72,10 @@ class ChatbotViewModel @Inject constructor(
         ?.takeIf(String::isNotBlank) ?: UUID.randomUUID().toString()
     private var userId: String? = null
     private var isUserMessageInFlight = false
+    private var preferencesJob: Job? = null
+    private var conversationsJob: Job? = null
     private var conversationJob: Job? = null
+    private var usageLimitsJob: Job? = null
     private var requestedConversationId: String? = savedStateHandle.get<String>("conversationId")
 
     private companion object {
@@ -96,17 +101,15 @@ class ChatbotViewModel @Inject constructor(
                 // Get authenticated user ID
                 authInteractor.currentUser(waitForAuth = false).fold(
                     onSuccess = { userIdResult ->
-                        userId = userIdResult.value
-                        if (userId != null) {
-                            val authenticatedUserId = userId!!
+                        val authenticatedUserId = userIdResult.value
+                        if (authenticatedUserId != null && hasAdminAiAccess(authenticatedUserId)) {
+                            userId = authenticatedUserId
                             _uiState.value = _uiState.value.copy(isAiAccessEnabled = true)
                             observeChatPreferences(authenticatedUserId)
                             observeConversations(authenticatedUserId)
                             checkUsageLimits()
                         } else {
-                            handleError(LiftrixError.AuthenticationError(
-                                errorMessage = "Failed to get current user ID"
-                            ))
+                            denyAiAccess()
                         }
                     },
                     onFailure = {
@@ -125,7 +128,8 @@ class ChatbotViewModel @Inject constructor(
     }
 
     private fun observeChatPreferences(userId: String) {
-        viewModelScope.launch {
+        preferencesJob?.cancel()
+        preferencesJob = viewModelScope.launch {
             chatRepository.observePreferences(userId).collect { preferences ->
                 val effectivePreferences = preferences ?: ChatPreferences(userId = userId)
                 _uiState.value = _uiState.value.copy(
@@ -137,17 +141,50 @@ class ChatbotViewModel @Inject constructor(
     }
 
     private fun denyAiAccess() {
+        val accessError = LiftrixError.BusinessLogicError(
+            code = "AI_ACCESS_DENIED",
+            errorMessage = "AI access is limited to authorized competition administrators."
+        )
+        preferencesJob?.cancel()
+        conversationsJob?.cancel()
+        conversationJob?.cancel()
+        usageLimitsJob?.cancel()
+        userId = null
         _uiState.value = _uiState.value.copy(
+            messages = emptyList(),
+            conversations = emptyList(),
+            conversationsState = UiState.Error(accessError),
+            conversationState = UiState.Error(accessError),
             isAiAccessEnabled = false,
-            error = LiftrixError.BusinessLogicError(
-                code = "AI_ACCESS_UNAVAILABLE",
-                errorMessage = "AI access is currently unavailable."
-            )
+            isTyping = false,
+            usageLimits = null,
+            usageStats = null,
+            showUsageWarning = false,
+            isGeneratingProgram = false,
+            isSavingGeneratedProgram = false,
+            pendingGeneratedProgram = null,
+            workoutBuilderNavigation = null,
+            error = accessError
         )
     }
 
+    private suspend fun hasAdminAiAccess(expectedUserId: String): Boolean {
+        val isAdmin = checkAdminPermissionsUseCase(expectedUserId).getOrElse { false }
+        val currentUserId = authInteractor.currentUser(waitForAuth = false)
+            .getOrNull()
+            ?.value
+        return isAdmin && currentUserId == expectedUserId
+    }
+
+    private suspend fun requireAdminAiAccess(expectedUserId: String): Boolean {
+        if (hasAdminAiAccess(expectedUserId)) return true
+        denyAiAccess()
+        return false
+    }
+
     private fun observeConversations(userId: String) {
-        viewModelScope.launch {
+        conversationsJob?.cancel()
+        conversationsJob = viewModelScope.launch {
             chatInteractor.observeConversations(userId).collectLatest { result ->
                 result.fold(
                     onSuccess = { conversations ->
@@ -250,12 +287,14 @@ class ChatbotViewModel @Inject constructor(
             is ChatbotEvent.OpenConversation -> openConversation(event.conversationId)
             is ChatbotEvent.RenameConversation -> renameConversation(event.conversationId, event.title)
             is ChatbotEvent.DeleteConversation -> deleteConversation(event.conversationId)
-            ChatbotEvent.CreateWorkoutPlan -> _uiState.value = _uiState.value.copy(
-                workoutBuilderNavigation = WorkoutBuilderNavigation(
-                    currentConversationId,
-                    _uiState.value.currentInput.takeIf(String::isNotBlank)
+            ChatbotEvent.CreateWorkoutPlan -> if (_uiState.value.canUseAiAction) {
+                _uiState.value = _uiState.value.copy(
+                    workoutBuilderNavigation = WorkoutBuilderNavigation(
+                        currentConversationId,
+                        _uiState.value.currentInput.takeIf(String::isNotBlank)
+                    )
                 )
-            )
+            }
             ChatbotEvent.WorkoutBuilderNavigationConsumed -> _uiState.value = _uiState.value.copy(workoutBuilderNavigation = null)
         }
     }
@@ -271,7 +310,8 @@ class ChatbotViewModel @Inject constructor(
      */
     private fun sendMessage(content: String) {
         val trimmedContent = content.trim()
-        if (trimmedContent.isBlank() || userId == null) return
+        val expectedUserId = userId ?: return
+        if (trimmedContent.isBlank()) return
         if (!_uiState.value.isAiAccessEnabled) {
             denyAiAccess()
             return
@@ -282,28 +322,36 @@ class ChatbotViewModel @Inject constructor(
         }
 
         isUserMessageInFlight = true
-        try {
-            val intent = workoutGenerationIntentClassifier.classify(trimmedContent)
-            Timber.i("[AI] ChatbotViewModel: classified chat message intent=${intent.javaClass.simpleName} chars=${trimmedContent.length}")
-            when (intent) {
-                ChatIntent.GenerateWorkout -> {
-                    _uiState.value = _uiState.value.copy(
-                        currentInput = "",
-                        workoutBuilderNavigation = WorkoutBuilderNavigation(currentConversationId, trimmedContent)
-                    )
+        viewModelScope.launch {
+            try {
+                if (!requireAdminAiAccess(expectedUserId)) {
                     isUserMessageInFlight = false
+                    return@launch
                 }
-                ChatIntent.ModifyWorkout -> modifyWorkoutProgram(trimmedContent, updateFromProgress = false)
-                ChatIntent.UpdatePlanFromProgress -> modifyWorkoutProgram(trimmedContent, updateFromProgress = true)
-                ChatIntent.NeedsClarification -> {
-                    showWorkoutGenerationClarification(trimmedContent)
-                    isUserMessageInFlight = false
+
+                val intent = workoutGenerationIntentClassifier.classify(trimmedContent)
+                Timber.i("[AI] ChatbotViewModel: classified chat message intent=${intent.javaClass.simpleName} chars=${trimmedContent.length}")
+                when (intent) {
+                    ChatIntent.GenerateWorkout -> {
+                        _uiState.value = _uiState.value.copy(
+                            currentInput = "",
+                            workoutBuilderNavigation = WorkoutBuilderNavigation(currentConversationId, trimmedContent)
+                        )
+                        isUserMessageInFlight = false
+                    }
+                    ChatIntent.ModifyWorkout -> modifyWorkoutProgram(trimmedContent, updateFromProgress = false)
+                    ChatIntent.UpdatePlanFromProgress -> modifyWorkoutProgram(trimmedContent, updateFromProgress = true)
+                    ChatIntent.NeedsClarification -> {
+                        showWorkoutGenerationClarification(trimmedContent)
+                        isUserMessageInFlight = false
+                    }
+                    ChatIntent.GeneralChat -> sendChatMessage(trimmedContent)
                 }
-                ChatIntent.GeneralChat -> sendChatMessage(trimmedContent)
+            } catch (exception: Exception) {
+                isUserMessageInFlight = false
+                Timber.e(exception, "Failed to authorize or classify AI chat action")
+                handleError(exception.toLiftrixError("Failed to prepare AI request"))
             }
-        } catch (exception: Exception) {
-            isUserMessageInFlight = false
-            throw exception
         }
     }
 
@@ -326,6 +374,8 @@ class ChatbotViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
+                if (!requireAdminAiAccess(userMessage.userId)) return@launch
+
                 // Optimistic UI update - show the message immediately
                 _uiState.value = _uiState.value.copy(
                     messages = _uiState.value.messages + userMessage,
@@ -411,6 +461,8 @@ class ChatbotViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
+                if (!requireAdminAiAccess(userMessage.userId)) return@launch
+
                 Timber.i("[AI] ChatbotViewModel: workout generation UI flow started promptChars=${content.length}")
                 _uiState.value = _uiState.value.copy(
                     messages = _uiState.value.messages + userMessage,
@@ -585,6 +637,8 @@ class ChatbotViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
+                if (!requireAdminAiAccess(id)) return@launch
+
                 _uiState.value = _uiState.value.copy(
                     messages = _uiState.value.messages + userMessage,
                     currentInput = "",
@@ -935,7 +989,8 @@ class ChatbotViewModel @Inject constructor(
      */
     private fun checkUsageLimits() {
         userId?.let { id ->
-            viewModelScope.launch {
+            usageLimitsJob?.cancel()
+            usageLimitsJob = viewModelScope.launch {
                 chatInteractor.usageLimits(id).fold(
                     onSuccess = { limits ->
                         Timber.tag(MONTHLY_USAGE_TAG).d(
@@ -1004,7 +1059,14 @@ data class ChatbotUiState(
     val lastFailedMessage: String? = null,
     val failedSubmission: FailedSubmission? = null,
     val workoutBuilderNavigation: WorkoutBuilderNavigation? = null
-)
+) {
+    val canUseAiAction: Boolean
+        get() = isAiAccessEnabled &&
+            isOnline &&
+            !isTyping &&
+            !isGeneratingProgram &&
+            usageLimits?.canSendMessage() != false
+}
 
 data class FailedSubmission(val requestId: String, val content: String)
 data class WorkoutBuilderNavigation(val conversationId: String?, val seedPrompt: String?)

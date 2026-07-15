@@ -8,6 +8,8 @@ import androidx.work.CoroutineWorker
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequest
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.example.liftrix.config.OfflineArchitectureFlags
@@ -57,6 +59,7 @@ class ChatSyncWorker @AssistedInject constructor(
         private const val MONTHLY_USAGE_TAG = "MonthlyUsageDebug"
         private const val DEFAULT_RETENTION_DAYS = 30
         private const val MILLIS_PER_DAY = 24L * 60L * 60L * 1000L
+        private const val PERIODIC_INTERVAL_MINUTES = 15L
 
         fun createWorkRequest(userId: String): OneTimeWorkRequest =
             OneTimeWorkRequestBuilder<ChatSyncWorker>()
@@ -70,6 +73,26 @@ class ChatSyncWorker @AssistedInject constructor(
                 .addTag(WORK_NAME)
                 .addTag("user_$userId")
                 .build()
+
+        fun createPeriodicWorkRequest(userId: String): PeriodicWorkRequest =
+            PeriodicWorkRequestBuilder<ChatSyncWorker>(
+                PERIODIC_INTERVAL_MINUTES,
+                TimeUnit.MINUTES
+            )
+                .setInputData(workDataOf(KEY_USER_ID to userId))
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .setRequiresBatteryNotLow(true)
+                        .build()
+                )
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                .addTag(WORK_NAME)
+                .addTag("periodic_sync")
+                .addTag("user_$userId")
+                .build()
+
+        fun getPeriodicWorkName(userId: String): String = "${WORK_NAME}_periodic_$userId"
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {

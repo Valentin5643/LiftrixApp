@@ -99,12 +99,6 @@ fun ChatbotScreen(
     val scope = rememberCoroutineScope()
     var renameTarget by remember { mutableStateOf<ChatConversation?>(null) }
     var deleteTarget by remember { mutableStateOf<ChatConversation?>(null) }
-    val canUseAiAction = uiState.isAiAccessEnabled &&
-        uiState.isOnline &&
-        !uiState.isTyping &&
-        !uiState.isGeneratingProgram &&
-        uiState.usageLimits?.canSendMessage() != false
-
     LaunchedEffect(uiState.workoutBuilderNavigation) {
         uiState.workoutBuilderNavigation?.let { request ->
             onCreateWorkoutPlan(request.conversationId, request.seedPrompt)
@@ -146,14 +140,14 @@ fun ChatbotScreen(
                 CreateWorkoutPlanAction(
                     currentLanguage = uiState.currentLanguage,
                     onClick = { viewModel.handleEvent(ChatbotEvent.CreateWorkoutPlan) },
-                    enabled = canUseAiAction,
+                    enabled = uiState.canUseAiAction,
                     modifier = Modifier.padding(horizontal = LiftrixSpacing.medium)
                 )
                 ChatInputBar(
                     text = uiState.currentInput,
                     onTextChange = { viewModel.handleEvent(ChatbotEvent.UpdateInput(it)) },
                     onSend = { viewModel.handleEvent(ChatbotEvent.SendMessage(it)) },
-                    enabled = canUseAiAction,
+                    enabled = uiState.canUseAiAction,
                     currentLanguage = uiState.currentLanguage
                 )
             }

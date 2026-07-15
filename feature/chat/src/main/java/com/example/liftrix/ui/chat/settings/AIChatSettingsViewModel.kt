@@ -6,10 +6,12 @@ import com.example.liftrix.domain.interactor.chat.ChatInteractor
 import com.example.liftrix.domain.model.chat.ChatPreferences
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.usecase.chat.ExportFormat
+import com.example.liftrix.domain.usecase.admin.CheckAdminPermissionsUseCase
 import com.example.liftrix.domain.repository.ChatRepository
 import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.state.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -23,19 +25,22 @@ import javax.inject.Inject
 class AIChatSettingsViewModel @Inject constructor(
     private val chatInteractor: ChatInteractor,
     private val chatRepository: ChatRepository,
-    private val authInteractor: AuthInteractor
+    private val authInteractor: AuthInteractor,
+    private val checkAdminPermissionsUseCase: CheckAdminPermissionsUseCase
 ) : ModernBaseViewModel<AIChatSettingsUiState>(
     initialState = AIChatSettingsUiState()
 ) {
     
     private var currentUserId: String? = null
+    private var settingsObservationJob: Job? = null
     
     init {
         loadInitialData()
     }
     
     private fun loadInitialData() {
-        viewModelScope.launch {
+        settingsObservationJob?.cancel()
+        settingsObservationJob = viewModelScope.launch {
             val userId = authInteractor.currentUser(waitForAuth = true).fold(
                 onSuccess = { it.value },
                 onFailure = { error ->
@@ -51,6 +56,11 @@ class AIChatSettingsViewModel @Inject constructor(
                     null
                 }
             ) ?: return@launch
+
+            if (!hasAdminAiAccess(userId)) {
+                denyAiAccess()
+                return@launch
+            }
 
             currentUserId = userId
 
@@ -120,6 +130,39 @@ class AIChatSettingsViewModel @Inject constructor(
             }
         )
     }
+
+    private suspend fun hasAdminAiAccess(expectedUserId: String): Boolean {
+        val isAdmin = checkAdminPermissionsUseCase(expectedUserId).getOrElse { false }
+        val currentUserId = authInteractor.currentUser(waitForAuth = false)
+            .getOrNull()
+            ?.value
+        return isAdmin && currentUserId == expectedUserId
+    }
+
+    private suspend fun requireAdminAiAccess(): Boolean {
+        val expectedUserId = currentUserId
+        if (expectedUserId != null && hasAdminAiAccess(expectedUserId)) return true
+        denyAiAccess()
+        return false
+    }
+
+    private fun denyAiAccess() {
+        val accessError = LiftrixError.BusinessLogicError(
+            code = "AI_ACCESS_DENIED",
+            errorMessage = "AI access is limited to authorized competition administrators."
+        )
+        settingsObservationJob?.cancel()
+        currentUserId = null
+        _uiState.value = _uiState.value.copy(
+            preferences = null,
+            preferencesState = UiState.Error(accessError),
+            clearHistoryInProgress = false,
+            exportInProgress = false,
+            showClearHistoryDialog = false,
+            showExportDialog = false,
+            error = accessError
+        )
+    }
     
     fun handleEvent(event: AIChatSettingsEvent) {
         when (event) {
@@ -175,6 +218,8 @@ class AIChatSettingsViewModel @Inject constructor(
         val updatedPreferences = update(currentPreferences.copy(updatedAt = System.currentTimeMillis()))
         
         viewModelScope.launch {
+            if (!requireAdminAiAccess()) return@launch
+
             // Optimistic update
             _uiState.value = _uiState.value.copy(preferences = updatedPreferences)
             
@@ -201,6 +246,8 @@ class AIChatSettingsViewModel @Inject constructor(
         val currentState = _uiState.value
         
         viewModelScope.launch {
+            if (!requireAdminAiAccess()) return@launch
+
             _uiState.value = currentState.copy(
                 clearHistoryInProgress = true,
                 showClearHistoryDialog = false
@@ -233,6 +280,8 @@ class AIChatSettingsViewModel @Inject constructor(
         val currentState = _uiState.value
         
         viewModelScope.launch {
+            if (!requireAdminAiAccess()) return@launch
+
             _uiState.value = currentState.copy(
                 exportInProgress = true,
                 showExportDialog = true,

@@ -86,6 +86,23 @@ class AIChatServiceImpl @Inject constructor(
                     errorMessage = throwable.message.orEmpty(),
                     analyticsContext = mapOf("user_id" to userId)
                 )
+                is PaidAiAccessDeniedException -> LiftrixError.BusinessLogicError(
+                    code = "AI_ACCESS_DENIED",
+                    errorMessage = throwable.message.orEmpty(),
+                    analyticsContext = mapOf("operation" to "CHAT_RESPONSE")
+                )
+                is PaidAiControlUnavailableException -> LiftrixError.BusinessLogicError(
+                    code = "AI_CONTROL_UNAVAILABLE",
+                    errorMessage = "AI is temporarily unavailable while operator controls are refreshed. Please try again.",
+                    isRecoverable = true,
+                    analyticsContext = mapOf("operation" to "CHAT_RESPONSE")
+                )
+                is PaidAiTimeoutException -> LiftrixError.BusinessLogicError(
+                    code = "AI_REQUEST_TIMEOUT",
+                    errorMessage = "The AI request took too long. Please try again or use a saved workout.",
+                    isRecoverable = true,
+                    analyticsContext = mapOf("operation" to "CHAT_RESPONSE")
+                )
                 is PaidAiPolicyDeniedException -> LiftrixError.ValidationError(
                     field = "message",
                     violations = listOf(throwable.message.orEmpty()),

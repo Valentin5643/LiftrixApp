@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.repository.AuthRepository
+import com.example.liftrix.domain.usecase.admin.CheckAdminPermissionsUseCase
 import com.example.liftrix.domain.usecase.profile.ProfileQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,7 +17,8 @@ import javax.inject.Inject
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val profileQueryUseCase: ProfileQueryUseCase
+    private val profileQueryUseCase: ProfileQueryUseCase,
+    private val checkAdminPermissionsUseCase: CheckAdminPermissionsUseCase
 ) : ViewModel() {
 
     private val _authState = MutableStateFlow<AuthenticationState>(AuthenticationState.Loading)
@@ -43,6 +45,12 @@ class MainViewModel @Inject constructor(
     private fun observeAuthState() {
         viewModelScope.launch {
             authRepository.currentUser.collect { user ->
+                if (user == null) {
+                    _aiAccessEligibility.value = AiAccessEligibility.Ineligible
+                } else if (isExplicitAuthFlow) {
+                    _aiAccessEligibility.value = AiAccessEligibility.Loading
+                }
+
                 // Only update state if we're not in the middle of an explicit auth flow
                 // This prevents MainViewModel from overriding AuthViewModel's error states
                 if (!isExplicitAuthFlow) {
@@ -66,10 +74,21 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    private fun refreshAiAccessEligibility(userId: String) {
-        // AI is available to authenticated users. PaidAiCallExecutor remains the
-        // authoritative guard for Remote Config, abuse policy, and per-user limits.
-        _aiAccessEligibility.value = AiAccessEligibility.Eligible(userId)
+    private suspend fun refreshAiAccessEligibility(userId: String) {
+        _aiAccessEligibility.value = AiAccessEligibility.Loading
+
+        val isAdmin = checkAdminPermissionsUseCase(userId).getOrElse {
+            false
+        }
+        val isStillAuthenticatedUser = runCatching {
+            authRepository.getCurrentUser()?.uid == userId
+        }.getOrDefault(false)
+
+        _aiAccessEligibility.value = if (isAdmin && isStillAuthenticatedUser) {
+            AiAccessEligibility.Eligible(userId)
+        } else {
+            AiAccessEligibility.Ineligible
+        }
     }
 
     private suspend fun ensureProfileReady(user: User) {

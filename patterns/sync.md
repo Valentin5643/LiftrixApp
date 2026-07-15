@@ -91,8 +91,8 @@ There is no current USE_UNIFIED_SYNC flag. SyncCoordinator directly schedules Un
 ### Periodic
 
 - Interval: 15 minutes.
-- Worker: UnifiedSyncWorker.
-- Unique work: liftrix_unified_sync_periodic_{userId}.
+- Workers: UnifiedSyncWorker plus the user-scoped ChatSyncWorker for conversation lifecycle and retention.
+- Unique work: liftrix_unified_sync_periodic_{userId} and chat_sync_work_periodic_{userId}.
 - Policy: KEEP.
 - Constraints: connected network and battery not low.
 - Additional schedules: DeadLetterCleanupWorker and DatabaseIntegrityWorker.
@@ -102,7 +102,7 @@ There is no current USE_UNIFIED_SYNC flag. SyncCoordinator directly schedules Un
 - Entry: SyncCoordinator.triggerImmediateSync(userId).
 - If StartupRestoreGate is incomplete, it does not enqueue work and returns a
   `RESTORE_IN_PROGRESS` business-logic failure.
-- Worker: one immediate UnifiedSyncWorker.
+- Worker chain: ChatSyncWorker, then UnifiedSyncWorker. The chain fails closed if chat durability work fails.
 - Policy: KEEP.
 
 Callers must receive either an accepted enqueue result or an explicit failure. A scheduling path that
@@ -130,9 +130,9 @@ Startup is queue-driven and unified:
    - FOLLOW_RELATIONSHIP;
    - WORKOUT_POST;
    - ACHIEVEMENT.
-5. Enqueue one startup UnifiedSyncWorker under startup_sync_{userId}.
+5. Enqueue ChatSyncWorker followed by UnifiedSyncWorker under startup_sync_{userId}.
 6. Use ExistingWorkPolicy.KEEP.
-7. UnifiedSyncWorker/SyncOperationManager performs restore/reconciliation.
+7. ChatSyncWorker restores durable conversation metadata/messages first, then UnifiedSyncWorker/SyncOperationManager performs the remaining restore/reconciliation.
 8. Observe the durable request without imposing a work deadline. ENQUEUED, BLOCKED, RUNNING, and
    WorkManager retry remain pending beyond any in-process observation interval.
 9. Transition the gate to RESTORE_COMPLETE only on successful startup work; FAILED and CANCELLED
@@ -147,7 +147,7 @@ Explicit account/logout cleanup remains authorized to cancel user-scoped work.
 
 ### Legacy Compatibility
 
-MasterSyncWorker and specialized entity workers remain loadable so already-persisted WorkManager specifications can instantiate after an update. New SyncCoordinator scheduling does not select them.
+MasterSyncWorker and specialized entity workers remain loadable so already-persisted WorkManager specifications can instantiate after an update. ChatSyncWorker is the intentional exception: SyncCoordinator actively schedules it for immediate, startup, periodic, and chat-specific work. Other new scheduling stays on UnifiedSyncWorker.
 
 Cancellation clears current unified names/tags and known legacy unique names.
 

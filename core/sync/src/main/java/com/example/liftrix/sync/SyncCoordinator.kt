@@ -116,6 +116,7 @@ class SyncCoordinator @Inject constructor(
     fun schedulePeriodicSync(userId: String) {
         Timber.d("SyncCoordinator: Scheduling unified periodic sync for user $userId")
         scheduleUnifiedPeriodicSync(userId)
+        scheduleChatPeriodicSync(userId)
 
         scheduleDeadLetterCleanup(userId)
         scheduleDatabaseIntegrityCheck(userId)
@@ -156,6 +157,16 @@ class SyncCoordinator @Inject constructor(
         )
         
         Timber.d("SyncCoordinator: Unified periodic sync scheduled for user $userId")
+    }
+
+    private fun scheduleChatPeriodicSync(userId: String) {
+        workManager.enqueueUniquePeriodicWork(
+            ChatSyncWorker.getPeriodicWorkName(userId),
+            ExistingPeriodicWorkPolicy.KEEP,
+            ChatSyncWorker.createPeriodicWorkRequest(userId)
+        )
+
+        Timber.d("SyncCoordinator: Chat periodic sync scheduled for user $userId")
     }
     
     private fun scheduleDeadLetterCleanup(userId: String) {
@@ -239,20 +250,22 @@ class SyncCoordinator @Inject constructor(
      * Trigger immediate sync using UnifiedSyncWorker
      */
     private suspend fun triggerUnifiedImmediateSync(userId: String): LiftrixResult<Unit> {
+        val chatSync = ChatSyncWorker.createWorkRequest(userId)
         val immediateSync = UnifiedSyncWorker.createImmediateWorkRequest(userId)
-        
-        val operation = workManager.enqueueUniqueWork(
-            "${UNIFIED_SYNC_WORK_NAME}_immediate_$userId",
+        val workName = "${UNIFIED_SYNC_WORK_NAME}_immediate_$userId"
+
+        val operation = workManager.beginUniqueWork(
+            workName,
             ExistingWorkPolicy.KEEP,
-            immediateSync
-        )
+            chatSync
+        ).then(immediateSync).enqueue()
         Timber.tag("FreshLoginRestoreDebug").i(
-            "operation=SYNC_COORDINATOR_IMMEDIATE_ENQUEUED userId=$userId uniqueWork=${UNIFIED_SYNC_WORK_NAME}_immediate_$userId policy=KEEP mode=unified timestamp=${System.currentTimeMillis()}"
+            "operation=SYNC_COORDINATOR_IMMEDIATE_ENQUEUED userId=$userId uniqueWork=$workName policy=KEEP workers=ChatSyncWorker->UnifiedSyncWorker timestamp=${System.currentTimeMillis()}"
         )
         
         startWorkMonitoring(
             operation = operation,
-            workName = "${UNIFIED_SYNC_WORK_NAME}_immediate_$userId",
+            workName = workName,
             workId = immediateSync.id,
             userId = userId,
             startupWork = false
@@ -297,6 +310,10 @@ class SyncCoordinator @Inject constructor(
      * Trigger entity sync using UnifiedSyncWorker
      */
     private suspend fun triggerUnifiedEntitySync(userId: String, entityType: String): LiftrixResult<Unit> {
+        if (entityType.equals("chat", ignoreCase = true)) {
+            enqueueChatEntitySync(userId, forceSync = true)
+            return liftrixSuccess(Unit)
+        }
         val (syncType, priority) = syncRequestForEntity(entityType) ?: return liftrixFailure(
             LiftrixError.ValidationError(
                 field = "entityType",
@@ -324,6 +341,10 @@ class SyncCoordinator @Inject constructor(
     }
 
     fun enqueueEntitySync(userId: String, entityType: String, forceSync: Boolean = true) {
+        if (entityType.equals("chat", ignoreCase = true)) {
+            enqueueChatEntitySync(userId, forceSync)
+            return
+        }
         val (syncType, priority) = syncRequestForEntity(entityType) ?: run {
             Timber.w("SyncCoordinator: Ignoring unknown entity sync type $entityType for user $userId")
             return
@@ -343,6 +364,16 @@ class SyncCoordinator @Inject constructor(
         )
 
         Timber.d("SyncCoordinator: Unified $entityType sync work enqueued for user $userId")
+    }
+
+    private fun enqueueChatEntitySync(userId: String, forceSync: Boolean) {
+        val workName = "${ChatSyncWorker.WORK_NAME}_entity_$userId"
+        workManager.enqueueUniqueWork(
+            workName,
+            if (forceSync) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP,
+            ChatSyncWorker.createWorkRequest(userId)
+        )
+        Timber.d("SyncCoordinator: Chat entity sync work enqueued for user $userId")
     }
     
     /**
@@ -403,6 +434,7 @@ class SyncCoordinator @Inject constructor(
             // Cancel unified sync operations
             workManager.cancelUniqueWork("${UNIFIED_SYNC_WORK_NAME}_periodic_$userId")
             workManager.cancelUniqueWork("${UNIFIED_SYNC_WORK_NAME}_immediate_$userId")
+            workManager.cancelUniqueWork(ChatSyncWorker.getPeriodicWorkName(userId))
             
             // Cancel legacy sync operations (for backward compatibility)
             workManager.cancelUniqueWork("liftrix_periodic_sync_$userId")
@@ -441,6 +473,7 @@ class SyncCoordinator @Inject constructor(
             workManager.cancelAllWorkByTag("unified_sync")
             workManager.cancelAllWorkByTag("periodic_sync")
             workManager.cancelAllWorkByTag("startup_sync")
+            workManager.cancelAllWorkByTag(ChatSyncWorker.WORK_NAME)
 
             coordinatorScope.launch {
                 realtimeSyncService.stopRealtimeSync()
@@ -576,20 +609,21 @@ class SyncCoordinator @Inject constructor(
                 forceSync = true,
                 startupSync = true
             )
+            val startupChatSync = ChatSyncWorker.createWorkRequest(userId)
 
-            val operation = workManager.enqueueUniqueWork(
+            val operation = workManager.beginUniqueWork(
                 workName,
                 ExistingWorkPolicy.KEEP,
-                startupUnifiedSync
-            )
+                startupChatSync
+            ).then(startupUnifiedSync).enqueue()
             Timber.tag("StartupRestoreFix").i(
                 "[TEMPLATE-LOAD] operation=STARTUP_SYNC_ENQUEUE_POLICY userId=$userId source=$source workName=$workName policy=KEEP previousPolicy=REPLACE reason=preserve_running_restore timestamp=${System.currentTimeMillis()}"
             )
             Timber.tag("StartupRestoreFix").i(
-                "[TEMPLATE-LOAD] operation=STARTUP_SYNC_ENQUEUED_ONCE userId=$userId source=$source workName=$workName worker=UnifiedSyncWorker queuedFetchTypes=${STARTUP_FETCH_ENTITY_TYPES.joinToString(",")} timestamp=${System.currentTimeMillis()}"
+                "[TEMPLATE-LOAD] operation=STARTUP_SYNC_ENQUEUED_ONCE userId=$userId source=$source workName=$workName workers=ChatSyncWorker->UnifiedSyncWorker queuedFetchTypes=${STARTUP_FETCH_ENTITY_TYPES.joinToString(",")} timestamp=${System.currentTimeMillis()}"
             )
             Timber.tag("FreshLoginRestoreDebug").i(
-                "operation=SYNC_COORDINATOR_STARTUP_ENQUEUED userId=$userId uniqueWork=startup_sync_$userId policy=KEEP worker=UnifiedSyncWorker timestamp=${System.currentTimeMillis()}"
+                "operation=SYNC_COORDINATOR_STARTUP_ENQUEUED userId=$userId uniqueWork=startup_sync_$userId policy=KEEP workers=ChatSyncWorker->UnifiedSyncWorker timestamp=${System.currentTimeMillis()}"
             )
             
             // Observe the durable startup work without taking ownership of its lifetime.

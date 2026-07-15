@@ -108,8 +108,8 @@ android {
         applicationId = "com.liftrix.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 10001
+        versionName = "1.0.1"
 
         buildConfigField("String", "APP_VERSION_NAME", buildConfigString(versionName ?: "unknown"))
         buildConfigField("int", "APP_VERSION_CODE", versionCode.toString())
@@ -189,7 +189,7 @@ android {
             
             // Firebase Performance Monitoring configuration
             manifestPlaceholders["firebase_performance_logcat_enabled"] = false
-            manifestPlaceholders["firebase_performance_collection_enabled"] = true
+            manifestPlaceholders["firebase_performance_collection_enabled"] = false
             
             // Secure OAuth configuration from properties
             buildConfigField("String", "GOOGLE_CLIENT_ID", "\"${project.findProperty("GOOGLE_CLIENT_ID_RELEASE") ?: ""}\"")

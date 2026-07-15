@@ -6,7 +6,13 @@ import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -118,7 +124,7 @@ class RemoteConfigManager @Inject constructor(
             REFUND_SUBSCRIPTION_POLICY_URL to "",
 
             // AI Chat defaults
-            AI_CHAT_ENABLED to true,
+            AI_CHAT_ENABLED to false,
             AI_DAILY_MESSAGE_LIMIT to 50,
             AI_MONTHLY_TOKEN_LIMIT to 100000,
             AI_COST_THRESHOLD_PER_HOUR to 1.0,
@@ -143,6 +149,37 @@ class RemoteConfigManager @Inject constructor(
     }
 
     private var isInitialized = false
+    private val paidControlsReadinessMutex = Mutex()
+    private val paidControlsReadinessScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var paidControlsReadiness: Deferred<LiftrixResult<Unit>>? = null
+
+    /**
+     * Performs one process-scoped fetch/activate before paid AI reads operator controls.
+     * Concurrent callers await the same attempt, whose success or failure is retained for the
+     * lifetime of this manager. Caller-side timeouts do not cancel the shared refresh.
+     */
+    suspend fun ensurePaidAiControlsReady(): LiftrixResult<Unit> {
+        val readiness = paidControlsReadinessMutex.withLock {
+            paidControlsReadiness ?: paidControlsReadinessScope.async {
+                liftrixCatching(
+                    errorMapper = { throwable ->
+                        LiftrixError.ConfigurationError(
+                            errorMessage = "Paid AI control state is unavailable",
+                            analyticsContext = mapOf(
+                                "operation" to "PAID_AI_REMOTE_CONFIG_READINESS",
+                                "error" to throwable.message.orEmpty()
+                            )
+                        )
+                    }
+                ) {
+                    initialize().getOrThrow()
+                    fetchAndActivate(forceRefresh = true).getOrThrow()
+                    Unit
+                }
+            }.also { paidControlsReadiness = it }
+        }
+        return readiness.await()
+    }
 
     /**
      * Initializes Remote Config with default values and settings

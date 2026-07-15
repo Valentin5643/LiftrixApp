@@ -7,6 +7,7 @@ import com.example.liftrix.data.remote.config.RemoteConfigManager
 import com.example.liftrix.domain.service.AbuseAction
 import com.example.liftrix.domain.service.AbusePreventionServiceContract
 import com.example.liftrix.domain.service.RateLimitingServiceContract
+import com.example.liftrix.domain.usecase.admin.CheckAdminPermissionsUseCase
 import com.google.firebase.Firebase
 import com.google.firebase.FirebaseException
 import com.google.firebase.appcheck.appCheck
@@ -14,10 +15,12 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 
@@ -60,7 +63,8 @@ class PaidAiCallExecutor @Inject constructor(
     private val remoteConfig: RemoteConfigManager,
     private val abusePreventionService: AbusePreventionServiceContract,
     private val rateLimitingService: RateLimitingServiceContract,
-    private val aiUsageDao: AiUsageDao
+    private val aiUsageDao: AiUsageDao,
+    private val checkAdminPermissionsUseCase: CheckAdminPermissionsUseCase
 ) {
     private val stripes = Array(STRIPE_COUNT) { Mutex() }
 
@@ -86,7 +90,13 @@ class PaidAiCallExecutor @Inject constructor(
                 request.estimatedInputTokens
             )
             dispatched = true
-            val result = dispatch()
+            val result = try {
+                withTimeout(PROVIDER_DISPATCH_TIMEOUT_MS) {
+                    dispatch()
+                }
+            } catch (error: TimeoutCancellationException) {
+                throw PaidAiTimeoutException(error)
+            }
             recordOutcome(
                 eventId = eventId,
                 request = request,
@@ -136,7 +146,27 @@ class PaidAiCallExecutor @Inject constructor(
     }
 
     private suspend fun checkPreconditions(request: PaidAiCallRequest) {
-        val isEnabled = remoteConfig.isAiChatEnabled().getOrThrow()
+        val isAdmin = checkAdminPermissionsUseCase(request.userId).getOrElse { false }
+        if (!isAdmin) throw PaidAiAccessDeniedException()
+
+        val readiness = withTimeoutOrNull(PAID_CONTROLS_READINESS_TIMEOUT_MS) {
+            remoteConfig.ensurePaidAiControlsReady()
+        } ?: throw PaidAiControlUnavailableException(
+            "Paid AI control state refresh timed out."
+        )
+        readiness.getOrElse { error ->
+            throw PaidAiControlUnavailableException(
+                "Paid AI control state refresh failed.",
+                error
+            )
+        }
+
+        val isEnabled = remoteConfig.isAiChatEnabled().getOrElse { error ->
+            throw PaidAiControlUnavailableException(
+                "Paid AI control state could not be read.",
+                error
+            )
+        }
         if (!isEnabled) throw PaidAiDisabledException()
 
         val abuse = abusePreventionService.detectAbuse(request.userId, request.abuseContent)
@@ -219,17 +249,27 @@ class PaidAiCallExecutor @Inject constructor(
         stripes[(userId.hashCode() and Int.MAX_VALUE) % stripes.size]
 
     private fun Throwable.toOutcomeCategory(): String = when (this) {
+        is PaidAiTimeoutException -> "TIMEOUT"
         is AIResponseMaxTokensException -> "MAX_TOKENS"
         else -> "DISPATCH_ERROR"
     }
 
     private companion object {
         const val STRIPE_COUNT = 64
+        const val PAID_CONTROLS_READINESS_TIMEOUT_MS = 10_000L
         const val APP_CHECK_TIMEOUT_MS = 10_000L
+        const val PROVIDER_DISPATCH_TIMEOUT_MS = 30_000L
     }
 }
 
 class PaidAiDisabledException : Exception("AI features are temporarily disabled.")
+class PaidAiAccessDeniedException : Exception(
+    "AI access is limited to authorized competition administrators."
+)
+class PaidAiControlUnavailableException(message: String, cause: Throwable? = null) :
+    Exception(message, cause)
+class PaidAiTimeoutException(cause: Throwable) :
+    Exception("The AI provider did not respond before the request deadline.", cause)
 class PaidAiPolicyDeniedException(message: String) : Exception(message)
 class PaidAiRecoverableDenialException(message: String) : Exception(message)
 class QuotaExceededException(message: String) : Exception(message)

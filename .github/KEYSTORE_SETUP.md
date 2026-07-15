@@ -1,6 +1,6 @@
 # Keystore Setup Guide for CI/CD
 
-This guide explains how to configure keystore credentials for both local development and GitHub Actions CI/CD.
+This guide explains how to configure the canonical release signing identity and Firebase Android configuration for local development and GitHub Actions CI/CD.
 
 ## Overview
 
@@ -46,6 +46,13 @@ Configure the following secrets in your GitHub repository:
 | `KEYSTORE_PASSWORD` | Keystore password | `your_password` |
 | `KEY_ALIAS` | Key alias in keystore | `liftrix` |
 | `KEY_PASSWORD` | Key password | `your_key_password` |
+| `GOOGLE_SERVICES_JSON_BASE64` | Base64-encoded Android Firebase configuration for package `com.liftrix.app` | Protected value; never print it |
+
+The frozen competition replacement is package `com.liftrix.app`, version name `1.0.1`, version code `10001`. Any later release must update the app version and the workflow's expected version in the same reviewed change.
+
+The release environment also requires the nonsecret Actions variable `RELEASE_CERT_SHA256`. The canonical certificate currently records SHA-256 `544162ace5fc6b03265f75db6f7cab5409c5981bd0097072d450f3ec01f548da` and SHA-1 `a3a0251d07bfe06d5dba72ee635eb7bfdf69cfb0`. Set the variable to the lowercase 64-character SHA-256 digest without separators. The workflow compares the signed APK and AAB identities to this value and records both fingerprints in the release manifest.
+
+Restrict the secrets and variable to the protected competition release environment. Access, changes, and rotations are owned jointly by the release owner and repository administrator; require review before a workflow can read them.
 
 ### How to Generate KEYSTORE_BASE64
 
@@ -63,6 +70,20 @@ Get-Content keystore.txt
 # Copy the output and paste into GitHub Secret
 ```
 
+Generate `GOOGLE_SERVICES_JSON_BASE64` the same way from the exact Firebase Android app configuration for `com.liftrix.app`. Do not save the encoded value in the repository, workflow, issue, or build log. CI decodes it directly to the ignored `app/google-services.json`, validates only the package name, and removes it in an always-run cleanup step.
+
+### Record the Canonical Certificate
+
+Derive the certificate fingerprint without exposing passwords in command arguments or logs:
+
+```bash
+keytool -list -v -keystore /secure/path/to/release.keystore -alias your_alias
+```
+
+Normalize the displayed SHA-256 fingerprint to lowercase hexadecimal without colons and store it as the `RELEASE_CERT_SHA256` Actions variable. The value in that protected variable is the canonical release identity; the workflow fails if the APK or AAB is signed by any other certificate.
+
+Maintain two encrypted offline backups in separately controlled storage. The release owner is accountable for a quarterly restore check; the repository administrator is the recovery approver. Document only the storage category and custodian in release records, never a device path, vault locator, password, or key filename.
+
 ### Security Best Practices
 
 1. **Never commit keystore files** to version control
@@ -70,7 +91,9 @@ Get-Content keystore.txt
 3. **Rotate credentials** if accidentally exposed
 4. **Limit access** to GitHub repository secrets
 5. **Use separate keystores** for debug and release builds
-6. **Backup keystore** in secure offline location
+6. **Backup the canonical keystore** in two encrypted offline locations with separate custody
+7. **Review the canonical SHA-256 fingerprint** before changing `RELEASE_CERT_SHA256`
+8. **Remove decoded CI inputs** in an always-run cleanup step
 
 ## Generating a New Keystore
 
@@ -146,11 +169,14 @@ The GitHub Actions workflow (`.github/workflows/android.yml`) performs:
 
 1. **Checkout code** from repository
 2. **Set up JDK 17** with Gradle caching
-3. **Decode keystore** from KEYSTORE_BASE64 secret
-4. **Build release APK** using environment variables
-5. **Run unit tests** with coverage report
-6. **Upload artifacts** (APK, test results, coverage)
-7. **Clean up** temporary keystore file
+3. **Decode and package-validate Firebase configuration** from `GOOGLE_SERVICES_JSON_BASE64`
+4. **Decode the canonical keystore** from `KEYSTORE_BASE64`
+5. **Build the release APK and AAB** using environment variables
+6. **Verify package, version, and signing certificate identity**
+7. **Upload the release set and verification manifest**
+8. **Clean up** both protected temporary inputs
+
+The uploaded `liftrix-release-<commit>` artifact is retained for 90 days and contains the universal signed APK, signed AAB, exact R8 mapping, `release-manifest.json`, and `SHA256SUMS`. Treat the manifest as the identity record; do not infer provenance from filenames alone.
 
 The workflow runs on:
 - Push to `master` or `develop` branches
