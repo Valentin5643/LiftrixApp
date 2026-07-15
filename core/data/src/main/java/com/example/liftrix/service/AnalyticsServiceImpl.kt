@@ -1223,83 +1223,15 @@ class AnalyticsServiceImpl @Inject constructor(
     }
     
     private suspend fun loadMuscleGroupDistributionData(userId: String): WidgetData {
-        return try {
-            val timeRange = com.example.liftrix.domain.model.analytics.TimeRange.lastMonth()
-            val metricsResult = analyticsEngine.calculateProgressMetrics(userId, timeRange)
-            
-            metricsResult.fold(
-                onSuccess = { metrics ->
-                    // Create sample muscle group distribution data for pie chart
-                    val muscleGroupMetrics = mapOf(
-                        "chest" to "25.5",
-                        "back" to "22.3", 
-                        "legs" to "20.1",
-                        "shoulders" to "15.7",
-                        "arms" to "12.2",
-                        "core" to "4.2"
-                    )
-                    
-                    AnalyticsWidgetData(
-                        widgetType = AnalyticsWidget.MuscleGroupDistribution,
-                        lastUpdated = Clock.System.now(),
-                        insights = listOf(
-                            Insight(
-                                title = "Training Balance",
-                                description = "Your training shows good muscle group distribution",
-                                category = InsightCategory.PERFORMANCE,
-                                confidence = 0.85f,
-                                actionable = false
-                            )
-                        ),
-                        recommendations = emptyList(),
-                        metrics = muscleGroupMetrics,
-                        confidence = 0.85f,
-                        timeRange = "Last 30 days",
-                        isLoading = false
-                    )
-                },
-                onFailure = { exception ->
-                    Timber.w(exception, "Failed to load muscle group distribution data")
-                    // Return empty data but still as AnalyticsWidgetData for consistency
-                    AnalyticsWidgetData(
-                        widgetType = AnalyticsWidget.MuscleGroupDistribution,
-                        lastUpdated = Clock.System.now(),
-                        insights = emptyList(),
-                        recommendations = emptyList(),
-                        metrics = mapOf(
-                            "chest" to "0",
-                            "back" to "0", 
-                            "legs" to "0",
-                            "shoulders" to "0",
-                            "arms" to "0",
-                            "core" to "0"
-                        ),
-                        confidence = 0.0f,
-                        timeRange = "No data",
-                        isLoading = false
-                    )
-                }
-            )
-        } catch (e: Exception) {
-            Timber.w(e, "Error loading muscle group distribution data")
-            AnalyticsWidgetData(
-                widgetType = AnalyticsWidget.MuscleGroupDistribution,
-                lastUpdated = Clock.System.now(),
-                insights = emptyList(),
-                recommendations = emptyList(),
-                metrics = mapOf(
-                    "chest" to "0",
-                    "back" to "0", 
-                    "legs" to "0",
-                    "shoulders" to "0",
-                    "arms" to "0",
-                    "core" to "0"
-                ),
-                confidence = 0.0f,
-                timeRange = "Error loading data",
-                isLoading = false
-            )
-        }
+        val timeRange = com.example.liftrix.domain.model.analytics.TimeRange.lastMonth()
+        return analyticsEngine.calculateProgressMetrics(userId, timeRange).fold(
+            onSuccess = {
+                // ProgressMetrics does not expose per-muscle distribution. Until the existing
+                // read-model contract supplies it, render this production widget as unavailable.
+                createNoDataWidgetData(AnalyticsWidget.MuscleGroupDistribution)
+            },
+            onFailure = { exception -> throw exception }
+        )
     }
     
     private suspend fun loadRecoveryPatternsData(userId: String): WidgetData {

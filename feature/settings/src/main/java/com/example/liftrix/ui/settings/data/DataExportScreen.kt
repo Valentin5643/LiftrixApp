@@ -37,15 +37,15 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 /**
- * Data export screen with format selection, data type filtering, date range selection,
+ * Data export screen with format selection, workout filtering, date range selection,
  * and real-time progress tracking.
  * 
- * This screen provides a comprehensive interface for exporting workout data in multiple
- * formats with granular control over what data is exported and the time period covered.
+ * This screen provides an interface for exporting supported workout records as JSON or CSV
+ * for a selected time period.
  * 
  * Key Features:
- * - Format selection (JSON, CSV, FIT, TCX)
- * - Data type filtering (workouts, exercises, templates)
+ * - Supported format selection (JSON and CSV)
+ * - Workout-record export only
  * - Date range picker for targeted exports
  * - Real-time progress tracking with cancellation
  * - File sharing integration
@@ -376,7 +376,7 @@ private fun DataTypeSelectionCard(
             )
             
             Text(
-                text = "Select which types of data to include in your export",
+                text = "This build exports workout records only",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
@@ -384,7 +384,7 @@ private fun DataTypeSelectionCard(
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                DataType.values().forEach { dataType ->
+                listOf(DataType.WORKOUTS).forEach { dataType ->
                     DataTypeOption(
                         dataType = dataType,
                         isSelected = dataType in selectedDataTypes,

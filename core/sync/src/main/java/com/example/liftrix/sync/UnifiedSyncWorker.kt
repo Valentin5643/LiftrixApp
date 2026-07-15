@@ -13,7 +13,6 @@ import androidx.hilt.work.HiltWorker
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import com.example.liftrix.data.sync.OfflineQueueManager
-import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.config.OfflineArchitectureFlags
 import kotlinx.coroutines.CancellationException
 import timber.log.Timber
@@ -63,6 +62,10 @@ class UnifiedSyncWorker @AssistedInject constructor(
         const val KEY_MAX_PRIORITY = "max_priority"
         const val KEY_FORCE_SYNC = "force_sync"
         const val KEY_STARTUP_SYNC = "startup_sync"
+        const val KEY_FAILED_COUNT = "failed_operations"
+        const val KEY_CONFLICT_COUNT = "conflict_operations"
+        const val KEY_REQUIRED_FAILURE_COUNT = "required_failure_count"
+        const val KEY_FAILURE_CATEGORIES = "failure_categories"
         
         // Default values
         const val DEFAULT_SYNC_TYPE = "all"
@@ -198,21 +201,31 @@ class UnifiedSyncWorker @AssistedInject constructor(
             val maxPriority = inputData.getInt(KEY_MAX_PRIORITY, DEFAULT_MAX_PRIORITY)
             val forceSync = inputData.getBoolean(KEY_FORCE_SYNC, false)
             val startupSync = inputData.getBoolean(KEY_STARTUP_SYNC, false)
+            val outcome = SyncOutcomeAggregate()
             
             Timber.d("$workerName: Starting sync - type: $syncType, maxPriority: $maxPriority, force: $forceSync, startup: $startupSync")
             
             // Check authentication
             if (!syncOperationManager.validateAuthentication(userId)) {
                 Timber.e("$workerName: User not authenticated for sync: $userId")
-                return Result.failure(
-                    Data.Builder()
-                        .putString(KEY_ERROR_MESSAGE, "User authentication failed")
-                        .build()
+                outcome.operationProcessingFailures++
+                outcome.failureCategories.add("authentication")
+                val outputData = buildOutcomeData(
+                    outcome = outcome,
+                    syncDuration = System.currentTimeMillis() - syncStartTime,
+                    syncType = syncType,
+                    errorMessage = "User authentication failed",
+                    requiredFailureCount = 1
                 )
+                if (startupSync) {
+                    startupRestoreGate.transition(
+                        userId = userId,
+                        state = StartupRestoreState.RESTORE_FAILED,
+                        reason = "unified_startup_authentication_failed"
+                    )
+                }
+                return Result.failure(outputData)
             }
-            
-            var totalOperations = 0
-            var successfulOperations = 0
             
             // Step 1: Process offline queue first
             try {
@@ -230,18 +243,27 @@ class UnifiedSyncWorker @AssistedInject constructor(
                 
                 queueResult.fold(
                     onSuccess = { syncResult ->
-                        totalOperations += (syncResult.successful + syncResult.failed + syncResult.conflicts)
-                        successfulOperations += syncResult.successful
+                        outcome.queueSuccessful += syncResult.successful
+                        outcome.queueFailed += syncResult.failed
+                        outcome.queueConflicts += syncResult.conflicts
+                        if (syncResult.failed > 0) {
+                            outcome.failureCategories.add("offline_queue_items")
+                        }
                         
                         Timber.d("$workerName: Offline queue processed - successful: ${syncResult.successful}, failed: ${syncResult.failed}, conflicts: ${syncResult.conflicts}")
                     },
                     onFailure = { error ->
-                        Timber.w("$workerName: Failed to process offline queue: $error")
-                        // Continue with regular sync even if offline queue fails
+                        outcome.queueProcessingFailures++
+                        outcome.failureCategories.add("offline_queue_processing")
+                        Timber.w(error, "$workerName: Failed to process offline queue")
                     }
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                Timber.w(e, "$workerName: Error processing offline queue, continuing with regular sync")
+                outcome.queueProcessingFailures++
+                outcome.failureCategories.add("offline_queue_processing")
+                Timber.w(e, "$workerName: Error processing offline queue")
             }
             
             // Step 2: Process sync operations through SyncOperationManager
@@ -258,11 +280,17 @@ class UnifiedSyncWorker @AssistedInject constructor(
                 
                 operationResults.fold(
                     onSuccess = { results ->
-                        totalOperations += results.size
-                        successfulOperations += results.count { it.success }
-                        
+                        val successfulResults = results.count { it.success }
                         val failedResults = results.filter { !it.success }
+                        outcome.operationSuccessful += successfulResults
+                        outcome.operationFailed += failedResults.size
+
                         if (failedResults.isNotEmpty()) {
+                            failedResults.forEach { result ->
+                                outcome.failureCategories.add(
+                                    "sync_operation_${result.operation.entityType.lowercase()}"
+                                )
+                            }
                             Timber.w("$workerName: Some operations failed:")
                             failedResults.forEach { result ->
                                 Timber.w("  - ${result.operation.entityType}:${result.operation.entityId} - ${result.error}")
@@ -273,7 +301,8 @@ class UnifiedSyncWorker @AssistedInject constructor(
                     },
                     onFailure = { error ->
                         Timber.e("$workerName: Sync operations failed: $error")
-                        throw Exception("Sync operations failed: $error")
+                        outcome.operationProcessingFailures++
+                        outcome.failureCategories.add("sync_operation_processing")
                     }
                 )
                 
@@ -285,32 +314,49 @@ class UnifiedSyncWorker @AssistedInject constructor(
                 throw e
             }
             
-            val syncEndTime = System.currentTimeMillis()
-            val syncDuration = syncEndTime - syncStartTime
-            
-            // Determine success criteria
-            val isSuccessful = when {
-                totalOperations == 0 -> {
+            val syncDuration = System.currentTimeMillis() - syncStartTime
+            val requiredFailureCount = outcome.requiredFailureCount(startupSync)
+            val hasAcceptedOutcome = outcome.totalOperations == 0 || outcome.completedOperations > 0
+            val isAccepted = requiredFailureCount == 0 && hasAcceptedOutcome
+
+            when {
+                outcome.totalOperations == 0 -> {
                     Timber.d("$workerName: No operations to sync for user $userId")
-                    true // No operations is considered success
                 }
-                successfulOperations == totalOperations -> {
+                outcome.failedOperations == 0 -> {
                     Timber.d("$workerName: All operations successful for user $userId")
-                    true // All operations succeeded
                 }
-                successfulOperations > 0 -> {
-                    Timber.w("$workerName: Partial success - $successfulOperations/$totalOperations operations successful")
-                    true // Partial success is acceptable
+                isAccepted -> {
+                    Timber.w(
+                        "$workerName: Accepted partial outcome - " +
+                            "${outcome.successfulOperations}/${outcome.totalOperations} operations successful"
+                    )
                 }
                 else -> {
-                    Timber.e("$workerName: All operations failed for user $userId")
-                    false // Complete failure
+                    Timber.e(
+                        "$workerName: Required sync outcome failed for user $userId " +
+                            "requiredFailures=$requiredFailureCount categories=${outcome.failureCategories}"
+                    )
                 }
             }
-            
-            Timber.i("$workerName: Sync completed for user $userId - Duration: ${syncDuration}ms, Operations: $successfulOperations/$totalOperations successful")
 
-            if (startupSync && isSuccessful) {
+            Timber.i(
+                "$workerName: Sync completed for user $userId - Duration: ${syncDuration}ms, " +
+                    "Operations: ${outcome.successfulOperations}/${outcome.totalOperations} successful, " +
+                    "failed=${outcome.failedOperations}, conflicts=${outcome.queueConflicts}"
+            )
+
+            val outputData = buildOutcomeData(
+                outcome = outcome,
+                syncDuration = syncDuration,
+                syncType = syncType,
+                errorMessage = if (isAccepted) null else "Required sync operations failed",
+                requiredFailureCount = requiredFailureCount.coerceAtLeast(
+                    if (hasAcceptedOutcome) 0 else outcome.failedOperations.coerceAtLeast(1)
+                )
+            )
+
+            if (startupSync && isAccepted) {
                 startupRestoreGate.transition(
                     userId = userId,
                     state = StartupRestoreState.RESTORE_COMPLETE,
@@ -318,22 +364,29 @@ class UnifiedSyncWorker @AssistedInject constructor(
                 )
                 Timber.tag("StartupRestoreFix").i(
                     "operation=UNIFIED_STARTUP_RESTORE_COMPLETE userId=$userId syncType=$syncType " +
-                        "successful=$successfulOperations total=$totalOperations timestamp=${System.currentTimeMillis()}"
+                        "successful=${outcome.successfulOperations} total=${outcome.totalOperations} timestamp=${System.currentTimeMillis()}"
                 )
             }
             
-            return if (isSuccessful) {
-                Result.success(
-                    Data.Builder()
-                        .putInt(KEY_SYNC_COUNT, successfulOperations)
-                        .putLong("sync_duration_ms", syncDuration)
-                        .putInt("total_operations", totalOperations)
-                        .putString("sync_type", syncType)
-                        .build()
+            return if (isAccepted) {
+                Result.success(outputData)
+            } else if (runAttemptCount < maxRetryCount) {
+                Timber.w(
+                    "$workerName: Retrying required sync failure for user $userId " +
+                        "attempt=${runAttemptCount + 1}/$maxRetryCount " +
+                        "successful=${outcome.successfulOperations} failed=${outcome.failedOperations} " +
+                        "categories=${outcome.failureCategories.joinToString(",")}"
                 )
+                Result.retry()
             } else {
-                // Let base class handle retry logic
-                throw Exception("All sync operations failed")
+                if (startupSync) {
+                    startupRestoreGate.transition(
+                        userId = userId,
+                        state = StartupRestoreState.RESTORE_FAILED,
+                        reason = "unified_startup_required_operations_failed"
+                    )
+                }
+                Result.failure(outputData)
             }
             
         } catch (e: CancellationException) {
@@ -341,16 +394,67 @@ class UnifiedSyncWorker @AssistedInject constructor(
             Timber.d("$workerName: Sync cancelled for user $userId")
             throw e
         } catch (e: Exception) {
-            if (inputData.getBoolean(KEY_STARTUP_SYNC, false)) {
-                startupRestoreGate.transition(
-                    userId = userId,
-                    state = StartupRestoreState.RESTORE_FAILED,
-                    reason = "unified_startup_sync_failed"
-                )
-            }
             // Let base class handle the error and retry logic
             Timber.e(e, "$workerName: Sync failed for user $userId")
             throw e
+        }
+    }
+
+    private fun buildOutcomeData(
+        outcome: SyncOutcomeAggregate,
+        syncDuration: Long,
+        syncType: String,
+        errorMessage: String?,
+        requiredFailureCount: Int
+    ): Data {
+        return Data.Builder()
+            .putInt(KEY_SYNC_COUNT, outcome.successfulOperations)
+            .putInt(KEY_FAILED_COUNT, outcome.failedOperations)
+            .putInt(KEY_CONFLICT_COUNT, outcome.queueConflicts)
+            .putInt(KEY_REQUIRED_FAILURE_COUNT, requiredFailureCount)
+            .putString(KEY_FAILURE_CATEGORIES, outcome.failureCategories.joinToString(","))
+            .putLong("sync_duration_ms", syncDuration)
+            .putInt("total_operations", outcome.totalOperations)
+            .putInt("queue_successful", outcome.queueSuccessful)
+            .putInt("queue_failed", outcome.queueFailed + outcome.queueProcessingFailures)
+            .putInt("operation_successful", outcome.operationSuccessful)
+            .putInt("operation_failed", outcome.operationFailed + outcome.operationProcessingFailures)
+            .putString("sync_type", syncType)
+            .apply {
+                if (errorMessage != null) {
+                    putString(KEY_ERROR_MESSAGE, errorMessage)
+                }
+            }
+            .build()
+    }
+
+    private data class SyncOutcomeAggregate(
+        var queueSuccessful: Int = 0,
+        var queueFailed: Int = 0,
+        var queueConflicts: Int = 0,
+        var queueProcessingFailures: Int = 0,
+        var operationSuccessful: Int = 0,
+        var operationFailed: Int = 0,
+        var operationProcessingFailures: Int = 0,
+        val failureCategories: MutableSet<String> = linkedSetOf()
+    ) {
+        val successfulOperations: Int
+            get() = queueSuccessful + operationSuccessful
+
+        val failedOperations: Int
+            get() = queueFailed + queueProcessingFailures + operationFailed + operationProcessingFailures
+
+        val completedOperations: Int
+            get() = successfulOperations + queueConflicts
+
+        val totalOperations: Int
+            get() = completedOperations + failedOperations
+
+        fun requiredFailureCount(startupSync: Boolean): Int {
+            return queueFailed +
+                queueProcessingFailures +
+                operationProcessingFailures +
+                if (startupSync) operationFailed else 0
         }
     }
 

@@ -22,13 +22,16 @@ import com.example.liftrix.domain.model.common.liftrixFailure
 import com.example.liftrix.domain.model.error.LiftrixError
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -76,13 +79,21 @@ class SyncCoordinator @Inject constructor(
     private val coordinatorScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val startupSyncGuard = Any()
     private val startupSyncInFlightUsers = mutableSetOf<String>()
+    private val workMonitorGuard = Any()
+    private val workMonitors = mutableMapOf<String, WorkMonitorRegistration>()
+    private var nextWorkMonitorGeneration = 0L
+
+    private data class WorkMonitorRegistration(
+        val generation: Long,
+        val job: Job
+    )
     
     companion object {
         private const val UNIFIED_SYNC_WORK_NAME = "liftrix_unified_sync"
         private const val STARTUP_SYNC_WORK_NAME = "startup_sync"
         private const val SYNC_INTERVAL_MINUTES = 15L
-        private const val SYNC_TIMEOUT_MS = 30_000L // 30 seconds timeout
         private const val WORKER_INSTANTIATION_CHECK_DELAY_MS = 1_000L // 1 second
+        private const val WORK_STATE_POLL_INTERVAL_MS = 500L
         private val STARTUP_FETCH_ENTITY_TYPES = listOf(
             SyncOperationManager.ENTITY_PROFILE,
             "USER_PUBLIC",
@@ -186,7 +197,16 @@ class SyncCoordinator @Inject constructor(
                 Timber.tag("StartupRestoreFix").w(
                     "operation=IMMEDIATE_SYNC_BLOCKED userId=$userId gateState=${startupRestoreGate.currentState(userId)} reason=restore_not_complete timestamp=${System.currentTimeMillis()}"
                 )
-                return liftrixSuccess(Unit)
+                return liftrixFailure(
+                    LiftrixError.BusinessLogicError(
+                        code = "RESTORE_IN_PROGRESS",
+                        errorMessage = "Immediate sync is unavailable until startup restore completes",
+                        analyticsContext = mapOf(
+                            "user_id" to userId,
+                            "restore_state" to startupRestoreGate.currentState(userId).name
+                        )
+                    )
+                )
             }
             Timber.tag("FreshLoginRestoreDebug").d(
                 "operation=SYNC_COORDINATOR_IMMEDIATE_START userId=$userId direction=queue_driven_unified timestamp=${System.currentTimeMillis()}"
@@ -230,7 +250,13 @@ class SyncCoordinator @Inject constructor(
             "operation=SYNC_COORDINATOR_IMMEDIATE_ENQUEUED userId=$userId uniqueWork=${UNIFIED_SYNC_WORK_NAME}_immediate_$userId policy=KEEP mode=unified timestamp=${System.currentTimeMillis()}"
         )
         
-        startWorkMonitoring(operation, "${UNIFIED_SYNC_WORK_NAME}_immediate_$userId", userId)
+        startWorkMonitoring(
+            operation = operation,
+            workName = "${UNIFIED_SYNC_WORK_NAME}_immediate_$userId",
+            workId = immediateSync.id,
+            userId = userId,
+            startupWork = false
+        )
         
         Timber.d("SyncCoordinator: Unified immediate sync work enqueued for user $userId")
         return liftrixSuccess(Unit)
@@ -465,16 +491,6 @@ class SyncCoordinator @Inject constructor(
                 return liftrixSuccess(Unit)
             }
 
-            if (!force && gateStateAtRequest == StartupRestoreState.RESTORING_FROM_FIREBASE) {
-                Timber.tag("StartupRestoreFix").w(
-                    "[TEMPLATE-LOAD] operation=STARTUP_SYNC_SKIPPED_ALREADY_RUNNING userId=$userId source=$source gateState=$gateStateAtRequest reason=restore_gate_restoring timestamp=${System.currentTimeMillis()}"
-                )
-                Timber.tag("StartupRestoreFix").w(
-                    "[TEMPLATE-LOAD] operation=STARTUP_SYNC_DUPLICATE_SUPPRESSED userId=$userId source=$source reason=restore_gate_restoring timestamp=${System.currentTimeMillis()}"
-                )
-                return liftrixSuccess(Unit)
-            }
-
             synchronized(startupSyncGuard) {
                 if (!force && userId in startupSyncInFlightUsers) {
                     Timber.tag("StartupRestoreFix").w(
@@ -576,8 +592,14 @@ class SyncCoordinator @Inject constructor(
                 "operation=SYNC_COORDINATOR_STARTUP_ENQUEUED userId=$userId uniqueWork=startup_sync_$userId policy=KEEP worker=UnifiedSyncWorker timestamp=${System.currentTimeMillis()}"
             )
             
-            // 🔥 NEW: Monitor startup sync operation and add watchdog
-            startWorkMonitoring(operation, "startup_sync_$userId", userId)
+            // Observe the durable startup work without taking ownership of its lifetime.
+            startWorkMonitoring(
+                operation = operation,
+                workName = "startup_sync_$userId",
+                workId = startupUnifiedSync.id,
+                userId = userId,
+                startupWork = true
+            )
             
             Timber.i("SyncCoordinator: Startup sync work enqueued for user $userId")
             
@@ -688,102 +710,204 @@ class SyncCoordinator @Inject constructor(
     }
     
     /**
-     * 🔥 NEW: Monitors WorkManager operation and implements watchdog timeout.
-     * This prevents permanent "Syncing" state by detecting worker failures.
+     * Observes durable WorkManager work without owning its lifetime. Replacing a monitor only
+     * detaches the older in-process observer; it never cancels the underlying unique work.
      */
-    private fun startWorkMonitoring(operation: Operation, workName: String, userId: String) {
-        coordinatorScope.launch {
+    private fun startWorkMonitoring(
+        operation: Operation,
+        workName: String,
+        workId: UUID,
+        userId: String,
+        startupWork: Boolean
+    ) {
+        val (registration, previousRegistration) = synchronized(workMonitorGuard) {
+            val generation = ++nextWorkMonitorGeneration
+            val job = coordinatorScope.launch(start = CoroutineStart.LAZY) {
+                monitorWork(
+                    operation = operation,
+                    workName = workName,
+                    workId = workId,
+                    userId = userId,
+                    startupWork = startupWork,
+                    generation = generation
+                )
+            }
+            val currentRegistration = WorkMonitorRegistration(generation, job)
+            currentRegistration to workMonitors.put(workName, currentRegistration)
+        }
+
+        previousRegistration?.job?.cancel(
+            CancellationException("Superseded by monitor generation ${registration.generation}")
+        )
+        registration.job.start()
+    }
+
+    private suspend fun monitorWork(
+        operation: Operation,
+        workName: String,
+        workId: UUID,
+        userId: String,
+        startupWork: Boolean,
+        generation: Long
+    ) {
+        try {
             try {
-                // First, check if the operation itself failed (enqueue failure)
-                try {
-                    operation.result.get()
-                    Timber.d("SyncCoordinator: Work enqueue successful for $workName")
-                } catch (e: Exception) {
-                    Timber.e("SyncCoordinator: Work enqueue failed for $workName: ${e.message}")
-                    syncStatusRepository.updateSyncStatus(userId, isInProgress = false, hasError = true, errorMessage = "Enqueue failed: ${e.message}")
-                    return@launch
-                }
-                
-                // Wait briefly for worker instantiation, then check status
-                delay(WORKER_INSTANTIATION_CHECK_DELAY_MS)
-                
-                val workInfos = workManager.getWorkInfosForUniqueWork(workName).get()
-                val workInfo = workInfos.firstOrNull()
-                
+                operation.result.get()
+                Timber.d("SyncCoordinator: Work enqueue successful for $workName")
+            } catch (e: Exception) {
+                Timber.e("SyncCoordinator: Work enqueue failed for $workName: ${e.message}")
+                if (!isCurrentWorkMonitor(workName, generation)) return
+                markMonitoringFailure(
+                    userId = userId,
+                    startupWork = startupWork,
+                    reason = "work_enqueue_failed",
+                    errorMessage = "Enqueue failed: ${e.message}"
+                )
+                return
+            }
+
+            delay(WORKER_INSTANTIATION_CHECK_DELAY_MS)
+            var monitoredWorkId = workId
+
+            while (true) {
+                val workInfo = workManager.getWorkInfoById(monitoredWorkId).get()
+                    ?: workManager.getWorkInfosForUniqueWork(workName).get().firstOrNull {
+                        it.state == WorkInfo.State.ENQUEUED ||
+                            it.state == WorkInfo.State.BLOCKED ||
+                            it.state == WorkInfo.State.RUNNING
+                    }
+
                 if (workInfo == null) {
                     Timber.e("SyncCoordinator: No WorkInfo found for $workName - worker may have failed to instantiate")
-                    syncStatusRepository.updateSyncStatus(userId, isInProgress = false, hasError = true, errorMessage = "Worker not found")
-                    return@launch
-                }
-                
-                // If work failed immediately, it's likely a worker instantiation error
-                if (workInfo.state == WorkInfo.State.FAILED) {
-                    Timber.e("SyncCoordinator: Work failed immediately for $workName - likely worker instantiation error")
-                    
-                    syncStatusRepository.updateSyncStatus(
-                        userId,
-                        isInProgress = false,
-                        hasError = true,
-                        errorMessage = "Sync worker failed to start"
+                    if (!isCurrentWorkMonitor(workName, generation)) return
+                    markMonitoringFailure(
+                        userId = userId,
+                        startupWork = startupWork,
+                        reason = "work_info_missing",
+                        errorMessage = "Worker not found"
                     )
-                    return@launch
+                    return
                 }
-                
-                // Start watchdog timer
-                val completed: WorkInfo? = withTimeoutOrNull(SYNC_TIMEOUT_MS) {
-                    while (true) {
-                        val currentInfos = workManager.getWorkInfosForUniqueWork(workName).get()
-                        val currentInfo = currentInfos.firstOrNull()
-                        
-                        if (currentInfo != null && currentInfo.state.isFinished) {
-                            return@withTimeoutOrNull currentInfo
+                monitoredWorkId = workInfo.id
+
+                when (workInfo.state) {
+                    WorkInfo.State.SUCCEEDED -> {
+                        if (!isCurrentWorkMonitor(workName, generation)) return
+                        Timber.d("SyncCoordinator: Sync completed successfully for $workName")
+                        syncStatusRepository.updateSyncStatus(
+                            userId,
+                            isInProgress = false,
+                            hasError = false,
+                            lastSyncTime = System.currentTimeMillis(),
+                            syncedCount = workInfo.outputData.getInt("sync_count", 0)
+                        )
+                        if (startupWork) {
+                            startupRestoreGate.transition(
+                                userId = userId,
+                                state = StartupRestoreState.RESTORE_COMPLETE,
+                                reason = "startup_work_succeeded"
+                            )
                         }
-                        
-                        delay(500) // Check every 500ms
+                        return
                     }
-                    null // This line will never be reached, but satisfies the compiler
-                }
-                
-                if (completed == null) {
-                    // Timeout - cancel work and mark as failed
-                    Timber.w("SyncCoordinator: Sync timeout for $workName after ${SYNC_TIMEOUT_MS}ms - cancelling work")
-                    workManager.cancelUniqueWork(workName)
-                    syncStatusRepository.updateSyncStatus(userId, isInProgress = false, hasError = true, errorMessage = "Sync timeout after ${SYNC_TIMEOUT_MS}ms")
-                } else {
-                    // Work completed - update status based on result
-                    when (completed.state) {
-                        WorkInfo.State.SUCCEEDED -> {
-                            Timber.d("SyncCoordinator: Sync completed successfully for $workName")
-                            syncStatusRepository.updateSyncStatus(userId, isInProgress = false, hasError = false, lastSyncTime = System.currentTimeMillis(), syncedCount = 1)
-                        }
-                        WorkInfo.State.FAILED -> {
-                            Timber.w("SyncCoordinator: Sync failed for $workName")
-                            syncStatusRepository.updateSyncStatus(userId, isInProgress = false, hasError = true, errorMessage = "Sync worker failed")
-                        }
-                        WorkInfo.State.CANCELLED -> {
-                            Timber.d("SyncCoordinator: Sync cancelled for $workName")
-                            syncStatusRepository.updateSyncStatus(userId, isInProgress = false, hasError = false)
-                        }
-                        else -> {
-                            Timber.w("SyncCoordinator: Unexpected work state for $workName: ${completed.state}")
-                            syncStatusRepository.updateSyncStatus(userId, isInProgress = false, hasError = true, errorMessage = "Unexpected state: ${completed.state}")
-                        }
+
+                    WorkInfo.State.FAILED -> {
+                        if (!isCurrentWorkMonitor(workName, generation)) return
+                        Timber.w("SyncCoordinator: Sync failed for $workName")
+                        markMonitoringFailure(
+                            userId = userId,
+                            startupWork = startupWork,
+                            reason = "startup_work_failed",
+                            errorMessage = workInfo.outputData.getString("error_message")
+                                ?: "Sync worker failed"
+                        )
+                        return
                     }
-                }
-                
-            } catch (e: Exception) {
-                Timber.e(e, "SyncCoordinator: Error monitoring work $workName")
-                syncStatusRepository.updateSyncStatus(userId, isInProgress = false, hasError = true, errorMessage = "Monitoring error: ${e.message}")
-            } finally {
-                if (workName == "startup_sync_$userId") {
-                    synchronized(startupSyncGuard) {
-                        startupSyncInFlightUsers.remove(userId)
+
+                    WorkInfo.State.CANCELLED -> {
+                        if (!isCurrentWorkMonitor(workName, generation)) return
+                        Timber.w("SyncCoordinator: Sync cancelled for $workName")
+                        markMonitoringFailure(
+                            userId = userId,
+                            startupWork = startupWork,
+                            reason = "startup_work_cancelled",
+                            errorMessage = "Sync worker was cancelled"
+                        )
+                        return
                     }
-                    Timber.tag("StartupRestoreFix").d(
-                        "[TEMPLATE-LOAD] operation=STARTUP_SYNC_GUARD_RELEASED userId=$userId workName=$workName timestamp=${System.currentTimeMillis()}"
-                    )
+
+                    WorkInfo.State.ENQUEUED,
+                    WorkInfo.State.BLOCKED,
+                    WorkInfo.State.RUNNING -> {
+                        Timber.v(
+                            "SyncCoordinator: Work remains pending workName=$workName " +
+                                "workId=$monitoredWorkId state=${workInfo.state} generation=$generation"
+                        )
+                        delay(WORK_STATE_POLL_INTERVAL_MS)
+                    }
                 }
             }
+        } catch (e: CancellationException) {
+            Timber.d(
+                "SyncCoordinator: Detached local observer workName=$workName workId=$workId " +
+                    "generation=$generation; durable work remains unchanged"
+            )
+            throw e
+        } catch (e: Exception) {
+            Timber.e(e, "SyncCoordinator: Error monitoring work $workName")
+            if (isCurrentWorkMonitor(workName, generation)) {
+                syncStatusRepository.updateSyncStatus(
+                    userId,
+                    isInProgress = true,
+                    hasError = false,
+                    errorMessage = null
+                )
+            }
+        } finally {
+            val releasedCurrentGeneration = synchronized(workMonitorGuard) {
+                if (workMonitors[workName]?.generation == generation) {
+                    workMonitors.remove(workName)
+                    true
+                } else {
+                    false
+                }
+            }
+            if (startupWork && releasedCurrentGeneration) {
+                synchronized(startupSyncGuard) {
+                    startupSyncInFlightUsers.remove(userId)
+                }
+                Timber.tag("StartupRestoreFix").d(
+                    "[TEMPLATE-LOAD] operation=STARTUP_SYNC_GUARD_RELEASED userId=$userId " +
+                        "workName=$workName generation=$generation timestamp=${System.currentTimeMillis()}"
+                )
+            }
+        }
+    }
+
+    private fun isCurrentWorkMonitor(workName: String, generation: Long): Boolean {
+        return synchronized(workMonitorGuard) {
+            workMonitors[workName]?.generation == generation
+        }
+    }
+
+    private suspend fun markMonitoringFailure(
+        userId: String,
+        startupWork: Boolean,
+        reason: String,
+        errorMessage: String
+    ) {
+        syncStatusRepository.updateSyncStatus(
+            userId,
+            isInProgress = false,
+            hasError = true,
+            errorMessage = errorMessage
+        )
+        if (startupWork) {
+            startupRestoreGate.transition(
+                userId = userId,
+                state = StartupRestoreState.RESTORE_FAILED,
+                reason = reason
+            )
         }
     }
     

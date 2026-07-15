@@ -100,9 +100,13 @@ There is no current USE_UNIFIED_SYNC flag. SyncCoordinator directly schedules Un
 ### Immediate
 
 - Entry: SyncCoordinator.triggerImmediateSync(userId).
-- If StartupRestoreGate is incomplete, it returns successful no-op without enqueuing.
+- If StartupRestoreGate is incomplete, it does not enqueue work and returns a
+  `RESTORE_IN_PROGRESS` business-logic failure.
 - Worker: one immediate UnifiedSyncWorker.
 - Policy: KEEP.
+
+Callers must receive either an accepted enqueue result or an explicit failure. A scheduling path that
+declines to enqueue must never report success.
 
 ### Entity-Specific
 
@@ -129,9 +133,17 @@ Startup is queue-driven and unified:
 5. Enqueue one startup UnifiedSyncWorker under startup_sync_{userId}.
 6. Use ExistingWorkPolicy.KEEP.
 7. UnifiedSyncWorker/SyncOperationManager performs restore/reconciliation.
-8. Transition the gate to RESTORE_COMPLETE on successful startup work or RESTORE_FAILED on exception.
+8. Observe the durable request without imposing a work deadline. ENQUEUED, BLOCKED, RUNNING, and
+   WorkManager retry remain pending beyond any in-process observation interval.
+9. Transition the gate to RESTORE_COMPLETE only on successful startup work; FAILED and CANCELLED
+   terminal work transition it to RESTORE_FAILED.
 
 Do not document or reintroduce the retired specialized startup worker chain.
+
+Local monitoring does not own durable work lifetime. Replacing or detaching an in-process observer may
+cancel only that observer job; it must not call `cancelUniqueWork` or otherwise mutate WorkManager work.
+Monitor cleanup is generation-safe so an older observer cannot release the guard for a newer request.
+Explicit account/logout cleanup remains authorized to cancel user-scoped work.
 
 ### Legacy Compatibility
 
@@ -182,6 +194,35 @@ Representative paths:
 
 Backend/deployment freshness is not proven by local source. Treat functions/, cloud-functions/, rules, and indexes as Needs verification until deployment state is checked.
 
+### Firebase Authorization Perimeter
+
+The active deployment sources are the root `firestore.rules`, `storage.rules`,
+`database.rules.json`, `firebase.json`, and `functions/index.js`. Files under
+`docs/firebase` are reference copies and must not be deployed as substitutes.
+
+- `/users/{userId}` is a private record boundary. Collection list is denied;
+  direct get is owner-only unless the record explicitly has `isPublic == true`.
+- Discovery uses projection-only `/users_public` or `/social_profiles` data.
+  Application-layer filtering is not authorization and must never be used to
+  compensate for a permissive private collection rule.
+- Profile-image originals and thumbnails use `/users_public/{userId}` as the
+  single Storage authorization projection. Owners retain access. An
+  authenticated non-owner is allowed only when the projection exists and
+  `isPublic` is exactly true; a missing or stale projection fails closed.
+- Client subscription creation is limited to the exact own-user free/default
+  registration shape. Paid/custom entitlement writes and every subscription
+  update/delete are server-owned. Claim derivation allowlists tiers, statuses,
+  and features and preserves only explicitly named non-subscription claims.
+- Every v2 callable in `functions/index.js` uses App Check enforcement plus one
+  authorization policy: caller-owned, server-derived relationship, or admin.
+  Caller-supplied foreign UIDs are never sufficient authorization.
+- `setAdminClaim` always requires an existing authenticated admin. First-admin
+  provisioning is an offline project-owner operation; there is no zero-admin
+  callable bootstrap path.
+- Realtime Database is selected by `firebase.json` and denied at the root for
+  authenticated and unauthenticated clients until a separate owner-specific
+  review approves a data model.
+
 ### AI Conversation Durability
 
 `ChatSyncWorker` is the per-user compatibility worker for AI conversation lifecycle data. Its ordering is part of the privacy contract:
@@ -205,7 +246,10 @@ Retention runs inside the authenticated user's `ChatSyncWorker`. It queries only
 - Failed operations retain enough metadata for retry/dead-letter diagnosis.
 - Use BaseSyncWorker and SyncOperationManager batch/retry conventions.
 - Do not clear dirty state before remote confirmation.
-- Partial worker success is currently treated as worker success by UnifiedSyncWorker; entity-level failures must remain represented in queue/failure metadata.
+- Offline queue item/processing failures are required unified-worker failures. Startup operation failures
+  are also required, so partial startup success retries under the existing WorkManager attempt policy and
+  becomes terminal failure when attempts are exhausted. Terminal output preserves successful, failed,
+  conflict, required-failure, and failure-category metadata.
 - A worker that fails to instantiate is an explicit sync failure. The coordinator must not delay, simulate in-process work, or report success when no durable work ran.
 
 ## Realtime Sync
@@ -246,6 +290,9 @@ Feature modules consume restore state and completion events through read-only co
 - Worker: inspect unified_sync/startup_sync/user tags and unique names.
 - Missing data: inspect dirty/isSynced/syncVersion/lastModified plus remote-upsert code.
 - Partial sync: inspect entity result, queue retry state, and dead-letter state.
+- Observer recovery: if an in-process observer detaches, inspect WorkManager by the user-scoped unique
+  name/request ID. Do not cancel constrained or retrying work merely to clear presentation state; a later
+  startup request may reattach or enqueue after terminal failure.
 - Realtime: confirm listener registration/awaitClose and Room upsert.
 - Database: confirm current schema 14, `liftrix_database_encrypted_v14`, no registered migration floor, and no destructive fallback.
 

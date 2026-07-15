@@ -51,6 +51,9 @@
       "predeploy": []
     }
   ],
+  "database": {
+    "rules": "database.rules.json"
+  },
   "firestore": {
     "database": "(default)",
     "location": "eur3",

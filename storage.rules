@@ -10,6 +10,15 @@ service firebase.storage {
     function isOwner(userId) {
       return request.auth.uid == userId;
     }
+
+    function isPublicProfile(userId) {
+      return firestore.exists(
+               /databases/(default)/documents/users_public/$(userId)
+             ) &&
+             firestore.get(
+               /databases/(default)/documents/users_public/$(userId)
+             ).data.isPublic == true;
+    }
     
     function isValidImageFile() {
       return request.resource.contentType.matches('image/.*') &&
@@ -20,10 +29,11 @@ service firebase.storage {
       return request.resource.contentType.matches('image/(jpeg|jpg|png|webp)');
     }
     
-    // Profile images - users can upload/update their own, all authenticated users can read
-    // CRITICAL FIX: Remove Firestore dependency that was causing 403 errors
+    // Profile images - owner access or server-visible public projection.
+    // A missing/stale public projection intentionally fails closed.
     match /profile_images/{userId}/{fileName} {
-      allow read: if isAuthenticated();  // Simplified - any authenticated user can read profile images
+      allow read: if isAuthenticated() &&
+                     (isOwner(userId) || isPublicProfile(userId));
                       
       allow write: if isAuthenticated() && 
                       isOwner(userId) && 
@@ -34,9 +44,10 @@ service firebase.storage {
                        isOwner(userId);
     }
     
-    // Profile image thumbnails - generated server-side, readable by authenticated users
+    // Profile image thumbnails follow the same privacy boundary as originals.
     match /profile_images/{userId}/thumbnails/{thumbnailName} {
-      allow read: if isAuthenticated();  // Simplified - any authenticated user can read thumbnails
+      allow read: if isAuthenticated() &&
+                     (isOwner(userId) || isPublicProfile(userId));
       
       // Thumbnails are generated server-side only
       allow write, delete: if false;
@@ -85,19 +96,6 @@ service firebase.storage {
     }
   }
   
-  // Helper function to check if a user's profile is public
-  // REMOVED: This function was causing 403 errors due to missing Firestore documents
-  // The dependency on users_public/{userId} documents created a race condition:
-  // 1. Profile images upload before UserPublicSyncWorker creates the Firestore document
-  // 2. isPublicProfile() Firestore lookup fails -> returns false
-  // 3. Storage read permission denied -> 403 error
-  // 
-  // Solution: Removed Firestore dependency from Storage Rules for profile images
-  // Privacy is now enforced at the application layer instead of Storage Rules
-  function isPublicProfile(userId) {
-    // This function is now deprecated but kept for compatibility with other rules
-    return true;  // Default to public for compatibility - privacy enforced in app
-  }
 }
 
 /* 
@@ -150,7 +148,9 @@ DEPLOYMENT INSTRUCTIONS:
    - Set up automatic image optimization/compression
 
 7. Security Considerations:
-   - Profile images are readable by anyone if profile is public
+   - Profile images are readable by the owner or authenticated users when
+     users_public/{userId}.isPublic is exactly true
+   - Missing public projections deny non-owner reads
    - File size limit is 10MB per image
    - Only JPEG, JPG, PNG, and WebP formats allowed
    - Users can only upload to their own folders

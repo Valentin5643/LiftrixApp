@@ -7,15 +7,84 @@ const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 const {onDocumentCreated} = require("firebase-functions/v2/firestore");
 const {onDocumentDeleted} = require("firebase-functions/v2/firestore");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
-const {onCall} = require("firebase-functions/v2/https");
+const {HttpsError, onCall} = require("firebase-functions/v2/https");
 const {logger} = require("firebase-functions");
-const functions = require("firebase-functions");
 
 // Initialize Firebase Admin SDK
 initializeApp();
 
 const auth = getAuth();
 const db = getFirestore();
+
+const CALLABLE_OPTIONS = Object.freeze({enforceAppCheck: true});
+const ONE_HOUR_MS = 60 * 60 * 1000;
+
+function requireAuthenticated(request) {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required");
+  }
+  return request.auth;
+}
+
+function requireAdmin(request) {
+  const caller = requireAuthenticated(request);
+  if (caller.token.admin !== true) {
+    throw new HttpsError("permission-denied", "Admin privileges required");
+  }
+  return caller;
+}
+
+function requireString(value, field, maxLength) {
+  if (typeof value !== "string" || value.trim().length === 0 ||
+      value.length > maxLength) {
+    throw new HttpsError(
+        "invalid-argument",
+        `${field} must be a non-empty string of at most ${maxLength} characters`,
+    );
+  }
+  return value.trim();
+}
+
+function callableFailure(error, publicMessage) {
+  if (error instanceof HttpsError) {
+    return error;
+  }
+  return new HttpsError("internal", publicMessage);
+}
+
+async function enforceCallableRateLimit(
+    userId,
+    operation,
+    maximumAttempts,
+    windowMs = ONE_HOUR_MS,
+) {
+  const rateLimitRef = db.collection("callable_rate_limits")
+      .doc(`${operation}_${encodeURIComponent(userId)}`);
+  const now = Date.now();
+
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(rateLimitRef);
+    const current = snapshot.exists ? snapshot.data() : {};
+    const windowStartedAt = current.window_started_at || 0;
+    const withinWindow = now - windowStartedAt < windowMs;
+    const attempts = withinWindow ? current.attempts || 0 : 0;
+
+    if (attempts >= maximumAttempts) {
+      throw new HttpsError(
+          "resource-exhausted",
+          "Too many requests. Try again later.",
+      );
+    }
+
+    transaction.set(rateLimitRef, {
+      user_id: userId,
+      operation,
+      window_started_at: withinWindow ? windowStartedAt : now,
+      attempts: attempts + 1,
+      updated_at: FieldValue.serverTimestamp(),
+    });
+  });
+}
 
 const FOLLOW_COUNTER_EVENTS_COLLECTION = "follow_relationship_counter_events";
 const SOCIAL_PROFILES_COLLECTION = "social_profiles";
@@ -210,7 +279,6 @@ exports.updateUserCustomClaims = onDocumentWritten(
               subscriptionId,
               tier: subscriptionData.tier,
               status: subscriptionData.status,
-              claims: customClaims,
             });
 
         return null;
@@ -230,30 +298,24 @@ exports.updateUserCustomClaims = onDocumentWritten(
  * @return {object} Custom claims object
  */
 async function calculateCustomClaims(userId, subscriptionData) {
-  const tier = subscriptionData.tier || "free";
-  const status = subscriptionData.status || "active";
-  const expiresAt = subscriptionData.expires_at;
-  const features = subscriptionData.features || [];
-
-  // Check if subscription is currently active
-  const isActive = status === "active" || status === "trial";
-  const isExpired = expiresAt && expiresAt.toDate() < new Date();
-  const isPremiumActive = tier !== "free" && isActive && !isExpired;
+  const entitlement = normalizeSubscriptionEntitlement(subscriptionData);
+  const userRecord = await auth.getUser(userId);
+  const preservedClaims = preserveNonSubscriptionClaims(
+      userRecord.customClaims || {},
+  );
 
   // Base claims
   const claims = {
-    premium: isPremiumActive,
-    tier: tier,
-    status: status,
+    ...preservedClaims,
+    premium: entitlement.premium,
+    tier: entitlement.tier,
+    status: entitlement.status,
     subscription_updated_at: new Date().toISOString(),
   };
 
   // Add feature-specific claims
-  if (isPremiumActive) {
-    // Get feature set based on tier
-    const tierFeatures = getTierFeatures(tier);
-    const allFeatures = new Set([...tierFeatures, ...features]);
-
+  if (entitlement.premium) {
+    const allFeatures = new Set(entitlement.features);
     // Add feature flags
     claims.features = Array.from(allFeatures);
 
@@ -263,20 +325,94 @@ async function calculateCustomClaims(userId, subscriptionData) {
     });
 
     // Add tier-specific flags
-    if (tier === "premium") {
+    if (entitlement.tier === "premium") {
       claims.premium_tier = true;
-    } else if (tier === "pro") {
+    } else if (entitlement.tier === "pro") {
       claims.pro_tier = true;
       claims.premium_tier = true; // Pro includes premium features
     }
   }
 
   // Add expiration info for time-based checks
-  if (expiresAt) {
-    claims.expires_at = expiresAt.toDate().toISOString();
+  if (entitlement.expiresAt) {
+    claims.expires_at = entitlement.expiresAt.toISOString();
   }
 
   return claims;
+}
+
+const SUBSCRIPTION_TIERS = Object.freeze(["free", "premium", "pro"]);
+const SUBSCRIPTION_STATUSES = Object.freeze([
+  "active",
+  "trial",
+  "expired",
+  "cancelled",
+  "paused",
+  "pending",
+]);
+const NON_SUBSCRIPTION_CLAIM_KEYS = Object.freeze([
+  "admin",
+  "adminSetAt",
+  "adminSetBy",
+  "banned",
+  "banReason",
+  "bannedBy",
+  "bannedAt",
+  "banDuration",
+  "severity",
+  "unbannedBy",
+  "unbannedAt",
+  "unbanReason",
+]);
+
+function preserveNonSubscriptionClaims(existingClaims) {
+  const preservedClaims = {};
+  NON_SUBSCRIPTION_CLAIM_KEYS.forEach((claimKey) => {
+    if (Object.prototype.hasOwnProperty.call(existingClaims, claimKey)) {
+      preservedClaims[claimKey] = existingClaims[claimKey];
+    }
+  });
+  return preservedClaims;
+}
+
+function normalizeSubscriptionEntitlement(subscriptionData) {
+  const rawTier = subscriptionData.tier;
+  const rawStatus = subscriptionData.status;
+  const rawFeatures = subscriptionData.features;
+  const rawExpiresAt = subscriptionData.expires_at;
+  const tierRecognized = SUBSCRIPTION_TIERS.includes(rawTier);
+  const statusRecognized = SUBSCRIPTION_STATUSES.includes(rawStatus);
+  const featuresValid = Array.isArray(rawFeatures) &&
+      rawFeatures.every((feature) => typeof feature === "string");
+  const expiresAtValid = rawExpiresAt == null ||
+      typeof rawExpiresAt.toDate === "function";
+  const expiresAt = expiresAtValid && rawExpiresAt ? rawExpiresAt.toDate() : null;
+  const isExpired = expiresAt != null && expiresAt <= new Date();
+  const isActive = rawStatus === "active" || rawStatus === "trial";
+  const wellFormed = tierRecognized && statusRecognized && featuresValid &&
+      expiresAtValid;
+  const premium = wellFormed && rawTier !== "free" && isActive && !isExpired;
+  const effectiveTier = premium ? rawTier : "free";
+  const effectiveStatus = wellFormed ?
+      (isExpired ? "expired" : rawStatus) : "expired";
+
+  if (!wellFormed || (rawTier !== "free" && !premium)) {
+    logger.warn("SUBSCRIPTION_ENTITLEMENT_FAIL_CLOSED", {
+      tier: rawTier,
+      status: rawStatus,
+      featuresValid,
+      expiresAtValid,
+      isExpired,
+    });
+  }
+
+  return {
+    tier: effectiveTier,
+    status: effectiveStatus,
+    premium,
+    features: premium ? getTierFeatures(effectiveTier) : [],
+    expiresAt,
+  };
 }
 
 /**
@@ -316,33 +452,27 @@ function getTierFeatures(tier) {
  */
 async function updateUserProfile(userId, subscriptionData) {
   try {
-    const tier = subscriptionData.tier || "free";
-    const status = subscriptionData.status || "active";
-    const expiresAt = subscriptionData.expires_at;
-
-    const isActive = status === "active" || status === "trial";
-    const isExpired = expiresAt && expiresAt.toDate() < new Date();
-    const premiumEnabled = tier !== "free" && isActive && !isExpired;
+    const entitlement = normalizeSubscriptionEntitlement(subscriptionData);
 
     const updateData = {
-      subscription_tier: tier,
-      subscription_status: status,
-      premium_features_enabled: premiumEnabled,
+      subscription_tier: entitlement.tier,
+      subscription_status: entitlement.status,
+      premium_features_enabled: entitlement.premium,
       profile_version: FieldValue.increment(1),
       updated_at: new Date(),
     };
 
-    if (expiresAt) {
-      updateData.subscription_expires_at = expiresAt;
+    if (entitlement.expiresAt) {
+      updateData.subscription_expires_at = entitlement.expiresAt;
     }
 
     await db.collection("users").doc(userId).update(updateData);
 
     logger.info(`User profile updated for user: ${userId}`, {
       userId,
-      tier,
-      status,
-      premiumEnabled,
+      tier: entitlement.tier,
+      status: entitlement.status,
+      premiumEnabled: entitlement.premium,
     });
   } catch (error) {
     logger.error(`Error updating user profile for user: ${userId}`, error);
@@ -407,16 +537,9 @@ exports.cleanupExpiredSubscriptions = onSchedule(
  * HTTP function to manually trigger custom claims update for a user
  * Useful for testing and manual operations
  */
-exports.updateUserClaimsManually = onCall(async (request) => {
-  // Verify the request is from an authenticated admin user
-  if (!request.auth || !request.auth.token.admin) {
-    throw new Error("Only admin users can manually update claims");
-  }
-
-  const userId = request.data.userId;
-  if (!userId) {
-    throw new Error("userId is required");
-  }
+exports.updateUserClaimsManually = onCall(CALLABLE_OPTIONS, async (request) => {
+  requireAdmin(request);
+  const userId = requireString(request.data?.userId, "userId", 128);
 
   try {
     // Get the user's active subscription
@@ -428,7 +551,7 @@ exports.updateUserClaimsManually = onCall(async (request) => {
         .get();
 
     if (subscriptionQuery.empty) {
-      throw new Error("No active subscription found for user");
+      throw new HttpsError("not-found", "No active subscription found");
     }
 
     const subscriptionDoc = subscriptionQuery.docs[0];
@@ -460,7 +583,7 @@ exports.updateUserClaimsManually = onCall(async (request) => {
     logger.error(
         `Error in manual claims update for user: ${userId}`, error,
     );
-    throw new Error(`Failed to update user claims: ${error.message}`);
+    throw callableFailure(error, "Failed to update user claims");
   }
 });
 
@@ -678,12 +801,19 @@ exports.cleanupFeedCache = onSchedule(
  * HTTP function to regenerate feed for a specific user
  * Useful for testing and manual operations
  */
-exports.regenerateUserFeed = onCall(async (request) => {
-  if (!request.auth) {
-    throw new Error("Authentication required");
+exports.regenerateUserFeed = onCall(CALLABLE_OPTIONS, async (request) => {
+  const caller = requireAuthenticated(request);
+  const targetUserId = request.data?.userId ?
+      requireString(request.data.userId, "userId", 128) : caller.uid;
+
+  if (targetUserId !== caller.uid && caller.token.admin !== true) {
+    throw new HttpsError(
+        "permission-denied",
+        "Feed regeneration is limited to the caller",
+    );
   }
 
-  const targetUserId = request.data.userId || request.auth.uid;
+  await enforceCallableRateLimit(caller.uid, "regenerate_feed", 5);
 
   try {
     // Clear existing feed cache for user
@@ -775,7 +905,7 @@ exports.regenerateUserFeed = onCall(async (request) => {
     };
   } catch (error) {
     logger.error(`Error regenerating feed for user: ${targetUserId}`, error);
-    throw new Error(`Failed to regenerate feed: ${error.message}`);
+    throw callableFailure(error, "Failed to regenerate feed");
   }
 });
 
@@ -1067,123 +1197,160 @@ function getMessagingClient() {
  * Cloud Function to send immediate notifications
  * Called when high-priority events occur (PRs, follow requests)
  */
-exports.sendImmediateNotification = onCall(async (request) => {
-  if (!request.auth) {
-    throw new Error("Authentication required");
-  }
-
-  const {targetUserId, type, title, body, data} = request.data;
-  
-  if (!targetUserId || !type || !title || !body) {
-    throw new Error("Missing required notification parameters");
-  }
+exports.sendImmediateNotification = onCall(CALLABLE_OPTIONS, async (request) => {
+  const caller = requireAuthenticated(request);
+  const targetUserId = requireString(
+      request.data?.targetUserId,
+      "targetUserId",
+      128,
+  );
+  const type = requireString(request.data?.type, "type", 40);
+  await enforceCallableRateLimit(caller.uid, "immediate_notification", 20);
 
   try {
-    // Check notification preferences
-    const preferencesDoc = await db.collection("notification_preferences")
-        .doc(targetUserId).get();
-    
-    if (!preferencesDoc.exists) {
-      logger.warn(`No notification preferences found for user: ${targetUserId}`);
-      return {success: false, reason: "No preferences found"};
-    }
-
-    const preferences = preferencesDoc.data();
-    
-    // Check master toggle
-    if (!preferences.notifications_enabled) {
-      logger.info(`Notifications disabled for user: ${targetUserId}`);
-      return {success: false, reason: "Notifications disabled"};
-    }
-
-    // Check category-specific preferences
-    if (!isNotificationTypeEnabled(type, preferences)) {
-      logger.info(`Notification type ${type} disabled for user: ${targetUserId}`);
-      return {success: false, reason: "Notification type disabled"};
-    }
-
-    // Check if we're in quiet hours
-    if (isInQuietHours(preferences)) {
-      logger.info(`In quiet hours, queueing notification for user: ${targetUserId}`);
-      await queueNotificationForLater(targetUserId, type, title, body, data, preferences);
-      return {success: true, reason: "Queued for quiet hours"};
-    }
-
-    // Check for mutes
-    const fromUserId = data?.fromUserId;
-    if (fromUserId && await isUserMuted(targetUserId, fromUserId, type)) {
-      logger.info(`User ${fromUserId} muted by ${targetUserId}`);
-      return {success: false, reason: "User muted"};
-    }
-
-    // Get FCM tokens for user
-    const tokensSnapshot = await db.collection("fcm_tokens")
-        .where("user_id", "==", targetUserId)
-        .where("is_active", "==", true)
-        .get();
-
-    if (tokensSnapshot.empty) {
-      logger.warn(`No active FCM tokens found for user: ${targetUserId}`);
-      return {success: false, reason: "No active tokens"};
-    }
-
-    // Send to all active tokens
-    const tokens = tokensSnapshot.docs.map((doc) => doc.data().token);
-    const message = {
-      notification: {
-        title: title,
-        body: body,
-      },
-      data: {
-        type: type,
-        ...data,
-      },
-      android: {
-        priority: "high",
-        notification: {
-          channelId: getChannelIdForType(type),
-          priority: "high",
-          defaultSound: preferences.notification_sound !== false,
-          defaultVibrateTimings: preferences.notification_vibration !== false,
-        },
-      },
-      tokens: tokens,
-    };
-
-    const response = await getMessagingClient().sendEachForMulticast(message);
-
-    // Process any failed tokens
-    const failedTokens = [];
-    response.responses.forEach((resp, idx) => {
-      if (!resp.success) {
-        failedTokens.push(tokens[idx]);
-        logger.warn(`Failed to send to token: ${tokens[idx]}, error: ${resp.error}`);
-      }
-    });
-
-    // Deactivate failed tokens
-    if (failedTokens.length > 0) {
-      await deactivateFailedTokens(failedTokens);
-    }
-
-    // Store notification in history
-    await storeNotificationHistory(targetUserId, type, title, body, data);
-
-    logger.info(
-        `Sent notification to ${response.successCount} devices ` +
-        `for user: ${targetUserId}, type: ${type}`,
+    const notification = await resolveCallableNotification(
+        caller.uid,
+        targetUserId,
+        type,
+        request.data || {},
     );
-
+    const delivered = await sendImmediateNotificationInternal(
+        targetUserId,
+        type,
+        notification.title,
+        notification.body,
+        notification.data,
+    );
     return {
-      success: true,
-      sentCount: response.successCount,
-      failedCount: response.failureCount,
+      success: delivered,
+      reason: delivered ? "Delivered or queued" : "Not deliverable",
     };
   } catch (error) {
-    logger.error(`Error sending immediate notification: ${error.message}`, error);
-    throw new Error(`Failed to send notification: ${error.message}`);
+    logger.error("Error sending immediate notification", error);
+    throw callableFailure(error, "Failed to send notification");
   }
 });
+
+async function resolveCallableNotification(
+    callerUserId,
+    targetUserId,
+    type,
+    requestData,
+) {
+  if (callerUserId === targetUserId && type === "WORKOUT_REMINDER") {
+    return {
+      title: requireString(requestData.title, "title", 80),
+      body: requireString(requestData.body, "body", 240),
+      data: {fromUserId: callerUserId},
+    };
+  }
+
+  const senderName = await getPublicDisplayName(callerUserId);
+  if (type === "FOLLOW_REQUEST") {
+    const relationshipId = requireString(
+        requestData.data?.relationshipId,
+        "relationshipId",
+        256,
+    );
+    const relationship = await db.collection("follow_relationships")
+        .doc(relationshipId).get();
+    const relationshipData = relationship.exists ? relationship.data() : {};
+    const followerId = relationshipData.followerId ||
+        relationshipData.follower_user_id;
+    const followingId = relationshipData.followingId ||
+        relationshipData.following_user_id;
+
+    if (followerId !== callerUserId || followingId !== targetUserId ||
+        relationshipData.status !== "PENDING") {
+      throw new HttpsError(
+          "permission-denied",
+          "Notification relationship is not valid",
+      );
+    }
+
+    return {
+      title: "New Follow Request",
+      body: `${senderName} wants to follow you`,
+      data: {
+        fromUserId: callerUserId,
+        fromUserName: senderName,
+        relationshipId,
+      },
+    };
+  }
+
+  if (type === "GYM_BUDDY_PR") {
+    const postId = requireString(requestData.data?.postId, "postId", 256);
+    const post = await db.collection("workout_posts").doc(postId).get();
+    const postData = post.exists ? post.data() : {};
+    const postOwnerId = postData.userId || postData.user_id;
+    const hasMutualRelationship =
+        await hasAcceptedRelationship(callerUserId, targetUserId) &&
+        await hasAcceptedRelationship(targetUserId, callerUserId);
+
+    if (postOwnerId !== callerUserId || !hasMutualRelationship ||
+        !(postData.prs_count > 0 || postData.prsCount > 0)) {
+      throw new HttpsError(
+          "permission-denied",
+          "Notification event is not valid",
+      );
+    }
+
+    return {
+      title: `${senderName} hit a PR!`,
+      body: "Your gym buddy reached a new personal record.",
+      data: {fromUserId: callerUserId, fromUserName: senderName, postId},
+    };
+  }
+
+  throw new HttpsError(
+      "invalid-argument",
+      "Unsupported callable notification type",
+  );
+}
+
+async function getPublicDisplayName(userId) {
+  const profile = await db.collection(SOCIAL_PROFILES_COLLECTION)
+      .doc(userId).get();
+  if (!profile.exists) {
+    return "Someone";
+  }
+  const profileData = profile.data();
+  const displayName = profileData.displayName ||
+      profileData.display_name || profileData.username || "Someone";
+  return typeof displayName === "string" ? displayName.slice(0, 60) : "Someone";
+}
+
+async function hasAcceptedRelationship(followerId, followingId) {
+  const canonicalId = `${followerId}_${followingId}`;
+  const canonical = await db.collection("follow_relationships")
+      .doc(canonicalId).get();
+  if (canonical.exists) {
+    const data = canonical.data();
+    const storedFollower = data.followerId || data.follower_user_id;
+    const storedFollowing = data.followingId || data.following_user_id;
+    return storedFollower === followerId && storedFollowing === followingId &&
+        data.status === "ACCEPTED";
+  }
+
+  const modern = await db.collection("follow_relationships")
+      .where("followerId", "==", followerId)
+      .where("followingId", "==", followingId)
+      .where("status", "==", "ACCEPTED")
+      .limit(1)
+      .get();
+  if (!modern.empty) {
+    return true;
+  }
+
+  const legacy = await db.collection("follow_relationships")
+      .where("follower_user_id", "==", followerId)
+      .where("following_user_id", "==", followingId)
+      .where("status", "==", "ACCEPTED")
+      .limit(1)
+      .get();
+  return !legacy.empty;
+}
 
 /**
  * Cloud Function triggered when workout post creates PR
@@ -1426,6 +1593,11 @@ exports.sendQuietHoursNotifications = onSchedule(
  */
 async function sendImmediateNotificationInternal(targetUserId, type, title, body, data) {
   // This mirrors the main sendImmediateNotification function but for internal use
+  const fromUserId = data?.fromUserId;
+  if (fromUserId && await isUserMuted(targetUserId, fromUserId, type)) {
+    return false;
+  }
+
   const preferencesDoc = await db.collection("notification_preferences")
       .doc(targetUserId).get();
   
@@ -1744,16 +1916,18 @@ async function sendBatchedNotification(userId, notifications, style) {
  * Admin-only Cloud Function to ban/disable users
  * Disables Firebase Auth account and updates user document
  */
-exports.banUser = onCall(async (request) => {
-  // Verify admin permissions
-  if (!request.auth || !request.auth.token.admin) {
-    throw new Error("Only admin users can ban other users");
+exports.banUser = onCall(CALLABLE_OPTIONS, async (request) => {
+  const caller = requireAdmin(request);
+  const userId = requireString(request.data?.userId, "userId", 128);
+  const reason = requireString(request.data?.reason, "reason", 1000);
+  const banDuration = request.data?.banDuration == null ? null :
+      requireString(request.data.banDuration, "banDuration", 80);
+  const severity = request.data?.severity || "moderate";
+  if (!["low", "moderate", "high", "critical"].includes(severity)) {
+    throw new HttpsError("invalid-argument", "Invalid ban severity");
   }
-
-  const {userId, reason, banDuration, severity} = request.data;
-
-  if (!userId || !reason) {
-    throw new Error("userId and reason are required");
+  if (userId === caller.uid) {
+    throw new HttpsError("failed-precondition", "Admins cannot ban themselves");
   }
 
   try {
@@ -1763,7 +1937,7 @@ exports.banUser = onCall(async (request) => {
     const userRecord = await auth.getUser(userId);
 
     if (!userRecord) {
-      throw new Error(`User not found: ${userId}`);
+      throw new HttpsError("not-found", "User not found");
     }
 
     const bannedAt = new Date();
@@ -1885,24 +2059,18 @@ exports.banUser = onCall(async (request) => {
       outcome: "failed",
     });
 
-    throw new Error(`Failed to ban user: ${error.message}`);
+    throw callableFailure(error, "Failed to ban user");
   }
 });
 
 /**
  * Admin-only Cloud Function to unban/re-enable users
  */
-exports.unbanUser = onCall(async (request) => {
-  // Verify admin permissions
-  if (!request.auth || !request.auth.token.admin) {
-    throw new Error("Only admin users can unban other users");
-  }
-
-  const {userId, reason} = request.data;
-
-  if (!userId) {
-    throw new Error("userId is required");
-  }
+exports.unbanUser = onCall(CALLABLE_OPTIONS, async (request) => {
+  requireAdmin(request);
+  const userId = requireString(request.data?.userId, "userId", 128);
+  const reason = request.data?.reason == null ? "Appeal approved" :
+      requireString(request.data.reason, "reason", 1000);
 
   try {
     logger.info(`Admin ${request.auth.uid} attempting to unban user: ${userId}`);
@@ -2014,24 +2182,16 @@ exports.unbanUser = onCall(async (request) => {
       outcome: "failed",
     });
 
-    throw new Error(`Failed to unban user: ${error.message}`);
+    throw callableFailure(error, "Failed to unban user");
   }
 });
 
 /**
  * Admin-only Cloud Function to get user ban history and details
  */
-exports.getUserBanInfo = onCall(async (request) => {
-  // Verify admin permissions
-  if (!request.auth || !request.auth.token.admin) {
-    throw new Error("Only admin users can view ban information");
-  }
-
-  const { userId } = request.data;
-
-  if (!userId) {
-    throw new Error("userId is required");
-  }
+exports.getUserBanInfo = onCall(CALLABLE_OPTIONS, async (request) => {
+  requireAdmin(request);
+  const userId = requireString(request.data?.userId, "userId", 128);
 
   try {
     // Get Firebase Auth user info
@@ -2084,20 +2244,24 @@ exports.getUserBanInfo = onCall(async (request) => {
 
   } catch (error) {
     logger.error(`Error getting ban info for user ${userId}:`, error);
-    throw new Error(`Failed to get user ban info: ${error.message}`);
+    throw callableFailure(error, "Failed to get user ban information");
   }
 });
 
 /**
  * Admin-only Cloud Function to list all banned users
  */
-exports.listBannedUsers = onCall(async (request) => {
-  // Verify admin permissions
-  if (!request.auth || !request.auth.token.admin) {
-    throw new Error("Only admin users can list banned users");
+exports.listBannedUsers = onCall(CALLABLE_OPTIONS, async (request) => {
+  requireAdmin(request);
+  const {limit = 50, offset = 0, severity = null} = request.data || {};
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100 ||
+      !Number.isInteger(offset) || offset < 0 || offset > 10000) {
+    throw new HttpsError("invalid-argument", "Invalid pagination values");
   }
-
-  const { limit = 50, offset = 0, severity = null } = request.data;
+  if (severity != null &&
+      !["low", "moderate", "high", "critical"].includes(severity)) {
+    throw new HttpsError("invalid-argument", "Invalid ban severity");
+  }
 
   try {
     let query = db.collection("user_bans")
@@ -2146,20 +2310,23 @@ exports.listBannedUsers = onCall(async (request) => {
 
   } catch (error) {
     logger.error("Error listing banned users:", error);
-    throw new Error(`Failed to list banned users: ${error.message}`);
+    throw callableFailure(error, "Failed to list banned users");
   }
 });
 
 /**
  * Admin-only Cloud Function to list recent ban management audit logs
  */
-exports.getAdminLogs = onCall(async (request) => {
-  // Verify admin permissions
-  if (!request.auth || !request.auth.token.admin) {
-    throw new Error("Only admin users can view admin logs");
-  }
-
+exports.getAdminLogs = onCall(CALLABLE_OPTIONS, async (request) => {
+  requireAdmin(request);
   const {limit = 100, actionType = null} = request.data || {};
+  if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
+    throw new HttpsError("invalid-argument", "Invalid log limit");
+  }
+  if (actionType != null &&
+      !["BAN_USER", "UNBAN_USER"].includes(actionType)) {
+    throw new HttpsError("invalid-argument", "Invalid action type");
+  }
 
   try {
     const query = db.collection("admin_actions")
@@ -2207,7 +2374,7 @@ exports.getAdminLogs = onCall(async (request) => {
 
   } catch (error) {
     logger.error("Error getting admin logs:", error);
-    throw new Error(`Failed to get admin logs: ${error.message}`);
+    throw callableFailure(error, "Failed to get admin logs");
   }
 });
 
@@ -2215,16 +2382,13 @@ exports.getAdminLogs = onCall(async (request) => {
  * Admin-only Cloud Function to search users by email or display name
  * Fixed implementation with robust search similar to social user search
  */
-exports.searchUsers = onCall(async (request) => {
-  // Verify admin permissions  
-  if (!request.auth || !request.auth.token.admin) {
-    throw new Error("Only admin users can search for users");
-  }
-
-  const { query: searchQuery, limit = 50 } = request.data;
-
-  if (!searchQuery || searchQuery.length < 3) {
-    throw new Error("Search query must be at least 3 characters long");
+exports.searchUsers = onCall(CALLABLE_OPTIONS, async (request) => {
+  requireAdmin(request);
+  const searchQuery = requireString(request.data?.query, "query", 100);
+  const limit = request.data?.limit || 50;
+  if (searchQuery.length < 3 || !Number.isInteger(limit) ||
+      limit < 1 || limit > 100) {
+    throw new HttpsError("invalid-argument", "Invalid search parameters");
   }
 
   try {
@@ -2319,7 +2483,7 @@ exports.searchUsers = onCall(async (request) => {
 
   } catch (error) {
     logger.error(`Error searching users with query "${searchQuery}":`, error);
-    throw new Error(`Failed to search users: ${error.message}`);
+    throw callableFailure(error, "Failed to search users");
   }
 });
 
@@ -2331,20 +2495,22 @@ exports.searchUsers = onCall(async (request) => {
  * Admin-only Cloud Function to set admin claims for a user
  * This function allows setting custom admin claims for user authentication
  */
-exports.setAdminClaim = onCall(async (request) => {
-  // For initial setup, allow if no admins exist yet
-  const adminQuery = await db.collection("admin_users").limit(1).get();
-  const hasExistingAdmins = !adminQuery.empty;
-  
-  // If admins exist, verify the caller is an admin
-  if (hasExistingAdmins && (!request.auth || !request.auth.token.admin)) {
-    throw new Error("Only admin users can set admin claims");
+exports.setAdminClaim = onCall(CALLABLE_OPTIONS, async (request) => {
+  const caller = requireAdmin(request);
+  const targetUserId = requireString(
+      request.data?.targetUserId,
+      "targetUserId",
+      128,
+  );
+  const isAdmin = request.data?.isAdmin == null ? true : request.data.isAdmin;
+  if (typeof isAdmin !== "boolean") {
+    throw new HttpsError("invalid-argument", "isAdmin must be a boolean");
   }
-  
-  const { targetUserId, isAdmin = true } = request.data;
-  
-  if (!targetUserId) {
-    throw new Error("targetUserId is required");
+  if (targetUserId === caller.uid && !isAdmin) {
+    throw new HttpsError(
+        "failed-precondition",
+        "Admins cannot revoke their own admin claim through this callable",
+    );
   }
   
   try {
@@ -2352,7 +2518,7 @@ exports.setAdminClaim = onCall(async (request) => {
     const userRecord = await auth.getUser(targetUserId);
     
     if (!userRecord) {
-      throw new Error(`User not found: ${targetUserId}`);
+      throw new HttpsError("not-found", "User not found");
     }
     
     // Set admin custom claim
@@ -2360,7 +2526,7 @@ exports.setAdminClaim = onCall(async (request) => {
       ...userRecord.customClaims,
       admin: isAdmin,
       adminSetAt: new Date().toISOString(),
-      adminSetBy: request.auth?.uid || "system"
+      adminSetBy: caller.uid,
     });
     
     // Record this admin in the admin_users collection
@@ -2370,7 +2536,7 @@ exports.setAdminClaim = onCall(async (request) => {
         email: userRecord.email,
         displayName: userRecord.displayName,
         grantedAt: new Date(),
-        grantedBy: request.auth?.uid || "system",
+        grantedBy: caller.uid,
         status: "active"
       });
     } else {
@@ -2381,7 +2547,7 @@ exports.setAdminClaim = onCall(async (request) => {
     // Log the action
     await db.collection("admin_actions").add({
       actionType: isAdmin ? "GRANT_ADMIN" : "REVOKE_ADMIN",
-      performedBy: request.auth?.uid || "system",
+      performedBy: caller.uid,
       targetUserId: targetUserId,
       timestamp: new Date(),
       outcome: "success"
@@ -2407,14 +2573,14 @@ exports.setAdminClaim = onCall(async (request) => {
     // Log failed attempt
     await db.collection("admin_actions").add({
       actionType: isAdmin ? "GRANT_ADMIN" : "REVOKE_ADMIN",
-      performedBy: request.auth?.uid || "system",
+      performedBy: caller.uid,
       targetUserId: targetUserId,
       error: error.message,
       timestamp: new Date(),
       outcome: "failed"
     });
     
-    throw new Error(`Failed to set admin claim: ${error.message}`);
+    throw callableFailure(error, "Failed to set admin claim");
   }
 });
 
@@ -2426,73 +2592,80 @@ exports.setAdminClaim = onCall(async (request) => {
  * Cloud Function to send support ticket emails
  * Called when support tickets are created or updated
  */
-exports.sendSupportTicketEmail = onCall(async (request) => {
-  if (!request.auth) {
-    throw new Error("Authentication required");
-  }
-
-  const {ticketId, subject, description, category, deviceInfo, userEmail, userName} = request.data;
-  
-  if (!ticketId || !subject || !description || !category) {
-    throw new Error("Missing required ticket parameters");
-  }
+exports.sendSupportTicketEmail = onCall(CALLABLE_OPTIONS, async (request) => {
+  const caller = requireAuthenticated(request);
+  const ticketId = requireString(request.data?.ticketId, "ticketId", 256);
 
   try {
-    // Use Nodemailer to send email
-    const nodemailer = require('nodemailer');
-    
-    // Configure Gmail transporter
-    const transporter = nodemailer.createTransporter({
-      service: 'gmail',
-      auth: {
-        user: 'valijianu98@gmail.com',
-        pass: process.env.GMAIL_APP_PASSWORD // Set this in Firebase Functions config
-      }
+    const ticketRef = db.collection("support_tickets").doc(ticketId);
+    const ticketSnapshot = await ticketRef.get();
+    if (!ticketSnapshot.exists ||
+        ticketSnapshot.data().user_id !== caller.uid) {
+      throw new HttpsError("not-found", "Support ticket not found");
+    }
+    if (ticketSnapshot.data().email_sent === true) {
+      return {success: true, ticketId, alreadySent: true};
+    }
+
+    await enforceCallableRateLimit(caller.uid, "support_email", 3);
+    const userRecord = await auth.getUser(caller.uid);
+    const result = await sendSupportTicketEmailInternal(
+        ticketId,
+        ticketSnapshot.data(),
+        userRecord,
+    );
+    await ticketRef.update({
+      email_sent: true,
+      email_sent_at: FieldValue.serverTimestamp(),
     });
-
-    const emailBody = `
-New Support Ticket Received
-
-Ticket ID: ${ticketId}
-Category: ${category}
-Subject: ${subject}
-
-User Information:
-- Email: ${userEmail || 'Not provided'}
-- Name: ${userName || 'Anonymous'}
-
-Description:
-${description}
-
-Device Information:
-${deviceInfo || 'Not provided'}
-
-Submitted at: ${new Date().toISOString()}
-    `;
-
-    const mailOptions = {
-      from: 'valijianu98@gmail.com',
-      to: 'valijianu98@gmail.com',
-      subject: `Liftrix Support: ${category} - ${subject}`,
-      text: emailBody,
-      replyTo: userEmail || 'valijianu98@gmail.com'
-    };
-
-    const result = await transporter.sendMail(mailOptions);
-    
-    logger.info(`Support ticket email sent successfully for ticket: ${ticketId}`);
-    
-    return {
-      success: true,
-      ticketId: ticketId,
-      messageId: result.messageId
-    };
-
+    return {success: true, ticketId, messageId: result.messageId};
   } catch (error) {
-    logger.error(`Error sending support ticket email: ${error.message}`, error);
-    throw new Error(`Failed to send support ticket email: ${error.message}`);
+    logger.error(`Error sending support ticket email: ${ticketId}`, error);
+    throw callableFailure(error, "Failed to send support ticket email");
   }
 });
+
+async function sendSupportTicketEmailInternal(ticketId, ticketData, userRecord) {
+  const subject = requireString(ticketData.subject, "subject", 200);
+  const description = requireString(
+      ticketData.description,
+      "description",
+      5000,
+  );
+  const category = requireString(ticketData.category, "category", 80);
+  const deviceInfo = ticketData.device_info == null ? "Not provided" :
+      requireString(ticketData.device_info, "deviceInfo", 2000);
+  const userEmail = userRecord.email || "Not provided";
+  const userName = userRecord.displayName || "Anonymous";
+  const nodemailer = require("nodemailer");
+  const supportAddress = "valijianu98@gmail.com";
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: supportAddress,
+      pass: process.env.GMAIL_APP_PASSWORD,
+    },
+  });
+  const emailBody = [
+    "New Support Ticket Received",
+    `Ticket ID: ${ticketId}`,
+    `Category: ${category}`,
+    `Subject: ${subject}`,
+    `User Email: ${userEmail}`,
+    `User Name: ${userName}`,
+    `Description: ${description}`,
+    `Device Information: ${deviceInfo}`,
+    `Submitted at: ${new Date().toISOString()}`,
+  ].join("\n\n");
+
+  return transporter.sendMail({
+    from: supportAddress,
+    to: supportAddress,
+    subject: `Liftrix Support: ${category} - ${subject}`,
+    text: emailBody,
+    replyTo: userRecord.email || supportAddress,
+  });
+}
 
 /**
  * Triggered function when support tickets are created in Firestore
@@ -2516,23 +2689,9 @@ exports.onSupportTicketCreated = onDocumentWritten(
       }
 
       try {
-        // Get user information
-        const userDoc = await db.collection("users").doc(ticketData.user_id).get();
-        const userData = userDoc.exists ? userDoc.data() : {};
-
-        // Send email notification
-        await exports.sendSupportTicketEmail.run({
-          auth: { uid: ticketData.user_id },
-          data: {
-            ticketId: ticketId,
-            subject: ticketData.subject,
-            description: ticketData.description,
-            category: ticketData.category,
-            deviceInfo: ticketData.device_info,
-            userEmail: userData.email,
-            userName: userData.display_name || userData.username
-          }
-        });
+        await enforceCallableRateLimit(ticketData.user_id, "support_email", 3);
+        const userRecord = await auth.getUser(ticketData.user_id);
+        await sendSupportTicketEmailInternal(ticketId, ticketData, userRecord);
 
         // Mark ticket as email sent
         await event.data.after.ref.update({
@@ -2814,14 +2973,10 @@ exports.cleanupDeletedUser = onDocumentWritten(
 });
 
 
-exports.bulkCleanupOrphanedData = onCall(async (request) => {
+exports.bulkCleanupOrphanedData = onCall(CALLABLE_OPTIONS, async (request) => {
+  const caller = requireAdmin(request);
   logger.info("🧹 BULK_CLEANUP: Starting bulk cleanup of orphaned data");
-  
-  if (request.auth) {
-    logger.info(`🧹 BULK_CLEANUP: Authenticated user ${request.auth.uid} running cleanup`);
-  } else {
-    logger.info("🧹 BULK_CLEANUP: Running cleanup from Firebase Console (unauthenticated)");
-  }
+  logger.info(`🧹 BULK_CLEANUP: Admin ${caller.uid} running cleanup`);
   
   try {
     const results = [];
@@ -2932,7 +3087,7 @@ exports.bulkCleanupOrphanedData = onCall(async (request) => {
     
   } catch (error) {
     logger.error("❌ BULK_CLEANUP FAILED:", error);
-    throw new Error(`Bulk cleanup failed: ${error.message}`);
+    throw callableFailure(error, "Bulk cleanup failed");
   }
 });
 
@@ -3450,20 +3605,12 @@ async function anonymizeSocialPosts(userId) {
  * @param {string} data.reasonDescription - Human-readable description of the reason
  * @param {string} data.notes - Optional additional notes from the reporter
  * @param {string} data.userId - ID of the user submitting the report
- * @param {number} data.timestamp - Report submission timestamp
  * @param {Object} context - Firebase Functions context
  * @returns {Promise<{success: boolean, reportId: string}>}
  */
-exports.aiReport = onCall(async (request) => {
-  const {data, auth} = request;
-
-  // Verify authentication
-  if (!auth) {
-    throw new functions.https.HttpsError(
-        "unauthenticated",
-        "User must be authenticated to report AI content",
-    );
-  }
+exports.aiReport = onCall(CALLABLE_OPTIONS, async (request) => {
+  const caller = requireAuthenticated(request);
+  const data = request.data || {};
 
   const {
     messageId,
@@ -3472,35 +3619,41 @@ exports.aiReport = onCall(async (request) => {
     reasonDescription,
     notes,
     userId,
-    timestamp,
   } = data;
 
-  // Validate required fields
-  if (!messageId || !messageContent || !reason || !userId) {
-    throw new functions.https.HttpsError(
-        "invalid-argument",
-        "Missing required fields: messageId, messageContent, reason, userId",
-    );
+  const validatedMessageId = requireString(messageId, "messageId", 256);
+  const validatedContent = requireString(
+      messageContent,
+      "messageContent",
+      8000,
+  );
+  const validatedUserId = requireString(userId, "userId", 128);
+  if (!["HARMFUL_MEDICAL", "MISINFORMATION", "INAPPROPRIATE", "OTHER"]
+      .includes(reason)) {
+    throw new HttpsError("invalid-argument", "Invalid report reason");
   }
-
-  // Verify the authenticated user matches the userId in the request
-  if (auth.uid !== userId) {
-    throw new functions.https.HttpsError(
+  if (caller.uid !== validatedUserId) {
+    throw new HttpsError(
         "permission-denied",
         "User can only submit reports on their own behalf",
     );
   }
+  const validatedReasonDescription = reasonDescription == null ? "" :
+      requireString(reasonDescription, "reasonDescription", 500);
+  const validatedNotes = notes == null || notes === "" ? "" :
+      requireString(notes, "notes", 2000);
+  await enforceCallableRateLimit(caller.uid, "ai_report", 5);
 
   try {
     // Create AI report document
     const reportRef = await db.collection("ai_reports").add({
-      message_id: messageId,
-      message_content: messageContent,
+      message_id: validatedMessageId,
+      message_content: validatedContent,
       reason: reason,
-      reason_description: reasonDescription || "",
-      notes: notes || "",
-      reporter_user_id: userId,
-      reported_at: timestamp || Date.now(),
+      reason_description: validatedReasonDescription,
+      notes: validatedNotes,
+      reporter_user_id: caller.uid,
+      reported_at: Date.now(),
       status: "PENDING", // PENDING, REVIEWED, RESOLVED, DISMISSED
       reviewed_at: null,
       reviewed_by_user_id: null,
@@ -3509,7 +3662,8 @@ exports.aiReport = onCall(async (request) => {
     });
 
     logger.info(
-        `AI content reported: ${reportRef.id} by user ${userId} for message ${messageId}`,
+        `AI content reported: ${reportRef.id} by user ${caller.uid} ` +
+        `for message ${validatedMessageId}`,
     );
 
     // Send notification to admin channel (optional - requires admin notification setup)
@@ -3521,10 +3675,7 @@ exports.aiReport = onCall(async (request) => {
     };
   } catch (error) {
     logger.error("Error processing AI report:", error);
-    throw new functions.https.HttpsError(
-        "internal",
-        "Failed to process AI report",
-    );
+    throw callableFailure(error, "Failed to process AI report");
   }
 });
 
@@ -3543,35 +3694,65 @@ exports.aiReport = onCall(async (request) => {
  * @param {Object} context - Firebase Functions context
  * @returns {Promise<{success: boolean, actionId: string}>}
  */
-exports.moderationAction = onCall(async (request) => {
-  const {data, auth} = request;
-
-  // Verify admin authentication
-  if (!auth || !auth.token.admin) {
-    throw new functions.https.HttpsError(
-        "permission-denied",
-        "This action requires admin privileges",
-    );
-  }
+exports.moderationAction = onCall(CALLABLE_OPTIONS, async (request) => {
+  const caller = requireAdmin(request);
+  const data = request.data || {};
 
   const {
     actionType,
-    targetId,
+    targetId: rawTargetId,
     targetType,
-    reason,
+    reason: rawReason,
     durationDays,
-    reportId,
+    reportId: rawReportId,
   } = data;
 
-  // Validate required fields
-  if (!actionType || !targetId || !targetType || !reason) {
-    throw new functions.https.HttpsError(
+  const allowedActions = [
+    "HIDE_POST",
+    "DELETE_POST",
+    "HIDE_COMMENT",
+    "DELETE_COMMENT",
+    "WARN_USER",
+    "SUSPEND_USER",
+    "DISMISS_REPORT",
+  ];
+  if (!allowedActions.includes(actionType)) {
+    throw new HttpsError("invalid-argument", "Invalid moderation action");
+  }
+  const targetId = requireString(rawTargetId, "targetId", 256);
+  const reason = requireString(rawReason, "reason", 1000);
+  if (!["POST", "COMMENT", "USER", "REPORT"].includes(targetType)) {
+    throw new HttpsError("invalid-argument", "Invalid target type");
+  }
+  const expectedTargetTypes = {
+    HIDE_POST: "POST",
+    DELETE_POST: "POST",
+    HIDE_COMMENT: "COMMENT",
+    DELETE_COMMENT: "COMMENT",
+    WARN_USER: "USER",
+    SUSPEND_USER: "USER",
+    DISMISS_REPORT: "REPORT",
+  };
+  if (expectedTargetTypes[actionType] !== targetType) {
+    throw new HttpsError(
         "invalid-argument",
-        "Missing required fields: actionType, targetId, targetType, reason",
+        "Moderation action does not match target type",
     );
   }
-
-  const adminUserId = auth.uid;
+  if (durationDays != null &&
+      (!Number.isInteger(durationDays) || durationDays < 1 ||
+       durationDays > 365)) {
+    throw new HttpsError("invalid-argument", "Invalid suspension duration");
+  }
+  const reportId = rawReportId == null ? null :
+      requireString(rawReportId, "reportId", 256);
+  if (actionType === "DISMISS_REPORT" && reportId !== targetId) {
+    throw new HttpsError(
+        "invalid-argument",
+        "reportId must match targetId for report dismissal",
+    );
+  }
+  const adminUserId = caller.uid;
 
   try {
     // Execute the moderation action
@@ -3623,7 +3804,7 @@ exports.moderationAction = onCall(async (request) => {
 
       case "SUSPEND_USER":
         if (!durationDays) {
-          throw new functions.https.HttpsError(
+          throw new HttpsError(
               "invalid-argument",
               "durationDays is required for SUSPEND_USER",
           );
@@ -3645,7 +3826,7 @@ exports.moderationAction = onCall(async (request) => {
 
       case "DISMISS_REPORT":
         if (!reportId) {
-          throw new functions.https.HttpsError(
+          throw new HttpsError(
               "invalid-argument",
               "reportId is required for DISMISS_REPORT",
           );
@@ -3660,7 +3841,7 @@ exports.moderationAction = onCall(async (request) => {
         break;
 
       default:
-        throw new functions.https.HttpsError(
+        throw new HttpsError(
             "invalid-argument",
             `Unknown action type: ${actionType}`,
         );
@@ -3696,9 +3877,6 @@ exports.moderationAction = onCall(async (request) => {
     };
   } catch (error) {
     logger.error("Error executing moderation action:", error);
-    throw new functions.https.HttpsError(
-        "internal",
-        "Failed to execute moderation action",
-    );
+    throw callableFailure(error, "Failed to execute moderation action");
   }
 });

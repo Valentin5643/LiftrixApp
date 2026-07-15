@@ -11,6 +11,49 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
 
+    function isStrictRegistrationSubscription() {
+      return request.resource.data.keys().hasOnly([
+               'user_id',
+               'tier',
+               'status',
+               'provider',
+               'started_at',
+               'auto_renew',
+               'features',
+               'metadata',
+               'claims_updated',
+               'created_at',
+               'version'
+             ]) &&
+             request.resource.data.keys().hasAll([
+               'user_id',
+               'tier',
+               'status',
+               'provider',
+               'started_at',
+               'auto_renew',
+               'features',
+               'metadata',
+               'claims_updated',
+               'created_at',
+               'version'
+             ]) &&
+             request.resource.data.user_id == request.auth.uid &&
+             request.resource.data.tier == 'free' &&
+             request.resource.data.status == 'active' &&
+             request.resource.data.provider == 'manual' &&
+             request.resource.data.started_at is timestamp &&
+             request.resource.data.auto_renew == false &&
+             request.resource.data.features is list &&
+             request.resource.data.features.size() == 0 &&
+             request.resource.data.metadata is map &&
+             request.resource.data.metadata.keys().hasOnly(['source']) &&
+             request.resource.data.metadata.source == 'registration' &&
+             request.resource.data.claims_updated == false &&
+             request.resource.data.created_at is timestamp &&
+             request.resource.data.version == 1;
+    }
+
     // ========================================
     // SECURITY: Timestamp Validation (SEC-T006)
     // Prevents timestamp manipulation attacks (SEC-006)
@@ -129,14 +172,14 @@ service cloud.firestore {
     
     // Users collection - user profile data with sync support
     match /users/{userId} {
-      // Allow querying for public profiles (list operations for collection queries)
-      allow list: if isAuthenticated();
+      // Private user records are never collection-listable. Discovery belongs
+      // to users_public/social_profiles, which contain projection-only fields.
+      allow list: if false;
 
-      // Allow read if owner OR document has isPublic == true
-      // Simplified condition - only docs with explicit isPublic: true are accessible
-      allow get, read: if isAuthenticated() &&
-                          (isOwner(userId) ||
-                           (resource.data.isPublic == true));
+      // A direct document get remains available to the owner or when the
+      // private record explicitly opts into public visibility.
+      allow get: if isAuthenticated() &&
+                    (isOwner(userId) || resource.data.isPublic == true);
       
       // GMAIL FIX: Simplified write rules that accept all fields Gmail authentication sends
       allow write, create: if isAuthenticated() && 
@@ -767,36 +810,12 @@ service cloud.firestore {
     match /subscriptions/{subscriptionId} {
       allow read: if isAuthenticated() && 
                      resource.data.user_id == request.auth.uid;
-      
-      allow write: if isAuthenticated() && 
-                      request.resource.data.user_id == request.auth.uid &&
-                      request.resource.data.keys().hasAll(['user_id']) &&
-                      // Allow subscription fields created during profile creation
-                      (!('tier' in request.resource.data) || request.resource.data.tier is string) &&
-                      (!('status' in request.resource.data) || request.resource.data.status is string) &&
-                      (!('provider' in request.resource.data) || request.resource.data.provider is string) &&
-                      (!('started_at' in request.resource.data) || request.resource.data.started_at is timestamp) &&
-                      (!('auto_renew' in request.resource.data) || request.resource.data.auto_renew is bool) &&
-                      (!('features' in request.resource.data) || request.resource.data.features is list) &&
-                      (!('metadata' in request.resource.data) || request.resource.data.metadata is map) &&
-                      (!('claims_updated' in request.resource.data) || request.resource.data.claims_updated is bool) &&
-                      (!('created_at' in request.resource.data) || request.resource.data.created_at is timestamp) &&
-                      (!('version' in request.resource.data) || request.resource.data.version is int);
-      
+
       allow create: if isAuthenticated() && 
-                       request.resource.data.user_id == request.auth.uid &&
-                       request.resource.data.keys().hasAll(['user_id']) &&
-                       // Allow subscription fields created during profile creation
-                       (!('tier' in request.resource.data) || request.resource.data.tier is string) &&
-                       (!('status' in request.resource.data) || request.resource.data.status is string) &&
-                       (!('provider' in request.resource.data) || request.resource.data.provider is string) &&
-                       (!('started_at' in request.resource.data) || request.resource.data.started_at is timestamp) &&
-                       (!('auto_renew' in request.resource.data) || request.resource.data.auto_renew is bool) &&
-                       (!('features' in request.resource.data) || request.resource.data.features is list) &&
-                       (!('metadata' in request.resource.data) || request.resource.data.metadata is map) &&
-                       (!('claims_updated' in request.resource.data) || request.resource.data.claims_updated is bool) &&
-                       (!('created_at' in request.resource.data) || request.resource.data.created_at is timestamp) &&
-                       (!('version' in request.resource.data) || request.resource.data.version is int);
+                       isStrictRegistrationSubscription();
+
+      // Paid state and all post-registration mutations are server-owned.
+      allow update, delete: if false;
     }
     
     // ========================================

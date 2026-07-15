@@ -196,35 +196,6 @@ fun DataPortabilityScreen(
                 }
             }
             
-            // Data Management Info
-            item {
-                UnifiedWorkoutCard(
-                    title = "Data Management",
-                    subtitle = "Information about your data",
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "Data retention",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                text = "Indefinite",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        
-                    }
-                }
-            }
-            
             // Progress indicator if exporting/importing
             when (val exportState = uiState.exportState) {
                 is UiState.Loading -> {

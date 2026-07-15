@@ -169,7 +169,9 @@ fun UserProfileScreen(
                 onSeeAllActivitiesClick = { viewModel.showAllActivities() },
                 onLikeClick = { postId -> viewModel.handleEvent(UserProfileEvent.ToggleLike(postId)) },
                 onSaveClick = { postId -> viewModel.handleEvent(UserProfileEvent.ToggleSave(postId)) },
-                onCommentClick = { postId -> viewModel.handleEvent(UserProfileEvent.CreateComment(postId, "")) },
+                // This surface has no comment composer/navigation contract. Keep the action
+                // disabled instead of dispatching an invalid blank comment.
+                onCommentClick = { _ -> },
                 onShareClick = { postId -> viewModel.handleEvent(UserProfileEvent.SharePost(postId, "copy_link")) },
                 onCopyWorkoutClick = { postId -> viewModel.handleEvent(UserProfileEvent.CopyWorkout(postId)) },
                 onLoadEngagementStatus = { postId -> viewModel.loadEngagementStatus(postId) },
