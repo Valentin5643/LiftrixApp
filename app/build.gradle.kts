@@ -13,7 +13,6 @@ plugins {
     alias(libs.plugins.google.firebase.firebase.perf)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt.android)
-    alias(libs.plugins.androidx.baselineprofile)
     id("kotlin-parcelize")
     id("jacoco")
 }
@@ -29,6 +28,35 @@ fun localOrEnvironment(name: String): String =
     (System.getenv(name) ?: localProperties.getProperty(name)).orEmpty()
 
 fun buildConfigString(value: String): String = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
+val releasePackageId = "com.liftrix.app"
+val releaseVersionCode = 10001
+val releaseVersionName = "1.0.1"
+val releaseKeystorePath = localOrEnvironment("KEYSTORE_PATH")
+val releaseKeystorePassword = localOrEnvironment("KEYSTORE_PASSWORD")
+val releaseKeyAlias = localOrEnvironment("KEY_ALIAS")
+val releaseKeyPassword = localOrEnvironment("KEY_PASSWORD")
+val hasReleaseSigningConfig = listOf(
+    releaseKeystorePath,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword
+).all(String::isNotBlank)
+
+val useFullReleaseOptimization = providers.gradleProperty("liftrix.fullReleaseOptimization")
+    .orNull
+    ?.toBooleanStrictOrNull()
+    ?: false
+
+if (!hasReleaseSigningConfig && listOf(
+        releaseKeystorePath,
+        releaseKeystorePassword,
+        releaseKeyAlias,
+        releaseKeyPassword
+    ).any(String::isNotBlank)
+) {
+    logger.warn("Release signing configuration is incomplete; release APKs will be unsigned.")
+}
 
 // Dependency resolution strategies for deterministic builds
 configurations.all {
@@ -105,11 +133,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.liftrix.app"
+        applicationId = releasePackageId
         minSdk = 26
         targetSdk = 35
-        versionCode = 10001
-        versionName = "1.0.1"
+        versionCode = releaseVersionCode
+        versionName = releaseVersionName
 
         buildConfigField("String", "APP_VERSION_NAME", buildConfigString(versionName ?: "unknown"))
         buildConfigField("int", "APP_VERSION_CODE", versionCode.toString())
@@ -142,43 +170,29 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            // Use environment variables for CI/CD, fallback to local.properties for local development
-            val keystorePropertiesFile = rootProject.file("local.properties")
-            val keystoreProperties = Properties()
-
-            if (keystorePropertiesFile.exists()) {
-                keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+        if (hasReleaseSigningConfig) {
+            create("release") {
+                // Environment variables take precedence through localOrEnvironment().
+                storeFile = file(releaseKeystorePath)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
             }
-
-            val envKeystorePath: String? = System.getenv("KEYSTORE_PATH")
-            val envKeystorePassword: String? = System.getenv("KEYSTORE_PASSWORD")
-            val envKeyAlias: String? = System.getenv("KEY_ALIAS")
-            val envKeyPassword: String? = System.getenv("KEY_PASSWORD")
-
-            // SECURITY: Environment variables take precedence (for CI/CD)
-            // Fallback to local.properties for local development only
-            storeFile = file(
-                envKeystorePath
-                    ?: keystoreProperties.getProperty("KEYSTORE_PATH")
-                    ?: "../liftrix-release.keystore"
-            )
-            storePassword = envKeystorePassword
-                ?: keystoreProperties.getProperty("KEYSTORE_PASSWORD")
-            keyAlias = envKeyAlias
-                ?: keystoreProperties.getProperty("KEY_ALIAS")
-                ?: "liftrix"
-            keyPassword = envKeyPassword
-                ?: keystoreProperties.getProperty("KEY_PASSWORD")
         }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = true   // ✅ Re-enabled for APK optimization
-            isShrinkResources = true // ✅ Re-enabled for resource optimization
+            isMinifyEnabled = true
+            isShrinkResources = useFullReleaseOptimization
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
+                getDefaultProguardFile(
+                    if (useFullReleaseOptimization) {
+                        "proguard-android-optimize.txt"
+                    } else {
+                        "proguard-android.txt"
+                    }
+                ),
                 "proguard-rules.pro"
             )
             
@@ -199,7 +213,9 @@ android {
             buildConfigField("boolean", "ENABLE_STRICT_MODE", "false")
             buildConfigField("boolean", "ENABLE_FIREBASE_PERFORMANCE", "true")
             buildConfigField("boolean", "ENABLE_CRASHLYTICS", "true")
-            signingConfig = signingConfigs.getByName("release")  // ADD THIS LINE
+            if (hasReleaseSigningConfig) {
+                signingConfig = signingConfigs.getByName("release")
+            }
 
             // Release mapping upload is required so production crashes remain retraceable.
             configure<CrashlyticsExtension> {
@@ -311,6 +327,33 @@ android {
     }
 }
 
+tasks.register("writeReleaseIdentity") {
+    group = "build setup"
+    description = "Writes the canonical nonsecret release package and version for CI verification"
+
+    val identityFile = layout.buildDirectory.file("release-identity/release.properties")
+    inputs.property("releasePackageId", releasePackageId)
+    inputs.property("releaseVersionCode", releaseVersionCode)
+    inputs.property("releaseVersionName", releaseVersionName)
+    outputs.file(identityFile)
+
+    doLast {
+        val packageId = inputs.properties.getValue("releasePackageId").toString()
+        val versionCode = inputs.properties.getValue("releaseVersionCode").toString()
+        val versionName = inputs.properties.getValue("releaseVersionName").toString()
+
+        outputs.files.singleFile.apply {
+            parentFile.mkdirs()
+            writeText(
+                "RELEASE_PACKAGE_ID=$packageId\n" +
+                    "RELEASE_VERSION_CODE=$versionCode\n" +
+                    "RELEASE_VERSION_NAME=$versionName\n"
+            )
+        }
+    }
+}
+
+
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 
@@ -345,7 +388,6 @@ dependencies {
     implementation(project(":feature:settings"))
     implementation(project(":feature:social"))
     implementation(project(":feature:workout"))
-    baselineProfile(project(":baselineprofile"))
 
     implementation(libs.androidx.core.ktx)
     implementation("androidx.core:core-splashscreen:1.0.1")
@@ -484,6 +526,8 @@ dependencies {
     
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
+    testImplementation(project(":core:network"))
+    testImplementation(libs.hilt.android.testing)
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
     testImplementation(libs.androidx.core.testing)
     testImplementation(libs.app.turbine)

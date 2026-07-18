@@ -14,6 +14,7 @@ import com.example.liftrix.domain.usecase.exercise.ExerciseQueryUseCase
 import com.example.liftrix.domain.usecase.profile.ProfileQueryUseCase
 import com.example.liftrix.domain.usecase.template.TemplateCommandUseCase
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -92,7 +93,7 @@ class GenerateWorkoutProgramUseCaseParsingTest {
         assertTrue(request.normalizedConstraints.allowedEquipment.contains(Equipment.DUMBBELLS))
         assertTrue(request.normalizedConstraints.allowedEquipment.contains(Equipment.BARBELL))
         assertTrue(request.normalizedConstraints.allowedEquipment.contains(Equipment.CABLE_MACHINE))
-        assertFalse(request.normalizedConstraints.allowedEquipment.contains(Equipment.BODYWEIGHT_ONLY))
+        assertTrue(request.normalizedConstraints.allowedEquipment.contains(Equipment.BODYWEIGHT_ONLY))
     }
 
     @Test
@@ -104,7 +105,7 @@ class GenerateWorkoutProgramUseCaseParsingTest {
     }
 
     @Test
-    fun `invoke returns failure reason when generation and repair fail validation`() = runTest {
+    fun `invoke repairs deterministic day count locally without remote repair`() = runTest {
         coEvery { profileQueryUseCase.getById("user-1") } returns Result.success(null)
         coEvery { exerciseQueryUseCase.invoke() } returns Result.success(dumbbellCatalog)
         coEvery {
@@ -132,37 +133,34 @@ class GenerateWorkoutProgramUseCaseParsingTest {
             language = Language.ENGLISH
         )
 
-        assertTrue(result.isFailure)
-        val error = result.exceptionOrNull()
-        assertTrue(error is LiftrixError.BusinessLogicError)
-        val businessError = error as LiftrixError.BusinessLogicError
-        assertEquals("AI_WORKOUT_GENERATION_INVALID", businessError.code)
-        assertTrue(businessError.errorMessage.contains("days count", ignoreCase = true))
-        assertTrue(businessError.errorMessage.contains("Repair failed", ignoreCase = true))
+        assertTrue(result.isSuccess)
+        val generationResult = result.getOrThrow()
+        assertEquals(3, generationResult.program.days.size)
+        assertEquals(0, generationResult.repairAttempts)
+        coVerify(exactly = 0) {
+            generationService.repairProgramJson(any(), any(), any(), any(), any(), any(), any())
+        }
     }
 
     private fun parseProgram(json: String): Result<GeneratedWorkoutProgram> {
-        val method = GenerateWorkoutProgramUseCase::class.java.getDeclaredMethod(
-            "parseProgram",
-            String::class.java,
-            List::class.java
-        )
+        val method = GenerateWorkoutProgramUseCase::class.java.declaredMethods.single {
+            it.name.startsWith("parseProgram") &&
+                it.parameterTypes.contentEquals(arrayOf(String::class.java, List::class.java))
+        }
         method.isAccessible = true
+        val unboxedResult = method.invoke(useCase, json, catalog)
+        val boxMethod = Result::class.java.declaredMethods.single { it.name == "box-impl" }
+        boxMethod.isAccessible = true
         @Suppress("UNCHECKED_CAST")
-        return method.invoke(useCase, json, catalog) as Result<GeneratedWorkoutProgram>
+        return boxMethod.invoke(null, unboxedResult) as Result<GeneratedWorkoutProgram>
     }
 
     private fun buildRequest(prompt: String): WorkoutGenerationRequest {
-        val method = GenerateWorkoutProgramUseCase::class.java.getDeclaredMethod(
-            "buildRequest",
-            String::class.java,
-            String::class.java,
-            Language::class.java,
-            com.example.liftrix.domain.model.UserProfile::class.java,
-            Boolean::class.javaPrimitiveType!!
-        )
+        val method = GenerateWorkoutProgramUseCase::class.java.declaredMethods.single {
+            it.name == "buildRequest" && it.parameterCount == 6
+        }
         method.isAccessible = true
-        return method.invoke(useCase, "user-1", prompt, Language.ENGLISH, null, false) as WorkoutGenerationRequest
+        return method.invoke(useCase, "user-1", prompt, Language.ENGLISH, null, false, null) as WorkoutGenerationRequest
     }
 
     private fun validProgramJson(dayField: String): String =

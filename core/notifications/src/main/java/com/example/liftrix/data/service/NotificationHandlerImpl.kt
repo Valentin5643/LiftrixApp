@@ -1,13 +1,18 @@
 package com.example.liftrix.data.service
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.app.AlarmManager
+import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.example.liftrix.domain.service.NotificationHandler
 import com.example.liftrix.services.NotificationChannelManager
 import com.google.firebase.messaging.RemoteMessage
@@ -106,7 +111,10 @@ class NotificationHandlerImpl @Inject constructor(
         activeNotifications[type] = notificationId
         
         try {
-            notificationManager.notify(notificationId, builder.build())
+            if (!postNotification(notificationId, builder.build())) {
+                activeNotifications.remove(type)
+                return
+            }
             
             // Create group summary if we have multiple notifications
             createGroupSummaryIfNeeded()
@@ -166,8 +174,9 @@ class NotificationHandlerImpl @Inject constructor(
             .setGroup(NOTIFICATION_GROUP_KEY)
         
         try {
-            notificationManager.notify(notificationId, builder.build())
-            Timber.d("Updated notification $notificationId with new content")
+            if (postNotification(notificationId, builder.build())) {
+                Timber.d("Updated notification $notificationId with new content")
+            }
         } catch (e: SecurityException) {
             Timber.e(e, "Failed to update notification due to security restrictions")
         }
@@ -203,8 +212,9 @@ class NotificationHandlerImpl @Inject constructor(
         
         // Show group summary
         try {
-            notificationManager.notify(GROUP_SUMMARY_ID, groupBuilder.build())
-            Timber.d("Created notification group: $summaryTitle")
+            if (postNotification(GROUP_SUMMARY_ID, groupBuilder.build())) {
+                Timber.d("Created notification group: $summaryTitle")
+            }
         } catch (e: SecurityException) {
             Timber.e(e, "Failed to create notification group due to security restrictions")
         }
@@ -277,6 +287,22 @@ class NotificationHandlerImpl @Inject constructor(
     // ========================================
     // Helper Methods
     // ========================================
+
+    @SuppressLint("MissingPermission")
+    private fun postNotification(notificationId: Int, notification: Notification): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                Timber.w("Notification permission is not granted; skipping notification $notificationId")
+                return false
+            }
+        }
+
+        notificationManager.notify(notificationId, notification)
+        return true
+    }
 
     private fun getChannelIdForNotificationType(type: String): String {
         return when (type) {
@@ -367,7 +393,7 @@ class NotificationHandlerImpl @Inject constructor(
                 .setAutoCancel(true)
             
             try {
-                notificationManager.notify(GROUP_SUMMARY_ID, summaryBuilder.build())
+                postNotification(GROUP_SUMMARY_ID, summaryBuilder.build())
             } catch (e: SecurityException) {
                 Timber.e(e, "Failed to create group summary due to security restrictions")
             }

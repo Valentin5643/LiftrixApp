@@ -1,19 +1,19 @@
 package com.example.liftrix.widget
 
 import androidx.glance.unit.ColorProvider
-import com.example.liftrix.R
+import androidx.compose.ui.graphics.Color
 
 object LiftrixWidgetTheme {
-    val background = ColorProvider(R.color.widget_background)
-    val surface = ColorProvider(R.color.widget_surface)
-    val onBackground = ColorProvider(R.color.widget_on_background)
-    val onSurfaceVariant = ColorProvider(R.color.widget_on_surface_variant)
-    val onSurfaceSubtle = ColorProvider(R.color.widget_on_surface_subtle)
-    val brand = ColorProvider(R.color.widget_brand)
-    val brandSoft = ColorProvider(R.color.widget_brand_soft)
-    val tealLight = ColorProvider(R.color.widget_teal_light)
-    val zeroValue = ColorProvider(R.color.widget_zero_value)
-    val streak = ColorProvider(R.color.widget_streak)
-    val success = ColorProvider(R.color.widget_success)
-    val pr = ColorProvider(R.color.widget_pr)
+    val background = ColorProvider(Color(0xFF0F0F0F))
+    val surface = ColorProvider(Color(0xFF17191A))
+    val onBackground = ColorProvider(Color(0xFFFFFFFF))
+    val onSurfaceVariant = ColorProvider(Color(0xFFB3B3B3))
+    val onSurfaceSubtle = ColorProvider(Color(0xFF888888))
+    val brand = ColorProvider(Color(0xFF00BCD4))
+    val brandSoft = ColorProvider(Color(0xFF083E4D))
+    val tealLight = ColorProvider(Color(0xFF67E8F9))
+    val zeroValue = ColorProvider(Color(0xFF888888))
+    val streak = ColorProvider(Color(0xFF00BCD4))
+    val success = ColorProvider(Color(0xFF00BCD4))
+    val pr = ColorProvider(Color(0xFF00BCD4))
 }

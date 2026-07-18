@@ -37,10 +37,11 @@ fun ResponsiveContainer(
         modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.TopCenter
     ) {
-        val screenSize = remember(maxWidth) {
+        val availableWidth = this.maxWidth
+        val screenSize = remember(availableWidth) {
             when {
-                maxWidth < 600.dp -> ScreenSize.Compact
-                maxWidth < 905.dp -> ScreenSize.Medium
+                availableWidth < 600.dp -> ScreenSize.Compact
+                availableWidth < 905.dp -> ScreenSize.Medium
                 else -> ScreenSize.Expanded
             }
         }
@@ -291,4 +292,4 @@ fun rememberScreenSize(): ScreenSize {
             else -> ScreenSize.Expanded
         }
     }
-} 
+}

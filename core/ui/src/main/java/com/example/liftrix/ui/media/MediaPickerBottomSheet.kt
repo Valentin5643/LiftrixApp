@@ -48,7 +48,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -324,11 +323,11 @@ private fun MediaGridContent(
     mediaType: MediaType
 ) {
     // Load media items from gallery
-    val mediaItems by produceState<List<GalleryItem>>(
-        initialValue = emptyList(),
-        key1 = mediaType
-    ) {
-        value = loadMediaFromGallery(mediaType)
+    var mediaItems by remember(mediaType) {
+        mutableStateOf<List<GalleryItem>>(emptyList())
+    }
+    LaunchedEffect(mediaType) {
+        mediaItems = loadMediaFromGallery(mediaType)
     }
     
     LazyVerticalGrid(

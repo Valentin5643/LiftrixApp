@@ -1,3 +1,5 @@
+> **InfoEducatie 2026:** [Open the jury package](./00_InfoEducatie_2026/)
+
 <div align="center">
   
 # 💪 Liftrix

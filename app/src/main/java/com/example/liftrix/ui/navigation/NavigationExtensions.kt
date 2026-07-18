@@ -246,7 +246,7 @@ fun NavController.navigateToPostComments(postId: String) {
  * Navigate to template creation screen
  */
 fun NavController.navigateToTemplateCreation() {
-    navigate(LiftrixRoute.TemplateCreation)
+    navigate(LiftrixRoute.TemplateCreation())
 }
 
 /**

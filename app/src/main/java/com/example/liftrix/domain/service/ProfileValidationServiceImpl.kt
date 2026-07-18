@@ -336,10 +336,8 @@ class ProfileValidationServiceImpl @Inject constructor() : ProfileValidationServ
             violations.add("Profile image format not supported. Allowed formats: JPEG, PNG, WebP")
         }
 
-        // Note: Dimension validation would require BitmapFactory which is Android-specific
-        // and should be done in the repository/data layer, not in this domain service.
-        // We can add a placeholder comment for this.
-        // TODO: Dimension validation should be done in the repository layer with BitmapFactory
+        // Image dimensions are decoded and validated in the Android repository layer;
+        // this domain service validates only transport-safe metadata and content presence.
 
         return if (violations.isEmpty()) {
             Result.success(Unit)

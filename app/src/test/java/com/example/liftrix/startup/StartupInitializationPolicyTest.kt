@@ -9,7 +9,9 @@ import kotlin.test.assertTrue
 
 class StartupInitializationPolicyTest {
 
-    private val root = Paths.get("").toAbsolutePath()
+    private val root = generateSequence(Paths.get("").toAbsolutePath()) { it.parent }
+        .firstOrNull { Files.exists(it.resolve("settings.gradle.kts")) }
+        ?: error("Could not locate repository root")
 
     @Test
     fun databaseProviderDoesNotBlockForSeedInitialization() {

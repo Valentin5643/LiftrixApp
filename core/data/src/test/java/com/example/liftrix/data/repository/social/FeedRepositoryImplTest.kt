@@ -18,7 +18,6 @@ import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.service.FeedCacheService
 import com.example.liftrix.domain.sync.SyncScheduler
 import io.mockk.Runs
-import io.mockk.capture
 import io.mockk.coEvery
 import io.mockk.coVerifyOrder
 import io.mockk.every

@@ -420,8 +420,8 @@ class ExportWorker @AssistedInject constructor(
      */
     private fun generateFilename(format: String, userId: String, dateRange: TimeRange): String {
         val userIdSafe = userId.take(8)
-        val startDate = java.time.LocalDate.ofInstant(dateRange.startDate.toInstant(), java.time.ZoneOffset.UTC)
-        val endDate = java.time.LocalDate.ofInstant(dateRange.endDate.toInstant(), java.time.ZoneOffset.UTC)
+        val startDate = dateRange.startDate.toInstant().atZone(java.time.ZoneOffset.UTC).toLocalDate()
+        val endDate = dateRange.endDate.toInstant().atZone(java.time.ZoneOffset.UTC).toLocalDate()
         val timestamp = System.currentTimeMillis()
         
         return "liftrix_export_${userIdSafe}_${startDate}_${endDate}_${timestamp}.${format}"

@@ -60,8 +60,8 @@ class ProgressReportFileManagerImpl @Inject constructor(
             )
         }
     ) {
-        check(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            "Saving directly to Downloads requires Android 10 or later"
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            throw IllegalStateException("Saving directly to Downloads requires Android 10 or later")
         }
         val sourceFile = File(filePath)
         val values = ContentValues().apply {

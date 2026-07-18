@@ -774,8 +774,8 @@ private fun ErrorContent(
 
 private fun formatDuration(duration: Duration): String {
     val hours = duration.toHours()
-    val minutes = duration.toMinutesPart()
-    val seconds = duration.toSecondsPart()
+    val minutes = duration.toMinutes() % 60
+    val seconds = duration.seconds % 60
     
     return when {
         hours > 0 -> String.format("%dh %02dm %02ds", hours, minutes, seconds)
@@ -786,11 +786,10 @@ private fun formatDuration(duration: Duration): String {
 
 private fun formatRestTime(duration: Duration): String {
     val minutes = duration.toMinutes()
-    val seconds = duration.toSecondsPart()
+    val seconds = duration.seconds % 60
     
     return when {
         minutes > 0 -> String.format("%d:%02d", minutes, seconds)
         else -> String.format("%ds", seconds)
     }
 }
-

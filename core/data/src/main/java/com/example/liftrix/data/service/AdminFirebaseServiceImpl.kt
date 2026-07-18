@@ -6,7 +6,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.functions.ktx.functions
 import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.*
@@ -39,20 +41,26 @@ class AdminFirebaseServiceImpl @Inject constructor(
         private const val FUNCTION_SEARCH_USERS = "searchUsers"
         private const val FUNCTION_LIST_BANNED_USERS = "listBannedUsers"
         private const val FUNCTION_GET_ADMIN_LOGS = "getAdminLogs"
+        private const val ADMIN_CLAIM_REFRESH_TIMEOUT_MS = 5_000L
     }
     
     override suspend fun checkAdminPermissions(userId: String): Boolean {
         return try {
             val user = firebaseAuth.currentUser ?: return false
-            val tokenResult = user.getIdToken(true).await()
+            if (user.uid != userId) return false
+
+            val tokenResult = withTimeoutOrNull(ADMIN_CLAIM_REFRESH_TIMEOUT_MS) {
+                user.getIdToken(true).await()
+            } ?: return false
             val claims = tokenResult.claims
-            
             val isAdmin = claims["admin"] as? Boolean ?: false
-            
-            Timber.d("Admin permission check for user $userId: $isAdmin")
+
+            Timber.d("Admin permission check completed: isAdmin=%s", isAdmin)
             isAdmin
+        } catch (error: CancellationException) {
+            throw error
         } catch (e: Exception) {
-            Timber.e(e, "Error checking admin permissions for user: $userId")
+            Timber.w("Admin permission check failed: reason=%s", e.javaClass.simpleName)
             false
         }
     }

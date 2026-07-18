@@ -6,7 +6,6 @@
  */
 
 const { initializeApp } = require('firebase-admin/app');
-const { getFunctions } = require('firebase-admin/functions');
 const { getAuth } = require('firebase-admin/auth');
 
 // Initialize with project ID (will use default credentials)

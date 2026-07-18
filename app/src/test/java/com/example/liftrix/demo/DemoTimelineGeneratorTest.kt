@@ -15,7 +15,7 @@ class DemoTimelineGeneratorTest {
 
         assertThat(second.workouts).isEqualTo(first.workouts)
         assertThat(second.personalRecords).isEqualTo(first.personalRecords)
-        assertThat(first.workouts).hasSizeAtLeast(75)
+        assertThat(first.workouts.size).isAtLeast(75)
     }
 
     @Test

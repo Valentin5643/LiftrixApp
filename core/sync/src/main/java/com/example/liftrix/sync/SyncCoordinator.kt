@@ -250,19 +250,18 @@ class SyncCoordinator @Inject constructor(
      * Trigger immediate sync using UnifiedSyncWorker
      */
     private suspend fun triggerUnifiedImmediateSync(userId: String): LiftrixResult<Unit> {
-        val chatSync = ChatSyncWorker.createWorkRequest(userId)
         val immediateSync = UnifiedSyncWorker.createImmediateWorkRequest(userId)
         val workName = "${UNIFIED_SYNC_WORK_NAME}_immediate_$userId"
 
-        val operation = workManager.beginUniqueWork(
+        val operation = workManager.enqueueUniqueWork(
             workName,
             ExistingWorkPolicy.KEEP,
-            chatSync
-        ).then(immediateSync).enqueue()
-        Timber.tag("FreshLoginRestoreDebug").i(
-            "operation=SYNC_COORDINATOR_IMMEDIATE_ENQUEUED userId=$userId uniqueWork=$workName policy=KEEP workers=ChatSyncWorker->UnifiedSyncWorker timestamp=${System.currentTimeMillis()}"
+            immediateSync
         )
-        
+        Timber.tag("FreshLoginRestoreDebug").i(
+            "operation=SYNC_COORDINATOR_IMMEDIATE_REQUIRED_ENQUEUED userId=$userId uniqueWork=$workName policy=KEEP worker=UnifiedSyncWorker timestamp=${System.currentTimeMillis()}"
+        )
+
         startWorkMonitoring(
             operation = operation,
             workName = workName,
@@ -270,7 +269,13 @@ class SyncCoordinator @Inject constructor(
             userId = userId,
             startupWork = false
         )
-        
+
+        enqueueOptionalChatSync(
+            userId = userId,
+            workName = ChatSyncWorker.getImmediateWorkName(userId),
+            scope = "immediate"
+        )
+
         Timber.d("SyncCoordinator: Unified immediate sync work enqueued for user $userId")
         return liftrixSuccess(Unit)
     }
@@ -435,6 +440,8 @@ class SyncCoordinator @Inject constructor(
             workManager.cancelUniqueWork("${UNIFIED_SYNC_WORK_NAME}_periodic_$userId")
             workManager.cancelUniqueWork("${UNIFIED_SYNC_WORK_NAME}_immediate_$userId")
             workManager.cancelUniqueWork(ChatSyncWorker.getPeriodicWorkName(userId))
+            workManager.cancelUniqueWork(ChatSyncWorker.getImmediateWorkName(userId))
+            workManager.cancelUniqueWork(ChatSyncWorker.getStartupWorkName(userId))
             
             // Cancel legacy sync operations (for backward compatibility)
             workManager.cancelUniqueWork("liftrix_periodic_sync_$userId")
@@ -609,32 +616,37 @@ class SyncCoordinator @Inject constructor(
                 forceSync = true,
                 startupSync = true
             )
-            val startupChatSync = ChatSyncWorker.createWorkRequest(userId)
-
-            val operation = workManager.beginUniqueWork(
+            val operation = workManager.enqueueUniqueWork(
                 workName,
                 ExistingWorkPolicy.KEEP,
-                startupChatSync
-            ).then(startupUnifiedSync).enqueue()
+                startupUnifiedSync
+            )
             Timber.tag("StartupRestoreFix").i(
                 "[TEMPLATE-LOAD] operation=STARTUP_SYNC_ENQUEUE_POLICY userId=$userId source=$source workName=$workName policy=KEEP previousPolicy=REPLACE reason=preserve_running_restore timestamp=${System.currentTimeMillis()}"
             )
             Timber.tag("StartupRestoreFix").i(
-                "[TEMPLATE-LOAD] operation=STARTUP_SYNC_ENQUEUED_ONCE userId=$userId source=$source workName=$workName workers=ChatSyncWorker->UnifiedSyncWorker queuedFetchTypes=${STARTUP_FETCH_ENTITY_TYPES.joinToString(",")} timestamp=${System.currentTimeMillis()}"
+                "[TEMPLATE-LOAD] operation=STARTUP_SYNC_REQUIRED_ENQUEUED userId=$userId source=$source workName=$workName worker=UnifiedSyncWorker queuedFetchTypes=${STARTUP_FETCH_ENTITY_TYPES.joinToString(",")} timestamp=${System.currentTimeMillis()}"
             )
-            Timber.tag("FreshLoginRestoreDebug").i(
-                "operation=SYNC_COORDINATOR_STARTUP_ENQUEUED userId=$userId uniqueWork=startup_sync_$userId policy=KEEP workers=ChatSyncWorker->UnifiedSyncWorker timestamp=${System.currentTimeMillis()}"
-            )
-            
+
             // Observe the durable startup work without taking ownership of its lifetime.
             startWorkMonitoring(
                 operation = operation,
-                workName = "startup_sync_$userId",
+                workName = workName,
                 workId = startupUnifiedSync.id,
                 userId = userId,
                 startupWork = true
             )
-            
+
+            val chatWorkName = ChatSyncWorker.getStartupWorkName(userId)
+            val chatEnqueueAccepted = enqueueOptionalChatSync(
+                userId = userId,
+                workName = chatWorkName,
+                scope = "startup"
+            )
+            Timber.tag("FreshLoginRestoreDebug").i(
+                "operation=SYNC_COORDINATOR_STARTUP_ENQUEUED userId=$userId requiredUniqueWork=$workName optionalChatUniqueWork=$chatWorkName policy=KEEP optionalChatAccepted=$chatEnqueueAccepted timestamp=${System.currentTimeMillis()}"
+            )
+
             Timber.i("SyncCoordinator: Startup sync work enqueued for user $userId")
             
             liftrixSuccess(Unit)
@@ -740,6 +752,56 @@ class SyncCoordinator @Inject constructor(
             "settings" -> "settings" to SyncOperationManager.PRIORITY_MEDIUM
             "chat" -> "chat" to SyncOperationManager.PRIORITY_LOW
             else -> null
+        }
+    }
+
+    private fun enqueueOptionalChatSync(
+        userId: String,
+        workName: String,
+        scope: String
+    ): Boolean {
+        return try {
+            val operation = workManager.enqueueUniqueWork(
+                workName,
+                ExistingWorkPolicy.KEEP,
+                ChatSyncWorker.createWorkRequest(userId)
+            )
+            Timber.i(
+                "SyncCoordinator: Optional chat sync submitted userId=$userId " +
+                    "scope=$scope workName=$workName policy=KEEP"
+            )
+            observeOptionalChatEnqueue(operation, userId, workName, scope)
+            true
+        } catch (e: Exception) {
+            Timber.w(
+                e,
+                "SyncCoordinator: Optional chat sync submission failed userId=$userId " +
+                    "scope=$scope workName=$workName; required sync remains unchanged"
+            )
+            false
+        }
+    }
+
+    private fun observeOptionalChatEnqueue(
+        operation: Operation,
+        userId: String,
+        workName: String,
+        scope: String
+    ) {
+        coordinatorScope.launch {
+            try {
+                operation.result.get()
+                Timber.d(
+                    "SyncCoordinator: Optional chat sync enqueue accepted userId=$userId " +
+                        "scope=$scope workName=$workName"
+                )
+            } catch (e: Exception) {
+                Timber.w(
+                    e,
+                    "SyncCoordinator: Optional chat sync enqueue failed userId=$userId " +
+                        "scope=$scope workName=$workName; required sync remains unchanged"
+                )
+            }
         }
     }
     

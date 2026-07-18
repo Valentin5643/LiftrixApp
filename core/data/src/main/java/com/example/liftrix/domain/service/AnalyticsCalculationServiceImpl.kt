@@ -1,12 +1,8 @@
 package com.example.liftrix.domain.service
 
 import com.example.liftrix.domain.model.Exercise
-import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.Reps
 import com.example.liftrix.domain.model.Workout
-import com.example.liftrix.domain.model.WorkoutId
-import com.example.liftrix.domain.model.analytics.RankingMetric
-import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.analytics.WorkoutMetrics
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
@@ -16,11 +12,6 @@ import com.example.liftrix.domain.usecase.analytics.ExerciseRanking
 import com.example.liftrix.domain.usecase.analytics.PerformanceTrend
 import com.example.liftrix.domain.usecase.analytics.PlateauStatus
 import com.example.liftrix.domain.usecase.analytics.RankedExercise
-import kotlinx.datetime.Clock
-import kotlinx.datetime.DatePeriod
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.minus
-import kotlinx.datetime.toLocalDateTime
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -186,87 +177,44 @@ class AnalyticsCalculationServiceImpl @Inject constructor() : AnalyticsCalculati
         val totalVolume = workout.calculateTotalVolume()
         val totalSets = workout.getTotalSets()
         val completedSets = workout.getCompletedSets()
-        var totalRepsCount = 0
-        for (exercise in workout.exercises) {
-            for (set in exercise.sets) {
-                try {
-                    // Handle Reps type which may have different getter
-                    val repsValue = when {
-                        set.reps is Number -> (set.reps as Number).toInt()
-                        set.reps != null -> set.reps.toString().toIntOrNull() ?: 0
-                        else -> 0
-                    }
-                    totalRepsCount += repsValue
-                } catch (e: Exception) {
-                    // Ignore conversion errors
-                }
-            }
+        val totalRepsCount = workout.exercises.sumOf { exercise ->
+            exercise.sets.sumOf { set -> set.reps?.count ?: 0 }
         }
         val averageIntensity = calculateAverageIntensity(workout.exercises)
         val duration = workout.getDuration()
         val completionPercentage = if (totalSets > 0) (completedSets.toDouble() / totalSets) * 100.0 else 0.0
-        val volumeEfficiency = if (duration != null) {
-            val durationMinutes = try {
-                duration.toMinutes().toDouble()
-            } catch (e: Exception) {
-                0.0
-            }
-            val volumeDoubleValue = if (totalVolume is Number) totalVolume.toDouble() else totalVolume.toString().toDoubleOrNull() ?: 0.0
-            if (durationMinutes > 0) (volumeDoubleValue / durationMinutes).toFloat() else 0.0f
-        } else 0.0f
-        // Categories will be set based on exercise types
-        @Suppress("UNCHECKED_CAST")
-        val categoriesSet = emptySet<Any>() as Set<Any>
-
-        // Convert java.time.LocalDate to kotlinx.datetime.LocalDate if needed
-        val workoutDate = if (workout.date is kotlinx.datetime.LocalDate) {
-            workout.date as kotlinx.datetime.LocalDate
+        val durationMinutes = duration?.toMinutes()?.toDouble() ?: 0.0
+        val volumeEfficiency = if (durationMinutes > 0.0) {
+            (totalVolume.kilograms / durationMinutes).toFloat()
         } else {
-            // Assume date is a string or compatible type - convert to LocalDate
-            try {
-                val javaDate = workout.date as? java.time.LocalDate
-                if (javaDate != null) {
-                    kotlinx.datetime.LocalDate(javaDate.year, javaDate.monthValue, javaDate.dayOfMonth)
-                } else {
-                    kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.UTC).date
-                }
-            } catch (e: Exception) {
-                kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.UTC).date
-            }
+            0.0f
         }
+        val workoutDate = kotlinx.datetime.LocalDate(
+            workout.date.year,
+            workout.date.monthValue,
+            workout.date.dayOfMonth
+        )
+        val categories = workout.exercises
+            .map { it.libraryExercise.primaryMuscleGroup }
+            .toSet()
 
-        // Build default/placeholder metrics since WorkoutMetrics constructor may vary
         Timber.d("Constructed metrics: volume=$totalVolume, sets=$totalSets, duration=$duration, reps=$totalRepsCount")
-        try {
-            // Create proper Reps instance from total reps count
-            val repsValue = Reps(totalRepsCount)
-
-            // Extract exercise categories from workout exercises
-            val categoriesValue: Set<ExerciseCategory> = workout.exercises
-                .map { it.libraryExercise.primaryMuscleGroup }
-                .toSet()
-
-            WorkoutMetrics(
-                workoutId = workout.id.value,
-                userId = workout.userId,
-                date = workoutDate,
-                totalVolume = totalVolume,
-                sessionDuration = duration,
-                caloriesBurned = 0, // Will be calculated separately
-                exerciseCount = workout.exercises.size,
-                totalSets = totalSets,
-                completedSets = completedSets,
-                totalReps = repsValue,
-                completionPercentage = completionPercentage,
-                averageIntensity = averageIntensity.toFloat(),
-                volumeEfficiency = volumeEfficiency,
-                categories = categoriesValue
-            )
-        } catch (e: Exception) {
-            Timber.e("Failed to create WorkoutMetrics: ${e.message}")
-            // Return a minimal valid WorkoutMetrics instead of crashing
-            throw e
-        }
+        WorkoutMetrics(
+            workoutId = workout.id.value,
+            userId = workout.userId,
+            date = workoutDate,
+            totalVolume = totalVolume,
+            sessionDuration = duration,
+            caloriesBurned = 0,
+            exerciseCount = workout.exercises.size,
+            totalSets = totalSets,
+            completedSets = completedSets,
+            totalReps = Reps(totalRepsCount),
+            completionPercentage = completionPercentage,
+            averageIntensity = averageIntensity.toFloat(),
+            volumeEfficiency = volumeEfficiency,
+            categories = categories
+        )
     }
 
     override fun calculateOneRepMax(weight: Double, reps: Int): Double {
@@ -326,14 +274,11 @@ class AnalyticsCalculationServiceImpl @Inject constructor() : AnalyticsCalculati
     private fun calculateAverageIntensity(exercises: List<Exercise>): Double {
         if (exercises.isEmpty()) return 0.0
 
-        val totalIntensity = exercises.sumOf { exercise ->
-            exercise.sets.sumOf { set ->
-                (set.weight?.kilograms ?: 0.0)
-            }
-        }
+        val normalizedRpeValues = exercises
+            .flatMap { it.sets }
+            .mapNotNull { set -> set.rpe?.value?.div(10.0) }
 
-        val totalSets = exercises.sumOf { it.sets.size }
-        return if (totalSets > 0) totalIntensity / totalSets else 0.0
+        return normalizedRpeValues.takeIf { it.isNotEmpty() }?.average() ?: 0.5
     }
 
     private fun calculateVolumeGrowthPercentage(exercise: ExercisePerformanceData): Float? {

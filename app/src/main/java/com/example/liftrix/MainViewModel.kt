@@ -7,6 +7,8 @@ import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.usecase.admin.CheckAdminPermissionsUseCase
 import com.example.liftrix.domain.usecase.profile.ProfileQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,6 +34,11 @@ class MainViewModel @Inject constructor(
     
     // Track if we're in an explicit authentication flow (from AuthActivity)
     private var isExplicitAuthFlow = false
+    private var activeUserId: String? = null
+    private var profileReadinessJob: Job? = null
+    private var aiAccessEligibilityJob: Job? = null
+    private var profileJobToken: Any? = null
+    private var aiJobToken: Any? = null
 
     init {
         observeAuthState()
@@ -46,88 +53,141 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             authRepository.currentUser.collect { user ->
                 if (user == null) {
+                    clearUserJobs()
+                    _authState.value = AuthenticationState.Unauthenticated
+                    _profileReadiness.value = ProfileReadiness.NotRequired
                     _aiAccessEligibility.value = AiAccessEligibility.Ineligible
+                    Timber.d("User not authenticated")
                 } else if (isExplicitAuthFlow) {
+                    clearUserJobs()
+                    _profileReadiness.value = ProfileReadiness.NotRequired
                     _aiAccessEligibility.value = AiAccessEligibility.Loading
-                }
-
-                // Only update state if we're not in the middle of an explicit auth flow
-                // This prevents MainViewModel from overriding AuthViewModel's error states
-                if (!isExplicitAuthFlow) {
-                    _authState.value = if (user != null) {
-                        Timber.d("User authenticated (not during explicit auth): ${user.uid}")
-
-                        refreshAiAccessEligibility(user.uid)
-                        ensureProfileReady(user)
-
-                        AuthenticationState.Authenticated(user)
-                    } else {
-                        Timber.d("User not authenticated (not during explicit auth)")
-                        _aiAccessEligibility.value = AiAccessEligibility.Ineligible
-                        _profileReadiness.value = ProfileReadiness.NotRequired
-                        AuthenticationState.Unauthenticated
-                    }
-                } else {
                     Timber.d("Skipping auth state update during explicit auth flow. User: ${user?.uid ?: "null"}")
+                } else {
+                    beginAuthenticatedUser(user)
                 }
             }
         }
     }
 
-    private suspend fun refreshAiAccessEligibility(userId: String) {
+    private fun beginAuthenticatedUser(user: User) {
+        clearUserJobs()
+        activeUserId = user.uid
+
+        _authState.value = AuthenticationState.Authenticated(user)
+        _profileReadiness.value = ProfileReadiness.Checking(user.uid)
         _aiAccessEligibility.value = AiAccessEligibility.Loading
+        Timber.d("Authenticated user shell is ready")
 
-        val isAdmin = checkAdminPermissionsUseCase(userId).getOrElse {
-            false
+        val profileToken = Any()
+        profileJobToken = profileToken
+        profileReadinessJob = viewModelScope.launch {
+            ensureProfileReady(user, profileToken)
         }
-        val isStillAuthenticatedUser = runCatching {
-            authRepository.getCurrentUser()?.uid == userId
-        }.getOrDefault(false)
 
-        _aiAccessEligibility.value = if (isAdmin && isStillAuthenticatedUser) {
-            AiAccessEligibility.Eligible(userId)
-        } else {
-            AiAccessEligibility.Ineligible
+        val aiToken = Any()
+        aiJobToken = aiToken
+        aiAccessEligibilityJob = viewModelScope.launch {
+            refreshAiAccessEligibility(user.uid, aiToken)
         }
     }
 
-    private suspend fun ensureProfileReady(user: User) {
-        _profileReadiness.value = ProfileReadiness.Checking(user.uid)
+    private fun clearUserJobs() {
+        activeUserId = null
+        profileJobToken = null
+        aiJobToken = null
+        profileReadinessJob?.cancel()
+        aiAccessEligibilityJob?.cancel()
+        profileReadinessJob = null
+        aiAccessEligibilityJob = null
+    }
 
+    private suspend fun refreshAiAccessEligibility(userId: String, jobToken: Any) {
+        val isAdmin = checkAdminPermissionsUseCase(userId).getOrElse {
+            false
+        }
+        val isStillAuthenticatedUser = try {
+            authRepository.getCurrentUser()?.uid == userId
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            false
+        }
+
+        if (ownsAiJob(userId, jobToken)) {
+            _aiAccessEligibility.value = if (isAdmin && isStillAuthenticatedUser) {
+                AiAccessEligibility.Eligible(userId)
+            } else {
+                AiAccessEligibility.Ineligible
+            }
+        }
+    }
+
+    private suspend fun ensureProfileReady(user: User, jobToken: Any) {
         // AUTO-HEAL: Check if profile exists and create if missing.
         // This catches legacy users and interrupted onboarding scenarios.
         when (val existence = checkProfileExists(user.uid)) {
             ProfileExistence.Exists -> {
-                Timber.d("[AUTO-HEAL] Profile exists for ${user.uid}, no action needed")
-                _profileReadiness.value = ProfileReadiness.Ready(user.uid)
+                Timber.d("[AUTO-HEAL] Profile exists, no action needed")
+                publishProfileReadiness(user.uid, jobToken, ProfileReadiness.Ready(user.uid))
             }
 
             ProfileExistence.Missing -> {
-                Timber.w("[AUTO-HEAL] User profile missing for ${user.uid}, creating default profile")
+                Timber.w("[AUTO-HEAL] User profile missing, creating default profile")
                 authRepository.createUserProfile(user).fold(
                     onSuccess = {
-                        Timber.i("[AUTO-HEAL] Successfully created missing profile for ${user.uid}")
-                        _profileReadiness.value = ProfileReadiness.Ready(user.uid)
+                        Timber.i("[AUTO-HEAL] Successfully created missing profile")
+                        publishProfileReadiness(
+                            user.uid,
+                            jobToken,
+                            ProfileReadiness.Ready(user.uid)
+                        )
                     },
                     onFailure = { error ->
-                        Timber.e(error, "[AUTO-HEAL] Failed to create missing profile for ${user.uid}")
-                        _profileReadiness.value = ProfileReadiness.Error(
-                            userId = user.uid,
-                            message = "We couldn't prepare your profile. Please try again."
+                        if (error is CancellationException) throw error
+                        Timber.e(error, "[AUTO-HEAL] Failed to create missing profile")
+                        publishProfileReadiness(
+                            user.uid,
+                            jobToken,
+                            ProfileReadiness.Error(
+                                userId = user.uid,
+                                message = "We couldn't prepare your profile. Please try again."
+                            )
                         )
                     }
                 )
             }
 
             is ProfileExistence.Failure -> {
-                Timber.e(existence.error, "Failed to determine profile readiness for ${user.uid}")
-                _profileReadiness.value = ProfileReadiness.Error(
-                    userId = user.uid,
-                    message = "We couldn't verify your profile. Please try again."
+                if (existence.error is CancellationException) throw existence.error
+                Timber.e(existence.error, "Failed to determine profile readiness")
+                publishProfileReadiness(
+                    user.uid,
+                    jobToken,
+                    ProfileReadiness.Error(
+                        userId = user.uid,
+                        message = "We couldn't verify your profile. Please try again."
+                    )
                 )
             }
         }
     }
+
+    private fun publishProfileReadiness(
+        userId: String,
+        jobToken: Any,
+        readiness: ProfileReadiness
+    ) {
+        if (ownsProfileJob(userId, jobToken)) {
+            _profileReadiness.value = readiness
+        }
+    }
+
+    private fun ownsProfileJob(userId: String, jobToken: Any): Boolean =
+        activeUserId == userId && profileJobToken === jobToken
+
+    private fun ownsAiJob(userId: String, jobToken: Any): Boolean =
+        activeUserId == userId && aiJobToken === jobToken
 
     /**
      * Checks if a user profile exists in the database.
@@ -148,6 +208,8 @@ class MainViewModel @Inject constructor(
                     ProfileExistence.Failure(error)
                 }
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "Exception checking profile existence for $userId")
             ProfileExistence.Failure(e)
@@ -156,8 +218,15 @@ class MainViewModel @Inject constructor(
 
     fun retryProfileReadiness() {
         val user = (authState.value as? AuthenticationState.Authenticated)?.user ?: return
-        viewModelScope.launch {
-            ensureProfileReady(user)
+        if (activeUserId != user.uid) return
+
+        profileJobToken = null
+        profileReadinessJob?.cancel()
+        _profileReadiness.value = ProfileReadiness.Checking(user.uid)
+        val profileToken = Any()
+        profileJobToken = profileToken
+        profileReadinessJob = viewModelScope.launch {
+            ensureProfileReady(user, profileToken)
         }
     }
 

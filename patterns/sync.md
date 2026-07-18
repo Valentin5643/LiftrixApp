@@ -102,8 +102,12 @@ There is no current USE_UNIFIED_SYNC flag. SyncCoordinator directly schedules Un
 - Entry: SyncCoordinator.triggerImmediateSync(userId).
 - If StartupRestoreGate is incomplete, it does not enqueue work and returns a
   `RESTORE_IN_PROGRESS` business-logic failure.
-- Worker chain: ChatSyncWorker, then UnifiedSyncWorker. The chain fails closed if chat durability work fails.
-- Policy: KEEP.
+- Required work: UnifiedSyncWorker is enqueued first under liftrix_unified_sync_immediate_{userId},
+  monitored by its own request ID, and solely owns the core operation result.
+- Optional work: ChatSyncWorker is independently enqueued under chat_sync_work_immediate_{userId}.
+  Submission or worker failure is diagnostic/retryable chat state and cannot block, cancel, or fail the
+  required unified work.
+- Policy: KEEP for both user-scoped unique works.
 
 Callers must receive either an accepted enqueue result or an explicit failure. A scheduling path that
 declines to enqueue must never report success.
@@ -130,20 +134,25 @@ Startup is queue-driven and unified:
    - FOLLOW_RELATIONSHIP;
    - WORKOUT_POST;
    - ACHIEVEMENT.
-5. Enqueue ChatSyncWorker followed by UnifiedSyncWorker under startup_sync_{userId}.
-6. Use ExistingWorkPolicy.KEEP.
-7. ChatSyncWorker restores durable conversation metadata/messages first, then UnifiedSyncWorker/SyncOperationManager performs the remaining restore/reconciliation.
-8. Observe the durable request without imposing a work deadline. ENQUEUED, BLOCKED, RUNNING, and
+5. Enqueue UnifiedSyncWorker first under startup_sync_{userId}; monitor that required request directly.
+6. Independently enqueue ChatSyncWorker under chat_sync_work_startup_{userId}.
+7. Use ExistingWorkPolicy.KEEP for both user-scoped unique works. Chat submission or execution failure is
+   logged separately and does not change the required restore gate.
+8. UnifiedSyncWorker/SyncOperationManager restores and reconciles the required profile, workout, template,
+   social, and achievement data. ChatSyncWorker separately preserves its conversation privacy, tombstone,
+   message, preference, and retention ordering.
+9. Observe the durable required request without imposing a work deadline. ENQUEUED, BLOCKED, RUNNING, and
    WorkManager retry remain pending beyond any in-process observation interval.
-9. Transition the gate to RESTORE_COMPLETE only on successful startup work; FAILED and CANCELLED
-   terminal work transition it to RESTORE_FAILED.
+10. Transition the gate to RESTORE_COMPLETE only when the required unified startup work succeeds; FAILED
+    and CANCELLED required work transition it to RESTORE_FAILED. Optional chat state never owns this gate.
 
 Do not document or reintroduce the retired specialized startup worker chain.
 
 Local monitoring does not own durable work lifetime. Replacing or detaching an in-process observer may
 cancel only that observer job; it must not call `cancelUniqueWork` or otherwise mutate WorkManager work.
 Monitor cleanup is generation-safe so an older observer cannot release the guard for a newer request.
-Explicit account/logout cleanup remains authorized to cancel user-scoped work.
+Explicit account/logout cleanup remains authorized to cancel required and optional user-scoped work by
+their stable unique names and user tag.
 
 ### Legacy Compatibility
 
@@ -222,6 +231,31 @@ The active deployment sources are the root `firestore.rules`, `storage.rules`,
 - Realtime Database is selected by `firebase.json` and denied at the root for
   authenticated and unauthenticated clients until a separate owner-specific
   review approves a data model.
+
+### Account, Support, and Audit Contracts
+
+- `deletion_requests/{jobId}` is the only client account-deletion path. An
+  authenticated owner may create exactly one `PENDING` request whose `jobId`
+  matches the document ID and whose `userId` matches the caller. Clients cannot
+  read, update, or delete these documents; the Functions processor owns all
+  later status transitions and validates the same identity/shape before any
+  destructive work.
+- `support_tickets/{ticketId}` accepts only the current Room-sync payload for
+  the authenticated owner: matching `ticket_id`/`user_id`, bounded text and
+  optional device/app fields, `OPEN` initial status, `email_sent == false`,
+  typed timestamps, and a positive sync version. Client read/update/delete is
+  denied; Admin SDK processing owns email state.
+- Client-created `audit_logs` must bind `userId` to `request.auth.uid`. Audit
+  reads remain admin-only, and updates/deletes remain denied.
+- Functions predeploy runs semantic lint and offline unit tests. The Firestore
+  rules matrix and public-discovery integration run separately in emulators
+  before deploy. Run the rules matrix without the Functions emulator so valid
+  synthetic deletion/support creates cannot invoke destructive/email triggers;
+  then load Functions with the public-discovery regression.
+- Local rules/Functions source and local passing tests are candidate evidence,
+  never proof of deployed state. A release receipt must bind the explicit
+  project, commit, rules and Functions revisions, App Check/claim/config state,
+  backup, smoke results, and rollback baseline.
 
 ### AI Conversation Durability
 

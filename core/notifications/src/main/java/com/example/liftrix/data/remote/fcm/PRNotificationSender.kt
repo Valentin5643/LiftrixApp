@@ -28,6 +28,7 @@ class PRNotificationSender @Inject constructor(
         private const val NOTIFICATION_TYPE_GYM_BUDDY_PR = "GYM_BUDDY_PR"
         private const val NOTIFICATION_TYPE_GYM_BUDDY_WELCOME = "GYM_BUDDY_WELCOME"
         private const val HIGH_PRIORITY = "high"
+        private const val MAX_TTL_SECONDS = 24 * 60 * 60
     }
 
     /**
@@ -81,7 +82,7 @@ class PRNotificationSender @Inject constructor(
                 "sound" to "pr_celebration.mp3"
             ))
             .setMessageId("pr_${fromUserId}_${System.currentTimeMillis()}")
-            .setTtl(24 * 60 * 60 * 1000) // 24 hours TTL
+            .setTtl(MAX_TTL_SECONDS)
             .build()
         
         firebaseMessaging.send(message)
@@ -130,7 +131,7 @@ class PRNotificationSender @Inject constructor(
                 "sound" to "buddy_connect.mp3"
             ))
             .setMessageId("welcome_${fromUserId}_${System.currentTimeMillis()}")
-            .setTtl(7 * 24 * 60 * 60 * 1000) // 7 days TTL
+            .setTtl(MAX_TTL_SECONDS)
             .build()
         
         firebaseMessaging.send(message)

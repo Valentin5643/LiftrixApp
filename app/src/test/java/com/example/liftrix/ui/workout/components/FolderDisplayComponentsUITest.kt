@@ -156,7 +156,7 @@ class FolderDisplayComponentsUITest {
         verify(exactly = 1) { mockOnEditWorkout(testWorkouts[1]) }
         
         // Verify callbacks were called with correct parameters
-        verifySequence {
+        verifyOrder {
             mockOnStartWorkout(testWorkouts[0])
             mockOnEditWorkout(testWorkouts[1])
         }

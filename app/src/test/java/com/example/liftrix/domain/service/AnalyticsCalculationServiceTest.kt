@@ -1,14 +1,20 @@
 package com.example.liftrix.domain.service
 
+import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.Exercise
-import com.example.liftrix.domain.model.Set
+import com.example.liftrix.domain.model.ExerciseCategory
+import com.example.liftrix.domain.model.ExerciseId
+import com.example.liftrix.domain.model.ExerciseLibrary
+import com.example.liftrix.domain.model.ExerciseSet
+import com.example.liftrix.domain.model.ExerciseSetId
+import com.example.liftrix.domain.model.Reps
+import com.example.liftrix.domain.model.RPE
+import com.example.liftrix.domain.model.Weight
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.model.WorkoutStatus
-import com.example.liftrix.domain.model.common.Weight
 import com.example.liftrix.domain.usecase.analytics.ExercisePerformanceData
-import com.example.liftrix.domain.usecase.analytics.OneRmDataPoint
-import com.example.liftrix.domain.usecase.analytics.VolumeDataPoint
+import com.example.liftrix.domain.usecase.analytics.PerformanceDataPoint
 import io.mockk.junit4.MockKRule
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.Clock
@@ -21,7 +27,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import java.util.UUID
+import java.time.Instant
+import java.time.LocalDate
 
 /**
  * Comprehensive unit tests for AnalyticsCalculationServiceImpl.
@@ -271,24 +278,24 @@ class AnalyticsCalculationServiceTest {
                 exerciseId = "ex1",
                 exerciseName = "Squat",
                 volumeHistory = listOf(
-                    VolumeDataPoint(twoMonthsAgo, Weight.kilograms(1000.0)),
-                    VolumeDataPoint(now, Weight.kilograms(1500.0)) // 50% growth
+                    PerformanceDataPoint(date = twoMonthsAgo, volume = 1000.0),
+                    PerformanceDataPoint(date = now, volume = 1500.0) // 50% growth
                 ),
                 oneRmHistory = listOf(
-                    OneRmDataPoint(twoMonthsAgo, 100.0),
-                    OneRmDataPoint(now, 120.0) // 20% growth
+                    PerformanceDataPoint(date = twoMonthsAgo, oneRm = 100.0),
+                    PerformanceDataPoint(date = now, oneRm = 120.0) // 20% growth
                 )
             ),
             createPerformanceData(
                 exerciseId = "ex2",
                 exerciseName = "Bench",
                 volumeHistory = listOf(
-                    VolumeDataPoint(twoMonthsAgo, Weight.kilograms(800.0)),
-                    VolumeDataPoint(now, Weight.kilograms(880.0)) // 10% growth
+                    PerformanceDataPoint(date = twoMonthsAgo, volume = 800.0),
+                    PerformanceDataPoint(date = now, volume = 880.0) // 10% growth
                 ),
                 oneRmHistory = listOf(
-                    OneRmDataPoint(twoMonthsAgo, 80.0),
-                    OneRmDataPoint(now, 84.0) // 5% growth
+                    PerformanceDataPoint(date = twoMonthsAgo, oneRm = 80.0),
+                    PerformanceDataPoint(date = now, oneRm = 84.0) // 5% growth
                 )
             )
         )
@@ -315,12 +322,12 @@ class AnalyticsCalculationServiceTest {
                 exerciseId = "ex$index",
                 exerciseName = "Exercise $index",
                 volumeHistory = listOf(
-                    VolumeDataPoint(oneMonthAgo, Weight.kilograms(1000.0)),
-                    VolumeDataPoint(now, Weight.kilograms(1100.0))
+                    PerformanceDataPoint(date = oneMonthAgo, volume = 1000.0),
+                    PerformanceDataPoint(date = now, volume = 1100.0)
                 ),
                 oneRmHistory = listOf(
-                    OneRmDataPoint(oneMonthAgo, 100.0),
-                    OneRmDataPoint(now, 110.0)
+                    PerformanceDataPoint(date = oneMonthAgo, oneRm = 100.0),
+                    PerformanceDataPoint(date = now, oneRm = 110.0)
                 )
             )
         }
@@ -344,19 +351,19 @@ class AnalyticsCalculationServiceTest {
                 exerciseId = "ex1",
                 exerciseName = "Valid",
                 volumeHistory = listOf(
-                    VolumeDataPoint(now, Weight.kilograms(1000.0)),
-                    VolumeDataPoint(now, Weight.kilograms(1100.0))
+                    PerformanceDataPoint(date = now, volume = 1000.0),
+                    PerformanceDataPoint(date = now, volume = 1100.0)
                 ),
                 oneRmHistory = listOf(
-                    OneRmDataPoint(now, 100.0),
-                    OneRmDataPoint(now, 110.0)
+                    PerformanceDataPoint(date = now, oneRm = 100.0),
+                    PerformanceDataPoint(date = now, oneRm = 110.0)
                 )
             ),
             createPerformanceData(
                 exerciseId = "ex2",
                 exerciseName = "Insufficient",
-                volumeHistory = listOf(VolumeDataPoint(now, Weight.kilograms(1000.0))), // Only 1 data point
-                oneRmHistory = listOf(OneRmDataPoint(now, 100.0)) // Only 1 data point
+                volumeHistory = listOf(PerformanceDataPoint(date = now, volume = 1000.0)), // Only 1 data point
+                oneRmHistory = listOf(PerformanceDataPoint(date = now, oneRm = 100.0)) // Only 1 data point
             )
         )
 
@@ -394,15 +401,15 @@ class AnalyticsCalculationServiceTest {
         // Then
         assertTrue("Should return success", result.isSuccess)
         val metrics = result.getOrNull()!!
-        assertEquals(workout.id, metrics.workoutId)
+        assertEquals(workout.id.value, metrics.workoutId)
         assertEquals(3, metrics.totalSets)
-        assertEquals(30, metrics.totalReps) // 10 + 8 + 12
-        assertEquals(45, metrics.durationMinutes)
-        assertTrue("Total volume should be positive", metrics.totalVolume > 0.0)
+        assertEquals(30, metrics.totalReps.count) // 10 + 8 + 12
+        assertEquals(45L, metrics.sessionDuration?.toMinutes())
+        assertTrue("Total volume should be positive", metrics.totalVolume.kilograms > 0.0)
     }
 
     @Test
-    fun `calculateWorkoutMetrics estimates duration when not provided`() = runTest {
+    fun `calculateWorkoutMetrics preserves absent duration`() = runTest {
         // Given
         val workout = createWorkout(
             exercises = listOf(
@@ -420,7 +427,7 @@ class AnalyticsCalculationServiceTest {
         // Then
         assertTrue("Should return success", result.isSuccess)
         val metrics = result.getOrNull()!!
-        assertTrue("Duration should be estimated", metrics.durationMinutes > 0)
+        assertTrue("Duration should remain absent", metrics.sessionDuration == null)
     }
 
     @Test
@@ -440,8 +447,26 @@ class AnalyticsCalculationServiceTest {
 
         // Then
         val metrics = result.getOrNull()!!
-        assertTrue("Volume per minute should be calculated", metrics.volumePerMinute > 0.0)
-        assertTrue("Sets per minute should be calculated", metrics.setsPerMinute > 0.0)
+        assertTrue("Volume per minute should be calculated", metrics.volumeEfficiency > 0.0f)
+    }
+
+    @Test
+    fun `calculateWorkoutMetrics normalizes average RPE as intensity`() = runTest {
+        val workout = createWorkout(
+            exercises = listOf(
+                createExercise(
+                    sets = listOf(
+                        createSet(rpe = 6),
+                        createSet(rpe = 8)
+                    )
+                )
+            ),
+            durationMinutes = 30
+        )
+
+        val metrics = service.calculateWorkoutMetrics(workout).getOrThrow()
+
+        assertEquals(0.7f, metrics.averageIntensity, 0.001f)
     }
 
     // ========== One Rep Max Tests ==========
@@ -563,52 +588,67 @@ class AnalyticsCalculationServiceTest {
         exercises: List<Exercise>,
         durationMinutes: Int?
     ): Workout {
+        val workoutId = WorkoutId.generate()
+        val now = Instant.now()
         return Workout(
-            id = WorkoutId(UUID.randomUUID().toString()),
             userId = "test-user",
+            id = workoutId,
             name = "Test Workout",
-            exercises = exercises,
-            date = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date,
+            date = LocalDate.now(),
+            exercises = exercises.map { it.copy(workoutId = workoutId) },
             status = WorkoutStatus.COMPLETED,
-            durationMinutes = durationMinutes,
+            startTime = durationMinutes?.let { now.minusSeconds(it * 60L) },
+            endTime = durationMinutes?.let { now },
             notes = null,
-            isSynced = true,
-            syncVersion = 1L,
-            lastModified = Clock.System.now().toEpochMilliseconds()
+            createdAt = now,
+            updatedAt = now
         )
     }
 
     private fun createExercise(
-        sets: List<Set> = listOf(createSet())
+        sets: List<ExerciseSet> = listOf(createSet())
     ): Exercise {
         return Exercise(
-            id = UUID.randomUUID().toString(),
-            name = "Test Exercise",
-            sets = sets,
-            muscleGroup = "Legs",
-            equipmentType = "Barbell",
-            notes = null
+            id = ExerciseId.generate(),
+            workoutId = WorkoutId.generate(),
+            libraryExercise = ExerciseLibrary(
+                id = "test-exercise",
+                name = "Test Exercise",
+                primaryMuscleGroup = ExerciseCategory.QUADRICEPS,
+                equipment = Equipment.BARBELL,
+                secondaryMuscleGroups = emptyList(),
+                movementPattern = "squat",
+                difficultyLevel = 1,
+                instructions = null,
+                isCompound = true,
+                searchableTerms = listOf("test")
+            ),
+            orderIndex = 0,
+            sets = sets.mapIndexed { index, set -> set.copy(setNumber = index + 1) },
+            createdAt = Instant.now()
         )
     }
 
     private fun createSet(
         weight: Double = 100.0,
-        reps: Int = 10
-    ): Set {
-        return Set(
-            id = UUID.randomUUID().toString(),
-            weight = Weight.kilograms(weight),
-            reps = reps,
-            isCompleted = true,
-            restTimeSeconds = 90
+        reps: Int = 10,
+        rpe: Int? = null
+    ): ExerciseSet {
+        return ExerciseSet(
+            id = ExerciseSetId.generate(),
+            setNumber = 1,
+            weight = Weight.fromKilograms(weight),
+            reps = Reps(reps),
+            rpe = rpe?.let(::RPE),
+            completedAt = Instant.now()
         )
     }
 
     private fun createPerformanceData(
         exerciseId: String,
         exerciseName: String,
-        volumeHistory: List<VolumeDataPoint>,
-        oneRmHistory: List<OneRmDataPoint>
+        volumeHistory: List<PerformanceDataPoint>,
+        oneRmHistory: List<PerformanceDataPoint>
     ): ExercisePerformanceData {
         return ExercisePerformanceData(
             exerciseId = exerciseId,

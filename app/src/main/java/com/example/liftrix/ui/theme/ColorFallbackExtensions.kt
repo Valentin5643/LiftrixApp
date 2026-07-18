@@ -3,6 +3,7 @@ package com.example.liftrix.ui.theme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -164,8 +165,8 @@ fun DebugColorState(component: String) {
     val isDarkTheme = isSystemInDarkTheme()
     val currentPrimary = MaterialTheme.colorScheme.primary
     
-    // This will log information about the current color state
-    remember(isDarkTheme, currentPrimary) {
+    // Log only after composition succeeds; remember must return state, not perform effects.
+    SideEffect {
         val fallbackReport = buildString {
             appendLine("=== Color Debug: $component ===")
             appendLine("Dark theme: $isDarkTheme")
@@ -175,6 +176,5 @@ fun DebugColorState(component: String) {
         }
         
         timber.log.Timber.d(fallbackReport)
-        Unit
     }
 }

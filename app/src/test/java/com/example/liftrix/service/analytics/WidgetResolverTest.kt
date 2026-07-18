@@ -33,7 +33,7 @@ class WidgetResolverTest {
         val widgets = widgetResolver.resolveStandardWidgets(UserLevel.BEGINNER)
 
         // Then
-        assertEquals("Beginner should have the focused standard widget set", 3, widgets.size)
+        assertEquals("Beginner should have the focused standard widget set", 4, widgets.size)
         
         // Verify widgets are sorted by complexity and priority
         assertTrue("Beginner widgets should be sorted", widgets.isNotEmpty())
@@ -45,7 +45,7 @@ class WidgetResolverTest {
         val widgets = widgetResolver.resolveStandardWidgets(UserLevel.INTERMEDIATE)
 
         // Then
-        assertEquals("Intermediate should have the focused standard widget set", 3, widgets.size)
+        assertEquals("Intermediate should have the focused standard widget set", 4, widgets.size)
         
         // Verify widgets are sorted and valid
         assertTrue("Intermediate widgets should be sorted", widgets.isNotEmpty())
@@ -60,7 +60,7 @@ class WidgetResolverTest {
         val widgets = widgetResolver.resolveStandardWidgets(UserLevel.ADVANCED)
 
         // Then
-        assertEquals("Advanced should have the focused standard widget set", 3, widgets.size)
+        assertEquals("Advanced should have the focused standard widget set", 4, widgets.size)
         
         // Verify all widgets are active and valid
         widgets.forEach { widget ->
@@ -77,7 +77,7 @@ class WidgetResolverTest {
         )
 
         // Then
-        assertEquals("GRID mode should return the focused standard widget set", 3, widgets.size)
+        assertEquals("GRID mode should return the focused standard widget set", 4, widgets.size)
     }
 
     @Test
@@ -89,7 +89,7 @@ class WidgetResolverTest {
         )
 
         // Then
-        assertEquals("SECTIONS mode should return the focused standard widget set", 3, widgets.size)
+        assertEquals("SECTIONS mode should return the focused standard widget set", 4, widgets.size)
     }
 
     @Test
@@ -101,7 +101,7 @@ class WidgetResolverTest {
         )
 
         // Then
-        assertEquals("SECTIONS mode should return the focused standard widget set", 3, widgets.size)
+        assertEquals("SECTIONS mode should return the focused standard widget set", 4, widgets.size)
     }
 
     @Test
@@ -265,6 +265,6 @@ class WidgetResolverTest {
         )
 
         // Then should return standard widgets for the level
-        assertEquals("Should return the focused standard widget set with null preferences", 3, widgets.size)
+        assertEquals("Should return the focused standard widget set with null preferences", 4, widgets.size)
     }
 }

@@ -1,7 +1,7 @@
 package com.example.liftrix.di
 
-import com.example.liftrix.data.local.converter.UserIdConverter
 import com.example.liftrix.data.local.converter.UserIdConverterConfig
+import com.example.liftrix.data.local.converter.UserIdConverterConfigProvider
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.components.SingletonComponent

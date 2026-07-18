@@ -10,15 +10,8 @@
         <exclude domain="database" path="."/>
         <exclude domain="sharedpref" path="."/>
         <exclude domain="file" path="."/>
-        <exclude domain="cache" path="."/>
         <exclude domain="external" path="."/>
         <exclude domain="root" path="."/>
-        
-        <!-- Only allow non-sensitive app preferences -->
-        <include domain="sharedpref" path="androidx.preference"/>
-        <exclude domain="sharedpref" path="firebase"/>
-        <exclude domain="sharedpref" path="auth"/>
-        <exclude domain="sharedpref" path="encrypted"/>
     </cloud-backup>
     
     <device-transfer>
@@ -26,14 +19,7 @@
         <exclude domain="database" path="."/>
         <exclude domain="sharedpref" path="."/>
         <exclude domain="file" path="."/>
-        <exclude domain="cache" path="."/>
         <exclude domain="external" path="."/>
         <exclude domain="root" path="."/>
-        
-        <!-- Only allow basic app preferences -->
-        <include domain="sharedpref" path="androidx.preference"/>
-        <exclude domain="sharedpref" path="firebase"/>
-        <exclude domain="sharedpref" path="auth"/>
-        <exclude domain="sharedpref" path="encrypted"/>
     </device-transfer>
 </data-extraction-rules>

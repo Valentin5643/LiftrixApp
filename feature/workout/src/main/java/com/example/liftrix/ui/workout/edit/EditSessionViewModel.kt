@@ -340,7 +340,7 @@ private fun convertWorkoutToUnifiedSession(workout: Workout): UnifiedWorkoutSess
             UnifiedWorkoutSession.SessionStatus.ACTIVE,
         startedAt = workout.startTime ?: workout.createdAt,
         endedAt = workout.endTime,
-        elapsedTimeSeconds = workout.getDuration()?.toSeconds() ?: 0,
+        elapsedTimeSeconds = workout.getDuration()?.toMillis()?.div(1_000) ?: 0,
         notes = workout.notes,
         lastModified = workout.updatedAt
     )

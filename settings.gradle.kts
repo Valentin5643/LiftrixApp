@@ -24,7 +24,6 @@ buildCache {
 
 rootProject.name = "Liftrix"
 include(":app")
-include(":baselineprofile")
 include(":core:analytics")
 include(":core:data")
 include(":core:database")

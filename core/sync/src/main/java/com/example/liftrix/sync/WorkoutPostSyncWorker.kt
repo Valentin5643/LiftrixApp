@@ -669,7 +669,7 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
             id = id,
             userId = userId,
             name = stringValue("name") ?: "Shared workout",
-            date = dateValue("date") ?: LocalDate.ofInstant(createdAt, ZoneOffset.UTC),
+            date = dateValue("date") ?: createdAt.atZone(ZoneOffset.UTC).toLocalDate(),
             exercisesJson = stringValue("exercisesJson")
                 ?: stringValue("exercises_json")
                 ?: "[]",
@@ -699,8 +699,8 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
     private fun Map<String, Any?>.dateValue(key: String): LocalDate? {
         return when (val value = this[key]) {
             is String -> runCatching { LocalDate.parse(value) }.getOrNull()
-            is Timestamp -> LocalDate.ofInstant(value.toDate().toInstant(), ZoneOffset.UTC)
-            is Number -> LocalDate.ofInstant(Instant.ofEpochMilli(value.toLong()), ZoneOffset.UTC)
+            is Timestamp -> value.toDate().toInstant().atZone(ZoneOffset.UTC).toLocalDate()
+            is Number -> Instant.ofEpochMilli(value.toLong()).atZone(ZoneOffset.UTC).toLocalDate()
             else -> null
         }
     }

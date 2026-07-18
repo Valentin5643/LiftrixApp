@@ -21,6 +21,8 @@ The source refresh identified Firebase AI usage with `gemini-2.5-flash-lite` in 
 ## Core Rules
 
 - Competition releases expose paid AI only to users whose current Firebase custom claim resolves to `admin=true`. Root eligibility, chat/settings ViewModels, and `PaidAiCallExecutor` enforce that policy independently; older authenticated-user/general-user availability is superseded.
+- Root authentication and profile readiness do not wait for admin eligibility. `MainViewModel` publishes the authenticated user immediately, then runs profile readiness and optional AI eligibility as independent user-keyed jobs. Account changes cancel and invalidate both jobs so a prior user's result cannot update the current shell.
+- Admin eligibility remains fail-closed and asynchronous. `AdminFirebaseServiceImpl` verifies that the requested UID equals the current Firebase UID before token access, and bounds its forced claim refresh to 5 seconds; mismatch, missing identity, timeout, or token failure produces no eligibility.
 - `ai_chat_enabled` defaults to `false`. Before the first paid dispatch in a process, `RemoteConfigManager` performs one shared fetch/activate attempt; concurrent callers await that result, and the executor rejects the request if readiness does not complete within 10 seconds or the control cannot be read.
 - Chat history is user-owned data and must be scoped by `user_id`.
 - Do not call Firebase AI directly from UI.
@@ -33,6 +35,7 @@ The source refresh identified Firebase AI usage with `gemini-2.5-flash-lite` in 
 - Default-enabled chat history persists messages in `chat_history` and local conversation metadata/tombstones in `chat_conversations`; explicit preference opt-out remains ephemeral.
 - Submission retries reuse `chat-{requestId}-user` and `chat-{requestId}-assistant` row IDs. Conversation rename/delete never reads or mutates `ai_usage`.
 - Every Firebase AI dispatch must run through `PaidAiCallExecutor`. A paid-operation change cannot merge unless CHAT_RESPONSE, WORKOUT_GENERATE, WORKOUT_REPAIR, and WORKOUT_MODIFY all demonstrate admin, kill-switch, abuse, quota, App Check, post-dispatch accounting, and metadata-only telemetry coverage with no direct bypass.
+- Before stripe acquisition or any paid control, `PaidAiCallExecutor` resolves the canonical current UID from `AuthRepository` and requires exact equality with the request UID. Missing or mismatched identity performs zero Remote Config, admin, abuse, quota, App Check, provider, or `ai_usage` work; the verified UID owns serialization and accounting when execution proceeds.
 - `PaidAiCallExecutor` applies one 30-second deadline around provider dispatch only. Do not add per-service provider timeouts or automatic paid retries.
 - Pre-dispatch rejection writes no usage event. Every post-dispatch outcome writes exactly one idempotent event, including `TIMEOUT`, empty output, max-token stops, and provider failures.
 - Competition presenters should treat AI as optional. On timeout, unavailable operator control, App Check failure, or provider outage, leave the AI surface and continue with a prepared saved workout/program; source changes do not prove the live Remote Config, quota, App Check, or account claim state.

@@ -672,8 +672,10 @@ private fun ExportSummary(
                 
                 dateRange?.let {
                     val dateFormat = DateTimeFormatter.ofPattern("MMM dd, yyyy")
-                    val startDate = java.time.LocalDate.ofInstant(java.time.Instant.ofEpochMilli(it.startDate.time), java.time.ZoneOffset.UTC)
-                    val endDate = java.time.LocalDate.ofInstant(java.time.Instant.ofEpochMilli(it.endDate.time), java.time.ZoneOffset.UTC)
+                    val startDate = java.time.Instant.ofEpochMilli(it.startDate.time)
+                        .atZone(java.time.ZoneOffset.UTC).toLocalDate()
+                    val endDate = java.time.Instant.ofEpochMilli(it.endDate.time)
+                        .atZone(java.time.ZoneOffset.UTC).toLocalDate()
                     SummaryRow("Date Range", "${startDate.format(dateFormat)} - ${endDate.format(dateFormat)}")
                 }
                 

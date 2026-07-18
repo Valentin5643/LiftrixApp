@@ -743,8 +743,8 @@ private fun ErrorContent(
 
 private fun formatDuration(duration: Duration): String {
     val hours = duration.toHours()
-    val minutes = duration.toMinutesPart()
-    val seconds = duration.toSecondsPart()
+    val minutes = duration.toMinutes() % 60
+    val seconds = duration.seconds % 60
     
     return when {
         hours > 0 -> String.format("%dh %02dm", hours, minutes)

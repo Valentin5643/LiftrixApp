@@ -4,20 +4,9 @@ Security-hardened backup rules for Liftrix Android
 Excludes sensitive data from device backups
 -->
 <full-backup-content>
-    <!-- Exclude all sensitive data from backups -->
+    <!-- Fail closed: authenticated and encrypted app state is never backed up. -->
     <exclude domain="database" path="."/>
     <exclude domain="sharedpref" path="."/>
     <exclude domain="file" path="."/>
     <exclude domain="external" path="."/>
-    
-    <!-- Only allow backup of non-sensitive app preferences -->
-    <include domain="sharedpref" path="androidx.preference"/>
-    <exclude domain="sharedpref" path="androidx.security.crypto"/>
-    <exclude domain="sharedpref" path="firebase"/>
-    <exclude domain="sharedpref" path="auth"/>
-    
-    <!-- Exclude all private app data directories -->
-    <exclude domain="file" path="databases"/>
-    <exclude domain="file" path="shared_prefs"/>
-    <exclude domain="file" path="cache"/>
 </full-backup-content>

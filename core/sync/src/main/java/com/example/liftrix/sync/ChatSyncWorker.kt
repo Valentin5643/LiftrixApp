@@ -93,6 +93,10 @@ class ChatSyncWorker @AssistedInject constructor(
                 .build()
 
         fun getPeriodicWorkName(userId: String): String = "${WORK_NAME}_periodic_$userId"
+
+        fun getImmediateWorkName(userId: String): String = "${WORK_NAME}_immediate_$userId"
+
+        fun getStartupWorkName(userId: String): String = "${WORK_NAME}_startup_$userId"
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {

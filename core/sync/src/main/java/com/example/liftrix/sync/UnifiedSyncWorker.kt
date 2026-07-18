@@ -136,7 +136,7 @@ class UnifiedSyncWorker @AssistedInject constructor(
                 .setConstraints(createImmediateConstraints())
                 .setBackoffCriteria(
                     BackoffPolicy.EXPONENTIAL,
-                    5,
+                    10,
                     TimeUnit.SECONDS
                 )
                 .addTag("unified_sync")

@@ -1,6 +1,7 @@
 package com.example.liftrix.ui.progress
 
 import com.example.liftrix.domain.model.analytics.StrengthForecastResult
+import com.example.liftrix.domain.model.analytics.MuscleHeatmapWidgetData
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.analytics.VolumeGrouping
 import com.example.liftrix.domain.model.common.LiftrixResult
@@ -70,6 +71,7 @@ class StrengthForecastViewModelTest {
         override suspend fun getOneRmProgression(userId: String, exerciseIds: List<String>?, timeRange: TimeRangeType, includeEstimated: Boolean): LiftrixResult<OneRmProgressionData> = TODO()
         override suspend fun getWorkoutFrequency(userId: String, timeRange: TimeRangeType): LiftrixResult<WorkoutFrequencyData> = TODO()
         override suspend fun getMuscleGroupAnalytics(userId: String, timeRange: TimeRangeType, muscleGroup: MuscleGroup?): LiftrixResult<MuscleGroupAnalyticsData> = TODO()
+        override suspend fun getMuscleHeatmapData(userId: String, configuration: Map<String, String>): LiftrixResult<MuscleHeatmapWidgetData> = TODO()
         override suspend fun getExerciseRanking(userId: String, timeRange: TimeRangeType, metric: com.example.liftrix.domain.model.analytics.RankingMetric): LiftrixResult<ExerciseRankingData> = TODO()
         override suspend fun exportOneRm(request: ExportOneRmDataRequest): LiftrixResult<File> = TODO()
         override suspend fun exportVolume(request: ExportVolumeDataRequest): LiftrixResult<File> = TODO()

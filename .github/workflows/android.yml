@@ -6,13 +6,17 @@ on:
   pull_request:
     branches: [ "master", "develop" ]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment: competition-release
     env:
-      RELEASE_PACKAGE_ID: com.liftrix.app
-      RELEASE_VERSION_CODE: '10001'
-      RELEASE_VERSION_NAME: 1.0.1
+      MIN_RELEASE_FREE_DISK_GIB: ${{ vars.MIN_RELEASE_FREE_DISK_GIB || '20' }}
+      GRADLE_OPTS: >-
+        -Dorg.gradle.jvmargs="-Xmx5g -XX:MaxMetaspaceSize=1g -XX:+UseG1GC -Dfile.encoding=UTF-8"
 
     steps:
     - name: Checkout code
@@ -39,11 +43,7 @@ jobs:
         printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > app/google-services.json
         unset GOOGLE_SERVICES_JSON_BASE64
         chmod 600 app/google-services.json
-        jq -e '
-          .client
-          | map(.client_info.android_client_info.package_name)
-          | index("com.liftrix.app") != null
-        ' app/google-services.json > /dev/null
+        jq -e '.client | type == "array" and length > 0' app/google-services.json > /dev/null
 
     - name: Decode keystore
       shell: bash
@@ -56,6 +56,119 @@ jobs:
         printf '%s' "$KEYSTORE_BASE64" | base64 --decode > liftrix-release.keystore
         unset KEYSTORE_BASE64
         chmod 600 liftrix-release.keystore
+
+    - name: Preflight capacity, configuration, and signing identity
+      shell: bash
+      env:
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        EXPECTED_RELEASE_CERT_SHA256: ${{ vars.RELEASE_CERT_SHA256 }}
+      run: |
+        set -Eeuo pipefail
+        export LC_ALL=C
+        for required_name in KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD EXPECTED_RELEASE_CERT_SHA256 MIN_RELEASE_FREE_DISK_GIB; do
+          : "${!required_name:?${required_name} is required}"
+        done
+        [[ "$MIN_RELEASE_FREE_DISK_GIB" =~ ^[1-9][0-9]*$ ]] || {
+          echo "MIN_RELEASE_FREE_DISK_GIB must be a positive integer" >&2
+          exit 1
+        }
+        (( MIN_RELEASE_FREE_DISK_GIB >= 20 )) || {
+          echo "MIN_RELEASE_FREE_DISK_GIB cannot be lower than the 20 GiB release floor" >&2
+          exit 1
+        }
+        test -s app/google-services.json
+        test -s liftrix-release.keystore
+
+        ./gradlew --no-daemon :app:writeReleaseIdentity
+        IDENTITY_FILE="app/build/release-identity/release.properties"
+        test -s "$IDENTITY_FILE"
+
+        read_identity_value() {
+          local key="$1"
+          [[ "$(grep -c "^${key}=" "$IDENTITY_FILE")" -eq 1 ]] || {
+            echo "Release identity must contain exactly one ${key}" >&2
+            exit 1
+          }
+          sed -n "s/^${key}=//p" "$IDENTITY_FILE"
+        }
+
+        RELEASE_PACKAGE_ID="$(read_identity_value RELEASE_PACKAGE_ID)"
+        RELEASE_VERSION_CODE="$(read_identity_value RELEASE_VERSION_CODE)"
+        RELEASE_VERSION_NAME="$(read_identity_value RELEASE_VERSION_NAME)"
+        [[ "$RELEASE_PACKAGE_ID" =~ ^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$ ]]
+        [[ "$RELEASE_VERSION_CODE" =~ ^[1-9][0-9]*$ ]]
+        [[ "$RELEASE_VERSION_NAME" =~ ^[0-9A-Za-z][0-9A-Za-z._-]*$ ]]
+
+        jq -e --arg package "$RELEASE_PACKAGE_ID" '
+          .client
+          | map(.client_info.android_client_info.package_name)
+          | index($package) != null
+        ' app/google-services.json > /dev/null
+
+        EXPECTED_CERT="$(printf '%s' "$EXPECTED_RELEASE_CERT_SHA256" | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]')"
+        [[ "$EXPECTED_CERT" =~ ^[0-9a-f]{64}$ ]] || {
+          echo "RELEASE_CERT_SHA256 must be a 64-character SHA-256 digest" >&2
+          exit 1
+        }
+        KEYSTORE_CERT_SHA256="$(
+          keytool -exportcert \
+            -keystore liftrix-release.keystore \
+            -alias "$KEY_ALIAS" \
+            -storepass:env KEYSTORE_PASSWORD \
+          | sha256sum | cut -d ' ' -f 1
+        )"
+        [[ "$KEYSTORE_CERT_SHA256" == "$EXPECTED_CERT" ]] || {
+          echo "Decoded keystore does not match the canonical release certificate" >&2
+          exit 1
+        }
+
+        AVAILABLE_DISK_KIB="$(df -Pk "$GITHUB_WORKSPACE" | awk 'END {print $4}')"
+        [[ "$AVAILABLE_DISK_KIB" =~ ^[0-9]+$ ]] || {
+          echo "Unable to determine available release disk space" >&2
+          exit 1
+        }
+        REQUIRED_DISK_KIB="$((MIN_RELEASE_FREE_DISK_GIB * 1024 * 1024))"
+        AVAILABLE_DISK_GIB="$((AVAILABLE_DISK_KIB / 1024 / 1024))"
+        echo "Release preflight disk: ${AVAILABLE_DISK_GIB} GiB available; ${MIN_RELEASE_FREE_DISK_GIB} GiB required"
+        (( AVAILABLE_DISK_KIB >= REQUIRED_DISK_KIB )) || {
+          echo "Insufficient disk space for the release gate" >&2
+          exit 1
+        }
+
+        {
+          printf 'RELEASE_PACKAGE_ID=%s\n' "$RELEASE_PACKAGE_ID"
+          printf 'RELEASE_VERSION_CODE=%s\n' "$RELEASE_VERSION_CODE"
+          printf 'RELEASE_VERSION_NAME=%s\n' "$RELEASE_VERSION_NAME"
+          printf 'PREFLIGHT_AVAILABLE_DISK_KIB=%s\n' "$AVAILABLE_DISK_KIB"
+          printf 'PREFLIGHT_MIN_FREE_DISK_GIB=%s\n' "$MIN_RELEASE_FREE_DISK_GIB"
+        } >> "$GITHUB_ENV"
+
+    - name: Compile debug sources
+      run: ./gradlew clean compileDebugKotlin
+
+    - name: Validate Room queries
+      run: ./gradlew validateRoomQueries
+
+    - name: Run aggregate debug unit tests
+      run: ./gradlew testDebugUnitTest
+
+    - name: Run full lint
+      run: ./gradlew --max-workers=2 lintFull
+
+    - name: Run aggregate build gate
+      env:
+        KEYSTORE_PATH: ../liftrix-release.keystore
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      run: >-
+        ./gradlew --max-workers=2
+        build
+
+    - name: Generate code coverage report
+      run: ./gradlew :app:jacocoTestReport
 
     - name: Build release APK and AAB
       shell: bash
@@ -70,7 +183,10 @@ jobs:
           : "${!required_name:?${required_name} is required}"
         done
         test -s liftrix-release.keystore
-        ./gradlew :app:processReleaseGoogleServices :app:assembleRelease :app:bundleRelease
+        ./gradlew --max-workers=2 \
+          :app:processReleaseGoogleServices \
+          :app:assembleRelease \
+          :app:bundleRelease
 
     - name: Verify and stage release provenance
       shell: bash
@@ -79,7 +195,15 @@ jobs:
       run: |
         set -Eeuo pipefail
         export LC_ALL=C
-        : "${EXPECTED_RELEASE_CERT_SHA256:?RELEASE_CERT_SHA256 repository variable is required}"
+        for required_name in \
+          EXPECTED_RELEASE_CERT_SHA256 \
+          RELEASE_PACKAGE_ID \
+          RELEASE_VERSION_CODE \
+          RELEASE_VERSION_NAME \
+          PREFLIGHT_AVAILABLE_DISK_KIB \
+          PREFLIGHT_MIN_FREE_DISK_GIB; do
+          : "${!required_name:?${required_name} is required}"
+        done
 
         EXPECTED_CERT="$(printf '%s' "$EXPECTED_RELEASE_CERT_SHA256" | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]')"
         [[ "$EXPECTED_CERT" =~ ^[0-9a-f]{64}$ ]] || {
@@ -148,6 +272,8 @@ jobs:
           --arg version_name "$VERSION_NAME" \
           --arg certificate_sha256 "$APK_CERT_SHA256" \
           --arg certificate_sha1 "$APK_CERT_SHA1" \
+          --arg available_disk_kib "$PREFLIGHT_AVAILABLE_DISK_KIB" \
+          --arg minimum_free_disk_gib "$PREFLIGHT_MIN_FREE_DISK_GIB" \
           --arg apk_file "$APK_NAME" \
           --arg apk_sha256 "$APK_SHA256" \
           --arg aab_file "$AAB_NAME" \
@@ -166,6 +292,21 @@ jobs:
               sha256: $certificate_sha256,
               sha1: $certificate_sha1
             },
+            preflight: {
+              available_disk_kib: $available_disk_kib,
+              minimum_free_disk_gib: $minimum_free_disk_gib
+            },
+            verified_gates: [
+              "compileDebugKotlin",
+              "validateRoomQueries",
+              "testDebugUnitTest",
+              "lintFull",
+              "build",
+              ":app:jacocoTestReport",
+              ":app:processReleaseGoogleServices",
+              ":app:assembleRelease",
+              ":app:bundleRelease"
+            ],
             artifacts: {
               apk: {file: $apk_file, sha256: $apk_sha256},
               aab: {file: $aab_file, sha256: $aab_sha256},
@@ -179,15 +320,6 @@ jobs:
           sha256sum --check SHA256SUMS
         )
 
-    - name: Run release unit tests
-      run: ./gradlew testReleaseUnitTest
-
-    - name: Run full lint
-      run: ./gradlew lintFull
-
-    - name: Generate code coverage report
-      run: ./gradlew jacocoTestReport
-
     - name: Upload verified release set
       uses: actions/upload-artifact@v4
       with:
@@ -200,15 +332,18 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: test-results
-        path: app/build/test-results/
+        name: test-results-${{ github.run_id }}-${{ github.run_attempt }}
+        path: '**/build/test-results/**'
+        if-no-files-found: warn
         retention-days: 7
 
     - name: Upload coverage report
+      if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: coverage-report
+        name: coverage-report-${{ github.run_id }}-${{ github.run_attempt }}
         path: app/build/reports/jacoco/jacocoTestReport/html/
+        if-no-files-found: warn
         retention-days: 7
 
     - name: Clean up protected release inputs

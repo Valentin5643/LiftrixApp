@@ -92,9 +92,8 @@ fun RecompositionCounter(
     reason: String = "recomposition"
 ) {
     if (BuildConfig.DEBUG) {
-        remember(componentName, reason) {
+        SideEffect {
             Timber.d("Recomposition: $componentName - $reason")
-            Unit
         }
     }
 }
@@ -114,4 +113,3 @@ object GlobalRecompositionCounter {
     fun reset(key: String) = instance.reset(key)
     fun resetAll() = instance.resetAll()
 }
-

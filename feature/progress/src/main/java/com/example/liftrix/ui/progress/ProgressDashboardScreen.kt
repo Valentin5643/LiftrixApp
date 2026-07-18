@@ -1216,10 +1216,10 @@ private fun CalorieSection(
         } else {
             if (calorieState.calorieSummary is AsyncData.Success) {
                 val summaryData = calorieState.calorieSummary.data
-                    CalorieInsightsSummary(
-                        calorieSummary = summaryData,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                CalorieInsightsSummary(
+                    calorieSummary = summaryData,
+                    modifier = Modifier.fillMaxWidth()
+                )
                     
                     val weeklyCalories = getWeeklyCaloriesList(summaryData)
                     if (weeklyCalories.isNotEmpty()) {

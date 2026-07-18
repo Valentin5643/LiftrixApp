@@ -15,6 +15,7 @@ import androidx.camera.core.*
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.Preview as CameraPreview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -233,6 +234,7 @@ private fun CameraPreviewWithOverlay(
 /**
  * Analyzes camera frames for QR codes using ZXing
  */
+@OptIn(ExperimentalGetImage::class)
 private fun analyzeQRCode(
     imageProxy: ImageProxy,
     reader: MultiFormatReader,
@@ -280,6 +282,7 @@ private fun analyzeQRCode(
 /**
  * Converts ImageProxy to Bitmap for QR code analysis
  */
+@OptIn(ExperimentalGetImage::class)
 private fun imageProxyToBitmap(imageProxy: ImageProxy): Bitmap? {
     return try {
         val image = imageProxy.image ?: return null

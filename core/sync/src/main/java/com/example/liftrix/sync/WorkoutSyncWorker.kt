@@ -342,8 +342,8 @@ class WorkoutSyncWorker @AssistedInject constructor(
     ): UploadResult {
         var successCount = 0
         var failureCount = 0
-            // Use batch processing with cancellation checks
-            processBatchesWithCancellation(
+        // Use batch processing with cancellation checks
+        processBatchesWithCancellation(
                 items = unsyncedWorkouts,
                 batchSize = BATCH_SIZE
             ) { batch ->

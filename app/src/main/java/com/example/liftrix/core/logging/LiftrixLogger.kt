@@ -52,7 +52,7 @@ object LiftrixLogger {
 
     fun redactSensitiveTokens(message: String): String {
         return SENSITIVE_PATTERNS.fold(message) { sanitized, pattern ->
-            sanitized.replace(pattern, "$1$REDACTED")
+            sanitized.replace(pattern, "$1=$REDACTED")
         }
     }
 

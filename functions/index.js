@@ -622,7 +622,6 @@ exports.generateFeedOnPostCreation = onDocumentWritten(
             .where("status", "==", "ACCEPTED")
             .get();
 
-        const batch = db.batch();
         const feedEntries = [];
 
         // Calculate relevance score for the post
@@ -1026,23 +1025,15 @@ async function addToDiscoveryFeed(postId, postData, relevanceScore) {
     for (const targetUserId of discoveryTargets) {
       const feedRef = db.collection("feed_cache").doc(`${targetUserId}_discovery_${postId}`);
       
-      batch.set(feedRef, {
-        user_id: targetUserId,
-        post_id: postId,
-        author_id: postData.user_id,
-        feed_type: "DISCOVERY",
-        relevance_score: relevanceScore,
-        created_at: admin.firestore.FieldValue.serverTimestamp(),
-        post_created_at: postData.created_at,
-        // Add content preview for faster loading
-        preview_data: {
-          author_name: postData.author_display_name || "Unknown",
-          workout_name: postData.workout_summary?.name || "",
-          exercise_count: postData.workout_summary?.exercise_count || 0,
-          media_count: postData.media_urls?.length || 0,
-          prs_count: postData.workout_summary?.prs_count || 0
-        }
-      });
+      batch.set(
+          feedRef,
+          buildDiscoveryFeedEntry(
+              targetUserId,
+              postId,
+              postData,
+              relevanceScore,
+          ),
+      );
 
       addedCount++;
 
@@ -1065,6 +1056,47 @@ async function addToDiscoveryFeed(postId, postData, relevanceScore) {
     throw error;
   }
 }
+
+/**
+ * Builds the canonical discovery-feed cache entry.
+ *
+ * @param {string} targetUserId - User receiving the discovery entry.
+ * @param {string} postId - Source workout post ID.
+ * @param {object} postData - Source workout post data.
+ * @param {number} relevanceScore - Calculated discovery relevance score.
+ * @return {object} Firestore payload for the discovery feed cache.
+ */
+function buildDiscoveryFeedEntry(
+    targetUserId,
+    postId,
+    postData,
+    relevanceScore,
+) {
+  return {
+    user_id: targetUserId,
+    post_id: postId,
+    author_id: postData.user_id,
+    feed_type: "DISCOVERY",
+    relevance_score: relevanceScore,
+    created_at: FieldValue.serverTimestamp(),
+    post_created_at: postData.created_at,
+    preview_data: {
+      author_name: postData.author_display_name || "Unknown",
+      workout_name: postData.workout_summary?.name || "",
+      exercise_count: postData.workout_summary?.exercise_count || 0,
+      media_count: postData.media_urls?.length || 0,
+      prs_count: postData.workout_summary?.prs_count || 0,
+    },
+  };
+}
+
+// Non-function exports are ignored by the Firebase deploy scanner and keep
+// deterministic payload construction available to offline regression tests.
+exports.__test = Object.freeze({
+  buildDiscoveryFeedEntry,
+  validatePendingDeletionRequest,
+  validateSupportTicket,
+});
 
 /**
  * Finds users who should see this post in their discovery feed
@@ -1476,8 +1508,6 @@ exports.processBatchedNotifications = onSchedule(
     async (event) => {
       try {
         const now = new Date();
-        const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-
         // Get pending notifications ready for batching
         const pendingSnapshot = await db.collection("notification_queue")
             .where("status", "==", "PENDING")
@@ -1515,7 +1545,7 @@ exports.processBatchedNotifications = onSchedule(
 
         // Process each user's batched notifications
         for (const [userId, batches] of Object.entries(userBatches)) {
-          for (const [batchKey, notifications] of Object.entries(batches)) {
+          for (const notifications of Object.values(batches)) {
             await processBatchForUser(userId, notifications);
             processedCount += notifications.length;
           }
@@ -2599,19 +2629,23 @@ exports.sendSupportTicketEmail = onCall(CALLABLE_OPTIONS, async (request) => {
   try {
     const ticketRef = db.collection("support_tickets").doc(ticketId);
     const ticketSnapshot = await ticketRef.get();
-    if (!ticketSnapshot.exists ||
-        ticketSnapshot.data().user_id !== caller.uid) {
+    if (!ticketSnapshot.exists) {
       throw new HttpsError("not-found", "Support ticket not found");
     }
-    if (ticketSnapshot.data().email_sent === true) {
+    const ticketData = ticketSnapshot.data();
+    if (ticketData.user_id !== caller.uid) {
+      throw new HttpsError("not-found", "Support ticket not found");
+    }
+    if (ticketData.email_sent === true) {
       return {success: true, ticketId, alreadySent: true};
     }
+    validateSupportTicket(ticketId, ticketData);
 
     await enforceCallableRateLimit(caller.uid, "support_email", 3);
     const userRecord = await auth.getUser(caller.uid);
     const result = await sendSupportTicketEmailInternal(
         ticketId,
-        ticketSnapshot.data(),
+        ticketData,
         userRecord,
     );
     await ticketRef.update({
@@ -2668,6 +2702,47 @@ async function sendSupportTicketEmailInternal(ticketId, ticketData, userRecord) 
 }
 
 /**
+ * Validates the initial client-owned support-ticket contract before processing.
+ *
+ * @param {string} ticketId - Firestore document ID.
+ * @param {object} ticketData - Firestore support-ticket payload.
+ * @return {{userId: string}} Validated processing identity.
+ */
+function validateSupportTicket(ticketId, ticketData) {
+  const storedTicketId = requireString(ticketData.ticket_id, "ticketId", 256);
+  const userId = requireString(ticketData.user_id, "userId", 128);
+  const requiredKeys = [
+    "user_id",
+    "ticket_id",
+    "category",
+    "subject",
+    "description",
+    "device_info",
+    "app_version",
+    "status",
+    "created_at",
+    "updated_at",
+    "email_sent",
+    "sync_version",
+  ];
+
+  if (storedTicketId !== ticketId ||
+      Object.keys(ticketData).some((key) => !requiredKeys.includes(key)) ||
+      requiredKeys.some((key) => !(key in ticketData)) ||
+      ticketData.status !== "OPEN" ||
+      ticketData.email_sent !== false ||
+      typeof ticketData.created_at?.toDate !== "function" ||
+      (ticketData.updated_at != null &&
+       typeof ticketData.updated_at?.toDate !== "function") ||
+      !Number.isSafeInteger(ticketData.sync_version) ||
+      ticketData.sync_version < 1) {
+    throw new HttpsError("invalid-argument", "Invalid support ticket contract");
+  }
+
+  return {userId};
+}
+
+/**
  * Triggered function when support tickets are created in Firestore
  * Automatically sends email notifications
  */
@@ -2689,8 +2764,9 @@ exports.onSupportTicketCreated = onDocumentWritten(
       }
 
       try {
-        await enforceCallableRateLimit(ticketData.user_id, "support_email", 3);
-        const userRecord = await auth.getUser(ticketData.user_id);
+        const {userId} = validateSupportTicket(ticketId, ticketData);
+        await enforceCallableRateLimit(userId, "support_email", 3);
+        const userRecord = await auth.getUser(userId);
         await sendSupportTicketEmailInternal(ticketId, ticketData, userRecord);
 
         // Mark ticket as email sent
@@ -3306,8 +3382,10 @@ exports.processAccountDeletion = onDocumentWritten(
           return null;
         }
 
-        const userId = deletionData.userId;
-        const exportFirst = deletionData.exportFirst || false;
+        const {userId, exportFirst} = validatePendingDeletionRequest(
+            jobId,
+            deletionData,
+        );
 
         logger.info(`🗑️ ACCOUNT_DELETION: Starting deletion for user ${userId} (job: ${jobId}, export: ${exportFirst})`);
 
@@ -3374,6 +3452,37 @@ exports.processAccountDeletion = onDocumentWritten(
         throw error;
       }
     });
+
+/**
+ * Validates an initial account-deletion request before destructive work.
+ *
+ * @param {string} jobId - Firestore document ID.
+ * @param {object} deletionData - Firestore deletion-request payload.
+ * @return {{userId: string, exportFirst: boolean}} Validated request values.
+ */
+function validatePendingDeletionRequest(jobId, deletionData) {
+  const storedJobId = requireString(deletionData.jobId, "jobId", 128);
+  const userId = requireString(deletionData.userId, "userId", 128);
+  const requiredKeys = [
+    "userId",
+    "requestedAt",
+    "exportFirst",
+    "status",
+    "jobId",
+  ];
+
+  if (storedJobId !== jobId ||
+      Object.keys(deletionData).some((key) => !requiredKeys.includes(key)) ||
+      requiredKeys.some((key) => !(key in deletionData)) ||
+      !Number.isSafeInteger(deletionData.requestedAt) ||
+      deletionData.requestedAt <= 0 ||
+      typeof deletionData.exportFirst !== "boolean" ||
+      deletionData.status !== "PENDING") {
+    throw new HttpsError("invalid-argument", "Invalid deletion request contract");
+  }
+
+  return {userId, exportFirst: deletionData.exportFirst};
+}
 
 /**
  * Export user data to Cloud Storage (GDPR requirement).
@@ -3802,7 +3911,7 @@ exports.moderationAction = onCall(CALLABLE_OPTIONS, async (request) => {
         // Send notification to user (implement via FCM)
         break;
 
-      case "SUSPEND_USER":
+      case "SUSPEND_USER": {
         if (!durationDays) {
           throw new HttpsError(
               "invalid-argument",
@@ -3823,6 +3932,7 @@ exports.moderationAction = onCall(CALLABLE_OPTIONS, async (request) => {
         logger.info(`Admin ${adminUserId} suspended user ${targetId} for ${durationDays} days: ${reason}`);
         // Send notification to user (implement via FCM)
         break;
+      }
 
       case "DISMISS_REPORT":
         if (!reportId) {

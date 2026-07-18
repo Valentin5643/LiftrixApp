@@ -4,6 +4,7 @@ import com.example.liftrix.core.data.BuildConfig
 import com.example.liftrix.data.local.dao.AiUsageDao
 import com.example.liftrix.data.local.entity.AiUsageEntity
 import com.example.liftrix.data.remote.config.RemoteConfigManager
+import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.service.AbuseAction
 import com.example.liftrix.domain.service.AbusePreventionServiceContract
 import com.example.liftrix.domain.service.RateLimitingServiceContract
@@ -14,6 +15,7 @@ import com.google.firebase.appcheck.appCheck
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.sync.Mutex
@@ -64,84 +66,100 @@ class PaidAiCallExecutor @Inject constructor(
     private val abusePreventionService: AbusePreventionServiceContract,
     private val rateLimitingService: RateLimitingServiceContract,
     private val aiUsageDao: AiUsageDao,
-    private val checkAdminPermissionsUseCase: CheckAdminPermissionsUseCase
+    private val checkAdminPermissionsUseCase: CheckAdminPermissionsUseCase,
+    private val authRepository: AuthRepository
 ) {
     private val stripes = Array(STRIPE_COUNT) { Mutex() }
 
     suspend fun <T> execute(
         request: PaidAiCallRequest,
         dispatch: suspend () -> PaidAiCallResult<T>
-    ): T = stripeFor(request.userId).withLock {
-        require(request.userId.isNotBlank()) { "User ID is required for paid AI calls" }
-        require(request.abuseContent.isNotBlank()) { "Abuse evaluation content is required" }
+    ): T {
+        val authenticatedUserId = try {
+            authRepository.getCurrentUserId()?.value
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+        if (authenticatedUserId == null || authenticatedUserId != request.userId) {
+            throw PaidAiAccessDeniedException()
+        }
 
-        val eventId = UUID.randomUUID().toString()
-        val startedAt = System.currentTimeMillis()
-        var dispatched = false
-
-        try {
-            checkPreconditions(request)
-            obtainAppCheckToken()
-
-            Timber.i(
-                "Paid AI dispatch eventId=%s operation=%s inputTokensEstimate=%d",
-                eventId,
-                request.operation.name,
-                request.estimatedInputTokens
-            )
-            dispatched = true
-            val result = try {
-                withTimeout(PROVIDER_DISPATCH_TIMEOUT_MS) {
-                    dispatch()
-                }
-            } catch (error: TimeoutCancellationException) {
-                throw PaidAiTimeoutException(error)
+        val verifiedRequest = request.copy(userId = authenticatedUserId)
+        return stripeFor(authenticatedUserId).withLock {
+            require(verifiedRequest.abuseContent.isNotBlank()) {
+                "Abuse evaluation content is required"
             }
-            recordOutcome(
-                eventId = eventId,
-                request = request,
-                inputTokens = result.inputTokens,
-                outputTokens = result.outputTokens,
-                totalTokens = result.totalTokens,
-                category = result.category
-            )
-            Timber.i(
-                "Paid AI completed eventId=%s operation=%s tokens=%d durationMs=%d category=%s",
-                eventId,
-                request.operation.name,
-                result.totalTokens,
-                System.currentTimeMillis() - startedAt,
-                result.category
-            )
-            result.value
-        } catch (error: Exception) {
-            if (dispatched) {
-                withContext(NonCancellable) {
-                    recordOutcome(
-                        eventId = eventId,
-                        request = request,
-                        inputTokens = request.estimatedInputTokens.coerceAtLeast(0),
-                        outputTokens = 0,
-                        totalTokens = request.estimatedInputTokens.coerceAtLeast(0),
-                        category = error.toOutcomeCategory()
+
+            val eventId = UUID.randomUUID().toString()
+            val startedAt = System.currentTimeMillis()
+            var dispatched = false
+
+            try {
+                checkPreconditions(verifiedRequest)
+                obtainAppCheckToken()
+
+                Timber.i(
+                    "Paid AI dispatch eventId=%s operation=%s inputTokensEstimate=%d",
+                    eventId,
+                    verifiedRequest.operation.name,
+                    verifiedRequest.estimatedInputTokens
+                )
+                dispatched = true
+                val result = try {
+                    withTimeout(PROVIDER_DISPATCH_TIMEOUT_MS) {
+                        dispatch()
+                    }
+                } catch (error: TimeoutCancellationException) {
+                    throw PaidAiTimeoutException(error)
+                }
+                recordOutcome(
+                    eventId = eventId,
+                    request = verifiedRequest,
+                    inputTokens = result.inputTokens,
+                    outputTokens = result.outputTokens,
+                    totalTokens = result.totalTokens,
+                    category = result.category
+                )
+                Timber.i(
+                    "Paid AI completed eventId=%s operation=%s tokens=%d durationMs=%d category=%s",
+                    eventId,
+                    verifiedRequest.operation.name,
+                    result.totalTokens,
+                    System.currentTimeMillis() - startedAt,
+                    result.category
+                )
+                result.value
+            } catch (error: Exception) {
+                if (dispatched) {
+                    withContext(NonCancellable) {
+                        recordOutcome(
+                            eventId = eventId,
+                            request = verifiedRequest,
+                            inputTokens = verifiedRequest.estimatedInputTokens.coerceAtLeast(0),
+                            outputTokens = 0,
+                            totalTokens = verifiedRequest.estimatedInputTokens.coerceAtLeast(0),
+                            category = error.toOutcomeCategory()
+                        )
+                    }
+                    Timber.w(
+                        error,
+                        "Paid AI failed after dispatch eventId=%s operation=%s durationMs=%d",
+                        eventId,
+                        verifiedRequest.operation.name,
+                        System.currentTimeMillis() - startedAt
+                    )
+                } else {
+                    Timber.w(
+                        "Paid AI rejected before dispatch eventId=%s operation=%s reason=%s",
+                        eventId,
+                        verifiedRequest.operation.name,
+                        error.javaClass.simpleName
                     )
                 }
-                Timber.w(
-                    error,
-                    "Paid AI failed after dispatch eventId=%s operation=%s durationMs=%d",
-                    eventId,
-                    request.operation.name,
-                    System.currentTimeMillis() - startedAt
-                )
-            } else {
-                Timber.w(
-                    "Paid AI rejected before dispatch eventId=%s operation=%s reason=%s",
-                    eventId,
-                    request.operation.name,
-                    error.javaClass.simpleName
-                )
+                throw error
             }
-            throw error
         }
     }
 

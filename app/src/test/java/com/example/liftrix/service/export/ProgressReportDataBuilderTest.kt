@@ -80,7 +80,8 @@ class ProgressReportDataBuilderTest {
 
         assertEquals(1, data.personalRecordRows.size)
         assertEquals(1, data.summary.newPersonalRecords)
-        assertEquals("REPS", data.personalRecordRows.single().recordType)
+        assertEquals("Baseline set", data.personalRecordRows.single().recordType)
+        assertEquals("REPS: 15 reps", data.personalRecordRows.single().newValue)
     }
 
     @Test
@@ -97,8 +98,8 @@ class ProgressReportDataBuilderTest {
 
         val data = builder.build(USER_ID, request())
 
-        assertEquals(listOf("REPS"), data.personalRecordRows.map { it.recordType })
-        assertEquals("20 reps", data.personalRecordRows.single().newValue)
+        assertEquals(listOf("Baseline set"), data.personalRecordRows.map { it.recordType })
+        assertEquals("REPS: 20 reps", data.personalRecordRows.single().newValue)
     }
 
     @Test

@@ -428,7 +428,7 @@ class PostWorkoutSummaryViewModel @Inject constructor(
     
     private fun formatDuration(duration: Duration): String {
         val hours = duration.toHours()
-        val minutes = duration.toMinutesPart()
+        val minutes = duration.toMinutes() % 60
         
         return when {
             hours > 0 -> "${hours}h ${minutes}m"

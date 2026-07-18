@@ -1,12 +1,18 @@
 package com.example.liftrix.service
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.app.ActivityManager
+import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.example.liftrix.domain.repository.FCMTokenRepository
 import com.example.liftrix.domain.service.NotificationHandler
 import com.example.liftrix.domain.service.AnalyticsTracker
@@ -145,8 +151,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
             .setLights(0xFF00FF00.toInt(), 1000, 500) // Green light
             .build()
         
-        NotificationManagerCompat.from(this)
-            .notify(generateNotificationId(), notification)
+        postNotification(notification)
     }
 
     private fun handleGymBuddyWorkoutCompleted(message: RemoteMessage) {
@@ -163,8 +168,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .build()
 
-        NotificationManagerCompat.from(this)
-            .notify(generateNotificationId(), notification)
+        postNotification(notification)
     }
     
     private fun handleFollowRequest(message: RemoteMessage) {
@@ -183,8 +187,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
             .addAction(createDeclineFollowAction(fromUser))
             .build()
         
-        NotificationManagerCompat.from(this)
-            .notify(generateNotificationId(), notification)
+        postNotification(notification)
     }
     
     private fun handlePostEngagement(message: RemoteMessage) {
@@ -213,8 +216,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .build()
         
-        NotificationManagerCompat.from(this)
-            .notify(generateNotificationId(), notification)
+        postNotification(notification)
     }
     
     private fun handleWorkoutReminder(message: RemoteMessage) {
@@ -237,8 +239,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
             .addAction(createStartWorkoutAction())
             .build()
         
-        NotificationManagerCompat.from(this)
-            .notify(generateNotificationId(), notification)
+        postNotification(notification)
     }
     
     private fun handleAchievementUnlocked(message: RemoteMessage) {
@@ -259,8 +260,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
             .setLights(0xFFFFD700.toInt(), 2000, 1000) // Gold light
             .build()
         
-        NotificationManagerCompat.from(this)
-            .notify(generateNotificationId(), notification)
+        postNotification(notification)
     }
     
     private fun handleSocialMention(message: RemoteMessage) {
@@ -277,8 +277,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
             .setContentIntent(if (postId != null) createPostPendingIntent(postId) else createMainAppPendingIntent(message))
             .build()
         
-        NotificationManagerCompat.from(this)
-            .notify(generateNotificationId(), notification)
+        postNotification(notification)
     }
     
     private fun handleGenericNotification(message: RemoteMessage) {
@@ -294,13 +293,28 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
             .setContentIntent(createMainAppPendingIntent(message))
             .build()
         
-        NotificationManagerCompat.from(this)
-            .notify(generateNotificationId(), notification)
+        postNotification(notification)
     }
     
     // ========================================
     // Utility Methods
     // ========================================
+
+    @SuppressLint("MissingPermission")
+    private fun postNotification(notification: Notification) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (
+                ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                Timber.w("Notification permission is not granted; dropping background notification")
+                return
+            }
+        }
+
+        NotificationManagerCompat.from(this)
+            .notify(generateNotificationId(), notification)
+    }
     
     private fun isAppInForeground(): Boolean {
         val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
