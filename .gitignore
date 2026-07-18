@@ -143,3 +143,8 @@ nul
 !/docs/firebase/
 /docs/firebase/*
 !/docs/firebase/firebase-deployment-guide.md
+
+/AGENTS.md
+/CLAUDE.md
+/patterns/
+/docs/runbooks/competition-release.md
