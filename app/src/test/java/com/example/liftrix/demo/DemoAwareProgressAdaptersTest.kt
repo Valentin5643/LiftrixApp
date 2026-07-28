@@ -9,9 +9,12 @@ import com.example.liftrix.domain.model.analytics.RankingMetric
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.analytics.VolumeGrouping
+import com.example.liftrix.domain.model.export.ProgressReportDateRange
+import com.example.liftrix.domain.model.export.ProgressReportRequest
 import com.google.common.truth.Truth.assertThat
 import kotlinx.datetime.LocalDate
 import org.junit.Test
+import java.time.LocalDateTime
 import java.util.Date
 
 class DemoAwareProgressAdaptersTest {
@@ -136,5 +139,26 @@ class DemoAwareProgressAdaptersTest {
         assertThat(heatmap.metric).isEqualTo(MuscleHeatmapMetric.SETS)
         assertThat(heatmap.colorMode).isEqualTo(MuscleHeatmapColorMode.MONOCHROME_INTENSITY)
         assertThat(heatmap.muscleValues).isNotEmpty()
+    }
+
+    @Test
+    fun `demo progress report uses user facing report language`() {
+        val report = factory.progressReportData(
+            timeline = timeline,
+            request = ProgressReportRequest(
+                dateRange = ProgressReportDateRange.AllTime,
+                generatedAt = LocalDateTime.of(2026, 5, 25, 12, 0)
+            )
+        )
+
+        assertThat(report.title.lowercase()).doesNotContain("demo")
+        assertThat(report.aiSummary.summary.lowercase()).doesNotContain("demo")
+        assertThat(report.aiSummary.recommendations.joinToString(" ").lowercase()).doesNotContain("demo")
+        assertThat(report.aiSummary.contextUsed.joinToString(" ").lowercase()).doesNotContain("demo")
+        assertThat(report.personalRecordRows.mapNotNull { it.previousValue }.joinToString(" ").lowercase())
+            .doesNotContain("demo")
+        assertThat(report.workoutRows.joinToString(" ") { it.name.lowercase() }).doesNotContain("demo")
+        assertThat(report.personalRecordRows.mapNotNull { it.previousValue })
+            .contains("First recorded")
     }
 }

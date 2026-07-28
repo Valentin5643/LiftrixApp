@@ -9,11 +9,9 @@ import com.example.liftrix.ui.common.state.AsyncData
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -91,30 +89,10 @@ class ProgressSummaryViewModel @Inject constructor(
      */
     private var userStabilized = false
 
-    /**
-     * Combined state flow that reactively updates when user authentication or time range changes.
-     * Uses Flow.combine to efficiently handle multiple data sources and automatically
-     * trigger data loading when dependencies change.
-     */
-    private val combinedState: StateFlow<ProgressSummaryState> = combine(
-        _currentUser,
-        _currentTimeRange
-    ) { user, timeRange ->
-        val userId = user?.uid
-        if (userId != null) {
-            ProgressSummaryState.createAuthenticatedState(userId, timeRange)
-        } else {
-            ProgressSummaryState.createUnauthenticatedState()
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = ProgressSummaryState.createUnauthenticatedState()
-    )
+    private var summaryLoadJob: Job? = null
 
     init {
-        // Start observing combined state and trigger initial data loading
-        observeStateChanges()
+        _uiState.value = UiState.Success(ProgressSummaryState.createUnauthenticatedState())
         
         // Load initial data when ViewModel is created
         handleEvent(ProgressSummaryEvent.LoadSummary)
@@ -221,10 +199,16 @@ class ProgressSummaryViewModel @Inject constructor(
 
                         // Auto-load summary when user is available and changed
                         if (previousUserId != _currentUser.value?.uid && _currentUser.value != null) {
-                            handleEvent(ProgressSummaryEvent.LoadSummary)
+                            startSummaryLoad(
+                                ProgressSummaryState.createAuthenticatedState(
+                                    userId = _currentUser.value!!.uid,
+                                    timeRange = _currentTimeRange.value
+                                )
+                            )
                             Timber.d("Summary: User auth changed to ${event.userId}, loading summary")
                         } else if (_currentUser.value == null) {
                             // Clear state when user logs out
+                            summaryLoadJob?.cancel()
                             _uiState.value = UiState.Success(ProgressSummaryState.createUnauthenticatedState())
                             Timber.d("Summary: User logged out, clearing state")
                         }
@@ -264,29 +248,20 @@ class ProgressSummaryViewModel @Inject constructor(
     }
 
     /**
-     * Observes the combined state and updates the UI state accordingly.
-     * This method ensures that UI state stays in sync with authentication and time range changes.
-     */
-    private fun observeStateChanges() {
-        viewModelScope.launch {
-            combinedState.collect { newState ->
-                _uiState.value = UiState.Success(newState)
-                
-                // Trigger data loading if user is authenticated and data is not asked
-                if (newState.hasValidUser() && newState.isNotAsked()) {
-                    loadSummaryDataForState(newState)
-                }
-            }
-        }
-    }
-
-    /**
      * Loads summary data for the current state.
      */
     private suspend fun loadSummaryData() {
-        val currentState = combinedState.value
+        val currentState = currentSummaryState()
         if (currentState.hasValidUser()) {
-            loadSummaryDataForState(currentState)
+            startSummaryLoad(currentState)
+        }
+    }
+
+    private fun startSummaryLoad(state: ProgressSummaryState) {
+        summaryLoadJob?.cancel()
+        _uiState.value = UiState.Success(state.toLoadingState())
+        summaryLoadJob = viewModelScope.launch {
+            loadSummaryDataForState(state)
         }
     }
 
@@ -298,9 +273,6 @@ class ProgressSummaryViewModel @Inject constructor(
     private suspend fun loadSummaryDataForState(state: ProgressSummaryState) {
         val userId = state.userId ?: return
         val timeRange = state.currentTimeRange
-
-        // Update state to loading
-        _uiState.value = UiState.Loading
 
         // Load data from service
         val result = try {
@@ -319,7 +291,11 @@ class ProgressSummaryViewModel @Inject constructor(
                     )
                 )
             )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         }
+
+        if (!isCurrentRequest(userId, timeRange)) return
         
         result.fold(
             onSuccess = { data ->
@@ -348,7 +324,7 @@ class ProgressSummaryViewModel @Inject constructor(
      * Refreshes the summary data.
      */
     private suspend fun refreshSummary() {
-        val currentState = combinedState.value
+        val currentState = currentSummaryState()
         if (!currentState.hasValidUser()) return
 
         // Set refresh flag to true
@@ -356,7 +332,7 @@ class ProgressSummaryViewModel @Inject constructor(
         _uiState.value = UiState.Success(refreshingState)
 
         // Load fresh data
-        loadSummaryDataForState(currentState)
+        startSummaryLoad(refreshingState)
     }
 
     /**
@@ -367,15 +343,13 @@ class ProgressSummaryViewModel @Inject constructor(
     private suspend fun changeTimePeriod(timeRange: TimeRange) {
         _currentTimeRange.value = timeRange
         
-        // Load from the explicit selected range instead of reading combinedState
-        // immediately, because the combined flow may still hold the previous range.
-        val currentState = (_uiState.value as? UiState.Success)?.data ?: combinedState.value
+        val currentState = currentSummaryState()
         val updatedState = currentState.withTimeRange(timeRange)
         _uiState.value = UiState.Success(updatedState)
 
         // Load data for new time range
         if (updatedState.hasValidUser()) {
-            loadSummaryDataForState(updatedState)
+            startSummaryLoad(updatedState)
         }
     }
 
@@ -391,7 +365,7 @@ class ProgressSummaryViewModel @Inject constructor(
      * Clears the current error state.
      */
     private fun clearError() {
-        val currentState = combinedState.value
+        val currentState = currentSummaryState()
         if (currentState.hasError()) {
             val clearedState = currentState.copy(summaryData = AsyncData.NotAsked)
             _uiState.value = UiState.Success(clearedState)
@@ -402,7 +376,7 @@ class ProgressSummaryViewModel @Inject constructor(
      * Forces a refresh of all data.
      */
     private suspend fun forceRefresh() {
-        val currentState = combinedState.value
+        val currentState = currentSummaryState()
         if (!currentState.hasValidUser()) return
 
         val userId = currentState.userId!!
@@ -413,7 +387,7 @@ class ProgressSummaryViewModel @Inject constructor(
         refreshResult.fold(
             onSuccess = { _ ->
                 // If refresh succeeded, reload summary data
-                loadSummaryDataForState(currentState)
+                startSummaryLoad(currentState)
             },
             onFailure = { throwable ->
                 // If refresh failed, handle error
@@ -441,7 +415,7 @@ class ProgressSummaryViewModel @Inject constructor(
      * Handles background data updates.
      */
     private suspend fun handleBackgroundDataUpdate() {
-        val currentState = combinedState.value
+        val currentState = currentSummaryState()
         if (!currentState.hasValidUser()) return
 
         // Check if current data is stale
@@ -451,6 +425,7 @@ class ProgressSummaryViewModel @Inject constructor(
             val timeRange = currentState.currentTimeRange
             
             val result = progressDataService.getProgressSummary(userId, timeRange)
+            if (!isCurrentRequest(userId, timeRange)) return
             
             result.fold(
                 onSuccess = { data ->
@@ -468,6 +443,26 @@ class ProgressSummaryViewModel @Inject constructor(
             )
         }
     }
+
+    private fun currentSummaryState(): ProgressSummaryState {
+        val userId = _currentUser.value?.uid
+        val timeRange = _currentTimeRange.value
+        val uiState = (_uiState.value as? UiState.Success)?.data
+        return if (
+            uiState != null &&
+            uiState.userId == userId &&
+            uiState.currentTimeRange == timeRange
+        ) {
+            uiState
+        } else if (userId != null) {
+            ProgressSummaryState.createAuthenticatedState(userId, timeRange)
+        } else {
+            ProgressSummaryState.createUnauthenticatedState()
+        }
+    }
+
+    private fun isCurrentRequest(userId: String, timeRange: TimeRange): Boolean =
+        _currentUser.value?.uid == userId && _currentTimeRange.value == timeRange
 
     /**
      * Extension function to handle TimeRange creation for predefined ranges.

@@ -255,7 +255,6 @@ Firebase Services (8 Integrated)
 
 ### Development Guides
 
-- **[CLAUDE.md](CLAUDE.md)** - AI assistant instructions and patterns
 - **[Contributing Guidelines](CONTRIBUTING.md)** - How to contribute
 - **[Code of Conduct](CODE_OF_CONDUCT.md)** - Community guidelines
 
@@ -372,7 +371,7 @@ Conține documentația tehnică, declarația de resurse externe, prezentarea, AP
 
 <div align="center">
 
-**Built with ❤️ by the Liftrix Team**
+**Built with ❤️ by Valentin**
 
 [⬆ Back to Top](#-liftrix)
 

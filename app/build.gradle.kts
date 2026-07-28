@@ -129,7 +129,7 @@ android {
     buildToolsVersion = "34.0.0"  // Installed SDK build tools with complete binaries
 
     installation {
-        enableBaselineProfile = true
+        enableBaselineProfile = false
     }
 
     defaultConfig {
@@ -183,6 +183,7 @@ android {
 
     buildTypes {
         release {
+            manifestPlaceholders += mapOf()
             isMinifyEnabled = true
             isShrinkResources = useFullReleaseOptimization
             proguardFiles(
@@ -213,6 +214,7 @@ android {
             buildConfigField("boolean", "ENABLE_STRICT_MODE", "false")
             buildConfigField("boolean", "ENABLE_FIREBASE_PERFORMANCE", "true")
             buildConfigField("boolean", "ENABLE_CRASHLYTICS", "true")
+            signingConfig = signingConfigs.getByName("debug")
             if (hasReleaseSigningConfig) {
                 signingConfig = signingConfigs.getByName("release")
             }

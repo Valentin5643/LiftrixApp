@@ -519,7 +519,7 @@ class PdfReportGenerator @Inject constructor() {
                 data.workoutRows.map {
                     listOf(
                         formatReportDate(it.date),
-                        formatWorkoutRowName(it.name, it.workoutId),
+                        formatWorkoutRowName(it.name),
                         it.durationMinutes?.let { minutes -> "$minutes min" } ?: "-",
                         formatWorkoutRowLoad(it.volumeKg, it.repCount),
                         it.setCount.takeIf { setCount -> setCount > 0 }?.toString() ?: "-"
@@ -756,10 +756,7 @@ class PdfReportGenerator @Inject constructor() {
         return "${formatDecimal(value, digits)} kg"
     }
 
-    private fun formatWorkoutRowName(name: String, workoutId: String): String {
-        val suffix = workoutId.takeIf { it.isNotBlank() }?.take(8) ?: return name
-        return "$name #$suffix"
-    }
+    private fun formatWorkoutRowName(name: String): String = name
 
     private fun formatWorkoutRowLoad(volumeKg: Double, repCount: Int): String {
         return when {

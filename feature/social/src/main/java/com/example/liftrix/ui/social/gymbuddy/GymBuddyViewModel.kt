@@ -6,12 +6,12 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.social.GymBuddy
 import com.example.liftrix.domain.model.social.QRCodeData
 import com.example.liftrix.domain.model.social.QRUserProfile
+import com.example.liftrix.domain.qr.GymBuddyQrCodec
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.social.GymBuddyRepository
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.domain.service.QRCodeService
 import com.example.liftrix.ui.common.event.ViewModelEvent
-import android.net.Uri
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -433,14 +433,11 @@ class GymBuddyViewModel @Inject constructor(
             android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING
         )
 
-        return Uri.Builder()
-            .scheme("liftrix")
-            .authority("gym-buddy")
-            .appendQueryParameter("userId", userId)
-            .appendQueryParameter("token", encodedToken)
-            .appendQueryParameter("expiresAt", expiresAt.toString())
-            .build()
-            .toString()
+        return GymBuddyQrCodec.encode(
+            userId = userId,
+            token = encodedToken,
+            expiresAt = expiresAt
+        )
     }
 
     // Analytics tracking methods

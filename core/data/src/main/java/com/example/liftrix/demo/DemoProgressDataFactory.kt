@@ -160,7 +160,7 @@ class DemoProgressDataFactory @Inject constructor() {
         return ProgressReportData(
             generatedAt = request.generatedAt,
             range = range,
-            title = "${range.label} Demo Training Summary",
+            title = "${range.label} Training Summary",
             summary = summary,
             privacyOptions = request.privacyOptions,
             privacyApplied = buildList {
@@ -179,7 +179,7 @@ class DemoProgressDataFactory @Inject constructor() {
                         exerciseName = record.exerciseName,
                         recordType = "PR event",
                         newValue = "MAX WEIGHT: ${formatDemoDecimal(record.weightKg, 1)} kg x ${record.reps}",
-                        previousValue = "Previous demo best"
+                        previousValue = previousBestValue(timeline, record)
                     )
                 }
             } else {
@@ -203,13 +203,13 @@ class DemoProgressDataFactory @Inject constructor() {
             },
             aiSummary = if (request.includeOptions.aiCoachInsights) {
                 ProgressReportAiSummary(
-                    summary = "Demo training data shows ${workouts.size} completed sessions, ${formatDemoDecimal(totalVolume, 0)} kg of weighted volume, and ${personalRecords.size} personal record events in this period.",
+                    summary = "Training data shows ${workouts.size} completed sessions, ${formatDemoDecimal(totalVolume, 0)} kg of weighted volume, and ${personalRecords.size} personal record events in this period.",
                     recommendations = listOf(
                         "Keep progressive overload focused on ${strengthRows.firstOrNull()?.exerciseName ?: "your top compound lifts"} while recovery stays stable.",
                         "Use the latest weekly volume as next week's baseline and add small increases only when form stays strong.",
-                        "Review rest days around the heaviest demo sessions before adding more volume."
+                        "Review rest days around the heaviest sessions before adding more volume."
                     ),
-                    contextUsed = listOf("Demo timeline", "Completed workouts", "Set activity", "Personal records")
+                    contextUsed = listOf("Training history", "Completed workouts", "Set activity", "Personal records")
                 )
             } else {
                 ProgressReportAiSummary("", emptyList(), emptyList())
@@ -653,6 +653,23 @@ class DemoProgressDataFactory @Inject constructor() {
     }
 
     private fun estimateOneRmKg(set: DemoSet): Double = set.weightKg * (1.0 + set.reps / 30.0)
+
+    private fun previousBestValue(timeline: DemoTimeline, record: DemoPersonalRecord): String {
+        val previousBest = timeline.workouts
+            .asSequence()
+            .filter { workout -> workout.date < record.date }
+            .flatMap { workout ->
+                workout.exercises
+                    .asSequence()
+                    .filter { exercise -> exercise.exerciseId == record.exerciseId }
+                    .flatMap { exercise -> exercise.sets.asSequence() }
+            }
+            .maxByOrNull { set -> set.weightKg }
+
+        return previousBest?.let {
+            "MAX WEIGHT: ${formatDemoDecimal(it.weightKg, 1)} kg x ${it.reps}"
+        } ?: "First recorded"
+    }
 
     private fun resolveReportRange(
         timeline: DemoTimeline,

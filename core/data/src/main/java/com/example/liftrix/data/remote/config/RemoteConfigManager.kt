@@ -125,8 +125,8 @@ class RemoteConfigManager @Inject constructor(
 
             // AI Chat defaults
             AI_CHAT_ENABLED to false,
-            AI_DAILY_MESSAGE_LIMIT to 50,
-            AI_MONTHLY_TOKEN_LIMIT to 100000,
+            AI_DAILY_MESSAGE_LIMIT to 100,
+            AI_MONTHLY_TOKEN_LIMIT to 250000,
             AI_COST_THRESHOLD_PER_HOUR to 1.0,
             AI_JAILBREAK_THRESHOLD to 0.8,
             AI_FITNESS_CONTEXT_WEIGHT to 0.5,
@@ -140,8 +140,8 @@ class RemoteConfigManager @Inject constructor(
             AI_TOP_P to 0.95,
 
             // Additional AI rate limiting keys for compatibility
-            "ai_max_daily_messages" to 50L,
-            "ai_max_monthly_tokens" to 100000L,
+            "ai_max_daily_messages" to 100L,
+            "ai_max_monthly_tokens" to 250000L,
             "ai_rate_limit_enabled" to true,
             "ai_cost_threshold_per_hour" to 1.0,
             "ai_avg_response_time_ms" to 1500L

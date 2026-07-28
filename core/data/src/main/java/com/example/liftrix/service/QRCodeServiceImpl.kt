@@ -8,6 +8,8 @@ import android.util.Base64
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.qr.GymBuddyQrCodec
+import com.example.liftrix.domain.qr.GymBuddyQrParseResult
 import com.example.liftrix.domain.service.QRCodeService
 import java.security.SecureRandom
 import javax.crypto.Cipher
@@ -151,12 +153,17 @@ class QRCodeServiceImpl @Inject constructor() : QRCodeService {
             return false
         }
 
-        return data.startsWith(PROFILE_URL_PREFIX) ||
-               data.startsWith(WEB_URL_PREFIX) ||
-               data.startsWith(GYM_BUDDY_PREFIX) ||
-               data.startsWith(INTERNAL_QR_PREFIX) ||
-               data.matches(Regex("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$")) || // UUID format
-               data.startsWith("eyJ") // Base64 encoded JSON (encrypted payload)
+        return when {
+            data.startsWith(GYM_BUDDY_PREFIX, ignoreCase = true) || data.startsWith("eyJ") ->
+                GymBuddyQrCodec.parse(data) is GymBuddyQrParseResult.Valid
+            data.startsWith(PROFILE_URL_PREFIX) ->
+                data.removePrefix(PROFILE_URL_PREFIX).matches(Regex("^[A-Za-z0-9_-]{5,128}$"))
+            data.startsWith(WEB_URL_PREFIX) ->
+                data.removePrefix(WEB_URL_PREFIX).matches(Regex("^[A-Za-z0-9_-]{8,256}$"))
+            data.startsWith(INTERNAL_QR_PREFIX) ->
+                data.removePrefix(INTERNAL_QR_PREFIX).matches(Regex("^[A-Za-z0-9_-]{8,128}$"))
+            else -> false
+        }
     }
 
     override suspend fun generateProfileQRCode(profileUrl: String, size: Int): LiftrixResult<Bitmap> {

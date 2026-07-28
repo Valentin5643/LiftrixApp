@@ -1,116 +1,166 @@
-DECLARATIE PRIVIND RESURSELE EXTERNE SI CONTRIBUTIA AUTORULUI
+DECLARAȚIE PRIVIND RESURSELE EXTERNE ȘI CONTRIBUȚIA AUTORULUI
 
-Competitie: InfoEducatie 2026
-Sectiune: Software Utilitar / Mobile
-Proiect: Liftrix - aplicatie Android de fitness tracking
+Competiție: InfoEducație 2026 — faza națională
+Secțiune: Software Utilitar / Mobile
+Proiect: Liftrix — aplicație Android de fitness tracking, progres, funcții sociale și coaching AI
 Autor: Jianu Valentin
-Scoala: Colegiul National Militar Tudor Vladimirescu
-Data: 8 mai 2026
+Școala: Colegiul Național Militar Tudor Vladimirescu
+Data documentului inițial: 8 mai 2026
+Data actualizării pentru faza națională: [DE COMPLETAT: data depunerii materialelor pentru faza națională]
 
-1. Biblioteci software si servicii folosite
+1. Biblioteci software și servicii folosite
 
-Bibliotecile de mai jos sunt folosite ca infrastructura, framework-uri sau servicii externe. Ele nu reprezinta codul principal al aplicatiei. Arhitectura, integrarea functionalitatilor, logica de business, modelul de date, fluxurile UI si testarea sunt realizate si asumate de autor.
+Bibliotecile de mai jos sunt folosite ca infrastructură, framework-uri sau servicii externe. Ele nu reprezintă codul principal al aplicației. Arhitectura, integrarea funcționalităților, logica de business, modelul de date, fluxurile UI și testarea sunt realizate și asumate de autor.
 
-1.1 Android, UI si lifecycle
-- Kotlin 2.0.21 - limbajul principal al aplicatiei; licenta Apache 2.0.
-- Jetpack Compose BOM 2024.12.01 - framework declarativ pentru interfata Android; licenta Apache 2.0.
-- Material 3 / Material You - sistem de design Google folosit ca baza vizuala; licenta Apache 2.0 pentru componentele Android.
-- Navigation Compose - navigare in aplicatie si rute type-safe; licenta Apache 2.0.
-- AndroidX Lifecycle - ViewModel, StateFlow/lifecycle integration; licenta Apache 2.0.
-- AndroidX WindowSizeClass - adaptarea layout-urilor la dimensiuni diferite de ecran; licenta Apache 2.0.
+1.1 Android, UI și lifecycle
 
-1.2 Date locale, sincronizare si background
-- Room 2.6.1 - ORM peste SQLite, folosit ca sursa locala unica de adevar; licenta Apache 2.0.
-- WorkManager 2.9.x - executie de taskuri background si sincronizare; licenta Apache 2.0.
-- Paging 3 - paginare pentru feed si liste mari; licenta Apache 2.0.
-- Kotlin Coroutines / Flow / StateFlow - programare asincrona si fluxuri reactive; licenta Apache 2.0.
-- SQLCipher - criptarea bazei de date locale; licenta BSD-style conform pachetului Zetetic.
+- Kotlin 2.0.21 — limbajul principal al aplicației; licență Apache 2.0.
+- Android Gradle Plugin 8.7.3 și Java/JVM 17 — infrastructura de compilare Android.
+- Android SDK: minimum API 26, compile/target API 35.
+- Jetpack Compose BOM 2024.12.01 — framework declarativ pentru interfața Android; licență Apache 2.0.
+- Material 3 / Material You — sistem de design Google folosit ca bază vizuală; licență Apache 2.0 pentru componentele Android.
+- Navigation Compose — navigare în aplicație și rute type-safe; licență Apache 2.0.
+- AndroidX Lifecycle — ViewModel și integrarea Flow/StateFlow cu ciclul de viață; licență Apache 2.0.
+- AndroidX Window Size Class — adaptarea layout-urilor la dimensiuni diferite de ecran; licență Apache 2.0.
+- Lottie 6.6.2 — animații în interfață.
 
-1.3 Injectie de dependente
-- Hilt / Dagger 2.52 - injectie de dependente, integrare cu ViewModel si WorkManager; licenta Apache 2.0.
+1.2 Date locale, sincronizare și operații în background
 
-1.4 Firebase si servicii Google
-Aplicatia foloseste servicii Firebase prin Firebase BOM 33.7.0 si dependente declarate in Gradle. In documentatia de concurs sunt evidentiate serviciile Firebase/Google folosite pentru infrastructura cloud:
-- Firebase Authentication - autentificare utilizatori.
-- Cloud Firestore - sincronizare cloud si date sociale.
-- Firebase Realtime Database - infrastructura Firebase auxiliara.
-- Firebase Storage - stocare media.
-- Firebase Analytics - evenimente de utilizare si metrici de engagement.
-- Firebase Performance Monitoring - monitorizare performanta.
-- Firebase Crashlytics - raportare erori.
-- Firebase Remote Config - configurare la distanta si rate limiting.
-- Firebase Cloud Messaging - infrastructura de notificari.
-- Firebase Cloud Functions - infrastructura backend auxiliara.
-- Firebase App Check / Play Integrity - protectie pentru accesul la serviciile Firebase.
-- Firebase AI / Vertex AI - integrare Gemini 2.5, inclusiv modelul gemini-2.5-flash-lite, pentru functionalitatea de AI coach.
+- Room 2.6.1 — ORM peste SQLite, folosit ca sursă locală principală de adevăr; licență Apache 2.0.
+- WorkManager 2.9.1 — execuția operațiilor background și sincronizare; licență Apache 2.0.
+- Paging 3.2.1 — paginare pentru feed și liste mari; licență Apache 2.0.
+- Kotlin Coroutines / Flow / StateFlow — programare asincronă și fluxuri reactive; licență Apache 2.0.
+- SQLCipher 4.6.0 — criptarea bazei de date locale; licență conform pachetului Zetetic.
+- AndroidX DataStore 1.1.1 — stocarea preferințelor și a configurațiilor locale.
 
-Serviciile de mai sus sunt infrastructura externa. Logica de business, modul de integrare in aplicatie, sincronizarea offline-first, modelul local de date si fluxurile UI sunt realizate de autor.
+Aplicația folosește o arhitectură offline-first. Interfața citește starea locală din Room, iar operațiile de sincronizare sunt coordonate prin repository-uri, cozi locale, SyncCoordinator și WorkManager. Interfața nu folosește Firebase ca sursă directă de adevăr.
 
-1.5 Autentificare externa si monetizare
-- Google Sign-In / Google Play Services Auth - autentificare OAuth cu cont Google; licenta conform termenilor Google Play Services.
-- Google Play Billing - infrastructura pentru optiuni premium; aplicatia are functionalitati gratuite si include infrastructura pentru optiuni premium.
+1.3 Injecție de dependențe
 
-1.6 Securitate
-- AndroidX Security Crypto - SharedPreferences criptat si management securizat al cheilor; licenta Apache 2.0.
-- Google Tink - folosit indirect de AndroidX Security Crypto, nu ca logica proprie principala a aplicatiei.
-- ProGuard/R8 - obfuscare si optimizare pentru build-ul de release.
-- Firebase Security Rules si App Check - reguli si protectie pentru accesul la datele cloud.
+- Hilt / Dagger 2.52 — injecție de dependențe și integrare cu ViewModel și WorkManager; licență Apache 2.0.
 
-1.7 Utilitati
-- Timber - logging in dezvoltare; licenta Apache 2.0.
-- Coil - incarcare asincrona de imagini in Compose; licenta Apache 2.0.
-- ZXing / zxing-android-embedded - generare si scanare QR pentru functionalitatea Gym Buddy; licenta Apache 2.0.
-- Gson si kotlinx.serialization - serializare/deserializare date; licente open-source conform proiectelor respective.
-- iText 7 si Apache Commons CSV - infrastructura pentru export de date; folosite conform licentelor declarate de proiecte.
+1.4 Firebase și servicii Google
 
-1.8 Testare
-- JUnit 4 - teste unitare; licenta Eclipse Public License 1.0.
-- MockK - mock-uri pentru Kotlin; licenta Apache 2.0.
-- Mockito - mock-uri pentru teste, acolo unde este folosit; licenta MIT.
-- Turbine - testare Flow; licenta Apache 2.0.
-- Robolectric, Espresso, Compose UI Test, Hilt Testing si Room Testing - testare Android; licente open-source conform proiectelor AndroidX/Google.
+Aplicația declară servicii Firebase prin Firebase BOM 33.7.0. Serviciile confirmate în implementarea curentă sunt:
 
-2. Resurse de continut si design
+- Firebase Authentication — autentificarea utilizatorilor.
+- Cloud Firestore — sincronizare cloud și date sociale.
+- Firebase Storage — stocare media.
+- Firebase Analytics — evenimente de utilizare, activate numai conform consimțământului utilizatorului.
+- Firebase Performance Monitoring — monitorizare de performanță, controlată prin consimțământ și configurarea build-ului.
+- Firebase Crashlytics — raportarea erorilor, controlată prin consimțământ și configurarea build-ului.
+- Firebase Remote Config — configurarea la distanță a funcționalităților și limitelor AI.
+- Firebase Cloud Messaging — infrastructura notificărilor.
+- Firebase Cloud Functions — infrastructură backend auxiliară.
+- Firebase App Check — provider Play Integrity în build-ul release și provider debug în build-ul debug.
+- Firebase AI / Vertex AI — integrarea modelului gemini-2.5-flash-lite pentru chatul AI și constructorul ghidat de antrenamente.
 
-- Iconurile folosite in aplicatie provin in principal din Material Icons / Material Symbols, utilizate conform licentei Google. Nu au fost folosite pachete comerciale sau iconuri fara drept de utilizare.
-- Logo-ul si elementele de identitate Liftrix din `assets` si `app/src/main/res/drawable` sunt resurse de proiect ale autorului.
-- Aplicatia foloseste in cod fonturile de sistem Android / Material 3 prin `FontFamily.SansSerif`, `FontFamily.Default` si `FontFamily.Monospace`. Exista fisiere font in resurse, dar configuratia Compose activa foloseste fallback-uri de sistem.
-- Capturile din `assets/Home-screen.jpg`, `assets/Coach.jpg` si capturile incluse in folderul `00_InfoEducatie_2026/dovezi` sunt capturi ale aplicatiei si pot fi folosite in prezentare.
-- Imaginile pentru conturile seed / conturile de test, inclusiv avataruri sau imagini demonstrative asociate acestor conturi, sunt imagini generate cu Gemini Nano Banana 2 si sunt folosite strict ca date demonstrative pentru prezentarea si testarea aplicatiei.
-- Imaginile anatomice / imaginile cu muschii folosite in interfata sau in materialele demonstrative sunt imagini generate cu Gemini Nano Banana 2, nu fotografii preluate de pe internet si nu resurse comerciale terte.
-- Biblioteca locala de exercitii este stocata in `app/src/main/assets/exercise_library.json` si contine 100 exercitii predefinite. Nu este declarata o sursa externa pentru acest fisier. Denumirile exercitiilor sunt termeni uzuali din domeniul fitness, iar clasificarea pe grupe musculare, echipamente si tipuri de miscare este structurata in proiect de autor.
-- Nu au fost utilizate template-uri de proiect platite sau UI kit-uri comerciale terte.
+Firebase Realtime Database este declarată ca dependență Gradle, însă nu este prezentată drept sursa principală de date a aplicației. Sursa locală principală rămâne baza Room, iar datele cloud sunt reconciliate local prin straturile de date și sincronizare.
 
-3. Utilizarea instrumentelor AI in dezvoltare
+Serviciile Firebase sunt infrastructură externă. Logica de business, integrarea în aplicație, sincronizarea offline-first, modelul local de date și fluxurile UI sunt realizate de autor.
 
-Instrumentele AI au fost folosite ca suport de lucru pentru brainstorming, cercetare, explicatii tehnice, debugging, structurarea documentatiei si sugestii pentru cod repetitiv. Implementarea finala, integrarea in proiect, testarea, deciziile de arhitectura, modelul de date si logica de business au fost realizate si asumate de autor.
+1.5 Autentificare externă și monetizare
 
-Utilizarea AI declarata:
-- Brainstorming si cercetare: Claude AI / ChatGPT - explorarea unor pattern-uri arhitecturale Android si comparatii intre biblioteci.
-- Asistenta la cod: sugestii pentru pattern-uri specifice precum WorkManager, Paging3 si Hilt boilerplate; logica business a fost implementata de autor.
-- Debugging: analiza erorilor de compilare si runtime, cu validare si integrare manuala in proiect.
-- Structurarea documentatiei: suport pentru formulare, organizare si verificarea coerentei documentatiei.
-- Generare imagini ilustrative: Gemini Nano Banana 2 pentru imaginile conturilor seed / test si imaginile anatomice cu muschii; alte instrumente generative pot fi folosite doar daca sunt declarate explicit in materialele finale.
-- Design sistem UI: LiftrixColorsV2 si integrarea Material 3 sunt decizii proprii de design; AI a fost folosit doar consultativ pentru idei de accesibilitate si structurare vizuala.
+- AndroidX Credentials 1.3.0, Google ID 1.1.1 și Google Play Services Auth 21.3.0 — autentificare cu un cont Google.
+- Google Play Billing 6.0.1 — infrastructură inclusă pentru opțiuni premium. În versiunea curentă, interfața de upgrade este în regim de preview/fail-closed și nu este declarată ca sistem complet de abonamente funcționale.
 
-Gemini 2.5 prin Firebase AI / Vertex AI este o functionalitate integrata in aplicatie pentru coaching AI. Aceasta functionalitate este parte din produs si nu inlocuieste contributia autorului la construirea proiectului.
+1.6 AI integrat în produs
 
-4. Contributia autorului
+Chatul AI și constructorul ghidat de antrenamente sunt implementate în aplicație. Constructorul colectează obiectivul, nivelul, echipamentul, numărul de zile, durata, limitările și preferințele utilizatorului, apoi prezintă planul pentru verificare înainte de salvare.
 
-Autorul a realizat arhitectura aplicatiei, integrarea functionalitatilor, logica de business, modelul de date, fluxurile UI, sistemul offline-first, integrarea Firebase si testarea.
+Funcționalitățile AI cu cost sunt opționale și controlate prin Firebase Remote Config. Configurația implicită are AI-ul dezactivat. În versiunea de concurs, apelurile AI cu cost sunt permise numai conturilor autorizate ca administrator. Înaintea apelului sunt verificate utilizatorul curent, autorizarea, App Check, protecțiile anti-abuz și limitele configurabile de utilizare. Evenimentele de utilizare AI sunt înregistrate într-un registru Room separat de istoricul conversațiilor.
 
-Contributia autorului include:
-- Arhitectura: Clean Architecture cu 6 straturi si separare UI / ViewModel / UseCase / Repository / DAO / Firebase.
-- Model de date: Room database version 9, cu 69 entitati Room inregistrate in `LiftrixDatabase.kt` si metadata de sincronizare.
-- Logic business: 84 use case-uri definite ca clase/interfete in sursa principala, wrapper `LiftrixResult<T>` pentru error handling tipizat si 47 interfete repository in domeniu.
-- Servicii de domeniu: 49 interfete service sub domain/service, conform inventarului mentionat in documentatia Word.
-- Persistenta si acces la date: 68 DAO-uri/accessors cu filtrare obligatorie per userId.
-- Sincronizare: WorkManager, `UnifiedSyncWorker`, workeri specializati si conflict resolution last-write-wins prin timestamp-uri, cu versiunea locala castigand la egalitate in resolverul central.
-- Interfata: 61 subclase `LiftrixRoute`, rute/ecrane 30+, componente Compose, sistem de culori LiftrixColorsV2 si integrare Material 3.
-- Functionalitati: tracking antrenamente, biblioteca locala cu 100 exercitii predefinite, dashboard de progres cu 12 widget-uri configurabile, social / QR buddy, AI coach si mecanisme offline-first.
-- Securitate: user scoping la nivel de DAO, Firebase Security Rules, autentificare, App Check, criptare locala pentru date sensibile si ProGuard/R8 in release.
-- Documentare si testare: documentatie tehnica, ghiduri de arhitectura, teste unitare si teste instrumented unde sunt disponibile. Acoperirea procentuala trebuie citata doar dupa rularea JaCoCo.
+1.7 Securitate
 
-5. Mentiune finala
+- AndroidX Security Crypto 1.1.0-alpha06 — stocare criptată și managementul datelor locale sensibile; licență Apache 2.0.
+- SQLCipher — criptarea bazei locale.
+- Firebase Security Rules și App Check — protecția accesului la datele și serviciile cloud.
+- ProGuard/R8 — obfuscare și optimizare pentru build-ul release. Reducerea resurselor este activată numai în configurațiile care solicită optimizarea completă.
+- Colectarea Analytics, Crashlytics și Performance este dezactivată implicit și este activată în funcție de consimțământ și configurația build-ului.
 
-Proiectul Liftrix este realizat individual de Jianu Valentin. Bibliotecile, framework-urile, serviciile Firebase, instrumentele AI si imaginile generate declarate mai sus sunt resurse auxiliare. Ele nu reprezinta codul principal al aplicatiei si nu inlocuiesc contributia autorului.
+Aplicația impune ca accesul la datele deținute de utilizator să fie filtrat după userId/user_id. Proiectul include și verificări automate pentru o parte dintre DAO-uri, fără a declara că toate cele 70 de fișiere sau accesori DAO sunt acoperite de aceeași adnotare automată.
+
+1.8 UI, grafice, media și utilitare
+
+- Glance 1.1.1 — widget-uri Android native pentru Streak, Consistency și Dashboard.
+- Vico 1.15.0 — grafice pentru progres și analiză.
+- CameraX 1.4.0 — acces la cameră pentru fluxurile care necesită scanare.
+- ZXing 3.5.3 și zxing-android-embedded 4.3.0 — generare și scanare QR pentru Gym Buddy.
+- Coil 2.5.0 — încărcarea asincronă a imaginilor în Compose.
+- Timber 5 — logging în dezvoltare.
+- Gson 2.11 și kotlinx.serialization 1.7.3 — serializarea și deserializarea datelor.
+- kotlinx-datetime 0.6.1 — operații cu date și timp.
+- OkHttp 4.12 — infrastructură HTTP.
+- iText 8.0.5 și Apache Commons CSV 1.12.0 — infrastructură pentru exportul datelor, folosită conform licențelor proiectelor.
+
+Exportul anumitor date și rapoarte este implementat. Importul de date nu este prezentat ca funcționalitate finalizată, iar serviciul general de generare PDF și acțiunile PDF juridice eșuează controlat atunci când nu sunt disponibile.
+
+1.9 Testare
+
+- JUnit 4 — teste unitare; licență Eclipse Public License 1.0.
+- MockK — mock-uri pentru Kotlin; licență Apache 2.0.
+- Mockito — mock-uri pentru testele în care este folosit; licență MIT.
+- Turbine — testarea fluxurilor Flow; licență Apache 2.0.
+- Robolectric, Espresso, Compose UI Test, Hilt Testing și Room Testing — testare Android; licențe open-source conform proiectelor AndroidX/Google.
+
+La auditul sursei din 18 iulie 2026 au fost identificate 126 de fișiere Kotlin de test. Configurația JaCoCo definește un prag de verificare de 40%. Aceste valori descriu inventarul și configurația sursei; nu reprezintă o afirmație că toate testele au fost rulate sau că pragul de acoperire a fost atins în cadrul actualizării documentației.
+
+2. Resurse de conținut și design
+
+- Iconurile folosite în aplicație provin în principal din Material Icons / Material Symbols, utilizate conform licenței Google. Nu au fost folosite pachete comerciale sau iconuri fără drept de utilizare.
+- Logo-ul și elementele de identitate Liftrix din `assets` și `app/src/main/res/drawable` sunt resurse de proiect ale autorului.
+- Aplicația folosește în cod fonturile de sistem Android / Material 3 prin `FontFamily.SansSerif`, `FontFamily.Default` și `FontFamily.Monospace`. Există fișiere font în resurse, dar configurația Compose activă folosește fallback-uri de sistem.
+- Capturile din `assets/Home-screen.jpg`, `assets/Coach.jpg` și capturile incluse în folderul `00_InfoEducatie_2026/dovezi` sunt capturi ale aplicației și pot fi folosite în prezentare.
+- Imaginile pentru conturile seed / conturile de test, inclusiv avatarurile și imaginile demonstrative asociate acestor conturi, sunt generate cu Gemini Nano Banana 2 și sunt folosite strict ca date demonstrative pentru prezentarea și testarea aplicației.
+- Imaginile anatomice și imaginile cu mușchii folosite în interfață sau în materialele demonstrative sunt generate cu Gemini Nano Banana 2, nu sunt fotografii preluate de pe internet și nu sunt resurse comerciale terțe.
+- Biblioteca locală de exerciții este stocată în `app/src/main/assets/exercise_library.json` și conține 100 de exerciții predefinite. Denumirile sunt termeni uzuali din fitness, iar clasificarea pe grupe musculare, echipamente și tipuri de mișcare este structurată în proiect de autor.
+- Nu au fost utilizate template-uri de proiect plătite sau kituri UI comerciale terțe.
+
+Capturile Analytics din `00_InfoEducatie_2026/dovezi` reprezintă dovezi istorice din intervalul aprilie–mai 2026. Valoarea 28m34s reprezintă timpul mediu de interacțiune per utilizator activ, iar 6,6 reprezintă numărul de sesiuni implicate per utilizator activ; aceste valori nu sunt declarate drept retenție sau statistici curente pentru faza națională.
+
+3. Utilizarea instrumentelor AI în dezvoltare
+
+Instrumentele AI au fost folosite ca suport de lucru pentru brainstorming, cercetare, explicații tehnice, debugging, structurarea documentației și sugestii pentru cod repetitiv. Implementarea finală, integrarea în proiect, testarea, deciziile de arhitectură, modelul de date și logica de business au fost realizate și asumate de autor.
+
+Utilizarea AI declarată:
+
+- Brainstorming și cercetare: Claude AI / ChatGPT — explorarea unor pattern-uri arhitecturale Android și comparații între biblioteci.
+- Asistență la cod: sugestii pentru pattern-uri precum WorkManager, Paging 3 și Hilt boilerplate; logica de business a fost implementată de autor.
+- Debugging: analiza erorilor de compilare și runtime, cu validare și integrare manuală în proiect.
+- Structurarea documentației: suport pentru formulare, organizare și verificarea coerenței documentației.
+- Generare de imagini ilustrative: Gemini Nano Banana 2 pentru imaginile conturilor seed/test și imaginile anatomice cu mușchii.
+- Sistemul de design UI: LiftrixColorsV2 și integrarea Material 3 sunt decizii proprii de design; AI a fost folosit consultativ pentru idei de accesibilitate și structurare vizuală.
+
+Gemini 2.5 prin Firebase AI / Vertex AI este și o funcționalitate integrată în produs pentru coaching și generarea ghidată de antrenamente. Această funcționalitate nu înlocuiește contribuția autorului la construirea proiectului.
+
+4. Contribuția autorului
+
+Autorul a realizat arhitectura aplicației, integrarea funcționalităților, logica de business, modelul de date, fluxurile UI, sistemul offline-first, integrarea Firebase și testarea.
+
+Inventarul curent al contribuției și al proiectului:
+
+- Arhitectură modulară: 26 de module Gradle înregistrate, cu separare între aplicație, module `feature:*` și module `core:*`.
+- Model de date: Room database version 14, cu 76 de entități și 2 view-uri înregistrate în `LiftrixDatabase`.
+- Persistență și acces la date: 70 de accesori DAO declarați de baza de date, cu regula obligatorie de filtrare după utilizator pentru datele deținute de acesta.
+- Rezultate și erori: `LiftrixResult<T>` este un alias pentru Kotlin `Result<T>`, utilizat împreună cu erorile de domeniu Liftrix.
+- Sincronizare: Room ca sursă locală principală, coadă locală, SyncCoordinator, WorkManager, UnifiedSyncWorker și workeri specializați. Resolverul central folosește timestamp-uri de tip last-write-wins, cu versiunea locală câștigătoare la egalitate; strategiile specializate pot trata diferit anumite entități.
+- Navigare: 75 de subclase `LiftrixRoute` și 75 de destinații tipizate înregistrate.
+- Operații background: 19 workeri Hilt identificați în sistemul de sincronizare și procesare.
+- Interfață: Jetpack Compose, LiftrixColorsV2, Material 3 și componente adaptive.
+- Antrenamente: sesiune activă persistentă, timer, seturi, repetări, greutăți, șabloane, foldere, exerciții personalizate și o bibliotecă locală de 100 de exerciții.
+- Progres: dashboard cu 12 widget-uri analitice configurabile, volume, estimări 1RM, grupe musculare, heatmap, clasamente, frecvență și prognoză de forță.
+- Widget-uri Android native: Streak, Consistency și Dashboard, alimentate din date locale Room și curățate la deconectare.
+- Funcții sociale: feed paginat prin Paging 3 și Room, like-uri, salvări, comentarii, raportări și blocări cu actualizări optimiste și coadă locală; niveluri de confidențialitate Public, Followers și Private.
+- Gym Buddy: maximum 5 parteneri, asociere prin QR cu expirare după 5 minute și notificări pentru recorduri personale.
+- Partajare: trimiterea șabloanelor către parteneri și inbox de partajare.
+- AI: chat, constructor ghidat de antrenamente, verificarea planului înainte de salvare, limite configurabile, verificări de eligibilitate și registru local separat pentru utilizare.
+- Securitate și confidențialitate: autentificare, App Check, Firebase Security Rules, SQLCipher, controlul consimțământului pentru telemetrie și obfuscare R8 în release.
+- Documentare și testare: documentație tehnică, reguli de arhitectură și teste unitare/instrumented. Procentele de acoperire sunt citate numai după rularea și păstrarea raportului JaCoCo.
+
+La auditul local din 18 iulie 2026, repository-ul avea versiunea aplicației 1.0.1, 149 de commit-uri locale pe ramura `master`, cu primul commit la 7 iunie 2025 și cel mai recent la 18 iulie 2026. Tagul local identificat este `Release`. Aceste date reprezintă inventarul local la data auditului, nu o declarație despre premii sau rezultate în concurs.
+
+5. Mențiune finală
+
+Proiectul Liftrix este realizat individual de Jianu Valentin. Bibliotecile, framework-urile, serviciile Firebase, instrumentele AI și imaginile generate declarate mai sus sunt resurse auxiliare. Ele nu reprezintă codul principal al aplicației și nu înlocuiesc contribuția autorului.
+
+Codul publicat în repository este însoțit de licența MIT. Drepturile asupra numelui, identității vizuale și materialelor proprii Liftrix rămân ale autorului, în limitele legislației și ale licențelor aplicabile resurselor externe.

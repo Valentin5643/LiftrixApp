@@ -13,13 +13,9 @@ import com.example.liftrix.ui.common.state.isFailure
 import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.progress.components.ChartType
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import java.time.LocalDate as JavaLocalDate
@@ -98,30 +94,10 @@ class ProgressChartsViewModel @Inject constructor(
      */
     private var userIdStabilized = false
 
-    /**
-     * Combined state flow that reactively updates when user authentication or time range changes.
-     * Uses Flow.combine to efficiently handle multiple data sources and automatically
-     * trigger data loading when dependencies change.
-     */
-    private val combinedState: StateFlow<ProgressChartsState> = combine(
-        _currentUserId,
-        _currentTimeRange
-    ) { userId, timeRange ->
-        if (userId != null) {
-            createLoadingChartsState(userId, timeRange)
-        } else {
-            createUnauthenticatedChartsState()
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = createUnauthenticatedChartsState()
-    )
+    private var chartLoadJob: Job? = null
 
     init {
-        
-        // Start observing reactive state changes automatically
-        observeStateChanges()
+        _uiState.value = UiState.Success(createUnauthenticatedChartsState())
         
         // Load initial data when ViewModel is created
         handleEvent(ProgressChartsEvent.LoadInitialData)
@@ -198,10 +174,12 @@ class ProgressChartsViewModel @Inject constructor(
                             
                             if (event.userId != null) {
                                 userIdStabilized = true
-                                handleEvent(ProgressChartsEvent.RefreshAll)
+                                loadAllCharts(event.userId, _currentTimeRange.value)
                             } else {
                                 // Only reset stabilization on explicit logout
                                 userIdStabilized = false
+                                chartLoadJob?.cancel()
+                                _uiState.value = UiState.Success(createUnauthenticatedChartsState())
                             }
                         }
                     }
@@ -224,43 +202,6 @@ class ProgressChartsViewModel @Inject constructor(
                 logError(exception, "handleCoordinatorEvent")
             }
         }
-    }
-
-    /**
-     * Sets the loading state in the UI.
-     */
-    private fun setChartLoadingState() {
-        val currentState = _uiState.value
-        if (currentState is UiState.Success) {
-            _uiState.value = UiState.Success(
-                currentState.data.copy(
-                    volumeChart = AsyncData.Loading(),
-                    durationChart = AsyncData.Loading(),
-                    frequencyChart = AsyncData.Loading(),
-                    volumeCalendar = AsyncData.Loading(),
-                    lastRefreshTimestamp = System.currentTimeMillis()
-                )
-            )
-        }
-    }
-
-    /**
-     * Observes the reactive state and updates the mutable UI state accordingly.
-     * This method ensures that UI state stays in sync with authentication and time range changes.
-     * Uses proper lifecycle management with onEach() and launchIn() to prevent memory leaks.
-     */
-    private fun observeStateChanges() {
-        combinedState
-            .onEach { newState ->
-                _uiState.value = UiState.Success(newState)
-                // Trigger data loading if user is authenticated and charts are not loaded
-                if (newState.hasValidUser() && newState.areAllChartsNotAsked()) {
-                    viewModelScope.launch {
-                        loadAllCharts(newState.userId!!, newState.currentTimeRange)
-                    }
-                }
-            }
-            .launchIn(viewModelScope)
     }
 
     /**
@@ -326,10 +267,9 @@ class ProgressChartsViewModel @Inject constructor(
     private suspend fun changeTimePeriod(timeRange: TimeRange) {
         _currentTimeRange.value = timeRange
         
-        val currentState = (_uiState.value as? UiState.Success)?.data ?: combinedState.value
-        if (currentState.hasValidUser()) {
-            _uiState.value = UiState.Success(currentState.copy(currentTimeRange = timeRange))
-            loadAllCharts(currentState.userId!!, timeRange)
+        val userId = _currentUserId.value
+        if (userId != null) {
+            loadAllCharts(userId, timeRange)
         }
     }
 
@@ -339,11 +279,8 @@ class ProgressChartsViewModel @Inject constructor(
      * @param chartType The type of chart to refresh
      */
     private suspend fun refreshChart(chartType: ChartType) {
-        val currentState = combinedState.value
-        if (!currentState.hasValidUser()) return
-
-        val userId = currentState.userId!!
-        val timeRange = currentState.currentTimeRange
+        val userId = _currentUserId.value ?: return
+        val timeRange = _currentTimeRange.value
 
         when (chartType) {
             ChartType.LINE -> loadVolumeChart(userId, timeRange)  // Assuming LINE maps to Volume
@@ -356,19 +293,17 @@ class ProgressChartsViewModel @Inject constructor(
      * Refreshes all chart data with current time period.
      */
     private suspend fun refreshAllCharts() {
-        val currentState = combinedState.value
-        if (!currentState.hasValidUser()) return
-
-        loadAllCharts(currentState.userId!!, currentState.currentTimeRange)
+        val userId = _currentUserId.value ?: return
+        loadAllCharts(userId, _currentTimeRange.value)
     }
 
     /**
      * Loads initial data when the ViewModel is created.
      */
     private suspend fun loadInitialData() {
-        val currentState = combinedState.value
-        if (currentState.hasValidUser()) {
-            loadAllCharts(currentState.userId!!, currentState.currentTimeRange)
+        val userId = _currentUserId.value
+        if (userId != null) {
+            loadAllCharts(userId, _currentTimeRange.value)
         }
     }
 
@@ -378,19 +313,16 @@ class ProgressChartsViewModel @Inject constructor(
      * @param userId The user ID for data scoping
      * @param timeRange The time range for data retrieval
      */
-    private suspend fun loadAllCharts(userId: String, timeRange: TimeRange) {
+    private fun loadAllCharts(userId: String, timeRange: TimeRange) {
         Timber.d("🔍 VOLUME-CALENDAR-DEBUG: loadAllCharts starting - userId=$userId, timeRange=$timeRange")
-        
+
+        chartLoadJob?.cancel()
+
         // Set loading state for all charts
-        updateChartStates(
-            volumeChart = AsyncData.Loading(),
-            durationChart = AsyncData.Loading(),
-            frequencyChart = AsyncData.Loading(),
-            volumeCalendar = AsyncData.Loading()
-        )
+        _uiState.value = UiState.Success(createLoadingChartsState(userId, timeRange))
 
         // Launch concurrent data loading with timeout
-        viewModelScope.launch {
+        chartLoadJob = viewModelScope.launch {
             try {
                 kotlinx.coroutines.withTimeout(30000) { // 30 second timeout
                     launch { loadVolumeChart(userId, timeRange) }
@@ -408,6 +340,8 @@ class ProgressChartsViewModel @Inject constructor(
                     durationChart = AsyncData.Failure(LiftrixError.UnknownError("Loading timeout - please try again")),
                     frequencyChart = AsyncData.Failure(LiftrixError.UnknownError("Loading timeout - please try again"))
                 )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             }
         }
     }
@@ -421,6 +355,7 @@ class ProgressChartsViewModel @Inject constructor(
     private suspend fun loadVolumeChart(userId: String, timeRange: TimeRange) {
         try {
             val result = progressDataService.getVolumeData(userId, timeRange)
+            if (!isCurrentRequest(userId, timeRange)) return
             
             result.fold(
                 onSuccess = { data ->
@@ -434,6 +369,8 @@ class ProgressChartsViewModel @Inject constructor(
                 }
             )
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            if (!isCurrentRequest(userId, timeRange)) return
             Timber.e(e, "Volume chart fetch exception: ${e.message}")
             updateChartStates(volumeChart = AsyncData.Failure(LiftrixError.UnknownError("Volume fetch exception: ${e.message}")))
         }
@@ -448,6 +385,7 @@ class ProgressChartsViewModel @Inject constructor(
     private suspend fun loadDurationChart(userId: String, timeRange: TimeRange) {
         try {
             val result = progressDataService.getDurationData(userId, timeRange)
+            if (!isCurrentRequest(userId, timeRange)) return
             
             result.fold(
                 onSuccess = { data ->
@@ -461,6 +399,8 @@ class ProgressChartsViewModel @Inject constructor(
                 }
             )
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            if (!isCurrentRequest(userId, timeRange)) return
             Timber.e(e, "Duration chart fetch exception: ${e.message}")
             updateChartStates(durationChart = AsyncData.Failure(LiftrixError.UnknownError("Duration fetch exception: ${e.message}")))
         }
@@ -475,6 +415,7 @@ class ProgressChartsViewModel @Inject constructor(
     private suspend fun loadFrequencyChart(userId: String, timeRange: TimeRange) {
         try {
             val result = progressDataService.getFrequencyData(userId, timeRange)
+            if (!isCurrentRequest(userId, timeRange)) return
             
             result.fold(
                 onSuccess = { data ->
@@ -488,6 +429,8 @@ class ProgressChartsViewModel @Inject constructor(
                 }
             )
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            if (!isCurrentRequest(userId, timeRange)) return
             Timber.e(e, "Frequency chart fetch exception: ${e.message}")
             updateChartStates(frequencyChart = AsyncData.Failure(LiftrixError.UnknownError("Frequency fetch exception: ${e.message}")))
         }
@@ -516,10 +459,14 @@ class ProgressChartsViewModel @Inject constructor(
                 }
             )
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Timber.e(e, "Volume calendar fetch exception: ${e.message}")
             updateChartStates(volumeCalendar = AsyncData.Failure(LiftrixError.UnknownError("Volume calendar fetch exception: ${e.message}")))
         }
     }
+
+    private fun isCurrentRequest(userId: String, timeRange: TimeRange): Boolean =
+        _currentUserId.value == userId && _currentTimeRange.value == timeRange
 
     /**
      * Updates the chart states in the UI state.
@@ -551,14 +498,18 @@ class ProgressChartsViewModel @Inject constructor(
                 _uiState.value = newState
             }
             is UiState.Loading -> {
-                // If we're still in Loading state but combinedState has provided initial data, create Success state
-                val combinedStateValue = combinedState.value
+                val currentUserId = _currentUserId.value
+                val initialState = if (currentUserId != null) {
+                    createLoadingChartsState(currentUserId, _currentTimeRange.value)
+                } else {
+                    createUnauthenticatedChartsState()
+                }
                 val newState = UiState.Success(
-                    combinedStateValue.copy(
-                        volumeChart = volumeChart ?: combinedStateValue.volumeChart,
-                        durationChart = durationChart ?: combinedStateValue.durationChart,
-                        frequencyChart = frequencyChart ?: combinedStateValue.frequencyChart,
-                        volumeCalendar = volumeCalendar ?: combinedStateValue.volumeCalendar,
+                    initialState.copy(
+                        volumeChart = volumeChart ?: initialState.volumeChart,
+                        durationChart = durationChart ?: initialState.durationChart,
+                        frequencyChart = frequencyChart ?: initialState.frequencyChart,
+                        volumeCalendar = volumeCalendar ?: initialState.volumeCalendar,
                         lastRefreshTimestamp = System.currentTimeMillis()
                     )
                 )
