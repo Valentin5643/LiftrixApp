@@ -14,6 +14,8 @@ import com.example.liftrix.data.local.entity.UserSearchCacheEntity
 import com.example.liftrix.data.local.entity.FollowRelationshipEntity
 import com.example.liftrix.data.local.entity.QRCodeMappingEntity
 import com.example.liftrix.data.local.entity.ProfileViewEntity
+import com.example.liftrix.data.local.entity.SocialProfileEntity
+import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.example.liftrix.data.remote.legacy.LegacyUserSearchFirestoreDataSource
 import com.example.liftrix.domain.model.common.LiftrixResult
@@ -33,11 +35,13 @@ import com.example.liftrix.domain.model.FitnessGoal
 import com.example.liftrix.domain.model.UserAchievement
 import com.example.liftrix.domain.repository.UserSearchRepository
 import com.example.liftrix.domain.repository.AuthRepository
+import com.google.firebase.Timestamp
 import com.google.gson.Gson
 import java.time.format.DateTimeFormatter
 import java.time.LocalDateTime
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.Date
 import kotlinx.coroutines.flow.first
 import timber.log.Timber
 import javax.inject.Inject
@@ -352,18 +356,155 @@ class UserSearchRepositoryImpl @Inject constructor(
         return liftrixCatching(
             errorMapper = { throwable -> LiftrixError.DatabaseError("Failed to check profile existence: ${throwable.message}") }
         ) {
-            Timber.d("[PROFILE-EXISTS] 🔍 Checking if profile exists for user: $userId")
+            Timber.d("[PROFILE-EXISTS] Checking if profile exists for user: $userId")
 
             if (OfflineArchitectureFlags.FIX_SEARCH_REPOSITORY) {
-                val exists = socialProfileDao.hasProfile(userId)
-                Timber.d("[PROFILE-EXISTS] ${if (exists) "✅" else "🚫"} Profile exists: $exists for user: $userId")
-                return@liftrixCatching exists
+                return@liftrixCatching socialProfileDao.hasProfile(userId)
             }
 
-            val exists = legacyDataSource.profileExists(userId)
-            Timber.d("[PROFILE-EXISTS] ${if (exists) "✅" else "🚫"} Profile exists: $exists for user: $userId")
-            exists
+            legacyDataSource.profileExists(userId)
         }
+    }
+
+    override suspend fun verifyProfileForPairing(userId: String): LiftrixResult<Boolean> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.DatabaseError("Failed to verify pairing profile: ${throwable.message}")
+            }
+        ) {
+            Timber.d("[PROFILE-VERIFY] Checking authoritative profile for user: $userId")
+
+            val remoteProfile = legacyDataSource.getSocialProfileData(userId)
+                ?: return@liftrixCatching false
+            val remoteUserId = remoteProfile["userId"] as? String
+                ?: throw IllegalStateException("Remote social profile is missing its user ID")
+            check(remoteUserId == userId) {
+                "Remote social profile ID does not match the requested user"
+            }
+
+            cacheRemoteSocialProfile(userId, remoteProfile)
+            check(socialProfileDao.hasProfile(userId)) {
+                "Verified social profile could not be reconciled locally"
+            }
+
+            Timber.d("[PROFILE-VERIFY] Profile verified and available locally for user: $userId")
+            true
+        }
+    }
+
+    private suspend fun cacheRemoteSocialProfile(
+        userId: String,
+        data: Map<String, Any>
+    ) {
+        val nowMillis = System.currentTimeMillis()
+        val memberSinceMillis = remoteEpochMillis(data["memberSince"])
+            ?: remoteEpochMillis(data["createdAt"])
+            ?: nowMillis
+        val updatedAtMillis = remoteEpochMillis(data["updatedAt"])
+            ?: remoteEpochMillis(data["lastModified"])
+            ?: nowMillis
+        val lastModified = remoteEpochMillis(data["lastModified"]) ?: updatedAtMillis
+        val memberSince = Instant.ofEpochMilli(memberSinceMillis)
+            .atZone(ZoneOffset.UTC)
+            .toLocalDateTime()
+        val updatedAt = Instant.ofEpochMilli(updatedAtMillis)
+            .atZone(ZoneOffset.UTC)
+            .toLocalDateTime()
+        val username = (data["username"] as? String)
+            ?.takeIf { it.isNotBlank() }
+            ?: "user_${userId.take(8)}"
+        val displayName = (data["displayName"] as? String)
+            ?.takeIf { it.isNotBlank() }
+            ?: username
+        val isPrivate = data["isPrivate"] as? Boolean
+            ?: !((data["isPublic"] as? Boolean) ?: false)
+        val profilePhotoUrl = (data["profilePhotoUrl"] as? String)
+            ?: (data["profileImageUrl"] as? String)
+
+        if (userProfileDao.getProfileForUserSuspend(userId) == null) {
+            userProfileDao.insertProfile(
+                UserProfileEntity(
+                    id = userId,
+                    userId = userId,
+                    displayName = displayName,
+                    age = null,
+                    weightKg = null,
+                    heightCm = null,
+                    fitnessLevel = null,
+                    goals = null,
+                    availableEquipment = null,
+                    workoutFrequency = null,
+                    preferredWorkoutDuration = null,
+                    completedAt = null,
+                    createdAt = memberSince,
+                    updatedAt = updatedAt,
+                    isSynced = true,
+                    syncVersion = (data["syncVersion"] as? Number)?.toLong() ?: 1L,
+                    isDirty = false,
+                    lastModified = lastModified,
+                    bio = data["bio"] as? String,
+                    isPublic = !isPrivate,
+                    lastActiveAt = remoteEpochMillis(data["lastActive"])?.let {
+                        Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDateTime()
+                    },
+                    totalWorkouts = (data["workoutCount"] as? Number)?.toInt()
+                        ?: (data["totalWorkouts"] as? Number)?.toInt()
+                        ?: 0,
+                    currentStreak = 0,
+                    longestStreak = 0,
+                    memberSince = memberSince,
+                    profileCompletionPercentage = 0,
+                    profileImageUrl = profilePhotoUrl,
+                    profileImageUpdatedAt = null,
+                    hasCustomProfileImage = profilePhotoUrl != null
+                )
+            )
+        }
+
+        socialProfileDao.upsertFromRemote(
+            SocialProfileEntity(
+                userId = userId,
+                username = username,
+                displayName = displayName,
+                bio = data["bio"] as? String,
+                profilePhotoUrl = profilePhotoUrl,
+                coverPhotoUrl = (data["coverPhotoUrl"] as? String)
+                    ?: (data["coverImageUrl"] as? String),
+                workoutCount = (data["workoutCount"] as? Number)?.toInt()
+                    ?: (data["totalWorkouts"] as? Number)?.toInt()
+                    ?: 0,
+                followerCount = (data["followerCount"] as? Number)?.toInt()
+                    ?: (data["followersCount"] as? Number)?.toInt()
+                    ?: 0,
+                followingCount = (data["followingCount"] as? Number)?.toInt()
+                    ?: 0,
+                memberSince = memberSinceMillis,
+                lastActive = remoteEpochMillis(data["lastActive"]),
+                isVerified = data["isVerified"] as? Boolean ?: false,
+                isPrivate = isPrivate,
+                hideFromSuggestions = data["hideFromSuggestions"] as? Boolean ?: false,
+                allowFriendRequests = data["allowFriendRequests"] as? Boolean ?: true,
+                instagramHandle = data["instagramHandle"] as? String,
+                youtubeChannel = data["youtubeChannel"] as? String,
+                personalWebsite = data["personalWebsite"] as? String,
+                isSynced = true,
+                syncVersion = (data["syncVersion"] as? Number)?.toLong() ?: 1L,
+                isDirty = false,
+                lastModified = lastModified,
+                createdAt = remoteEpochMillis(data["createdAt"]) ?: memberSinceMillis,
+                updatedAt = updatedAtMillis
+            )
+        )
+    }
+
+    private fun remoteEpochMillis(value: Any?): Long? = when (value) {
+        is Timestamp -> value.toDate().time
+        is Date -> value.time
+        is Instant -> value.toEpochMilli()
+        is Number -> value.toLong()
+        is String -> value.toLongOrNull()
+            ?: parseDateTime(value)?.toInstant(ZoneOffset.UTC)?.toEpochMilli()
+        else -> null
     }
 
     override suspend fun generateProfileQRCode(userId: String): LiftrixResult<String> {

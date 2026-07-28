@@ -46,6 +46,12 @@ interface UserSearchRepository {
      * @return LiftrixResult containing true if profile exists, false otherwise
      */
     suspend fun profileExists(userId: String): LiftrixResult<Boolean>
+
+    /**
+     * Verifies a Gym Buddy target against authoritative remote state and makes
+     * the verified profile available in Room for the relationship foreign keys.
+     */
+    suspend fun verifyProfileForPairing(userId: String): LiftrixResult<Boolean>
     
     /**
      * Generate QR code data for profile sharing

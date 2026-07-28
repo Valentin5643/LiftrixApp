@@ -11,6 +11,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerationConfig
 import com.google.firebase.ai.type.ResponseStoppedException
+import com.google.firebase.ai.type.Schema
 import com.google.firebase.ai.type.content
 import timber.log.Timber
 import javax.inject.Inject
@@ -26,6 +27,15 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
         .setTopK(TOP_K)
         .setTopP(TOP_P)
         .setMaxOutputTokens(MAX_OUTPUT_TOKENS)
+        .build()
+
+    private val workoutGenerationConfig = GenerationConfig.Builder()
+        .setTemperature(TEMPERATURE)
+        .setTopK(TOP_K)
+        .setTopP(TOP_P)
+        .setMaxOutputTokens(MAX_OUTPUT_TOKENS)
+        .setResponseMimeType(JSON_MIME_TYPE)
+        .setResponseSchema(WORKOUT_RESPONSE_SCHEMA)
         .build()
 
     override suspend fun generateProgramJson(
@@ -192,7 +202,11 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
 
         val generativeModel = Firebase.ai().generativeModel(
             modelName = MODEL_NAME,
-            generationConfig = generationConfig,
+            generationConfig = if (stage == "generate" || stage == "repair") {
+                workoutGenerationConfig
+            } else {
+                generationConfig
+            },
             systemInstruction = content { text(systemPrompt) }
         )
 
@@ -332,11 +346,94 @@ class WorkoutProgramGenerationServiceImpl @Inject constructor(
 
     companion object {
         private const val MODEL_NAME = "gemini-2.5-flash-lite"
+        private const val JSON_MIME_TYPE = "application/json"
         private const val MAX_OUTPUT_TOKENS = 8192
         private const val TEMPERATURE = 0.25f
         private const val TOP_K = 40
         private const val TOP_P = 0.9f
         private const val MAX_PROMPT_LENGTH = 2000
+
+        private val WORKOUT_PHASE_SCHEMA = Schema.obj(
+            properties = mapOf(
+                "duration_minutes" to Schema.integer(),
+                "steps" to Schema.array(Schema.string())
+            )
+        )
+
+        private val WORKOUT_EXERCISE_SCHEMA = Schema.obj(
+            properties = mapOf(
+                "exercise_id" to Schema.string(),
+                "exercise_name" to Schema.string(),
+                "primary_muscle" to Schema.string(),
+                "equipment" to Schema.string(),
+                "sets" to Schema.integer(),
+                "exercise_type" to Schema.string(),
+                "reps_min" to Schema.integer(nullable = true),
+                "reps_max" to Schema.integer(nullable = true),
+                "duration_seconds" to Schema.integer(nullable = true),
+                "is_unilateral" to Schema.boolean(),
+                "rest_seconds" to Schema.integer(),
+                "notes" to Schema.string(nullable = true)
+            ),
+            optionalProperties = listOf(
+                "reps_min",
+                "reps_max",
+                "duration_seconds",
+                "notes"
+            )
+        )
+
+        private val WORKOUT_DAY_SCHEMA = Schema.obj(
+            properties = mapOf(
+                "scheduled_day" to Schema.enumeration(
+                    listOf(
+                        "MONDAY",
+                        "TUESDAY",
+                        "WEDNESDAY",
+                        "THURSDAY",
+                        "FRIDAY",
+                        "SATURDAY",
+                        "SUNDAY"
+                    )
+                ),
+                "day_name" to Schema.string(),
+                "focus" to Schema.string(),
+                "estimated_duration_minutes" to Schema.integer(),
+                "warm_up" to WORKOUT_PHASE_SCHEMA,
+                "exercises" to Schema.array(WORKOUT_EXERCISE_SCHEMA),
+                "cool_down" to WORKOUT_PHASE_SCHEMA
+            )
+        )
+
+        private val WORKOUT_PROGRAM_SCHEMA = Schema.obj(
+            properties = mapOf(
+                "workout_name" to Schema.string(),
+                "description" to Schema.string(),
+                "goal" to Schema.enumeration(
+                    listOf("fat_loss", "hypertrophy", "strength", "endurance", "general_fitness")
+                ),
+                "level" to Schema.enumeration(listOf("beginner", "intermediate", "advanced")),
+                "days" to Schema.array(WORKOUT_DAY_SCHEMA)
+            )
+        )
+
+        private val WORKOUT_ERROR_SCHEMA = Schema.obj(
+            properties = mapOf(
+                "code" to Schema.enumeration(
+                    listOf("UNSATISFIABLE_REQUEST", "UNSAFE_REQUEST", "NEEDS_CLARIFICATION")
+                ),
+                "message" to Schema.string()
+            )
+        )
+
+        private val WORKOUT_RESPONSE_SCHEMA = Schema.obj(
+            properties = mapOf(
+                "schema_version" to Schema.string(),
+                "program" to WORKOUT_PROGRAM_SCHEMA,
+                "error" to WORKOUT_ERROR_SCHEMA
+            ),
+            optionalProperties = listOf("program", "error")
+        )
     }
 
     private fun ResponseStoppedException.isMaxTokensStop(): Boolean =

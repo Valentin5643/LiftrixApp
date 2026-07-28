@@ -92,6 +92,7 @@ class TemplateCommandUseCase @Inject constructor(
             errorMapper = { throwable ->
                 Timber.e(throwable, "CREATE-TEMPLATE: Error occurred during template creation")
                 when (throwable) {
+                    is LiftrixError -> throwable
                     is IllegalArgumentException -> {
                         LiftrixError.ValidationError(
                             field = when {

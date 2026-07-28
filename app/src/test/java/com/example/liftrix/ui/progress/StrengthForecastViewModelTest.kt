@@ -64,18 +64,58 @@ class StrengthForecastViewModelTest {
     private class FakeGateway(
         private val result: StrengthForecastResult
     ) : ProgressDetailAnalyticsGateway {
-        override suspend fun getStrengthForecast(userId: String, selectedExerciseId: String?, historyDays: Int, forecastDays: Int): LiftrixResult<StrengthForecastResult> =
+        override suspend fun getStrengthForecast(
+            userId: String,
+            selectedExerciseId: String?,
+            historyDays: Int,
+            forecastDays: Int
+        ): LiftrixResult<StrengthForecastResult> =
             Result.success(result)
 
-        override suspend fun getVolumeAnalysis(userId: String, timeRange: TimeRangeType, muscleGroupFilter: String?, grouping: VolumeGrouping): LiftrixResult<VolumeAnalysisData> = TODO()
-        override suspend fun getOneRmProgression(userId: String, exerciseIds: List<String>?, timeRange: TimeRangeType, includeEstimated: Boolean): LiftrixResult<OneRmProgressionData> = TODO()
-        override suspend fun getWorkoutFrequency(userId: String, timeRange: TimeRangeType): LiftrixResult<WorkoutFrequencyData> = TODO()
-        override suspend fun getMuscleGroupAnalytics(userId: String, timeRange: TimeRangeType, muscleGroup: MuscleGroup?): LiftrixResult<MuscleGroupAnalyticsData> = TODO()
-        override suspend fun getMuscleHeatmapData(userId: String, configuration: Map<String, String>): LiftrixResult<MuscleHeatmapWidgetData> = TODO()
-        override suspend fun getExerciseRanking(userId: String, timeRange: TimeRangeType, metric: com.example.liftrix.domain.model.analytics.RankingMetric): LiftrixResult<ExerciseRankingData> = TODO()
-        override suspend fun exportOneRm(request: ExportOneRmDataRequest): LiftrixResult<File> = TODO()
-        override suspend fun exportVolume(request: ExportVolumeDataRequest): LiftrixResult<File> = TODO()
-        override suspend fun exportFrequency(request: ExportWorkoutFrequencyDataRequest): LiftrixResult<File> = TODO()
+        override suspend fun getVolumeAnalysis(
+            userId: String,
+            timeRange: TimeRangeType,
+            muscleGroupFilter: String?,
+            grouping: VolumeGrouping
+        ): LiftrixResult<VolumeAnalysisData> = TODO()
+
+        override suspend fun getOneRmProgression(
+            userId: String,
+            exerciseIds: List<String>?,
+            timeRange: TimeRangeType,
+            includeEstimated: Boolean
+        ): LiftrixResult<OneRmProgressionData> = TODO()
+
+        override suspend fun getWorkoutFrequency(
+            userId: String,
+            timeRange: TimeRangeType
+        ): LiftrixResult<WorkoutFrequencyData> = TODO()
+
+        override suspend fun getMuscleGroupAnalytics(
+            userId: String,
+            timeRange: TimeRangeType,
+            muscleGroup: MuscleGroup?
+        ): LiftrixResult<MuscleGroupAnalyticsData> = TODO()
+
+        override suspend fun getMuscleHeatmapData(
+            userId: String,
+            configuration: Map<String, String>
+        ): LiftrixResult<MuscleHeatmapWidgetData> = TODO()
+
+        override suspend fun getExerciseRanking(
+            userId: String,
+            timeRange: TimeRangeType,
+            metric: com.example.liftrix.domain.model.analytics.RankingMetric
+        ): LiftrixResult<ExerciseRankingData> = TODO()
+
+        override suspend fun exportOneRm(request: ExportOneRmDataRequest): LiftrixResult<File> =
+            TODO()
+
+        override suspend fun exportVolume(request: ExportVolumeDataRequest): LiftrixResult<File> =
+            TODO()
+
+        override suspend fun exportFrequency(request: ExportWorkoutFrequencyDataRequest): LiftrixResult<File> =
+            TODO()
     }
 
     private class FakeAuthPort(

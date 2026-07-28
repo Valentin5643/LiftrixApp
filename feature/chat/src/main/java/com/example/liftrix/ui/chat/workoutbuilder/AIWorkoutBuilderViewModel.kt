@@ -34,10 +34,12 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import timber.log.Timber
 
 private const val BUILDER_SNAPSHOT_KEY = "ai_workout_builder_snapshot"
 private const val BUILDER_SNAPSHOT_VERSION = 1
 private const val BUILDER_SNAPSHOT_MAX_BYTES = 200 * 1024
+private const val BUILDER_LOG_TAG = "AIWorkoutBuilder"
 
 private val builderSnapshotJson = Json {
     ignoreUnknownKeys = true
@@ -73,6 +75,11 @@ class AIWorkoutBuilderViewModel @Inject constructor(
         viewModelScope.launch {
             val id = authInteractor.currentUser(true).getOrNull()?.value
             userId = id
+            Timber.tag(BUILDER_LOG_TAG).i(
+                "Authentication resolved signedIn=%s step=%s",
+                id != null,
+                _uiState.value.step
+            )
             if (id != null) {
                 chatInteractor.observePreferences(id).collectLatest { preferences ->
                     val language = preferences?.preferredLanguage.toBuilderLanguage()
@@ -106,20 +113,81 @@ class AIWorkoutBuilderViewModel @Inject constructor(
     fun editPreferences() = updateState { it.copy(step = BuilderStep.FORM) }
 
     fun generate(forceRefresh: Boolean = false) {
-        val id = userId ?: return fail("Sign in is required to create a plan.")
         val state = _uiState.value
-        if (inFlight || !state.isOnline || state.draft.validationErrors().isNotEmpty() || state.step != BuilderStep.REVIEW && !forceRefresh) return
+        val validationErrors = state.draft.validationErrors()
+        Timber.tag(BUILDER_LOG_TAG).i(
+            "Generate tapped step=%s signedIn=%s online=%s inFlight=%s validationErrors=%d forceRefresh=%s",
+            state.step,
+            userId != null,
+            state.isOnline,
+            inFlight,
+            validationErrors.size,
+            forceRefresh
+        )
+        val id = userId ?: run {
+            Timber.tag(BUILDER_LOG_TAG).w("Generate blocked reason=NO_AUTHENTICATED_USER")
+            return fail("Sign in is required to create a plan.")
+        }
+        when {
+            inFlight -> {
+                Timber.tag(BUILDER_LOG_TAG).w("Generate blocked reason=REQUEST_ALREADY_IN_FLIGHT")
+                return
+            }
+            !state.isOnline -> {
+                Timber.tag(BUILDER_LOG_TAG).w("Generate blocked reason=OFFLINE")
+                return
+            }
+            validationErrors.isNotEmpty() -> {
+                Timber.tag(BUILDER_LOG_TAG).w(
+                    "Generate blocked reason=INVALID_PREFERENCES errors=%s",
+                    validationErrors.joinToString(separator = " | ")
+                )
+                return
+            }
+            state.step != BuilderStep.REVIEW && !forceRefresh -> {
+                Timber.tag(BUILDER_LOG_TAG).w(
+                    "Generate blocked reason=INVALID_STEP step=%s",
+                    state.step
+                )
+                return
+            }
+        }
         inFlight = true
         updateState { it.copy(step = BuilderStep.GENERATING, error = null, activeAction = BuilderAction.GENERATE) }
+        Timber.tag(BUILDER_LOG_TAG).i(
+            "Generate dispatch starting goal=%s level=%s days=%d equipment=%d durationMinutes=%d language=%s",
+            state.draft.goal,
+            state.draft.level,
+            state.draft.trainingDays.size,
+            state.draft.availableEquipment.size,
+            state.draft.sessionDurationMinutes,
+            state.language.code
+        )
         viewModelScope.launch {
             gateway.generate(id, state.draft, state.language, forceRefresh) { stage ->
+                Timber.tag(BUILDER_LOG_TAG).d("Generate stage=%s", stage)
                 updateState { current -> current.copy(generationStage = stage) }
             }.fold(
                 onSuccess = { result ->
+                    Timber.tag(BUILDER_LOG_TAG).i(
+                        "Generate succeeded previewId=%s days=%d cacheHit=%s repairAttempts=%d",
+                        result.previewId,
+                        result.program.days.size,
+                        result.cacheHit,
+                        result.repairAttempts
+                    )
                     updateState { it.copy(step = BuilderStep.PREVIEW, result = result, activeAction = null, dirty = true) }
                     recordResult("Generated ${result.program.workoutName}")
                 },
-                onFailure = { fail(it.message ?: "Workout generation failed.") }
+                onFailure = { error ->
+                    Timber.tag(BUILDER_LOG_TAG).e(
+                        error,
+                        "Generate failed type=%s message=%s",
+                        error.javaClass.simpleName,
+                        error.message
+                    )
+                    fail(error.message ?: "Workout generation failed.")
+                }
             )
             inFlight = false
         }
@@ -166,27 +234,74 @@ class AIWorkoutBuilderViewModel @Inject constructor(
     }
 
     fun save() {
-        val id = userId ?: return
-        val current = _uiState.value.result ?: return
-        if (inFlight) return
+        val state = _uiState.value
+        Timber.tag(BUILDER_LOG_TAG).i(
+            "Save tapped step=%s signedIn=%s hasResult=%s online=%s inFlight=%s totalDays=%d alreadySaved=%d",
+            state.step,
+            userId != null,
+            state.result != null,
+            state.isOnline,
+            inFlight,
+            state.result?.program?.days?.size ?: 0,
+            state.savedDays.size
+        )
+        val id = userId ?: run {
+            Timber.tag(BUILDER_LOG_TAG).w("Save blocked reason=NO_AUTHENTICATED_USER")
+            return fail("Sign in is required to save the plan.")
+        }
+        val current = state.result ?: run {
+            Timber.tag(BUILDER_LOG_TAG).w("Save blocked reason=NO_GENERATED_RESULT")
+            return fail("Generate a plan before saving it.")
+        }
+        if (inFlight) {
+            Timber.tag(BUILDER_LOG_TAG).w("Save blocked reason=REQUEST_ALREADY_IN_FLIGHT")
+            return
+        }
         inFlight = true
         updateState { it.copy(step = BuilderStep.SAVING, activeAction = BuilderAction.SAVE, error = null) }
+        Timber.tag(BUILDER_LOG_TAG).i(
+            "Save dispatch starting totalDays=%d alreadySaved=%d",
+            current.program.days.size,
+            state.savedDays.size
+        )
         viewModelScope.launch {
             gateway.saveGeneratedProgram(id, current.program, _uiState.value.draft, _uiState.value.savedDays).fold(
                 onSuccess = { outcome ->
                     when (outcome) {
                         is WorkoutProgramSaveOutcome.Complete -> {
+                            Timber.tag(BUILDER_LOG_TAG).i(
+                                "Save completed savedDays=%d",
+                                outcome.savedDays.size
+                            )
                             updateState {
                                 it.copy(step = BuilderStep.SAVED, savedDays = outcome.savedDays, dirty = false, activeAction = null)
                             }
                             clearSnapshot()
                         }
-                        is WorkoutProgramSaveOutcome.Partial -> updateState {
-                            it.copy(step = BuilderStep.PARTIAL, savedDays = outcome.savedDays, error = outcome.error.message, activeAction = null)
+                        is WorkoutProgramSaveOutcome.Partial -> {
+                            Timber.tag(BUILDER_LOG_TAG).e(
+                                outcome.error,
+                                "Save partial failedDayIndex=%d savedDays=%d type=%s message=%s",
+                                outcome.failedDayIndex,
+                                outcome.savedDays.size,
+                                outcome.error.javaClass.simpleName,
+                                outcome.error.message
+                            )
+                            updateState {
+                                it.copy(step = BuilderStep.PARTIAL, savedDays = outcome.savedDays, error = outcome.error.message, activeAction = null)
+                            }
                         }
                     }
                 },
-                onFailure = { fail(it.message ?: "The plan could not be saved.") }
+                onFailure = { error ->
+                    Timber.tag(BUILDER_LOG_TAG).e(
+                        error,
+                        "Save failed before per-day persistence type=%s message=%s",
+                        error.javaClass.simpleName,
+                        error.message
+                    )
+                    fail(error.message ?: "The plan could not be saved.")
+                }
             )
             inFlight = false
         }
@@ -299,6 +414,13 @@ class AIWorkoutBuilderViewModel @Inject constructor(
     fun dismissError() = updateState { it.copy(error = null) }
 
     private fun fail(message: String) {
+        Timber.tag(BUILDER_LOG_TAG).w(
+            "UI failure step=%s action=%s hasResult=%s message=%s",
+            _uiState.value.step,
+            _uiState.value.activeAction,
+            _uiState.value.result != null,
+            message
+        )
         updateState { current ->
             current.copy(
                 step = if (current.result != null) BuilderStep.PREVIEW else BuilderStep.REVIEW,

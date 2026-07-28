@@ -75,6 +75,51 @@ class GenerateWorkoutProgramUseCaseTest {
     }
 
     @Test
+    fun `generated template save chooses a numbered name after a duplicate`() = runTest {
+        val attemptedNames = mutableListOf<String>()
+        coEvery { profileQueryUseCase.getById("user-1") } returns Result.success(null)
+        coEvery { exerciseQueryUseCase.invoke() } returns Result.success(listOf(catalog()))
+        coEvery {
+            generationService.generateProgramJson(any(), any(), any(), any(), any())
+        } returns Result.success(WorkoutProgramJsonResponse(validJson(), 100, 50, "test"))
+        coEvery {
+            templateCommandUseCase.create(
+                userId = "user-1",
+                name = capture(attemptedNames),
+                folderId = null,
+                description = any(),
+                exercises = any(),
+                estimatedDurationMinutes = 45,
+                difficultyLevel = 2
+            )
+        } returnsMany listOf(
+            Result.failure(
+                LiftrixError.BusinessLogicError(
+                    code = "TEMPLATE_NAME_ALREADY_EXISTS",
+                    errorMessage = "A workout template with this name already exists."
+                )
+            ),
+            Result.success(template())
+        )
+
+        val result = useCase(
+            userId = "user-1",
+            prompt = "Create a 1-day beginner workout using dumbbells only",
+            language = Language.ENGLISH,
+            saveAfterGeneration = true
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals(
+            listOf(
+                "Beginner Dumbbell Plan - Day 1",
+                "Beginner Dumbbell Plan - Day 1 (2)"
+            ),
+            attemptedNames
+        )
+    }
+
+    @Test
     fun `reuses cache for repeated request`() = runTest {
         coEvery { profileQueryUseCase.getById("user-1") } returns Result.success(null)
         coEvery { exerciseQueryUseCase.invoke() } returns Result.success(listOf(catalog()))
@@ -217,7 +262,37 @@ class GenerateWorkoutProgramUseCaseTest {
         val result = useCase("user-1", "Create a 1-day beginner workout using dumbbells only")
 
         assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull()?.message?.contains("repair response was not valid workout JSON") == true)
+        assertTrue(result.exceptionOrNull()?.message?.contains("final AI regeneration was not valid workout JSON") == true)
+        coVerify(exactly = 2) {
+            generationService.generateProgramJson(any(), any(), any(), any(), any())
+        }
+    }
+
+    @Test
+    fun `regenerates once when both initial and repair responses are malformed`() = runTest {
+        coEvery { profileQueryUseCase.getById("user-1") } returns Result.success(null)
+        coEvery { exerciseQueryUseCase.invoke() } returns Result.success(listOf(catalog()))
+        coEvery {
+            generationService.generateProgramJson(any(), any(), any(), any(), any())
+        } returnsMany listOf(
+            Result.success(WorkoutProgramJsonResponse("not json", 100, 50, "test")),
+            Result.success(WorkoutProgramJsonResponse(validJson(), 75, 30, "test"))
+        )
+        coEvery {
+            generationService.repairProgramJson(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(WorkoutProgramJsonResponse("still not json", 50, 25, "test"))
+
+        val result = useCase("user-1", "Create a 1-day beginner workout using dumbbells only")
+
+        assertTrue(result.isSuccess)
+        assertEquals(2, result.getOrThrow().repairAttempts)
+        assertEquals(225, result.getOrThrow().tokensUsed)
+        coVerify(exactly = 2) {
+            generationService.generateProgramJson(any(), any(), any(), any(), any())
+        }
+        coVerify(exactly = 1) {
+            generationService.repairProgramJson(any(), any(), any(), any(), any(), any(), any())
+        }
     }
 
     @Test

@@ -42,21 +42,48 @@ class TemplateRepositoryImpl @Inject constructor(
     override suspend fun createTemplate(template: WorkoutTemplate): LiftrixResult<WorkoutTemplate> {
         return liftrixCatching(
             errorMapper = { throwable ->
-                LiftrixError.DatabaseError(
-                    errorMessage = "Failed to create workout template: ${template.name}",
-                    operation = "CREATE",
-                    table = "workout_templates",
-                    analyticsContext = mapOf(
-                        "template_name" to template.name,
-                        "user_id" to template.userId,
-                        "exercise_count" to template.exercises.size.toString(),
-                        "difficulty_level" to template.difficultyLevel.toString()
-                    )
+                Timber.tag(TEMPLATE_CREATE_LOG_TAG).e(
+                    throwable,
+                    "Create failed type=%s templateId=%s exerciseCount=%d nameLength=%d message=%s",
+                    throwable.javaClass.simpleName,
+                    template.id.value,
+                    template.exercises.size,
+                    template.name.length,
+                    throwable.message
                 )
+                if (
+                    throwable is IllegalArgumentException &&
+                    throwable.message?.contains("already exists", ignoreCase = true) == true
+                ) {
+                    LiftrixError.BusinessLogicError(
+                        code = "TEMPLATE_NAME_ALREADY_EXISTS",
+                        errorMessage = "A workout template with this name already exists.",
+                        isRecoverable = false
+                    )
+                } else {
+                    LiftrixError.DatabaseError(
+                        errorMessage = "Failed to create workout template: ${template.name}",
+                        operation = "CREATE",
+                        table = "workout_templates",
+                        analyticsContext = mapOf(
+                            "template_name" to template.name,
+                            "user_id" to template.userId,
+                            "exercise_count" to template.exercises.size.toString(),
+                            "difficulty_level" to template.difficultyLevel.toString()
+                        )
+                    )
+                }
             }
         ) {
             // Check if template name already exists
             val nameExists = workoutTemplateDao.doesTemplateNameExist(template.userId, template.name)
+            Timber.tag(TEMPLATE_CREATE_LOG_TAG).i(
+                "Preflight templateId=%s exerciseCount=%d nameLength=%d nameExists=%s",
+                template.id.value,
+                template.exercises.size,
+                template.name.length,
+                nameExists
+            )
             if (nameExists) {
                 throw IllegalArgumentException("Template name '${template.name}' already exists")
             }
@@ -65,10 +92,21 @@ class TemplateRepositoryImpl @Inject constructor(
                 isDirty = true,
                 lastModified = System.currentTimeMillis()
             )
+            Timber.tag(TEMPLATE_CREATE_LOG_TAG).i(
+                "Insert starting templateId=%s exerciseJsonChars=%d folderAssigned=%s",
+                entity.id,
+                entity.templateExercisesJson.length,
+                entity.folderId != null
+            )
             Timber.tag("StartupRestoreFix").i(
                 "operation=TEMPLATE_CREATE_BEFORE_INSERT repo=TemplateRepositoryImpl userId=${template.userId} stableTemplateId=${template.id.value} localRowId=not_assigned isDirty=${entity.isDirty} isSynced=${entity.isSynced} timestamp=${System.currentTimeMillis()}"
             )
             val insertResult = workoutTemplateDao.insertTemplate(entity)
+            Timber.tag(TEMPLATE_CREATE_LOG_TAG).i(
+                "Insert returned templateId=%s rowId=%d",
+                entity.id,
+                insertResult
+            )
             
             if (insertResult > 0) {
                 Timber.tag("StartupRestoreFix").i(
@@ -81,6 +119,10 @@ class TemplateRepositoryImpl @Inject constructor(
                 throw RuntimeException("Template insert operation returned invalid ID: $insertResult")
             }
         }
+    }
+
+    private companion object {
+        const val TEMPLATE_CREATE_LOG_TAG = "TemplateCreate"
     }
 
     override suspend fun getTemplateById(templateId: WorkoutTemplateId, userId: String): LiftrixResult<WorkoutTemplate?> {

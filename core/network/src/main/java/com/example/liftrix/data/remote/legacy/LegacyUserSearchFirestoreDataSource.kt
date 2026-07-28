@@ -1,6 +1,7 @@
 package com.example.liftrix.data.remote.legacy
 
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import javax.inject.Inject
@@ -12,6 +13,7 @@ class LegacyUserSearchFirestoreDataSource @Inject constructor(
 ) {
     companion object {
         private const val USERS_PUBLIC_COLLECTION = "users_public"
+        private const val SOCIAL_PROFILES_COLLECTION = "social_profiles"
         private const val USER_SEARCH_CACHE_COLLECTION = "user_search_cache"
         private const val QR_CODE_COLLECTION = "qr_codes"
         private const val PROFILE_VIEWS_COLLECTION = "profile_views"
@@ -31,11 +33,23 @@ class LegacyUserSearchFirestoreDataSource @Inject constructor(
     }
 
     suspend fun profileExists(userId: String): Boolean {
-        val document = firestore.collection(USERS_PUBLIC_COLLECTION)
+        return getSocialProfileData(userId) != null
+    }
+
+    suspend fun getSocialProfileData(userId: String): Map<String, Any>? {
+        Timber.i("[PROFILE-VERIFY] Reading authoritative profile from $SOCIAL_PROFILES_COLLECTION/$userId")
+        val document = firestore.collection(SOCIAL_PROFILES_COLLECTION)
             .document(userId)
-            .get()
+            .get(Source.SERVER)
             .await()
-        return document.exists()
+        if (!document.exists()) {
+            Timber.w("[PROFILE-VERIFY] Profile missing in $SOCIAL_PROFILES_COLLECTION/$userId")
+            return null
+        }
+
+        return document.data?.toMutableMap()?.apply {
+            put("userId", document.id)
+        }
     }
 
     suspend fun storeQRCode(qrCodeId: String, data: Map<String, Any>) {

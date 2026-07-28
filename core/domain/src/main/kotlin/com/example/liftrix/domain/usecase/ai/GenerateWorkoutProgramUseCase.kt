@@ -379,18 +379,32 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         Timber.i("[AI] GenerateWorkoutProgramUseCase: repair JSON received chars=${repairedJson.json.length}")
 
         val repairedProgram = parseProgram(repairedJson.json, catalog).getOrElse {
-            Timber.w(it, "[AI] GenerateWorkoutProgramUseCase: repair parsing failed; refusing fallback workout")
-            return invalidGenerationFailure(
-                stage = "repair_parse",
-                details = "The AI repair response was not valid workout JSON: ${it.message ?: it.javaClass.simpleName}."
+            Timber.w(it, "[AI] GenerateWorkoutProgramUseCase: repair parsing failed; one regeneration started")
+            return regenerateAfterInvalidRepair(
+                userId = userId,
+                request = request,
+                catalog = catalog,
+                generationPrompt = generationPrompt,
+                language = language,
+                originalTokensUsed = originalTokensUsed + repairedJson.tokensUsed,
+                originalProcessingTimeMs = originalProcessingTimeMs + repairedJson.processingTimeMs,
+                originalModelVersion = repairedJson.modelVersion.ifBlank { originalModelVersion },
+                recoveryReason = "Repair response was not valid workout JSON: ${it.message ?: it.javaClass.simpleName}."
             )
         }
         val normalizedProgram = normalizeGeneratedProgram(repairedProgram, request, catalog)
         val validation = validator(normalizedProgram, request, catalog).getOrElse {
-            Timber.w(it, "[AI] GenerateWorkoutProgramUseCase: repair validation failed after local normalization; refusing fallback workout")
-            return invalidGenerationFailure(
-                stage = "repair_validation",
-                details = "The AI repair response still did not satisfy the request: ${it.message ?: it.javaClass.simpleName}."
+            Timber.w(it, "[AI] GenerateWorkoutProgramUseCase: repair validation failed; one regeneration started")
+            return regenerateAfterInvalidRepair(
+                userId = userId,
+                request = request,
+                catalog = catalog,
+                generationPrompt = generationPrompt,
+                language = language,
+                originalTokensUsed = originalTokensUsed + repairedJson.tokensUsed,
+                originalProcessingTimeMs = originalProcessingTimeMs + repairedJson.processingTimeMs,
+                originalModelVersion = repairedJson.modelVersion.ifBlank { originalModelVersion },
+                recoveryReason = "Repair response still failed validation: ${it.message ?: it.javaClass.simpleName}."
             )
         }
         Timber.i("[AI] GenerateWorkoutProgramUseCase: repair parsing and validation succeeded")
@@ -402,6 +416,70 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
                 tokensUsed = originalTokensUsed + repairedJson.tokensUsed,
                 processingTimeMs = originalProcessingTimeMs + repairedJson.processingTimeMs,
                 modelVersion = repairedJson.modelVersion.ifBlank { originalModelVersion }
+            )
+        )
+    }
+
+    private suspend fun regenerateAfterInvalidRepair(
+        userId: String,
+        request: WorkoutGenerationRequest,
+        catalog: List<ExerciseLibrary>,
+        generationPrompt: com.example.liftrix.domain.model.ai.WorkoutGenerationPrompt,
+        language: Language,
+        originalTokensUsed: Int,
+        originalProcessingTimeMs: Long,
+        originalModelVersion: String,
+        recoveryReason: String
+    ): LiftrixResult<ParsedProgram> {
+        val recoveryPayload = buildString {
+            append(generationPrompt.inputPayload)
+            appendLine()
+            appendLine()
+            appendLine("recovery_instruction:")
+            appendLine("- Regenerate the complete workout from the original input.")
+            appendLine("- A previous response and its repair were invalid: ${recoveryReason.take(300)}")
+            appendLine("- Return exactly one response matching the required JSON schema.")
+            append("- Do not copy malformed JSON from either previous response.")
+        }
+        val regeneratedJson = generationService.generateProgramJson(
+            userId = userId,
+            userPrompt = request.userPrompt,
+            systemPrompt = generationPrompt.systemPrompt,
+            inputPayload = recoveryPayload,
+            language = language
+        ).getOrElse { error ->
+            Timber.w(error, "[AI] GenerateWorkoutProgramUseCase: final regeneration request failed")
+            return invalidGenerationFailure(
+                stage = "regenerate",
+                details = "The AI response and repair were invalid, and the final regeneration failed: ${error.message ?: error.javaClass.simpleName}."
+            )
+        }
+        Timber.i("[AI] GenerateWorkoutProgramUseCase: final regeneration JSON received chars=${regeneratedJson.json.length}")
+
+        val regeneratedProgram = parseProgram(regeneratedJson.json, catalog).getOrElse {
+            Timber.w(it, "[AI] GenerateWorkoutProgramUseCase: final regeneration parsing failed")
+            return invalidGenerationFailure(
+                stage = "regenerate_parse",
+                details = "The final AI regeneration was not valid workout JSON: ${it.message ?: it.javaClass.simpleName}."
+            )
+        }
+        val normalizedProgram = normalizeGeneratedProgram(regeneratedProgram, request, catalog)
+        val validation = validator(normalizedProgram, request, catalog).getOrElse {
+            Timber.w(it, "[AI] GenerateWorkoutProgramUseCase: final regeneration validation failed")
+            return invalidGenerationFailure(
+                stage = "regenerate_validation",
+                details = "The final AI regeneration did not satisfy the request: ${it.message ?: it.javaClass.simpleName}."
+            )
+        }
+        Timber.i("[AI] GenerateWorkoutProgramUseCase: final regeneration parsing and validation succeeded")
+        return Result.success(
+            ParsedProgram(
+                program = validation.program,
+                warnings = validation.warnings,
+                repairAttempts = 2,
+                tokensUsed = originalTokensUsed + regeneratedJson.tokensUsed,
+                processingTimeMs = originalProcessingTimeMs + regeneratedJson.processingTimeMs,
+                modelVersion = regeneratedJson.modelVersion.ifBlank { originalModelVersion }
             )
         )
     }
@@ -914,34 +992,41 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
         request: WorkoutGenerationRequest,
         program: GeneratedWorkoutProgram,
         day: GeneratedWorkoutDay
-    ): LiftrixResult<com.example.liftrix.domain.model.WorkoutTemplate> =
-        templateCommandUseCase.create(
-                userId = request.userId,
-                name = "${program.workoutName} - ${day.dayName}".take(100),
-                folderId = null,
-                description = listOf(
-                    program.description,
-                    day.focus,
-                    "Warm-up: ${day.warmUp.steps.joinToString()}",
-                    "Cooldown: ${day.coolDown.steps.joinToString()}"
-                ).filter(String::isNotBlank).joinToString(" | ").take(500),
-                exercises = day.exercises.mapIndexed { index, exercise ->
-                    TemplateExercise(
-                        exerciseId = ExerciseId.fromString(exercise.exerciseId),
-                        name = exercise.exerciseName,
-                        primaryMuscle = exercise.primaryMuscle,
-                        equipment = exercise.equipment,
-                        targetSets = exercise.sets,
-                        targetReps = if (exercise.type == GeneratedPrescriptionType.REPS) {
-                            Reps((exercise.repsMax ?: exercise.repsMin ?: 1).coerceAtLeast(1))
-                        } else {
-                            Reps(1)
-                        },
-                        restTimeSeconds = exercise.restSeconds,
-                        notes = buildTemplateNotes(exercise),
-                        orderIndex = index
-                    )
+    ): LiftrixResult<com.example.liftrix.domain.model.WorkoutTemplate> {
+        val baseName = "${program.workoutName} - ${day.dayName}"
+            .take(com.example.liftrix.domain.model.WorkoutTemplate.MAX_NAME_LENGTH)
+        val description = listOf(
+            program.description,
+            day.focus,
+            "Warm-up: ${day.warmUp.steps.joinToString()}",
+            "Cooldown: ${day.coolDown.steps.joinToString()}"
+        ).filter(String::isNotBlank).joinToString(" | ").take(500)
+        val exercises = day.exercises.mapIndexed { index, exercise ->
+            TemplateExercise(
+                exerciseId = ExerciseId.fromString(exercise.exerciseId),
+                name = exercise.exerciseName,
+                primaryMuscle = exercise.primaryMuscle,
+                equipment = exercise.equipment,
+                targetSets = exercise.sets,
+                targetReps = if (exercise.type == GeneratedPrescriptionType.REPS) {
+                    Reps((exercise.repsMax ?: exercise.repsMin ?: 1).coerceAtLeast(1))
+                } else {
+                    Reps(1)
                 },
+                restTimeSeconds = exercise.restSeconds,
+                notes = buildTemplateNotes(exercise),
+                orderIndex = index
+            )
+        }
+
+        for (attempt in 1..MAX_GENERATED_TEMPLATE_NAME_ATTEMPTS) {
+            val candidateName = generatedTemplateName(baseName, attempt)
+            val result = templateCommandUseCase.create(
+                userId = request.userId,
+                name = candidateName,
+                folderId = null,
+                description = description,
+                exercises = exercises,
                 estimatedDurationMinutes = day.estimatedDurationMinutes,
                 difficultyLevel = when (program.level) {
                     WorkoutProgramLevel.BEGINNER -> 2
@@ -949,6 +1034,31 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
                     WorkoutProgramLevel.ADVANCED -> 8
                 }
             )
+            val error = result.exceptionOrNull()
+            if (
+                result.isSuccess ||
+                error !is LiftrixError.BusinessLogicError ||
+                error.code != TEMPLATE_NAME_ALREADY_EXISTS
+            ) {
+                return result
+            }
+        }
+
+        return liftrixFailure(
+            LiftrixError.BusinessLogicError(
+                code = "GENERATED_TEMPLATE_UNIQUE_NAME_EXHAUSTED",
+                errorMessage = "Could not choose an available name for the generated workout."
+            )
+        )
+    }
+
+    private fun generatedTemplateName(baseName: String, attempt: Int): String {
+        if (attempt == 1) return baseName
+        val suffix = " ($attempt)"
+        return baseName
+            .take(com.example.liftrix.domain.model.WorkoutTemplate.MAX_NAME_LENGTH - suffix.length)
+            .trimEnd() + suffix
+    }
 
     private fun buildTemplateNotes(exercise: com.example.liftrix.domain.model.ai.GeneratedWorkoutExercise): String? {
         val prescription = when (exercise.type) {
@@ -1206,6 +1316,8 @@ class GenerateWorkoutProgramUseCase @Inject constructor(
     }
 
     private companion object {
+        const val TEMPLATE_NAME_ALREADY_EXISTS = "TEMPLATE_NAME_ALREADY_EXISTS"
+        const val MAX_GENERATED_TEMPLATE_NAME_ATTEMPTS = 100
         const val MAX_NORMALIZED_EXERCISES_PER_DAY = 8
     }
 
